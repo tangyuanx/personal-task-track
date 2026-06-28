@@ -1,5 +1,6 @@
 const STORAGE_KEY = "task-flow-sheet-prototype-v2";
 const FLOW_WIDTH_KEY = "task-flow-column-widths-v1";
+const THEME_KEY = "task-track-theme";
 const DATA_VERSION = 1;
 const desktopStorage = window.personalTaskTrack?.storage;
 
@@ -25,6 +26,11 @@ const priorityFilterLabels = {
   low: "低",
 };
 
+const themeLabels = {
+  light: "浅色",
+  dark: "深色",
+};
+
 const defaultFlowWidths = {
   title: 360,
   note: 330,
@@ -40,10 +46,11 @@ let state = {
   activeTaskId: "",
   selectedNodeId: "",
   query: "",
-  taskFilter: "today",
+  taskFilter: "all",
   priorityFilter: "all",
   newTaskPriority: "medium",
   markdownMode: "edit",
+  theme: "light",
   flowWidths: { ...defaultFlowWidths },
   conclusionPromptTaskId: "",
   contextMenu: null,
@@ -79,80 +86,14 @@ function makeNode(taskId, parentId, order) {
   };
 }
 
-function sampleTasks() {
-  const taskId = id("task");
-  const first = {
-    ...makeNode(taskId, null, 1),
-    title: "复现问题",
-    status: "done",
-    note: "测试账号可以稳定复现登录后掉线。",
-  };
-  const second = {
-    ...makeNode(taskId, null, 2),
-    title: "提出当前猜想",
-    status: "done",
-    note: "refresh token 过期后没有正确刷新。",
-  };
-  const third = {
-    ...makeNode(taskId, null, 3),
-    title: "查看登录日志",
-    status: "todo",
-    note: "重点看 token refresh 和 session TTL。",
-  };
-  const childA = {
-    ...makeNode(taskId, third.id, 1),
-    title: "查看 token expired 相关日志",
-    status: "done",
-    note: "日志里有 refresh 失败记录。",
-  };
-  const childB = {
-    ...makeNode(taskId, third.id, 2),
-    title: "确认日志时间是否准确",
-    status: "todo",
-    note: "如果时间不准，后续判断会偏。",
-  };
-  third.children = [childA, childB];
-
-  return [
-    {
-      id: taskId,
-      order: 1,
-      title: "修复登录失败问题",
-      description: "用户反馈登录后很快掉线，需要确认失败原因并完成修复。",
-      status: "active",
-      priority: "high",
-      hypothesis: "refresh token 过期后没有正确刷新。",
-      hypothesisUpdatedAt: now(),
-      conclusion: "",
-      createdAt: now(),
-      updatedAt: now(),
-      nodes: [first, second, third],
-    },
-    {
-      id: id("task"),
-      order: 2,
-      title: "梳理接口权限模型",
-      description: "整理接口权限边界，确认是否存在不一致规则。",
-      status: "active",
-      priority: "medium",
-      hypothesis: "",
-      hypothesisUpdatedAt: "",
-      conclusion: "",
-      createdAt: now(),
-      updatedAt: now(),
-      nodes: [],
-    },
-  ];
-}
-
 function loadBrowserTasks() {
   const raw = localStorage.getItem(STORAGE_KEY);
-  if (!raw) return sampleTasks();
+  if (!raw) return [];
   try {
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? normalizeTasks(parsed) : sampleTasks();
+    return Array.isArray(parsed) ? normalizeTasks(parsed) : [];
   } catch {
-    return sampleTasks();
+    return [];
   }
 }
 
@@ -181,13 +122,22 @@ function normalizeLoadedFlowWidths(value) {
   return Object.fromEntries(Object.keys(defaultFlowWidths).map((key) => [key, normalizeFlowWidth(key, raw[key])]));
 }
 
+function normalizeTheme(value) {
+  return value === "dark" ? "dark" : "light";
+}
+
+function loadBrowserTheme() {
+  return normalizeTheme(localStorage.getItem(THEME_KEY));
+}
+
 async function loadAppData() {
   if (desktopStorage?.read) {
     try {
       const stored = await desktopStorage.read();
-      const tasks = stored && Array.isArray(stored.tasks) ? normalizeTasks(stored.tasks) : loadBrowserTasks();
-      const flowWidths = normalizeLoadedFlowWidths(stored?.flowWidths || loadBrowserFlowWidths());
-      return { tasks, flowWidths };
+      const tasks = stored && Array.isArray(stored.tasks) ? normalizeTasks(stored.tasks) : [];
+      const flowWidths = normalizeLoadedFlowWidths(stored?.flowWidths || {});
+      const theme = normalizeTheme(stored?.theme);
+      return { tasks, flowWidths, theme };
     } catch (error) {
       console.error("Failed to read local task data.", error);
     }
@@ -196,6 +146,7 @@ async function loadAppData() {
   return {
     tasks: loadBrowserTasks(),
     flowWidths: loadBrowserFlowWidths(),
+    theme: loadBrowserTheme(),
   };
 }
 
@@ -204,12 +155,14 @@ function save() {
     version: DATA_VERSION,
     tasks: state.tasks,
     flowWidths: state.flowWidths,
+    theme: state.theme,
     updatedAt: now(),
   };
 
   if (!desktopStorage?.write) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state.tasks));
     localStorage.setItem(FLOW_WIDTH_KEY, JSON.stringify(state.flowWidths));
+    localStorage.setItem(THEME_KEY, state.theme);
     return;
   }
 
@@ -252,6 +205,7 @@ function flowWidthStyle() {
 
 function render() {
   save();
+  document.documentElement.dataset.theme = state.theme;
   const task = activeTask();
   if (task) state.activeTaskId = task.id;
   document.querySelector("#root").innerHTML = `
@@ -269,7 +223,10 @@ function renderSidebar() {
     <aside class="sidebar">
       <div class="sidebar-head">
         <h1>任务</h1>
-        <span>${filteredTasks().length}/${state.tasks.length}</span>
+        <div class="sidebar-head-actions">
+          <span>${filteredTasks().length}/${state.tasks.length}</span>
+          ${themeSelectHtml()}
+        </div>
       </div>
 
       <label class="search-box">
@@ -294,7 +251,7 @@ function renderSidebar() {
           .join("")}
         <div class="task-item new-task-row">
           <span class="task-check-spacer"></span>
-          <input class="task-title" data-new-task-title placeholder="新任务" />
+          <input class="task-title" data-new-task-title placeholder="输入任务标题，回车创建" />
           ${newTaskPrioritySelect()}
         </div>
       </div>
@@ -510,7 +467,7 @@ function filteredTasks() {
       const openNodes = flatten(task.nodes).filter((node) => node.status !== "done");
       const hasBlocked = flatten(task.nodes).some((node) => node.status === "blocked");
       const hasLater = flatten(task.nodes).some((node) => node.status === "later");
-      if (state.taskFilter === "today" && (task.status === "done" || (!openNodes.length && task.priority !== "high"))) return false;
+      if (state.taskFilter === "today" && task.status === "done") return false;
       if (state.taskFilter === "active" && task.status === "done") return false;
       if (state.taskFilter === "done" && task.status !== "done") return false;
       if (state.taskFilter === "blocked" && !hasBlocked) return false;
@@ -587,6 +544,16 @@ function filterSelectHtml(kind, value, options) {
   `;
 }
 
+function themeSelectHtml() {
+  return `
+    <select class="theme-select" data-theme-select title="色调">
+      ${Object.entries(themeLabels)
+        .map(([optionValue, label]) => `<option value="${optionValue}" ${optionValue === state.theme ? "selected" : ""}>${label}</option>`)
+        .join("")}
+    </select>
+  `;
+}
+
 function bind() {
   document.querySelectorAll("[data-action]").forEach((element) => {
     element.addEventListener("click", (event) => {
@@ -639,9 +606,24 @@ function bind() {
       exitNodeDetail();
       event.stopPropagation();
     });
-    newTaskTitle.addEventListener("change", (event) => createTaskFromBlank(event.target.value));
+    newTaskTitle.addEventListener("blur", (event) => createTaskFromBlank(event.target.value));
     newTaskTitle.addEventListener("keydown", (event) => {
-      if (event.key === "Enter") createTaskFromBlank(event.target.value);
+      if (event.key === "Enter") {
+        event.preventDefault();
+        const title = event.target.value;
+        event.target.value = "";
+        createTaskFromBlank(title);
+      }
+    });
+  }
+
+  const themeSelect = document.querySelector("[data-theme-select]");
+  if (themeSelect) {
+    themeSelect.addEventListener("click", (event) => event.stopPropagation());
+    themeSelect.addEventListener("change", (event) => {
+      state.theme = normalizeTheme(event.target.value);
+      save();
+      render();
     });
   }
 
@@ -808,6 +790,9 @@ function createTaskFromBlank(title) {
   state.tasks.push(task);
   state.activeTaskId = task.id;
   state.selectedNodeId = "";
+  state.taskFilter = "all";
+  state.priorityFilter = "all";
+  state.query = "";
   save();
   render();
 }
@@ -1167,6 +1152,7 @@ async function bootstrap() {
   const data = await loadAppData();
   state.tasks = data.tasks;
   state.flowWidths = data.flowWidths;
+  state.theme = data.theme;
   state.activeTaskId = state.tasks[0]?.id || "";
   render();
 }

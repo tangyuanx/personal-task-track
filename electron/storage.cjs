@@ -38,6 +38,7 @@ function normalizeTaskData(data) {
     version: DATA_VERSION,
     tasks: Array.isArray(safeData.tasks) ? safeData.tasks : [],
     flowWidths: safeData.flowWidths && typeof safeData.flowWidths === "object" ? safeData.flowWidths : {},
+    theme: safeData.theme === "dark" ? "dark" : "light",
     updatedAt: typeof safeData.updatedAt === "string" ? safeData.updatedAt : new Date().toISOString(),
   };
 }
