@@ -1,6 +1,6 @@
 {
   "name": "personal-task-track",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "A local-first personal task flow tracker for programmer daily work.",
   "private": true,
   "license": "UNLICENSED",
@@ -34,7 +34,9 @@
       "src/**/*",
       "electron/**/*",
       "build/icon.*",
-      "package.json"
+      "package.json",
+      "!**/._*",
+      "!**/.DS_Store"
     ],
     "mac": {
       "identity": null,
@@ -58,8 +60,7 @@
     "nsis": {
       "oneClick": false,
       "perMachine": false,
-      "allowToChangeInstallationDirectory": true,
-      "include": "build/installer.nsh"
+      "allowToChangeInstallationDirectory": true
     }
   },
   "devDependencies": {
