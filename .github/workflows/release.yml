@@ -1,19 +1,16 @@
-name: Build Desktop Apps
+name: Release Desktop Apps
 
 on:
   push:
-    branches:
-      - main
     tags:
       - "v*"
-  pull_request:
-    branches:
-      - main
-  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
-    name: Build ${{ matrix.platform }}
+    name: Release ${{ matrix.platform }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -22,11 +19,9 @@ jobs:
           - platform: macOS
             os: macos-latest
             script: npm run dist:mac -- --x64 --arm64 --publish never
-            artifact: macos-artifacts
           - platform: Windows
             os: windows-latest
             script: npm run dist:win -- --publish never
-            artifact: windows-artifacts
 
     steps:
       - name: Checkout
@@ -49,13 +44,13 @@ jobs:
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
 
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v2
         with:
-          name: ${{ matrix.artifact }}
-          path: |
+          files: |
             release/*.dmg
             release/*.zip
             release/*.exe
             release/*.blockmap
             release/*.yml
+          prerelease: ${{ contains(github.ref_name, '-') }}

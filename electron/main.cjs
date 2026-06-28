@@ -1,5 +1,6 @@
-const { app, BrowserWindow, Menu, shell } = require("electron");
+const { app, BrowserWindow, Menu, ipcMain, shell } = require("electron");
 const path = require("node:path");
+const { readTaskData, writeTaskData } = require("./storage.cjs");
 
 const isMac = process.platform === "darwin";
 
@@ -38,6 +39,11 @@ function createWindow() {
 
 function openExternalUrl(url) {
   if (/^(https?|mailto):/i.test(url)) shell.openExternal(url);
+}
+
+function registerStorageHandlers() {
+  ipcMain.handle("task-data:read", () => readTaskData(app.getPath("userData")));
+  ipcMain.handle("task-data:write", (_event, data) => writeTaskData(app.getPath("userData"), data));
 }
 
 function createMenu() {
@@ -96,6 +102,7 @@ function createMenu() {
 
 app.whenReady().then(() => {
   app.setName("Personal Task Track");
+  registerStorageHandlers();
   createMenu();
   createWindow();
 

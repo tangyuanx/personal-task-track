@@ -17,7 +17,7 @@
   "scripts": {
     "dev": "electron .",
     "start": "electron .",
-    "check": "node --check src/app.js && node --check electron/main.cjs && node --check electron/preload.cjs",
+    "check": "node --check src/app.js && node --check electron/main.cjs && node --check electron/preload.cjs && node --check electron/storage.cjs",
     "dist": "electron-builder",
     "dist:mac": "electron-builder --mac",
     "dist:win": "electron-builder --win"

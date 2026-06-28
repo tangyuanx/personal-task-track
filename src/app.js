@@ -1,5 +1,7 @@
 const STORAGE_KEY = "task-flow-sheet-prototype-v2";
 const FLOW_WIDTH_KEY = "task-flow-column-widths-v1";
+const DATA_VERSION = 1;
+const desktopStorage = window.personalTaskTrack?.storage;
 
 const priorityLabels = {
   high: "高",
@@ -34,7 +36,7 @@ const flowWidthLimits = {
 };
 
 let state = {
-  tasks: loadTasks(),
+  tasks: [],
   activeTaskId: "",
   selectedNodeId: "",
   query: "",
@@ -42,12 +44,14 @@ let state = {
   priorityFilter: "all",
   newTaskPriority: "medium",
   markdownMode: "edit",
-  flowWidths: loadFlowWidths(),
+  flowWidths: { ...defaultFlowWidths },
   conclusionPromptTaskId: "",
   contextMenu: null,
 };
 
-state.activeTaskId = state.tasks[0]?.id || "";
+let saveTimer = 0;
+let pendingPayload = null;
+let saveInFlight = false;
 
 function id(prefix) {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
@@ -141,7 +145,7 @@ function sampleTasks() {
   ];
 }
 
-function loadTasks() {
+function loadBrowserTasks() {
   const raw = localStorage.getItem(STORAGE_KEY);
   if (!raw) return sampleTasks();
   try {
@@ -159,7 +163,7 @@ function normalizeTasks(tasks) {
   }));
 }
 
-function loadFlowWidths() {
+function loadBrowserFlowWidths() {
   const raw = localStorage.getItem(FLOW_WIDTH_KEY);
   if (!raw) return { ...defaultFlowWidths };
   try {
@@ -172,12 +176,65 @@ function loadFlowWidths() {
   }
 }
 
+function normalizeLoadedFlowWidths(value) {
+  const raw = value && typeof value === "object" ? value : {};
+  return Object.fromEntries(Object.keys(defaultFlowWidths).map((key) => [key, normalizeFlowWidth(key, raw[key])]));
+}
+
+async function loadAppData() {
+  if (desktopStorage?.read) {
+    try {
+      const stored = await desktopStorage.read();
+      const tasks = stored && Array.isArray(stored.tasks) ? normalizeTasks(stored.tasks) : loadBrowserTasks();
+      const flowWidths = normalizeLoadedFlowWidths(stored?.flowWidths || loadBrowserFlowWidths());
+      return { tasks, flowWidths };
+    } catch (error) {
+      console.error("Failed to read local task data.", error);
+    }
+  }
+
+  return {
+    tasks: loadBrowserTasks(),
+    flowWidths: loadBrowserFlowWidths(),
+  };
+}
+
 function save() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state.tasks));
+  const payload = {
+    version: DATA_VERSION,
+    tasks: state.tasks,
+    flowWidths: state.flowWidths,
+    updatedAt: now(),
+  };
+
+  if (!desktopStorage?.write) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state.tasks));
+    localStorage.setItem(FLOW_WIDTH_KEY, JSON.stringify(state.flowWidths));
+    return;
+  }
+
+  pendingPayload = payload;
+  window.clearTimeout(saveTimer);
+  saveTimer = window.setTimeout(flushSave, 80);
 }
 
 function saveFlowWidths() {
-  localStorage.setItem(FLOW_WIDTH_KEY, JSON.stringify(state.flowWidths));
+  save();
+}
+
+async function flushSave() {
+  if (!desktopStorage?.write || saveInFlight || !pendingPayload) return;
+  const payload = pendingPayload;
+  pendingPayload = null;
+  saveInFlight = true;
+  try {
+    await desktopStorage.write(payload);
+  } catch (error) {
+    console.error("Failed to save local task data.", error);
+  } finally {
+    saveInFlight = false;
+    if (pendingPayload) flushSave();
+  }
 }
 
 function normalizeFlowWidth(key, value) {
@@ -1106,4 +1163,12 @@ function escAttr(value) {
   return esc(value).replaceAll("\n", " ");
 }
 
-render();
+async function bootstrap() {
+  const data = await loadAppData();
+  state.tasks = data.tasks;
+  state.flowWidths = data.flowWidths;
+  state.activeTaskId = state.tasks[0]?.id || "";
+  render();
+}
+
+bootstrap();
