@@ -1,6 +1,9 @@
 const STORAGE_KEY = "task-flow-sheet-prototype-v2";
 const FLOW_WIDTH_KEY = "task-flow-column-widths-v1";
 const THEME_KEY = "task-track-theme";
+const ZH_FONT_KEY = "task-track-zh-font";
+const EN_FONT_KEY = "task-track-en-font";
+const TONE_KEY = "task-track-tone";
 const DATA_VERSION = 1;
 const desktopStorage = window.personalTaskTrack?.storage;
 
@@ -31,11 +34,34 @@ const themeLabels = {
   dark: "深色",
 };
 
-const fontLabels = {
-  songti: "宋体 / Inter",
-  heiti: "黑体 / Inter",
-  system: "系统默认",
-  mono: "等宽字体",
+const toneLabels = {
+  moss: "松石绿",
+  blue: "深海蓝",
+  violet: "烟紫色",
+  graphite: "石墨灰",
+  amber: "琥珀棕",
+};
+
+const zhFontLabels = {
+  system: "系统中文",
+  yahei: "微软雅黑",
+  pingfang: "苹方",
+  songti: "宋体",
+  simsun: "中易宋体",
+  fangsong: "仿宋",
+  heiti: "黑体",
+  kaiti: "楷体",
+};
+
+const enFontLabels = {
+  inter: "Inter",
+  system: "System UI",
+  segoe: "Segoe UI",
+  arial: "Arial",
+  helvetica: "Helvetica",
+  times: "Times New Roman",
+  georgia: "Georgia",
+  mono: "Monospace",
 };
 
 const defaultFlowWidths = {
@@ -58,7 +84,9 @@ let state = {
   newTaskPriority: "medium",
   markdownMode: "edit",
   theme: "light",
-  font: "songti",
+  zhFont: "system",
+  enFont: "inter",
+  tone: "moss",
   settingsOpen: false,
   focusTaskTitleId: "",
   focusNodeTitleId: "",
@@ -137,16 +165,36 @@ function normalizeTheme(value) {
   return value === "dark" ? "dark" : "light";
 }
 
-function normalizeFont(value) {
-  return Object.hasOwn(fontLabels, value) ? value : "songti";
+function normalizeTone(value) {
+  return Object.hasOwn(toneLabels, value) ? value : "moss";
+}
+
+function normalizeZhFont(value) {
+  return Object.hasOwn(zhFontLabels, value) ? value : "system";
+}
+
+function normalizeEnFont(value) {
+  return Object.hasOwn(enFontLabels, value) ? value : "inter";
+}
+
+function migrateLegacyFont(value) {
+  if (value === "songti") return { zhFont: "songti", enFont: "inter" };
+  if (value === "heiti") return { zhFont: "heiti", enFont: "inter" };
+  if (value === "mono") return { zhFont: "yahei", enFont: "mono" };
+  return { zhFont: "system", enFont: "inter" };
 }
 
 function loadBrowserTheme() {
   return normalizeTheme(localStorage.getItem(THEME_KEY));
 }
 
-function loadBrowserFont() {
-  return normalizeFont(localStorage.getItem("task-track-font"));
+function loadBrowserTypography() {
+  const legacy = migrateLegacyFont(localStorage.getItem("task-track-font"));
+  return {
+    zhFont: normalizeZhFont(localStorage.getItem(ZH_FONT_KEY) || legacy.zhFont),
+    enFont: normalizeEnFont(localStorage.getItem(EN_FONT_KEY) || legacy.enFont),
+    tone: normalizeTone(localStorage.getItem(TONE_KEY)),
+  };
 }
 
 async function loadAppData() {
@@ -156,18 +204,22 @@ async function loadAppData() {
       const tasks = stored && Array.isArray(stored.tasks) ? normalizeTasks(stored.tasks) : [];
       const flowWidths = normalizeLoadedFlowWidths(stored?.flowWidths || {});
       const theme = normalizeTheme(stored?.theme);
-      const font = normalizeFont(stored?.font);
-      return { tasks, flowWidths, theme, font };
+      const legacy = migrateLegacyFont(stored?.font);
+      const zhFont = normalizeZhFont(stored?.zhFont || legacy.zhFont);
+      const enFont = normalizeEnFont(stored?.enFont || legacy.enFont);
+      const tone = normalizeTone(stored?.tone);
+      return { tasks, flowWidths, theme, zhFont, enFont, tone };
     } catch (error) {
       console.error("Failed to read local task data.", error);
     }
   }
 
+  const typography = loadBrowserTypography();
   return {
     tasks: loadBrowserTasks(),
     flowWidths: loadBrowserFlowWidths(),
     theme: loadBrowserTheme(),
-    font: loadBrowserFont(),
+    ...typography,
   };
 }
 
@@ -177,7 +229,9 @@ function save() {
     tasks: state.tasks,
     flowWidths: state.flowWidths,
     theme: state.theme,
-    font: state.font,
+    zhFont: state.zhFont,
+    enFont: state.enFont,
+    tone: state.tone,
     updatedAt: now(),
   };
 
@@ -185,7 +239,9 @@ function save() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state.tasks));
     localStorage.setItem(FLOW_WIDTH_KEY, JSON.stringify(state.flowWidths));
     localStorage.setItem(THEME_KEY, state.theme);
-    localStorage.setItem("task-track-font", state.font);
+    localStorage.setItem(ZH_FONT_KEY, state.zhFont);
+    localStorage.setItem(EN_FONT_KEY, state.enFont);
+    localStorage.setItem(TONE_KEY, state.tone);
     return;
   }
 
@@ -229,7 +285,9 @@ function flowWidthStyle() {
 function render() {
   save();
   document.documentElement.dataset.theme = state.theme;
-  document.documentElement.dataset.font = state.font;
+  document.documentElement.dataset.zhFont = state.zhFont;
+  document.documentElement.dataset.enFont = state.enFont;
+  document.documentElement.dataset.tone = state.tone;
   const task = activeTask();
   if (task) state.activeTaskId = task.id;
   document.querySelector("#root").innerHTML = `
@@ -241,14 +299,27 @@ function render() {
     </main>
   `;
   bind();
+  resizeTaskBriefTextareas();
   focusPendingElement();
 }
 
 function renderSidebar() {
+  const visibleCount = filteredTasks().length;
+  const openCount = state.tasks.filter((task) => task.status !== "done").length;
+  const blockedCount = state.tasks.filter((task) => flatten(task.nodes).some((node) => node.status === "blocked")).length;
   return `
     <aside class="sidebar">
       <div class="sidebar-head">
-        <span>${filteredTasks().length}/${state.tasks.length}</span>
+        <div>
+          <strong>Task Track</strong>
+          <small>Personal operations</small>
+        </div>
+        <span>${visibleCount}/${state.tasks.length}</span>
+      </div>
+
+      <div class="sidebar-stats" aria-label="任务统计">
+        <span><b>${openCount}</b> 进行中</span>
+        <span><b>${blockedCount}</b> 卡住</span>
       </div>
 
       <label class="search-box">
@@ -292,11 +363,13 @@ function renderTaskPage(task) {
   const topNodes = sort(task.nodes);
   const selectedNode = state.selectedNodeId ? findNode(task.nodes, state.selectedNodeId) : null;
   const summary = taskSummary(task);
+  const nextNode = nextOpenNode(task.nodes);
   const needsConclusion = state.conclusionPromptTaskId === task.id && !task.conclusion.trim();
   return `
     <section class="task-page">
       <header class="page-header">
         <div class="page-title-block">
+          <div class="page-kicker">任务档案</div>
           <input class="page-title" data-edit-key="title" data-task-id="${task.id}" value="${escAttr(task.title)}" />
           <div class="page-properties">
             <span class="priority ${task.priority}">${priorityLabels[task.priority]}优先</span>
@@ -305,6 +378,11 @@ function renderTaskPage(task) {
             <span>${formatShort(task.updatedAt)}</span>
           </div>
         </div>
+        <aside class="next-step ${nextNode?.status || (task.status === "done" ? "done" : "")}">
+          <span>Next checkpoint</span>
+          <strong>${nextNode ? esc(nextNode.title || "未命名节点") : task.status === "done" ? "任务已收束" : "右键添加第一个节点"}</strong>
+          <small>${nextNode ? nodeStatusText(nextNode.status) : "把下一步写进处理流"}</small>
+        </aside>
       </header>
 
       ${needsConclusion ? renderConclusionPrompt() : ""}
@@ -438,6 +516,7 @@ function renderEmptyPage() {
   const hasTasks = state.tasks.length > 0;
   return `
     <section class="task-page empty-page">
+      <div class="empty-mark">TRACK</div>
       <h2>${hasTasks ? "没有符合筛选的任务" : "没有任务"}</h2>
       <p>${hasTasks ? "调整左侧筛选条件，或在底部输入新任务。" : "在左侧底部输入任务标题，即可创建新的处理流。"}</p>
     </section>
@@ -580,18 +659,59 @@ function filterSelectHtml(kind, value, options, title = "") {
 
 function renderSettingsPanel() {
   return `
-    <section class="settings-panel">
-      <div class="settings-title">设置</div>
-      <label>
-        <span>色调</span>
-        ${settingsSelectHtml("theme", state.theme, themeLabels)}
-      </label>
-      <label>
-        <span>字体</span>
-        ${settingsSelectHtml("font", state.font, fontLabels)}
-      </label>
-      <button type="button" data-action="reload-app">重新加载</button>
-    </section>
+    <div class="settings-overlay" role="presentation">
+      <section class="settings-panel" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+        <header class="settings-head">
+          <div>
+            <span>Preferences</span>
+            <h2 id="settings-title">界面设置</h2>
+          </div>
+          <button class="settings-close" type="button" data-action="close-settings" title="关闭">×</button>
+        </header>
+        <div class="settings-body">
+          <nav class="settings-nav" aria-label="设置分组">
+            <span class="active">外观</span>
+            <span>字体</span>
+            <span>色调</span>
+          </nav>
+          <div class="settings-content">
+            <section class="settings-group">
+              <div class="settings-group-head">
+                <h3>显示模式</h3>
+                <p>选择浅色或深色界面。</p>
+              </div>
+              ${settingsOptionGroup("theme", state.theme, themeLabels)}
+            </section>
+            <section class="settings-group">
+              <div class="settings-group-head">
+                <h3>色调</h3>
+                <p>用于高亮、选中状态和流程标记。</p>
+              </div>
+              ${settingsOptionGroup("tone", state.tone, toneLabels, true)}
+            </section>
+            <section class="settings-group">
+              <div class="settings-group-head">
+                <h3>中文字体</h3>
+                <p>适配 macOS 与 Windows 的常用中文字体。</p>
+              </div>
+              ${settingsSelectHtml("zh-font", state.zhFont, zhFontLabels)}
+            </section>
+            <section class="settings-group">
+              <div class="settings-group-head">
+                <h3>英文字体</h3>
+                <p>用于英文、数字和大部分界面文字。</p>
+              </div>
+              ${settingsSelectHtml("en-font", state.enFont, enFontLabels)}
+            </section>
+            <div class="settings-preview">
+              <span>Preview</span>
+              <strong>任务流 Task flow 123</strong>
+              <p>背景、当前判断、结论保持轻量，处理流保持主视线。</p>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
   `;
 }
 
@@ -602,6 +722,23 @@ function settingsSelectHtml(key, value, options) {
         .map(([optionValue, label]) => `<option value="${optionValue}" ${optionValue === value ? "selected" : ""}>${label}</option>`)
         .join("")}
     </select>
+  `;
+}
+
+function settingsOptionGroup(key, value, options, swatches = false) {
+  return `
+    <div class="settings-options">
+      ${Object.entries(options)
+        .map(
+          ([optionValue, label]) => `
+            <button class="${optionValue === value ? "active" : ""}" type="button" data-setting-button="${key}" data-value="${optionValue}">
+              ${swatches ? `<span class="tone-swatch tone-${optionValue}"></span>` : ""}
+              <span>${label}</span>
+            </button>
+          `,
+        )
+        .join("")}
+    </div>
   `;
 }
 
@@ -623,7 +760,10 @@ function bind() {
   });
 
   document.querySelectorAll("[data-edit-key]").forEach((element) => {
-    element.addEventListener("input", (event) => edit(event.target.dataset, event.target.value));
+    element.addEventListener("input", (event) => {
+      edit(event.target.dataset, event.target.value);
+      if (event.target.closest(".task-brief")) resizeTaskBriefTextarea(event.target);
+    });
     element.addEventListener("change", (event) => edit(event.target.dataset, event.target.value));
     element.addEventListener("click", (event) => {
       if (!event.currentTarget.dataset.nodeId) exitNodeDetail();
@@ -681,25 +821,39 @@ function bind() {
     });
   }
 
-  const themeSelect = document.querySelector("[data-theme-select]");
-  if (themeSelect) {
-    themeSelect.addEventListener("click", (event) => event.stopPropagation());
-    themeSelect.addEventListener("change", (event) => {
-      state.theme = normalizeTheme(event.target.value);
-      save();
-      render();
-    });
-  }
-
   document.querySelectorAll("[data-setting]").forEach((element) => {
     element.addEventListener("click", (event) => event.stopPropagation());
     element.addEventListener("change", (event) => {
       if (event.target.dataset.setting === "theme") state.theme = normalizeTheme(event.target.value);
-      if (event.target.dataset.setting === "font") state.font = normalizeFont(event.target.value);
+      if (event.target.dataset.setting === "tone") state.tone = normalizeTone(event.target.value);
+      if (event.target.dataset.setting === "zh-font") state.zhFont = normalizeZhFont(event.target.value);
+      if (event.target.dataset.setting === "en-font") state.enFont = normalizeEnFont(event.target.value);
       save();
       render();
     });
   });
+
+  document.querySelectorAll("[data-setting-button]").forEach((element) => {
+    element.addEventListener("click", (event) => {
+      event.stopPropagation();
+      applySetting(event.currentTarget.dataset.settingButton, event.currentTarget.dataset.value);
+      save();
+      render();
+    });
+  });
+
+  const settingsPanel = document.querySelector(".settings-panel");
+  if (settingsPanel) {
+    settingsPanel.addEventListener("click", (event) => event.stopPropagation());
+  }
+
+  const settingsOverlay = document.querySelector(".settings-overlay");
+  if (settingsOverlay) {
+    settingsOverlay.addEventListener("click", () => {
+      state.settingsOpen = false;
+      render();
+    });
+  }
 
   const search = document.querySelector("#search");
   if (search) {
@@ -746,7 +900,7 @@ function bind() {
     app.addEventListener("click", (event) => {
       let needsRender = false;
       const keepNodeDetail = event.target.closest(".node-detail, .flow-row:not(.flow-header), .context-menu");
-      const keepSettings = event.target.closest(".settings-panel, .settings-trigger");
+      const keepSettings = event.target.closest(".settings-overlay, .settings-trigger");
 
       if (state.contextMenu) {
         state.contextMenu = null;
@@ -763,6 +917,22 @@ function bind() {
       if (needsRender) render();
     });
   }
+}
+
+function resizeTaskBriefTextareas() {
+  document.querySelectorAll(".task-brief textarea").forEach((element) => resizeTaskBriefTextarea(element));
+}
+
+function resizeTaskBriefTextarea(element) {
+  element.style.height = "0px";
+  element.style.height = `${Math.min(180, Math.max(34, element.scrollHeight))}px`;
+}
+
+function applySetting(key, value) {
+  if (key === "theme") state.theme = normalizeTheme(value);
+  if (key === "tone") state.tone = normalizeTone(value);
+  if (key === "zh-font") state.zhFont = normalizeZhFont(value);
+  if (key === "en-font") state.enFont = normalizeEnFont(value);
 }
 
 function startColumnResize(event, column) {
@@ -825,6 +995,7 @@ function action(data) {
   state.contextMenu = null;
   if (data.action === "set-markdown-mode") state.markdownMode = data.mode === "preview" ? "preview" : "edit";
   if (data.action === "toggle-settings") state.settingsOpen = !state.settingsOpen;
+  if (data.action === "close-settings") state.settingsOpen = false;
   if (data.action === "reload-app") window.location.reload();
   if (data.action === "select-task") {
     state.activeTaskId = data.taskId;
@@ -1282,6 +1453,9 @@ async function bootstrap() {
   state.tasks = data.tasks;
   state.flowWidths = data.flowWidths;
   state.theme = data.theme;
+  state.zhFont = data.zhFont;
+  state.enFont = data.enFont;
+  state.tone = data.tone;
   state.activeTaskId = state.tasks[0]?.id || "";
   render();
 }

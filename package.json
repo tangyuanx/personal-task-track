@@ -18,14 +18,16 @@
     "dev": "electron .",
     "start": "electron .",
     "check": "node --check src/app.js && node --check electron/main.cjs && node --check electron/preload.cjs && node --check electron/storage.cjs",
-    "dist": "electron-builder",
-    "dist:mac": "electron-builder --mac",
-    "dist:win": "electron-builder --win"
+    "dist": "node scripts/build.cjs",
+    "dist:mac": "node scripts/build.cjs --mac",
+    "dist:win": "node scripts/build.cjs --win"
   },
   "build": {
     "appId": "io.github.tangyuanx.personal-task-track",
     "productName": "Personal Task Track",
     "icon": "build/icon",
+    "asar": false,
+    "afterPack": "scripts/after-pack.cjs",
     "directories": {
       "output": "release"
     },
@@ -47,7 +49,7 @@
       ]
     },
     "win": {
-      "executableName": "task track",
+      "executableName": "PersonalTaskTrack",
       "target": [
         {
           "target": "nsis",
