@@ -1,6 +1,7 @@
 node_modules/
 release/
 dist/
+build/*.iconset/
 .DS_Store
 *.log
 npm-debug.log*

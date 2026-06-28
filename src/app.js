@@ -31,6 +31,13 @@ const themeLabels = {
   dark: "深色",
 };
 
+const fontLabels = {
+  songti: "宋体 / Inter",
+  heiti: "黑体 / Inter",
+  system: "系统默认",
+  mono: "等宽字体",
+};
+
 const defaultFlowWidths = {
   title: 360,
   note: 330,
@@ -51,6 +58,10 @@ let state = {
   newTaskPriority: "medium",
   markdownMode: "edit",
   theme: "light",
+  font: "songti",
+  settingsOpen: false,
+  focusTaskTitleId: "",
+  focusNodeTitleId: "",
   flowWidths: { ...defaultFlowWidths },
   conclusionPromptTaskId: "",
   contextMenu: null,
@@ -126,8 +137,16 @@ function normalizeTheme(value) {
   return value === "dark" ? "dark" : "light";
 }
 
+function normalizeFont(value) {
+  return Object.hasOwn(fontLabels, value) ? value : "songti";
+}
+
 function loadBrowserTheme() {
   return normalizeTheme(localStorage.getItem(THEME_KEY));
+}
+
+function loadBrowserFont() {
+  return normalizeFont(localStorage.getItem("task-track-font"));
 }
 
 async function loadAppData() {
@@ -137,7 +156,8 @@ async function loadAppData() {
       const tasks = stored && Array.isArray(stored.tasks) ? normalizeTasks(stored.tasks) : [];
       const flowWidths = normalizeLoadedFlowWidths(stored?.flowWidths || {});
       const theme = normalizeTheme(stored?.theme);
-      return { tasks, flowWidths, theme };
+      const font = normalizeFont(stored?.font);
+      return { tasks, flowWidths, theme, font };
     } catch (error) {
       console.error("Failed to read local task data.", error);
     }
@@ -147,6 +167,7 @@ async function loadAppData() {
     tasks: loadBrowserTasks(),
     flowWidths: loadBrowserFlowWidths(),
     theme: loadBrowserTheme(),
+    font: loadBrowserFont(),
   };
 }
 
@@ -156,6 +177,7 @@ function save() {
     tasks: state.tasks,
     flowWidths: state.flowWidths,
     theme: state.theme,
+    font: state.font,
     updatedAt: now(),
   };
 
@@ -163,6 +185,7 @@ function save() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state.tasks));
     localStorage.setItem(FLOW_WIDTH_KEY, JSON.stringify(state.flowWidths));
     localStorage.setItem(THEME_KEY, state.theme);
+    localStorage.setItem("task-track-font", state.font);
     return;
   }
 
@@ -206,6 +229,7 @@ function flowWidthStyle() {
 function render() {
   save();
   document.documentElement.dataset.theme = state.theme;
+  document.documentElement.dataset.font = state.font;
   const task = activeTask();
   if (task) state.activeTaskId = task.id;
   document.querySelector("#root").innerHTML = `
@@ -213,20 +237,18 @@ function render() {
       ${renderSidebar()}
       ${task ? renderTaskPage(task) : renderEmptyPage()}
       ${renderContextMenu()}
+      ${state.settingsOpen ? renderSettingsPanel() : ""}
     </main>
   `;
   bind();
+  focusPendingElement();
 }
 
 function renderSidebar() {
   return `
     <aside class="sidebar">
       <div class="sidebar-head">
-        <h1>任务</h1>
-        <div class="sidebar-head-actions">
-          <span>${filteredTasks().length}/${state.tasks.length}</span>
-          ${themeSelectHtml()}
-        </div>
+        <span>${filteredTasks().length}/${state.tasks.length}</span>
       </div>
 
       <label class="search-box">
@@ -234,17 +256,11 @@ function renderSidebar() {
         <input id="search" value="${escAttr(state.query)}" placeholder="搜索" />
       </label>
 
-      <div class="task-list">
+      <div class="task-list" data-context="task-list">
         <div class="task-list-head">
           <span></span>
-          <label class="head-filter">
-            <span>任务</span>
-            ${filterSelectHtml("task-filter", state.taskFilter, taskFilterLabels)}
-          </label>
-          <label class="head-filter">
-            <span>优先级</span>
-            ${filterSelectHtml("priority-filter", state.priorityFilter, priorityFilterLabels)}
-          </label>
+          ${filterSelectHtml("task-filter", state.taskFilter, taskFilterLabels, "任务筛选")}
+          ${filterSelectHtml("priority-filter", state.priorityFilter, priorityFilterLabels, "优先级筛选")}
         </div>
         ${filteredTasks()
           .map((task) => renderTaskItem(task))
@@ -255,15 +271,18 @@ function renderSidebar() {
           ${newTaskPrioritySelect()}
         </div>
       </div>
+      <div class="sidebar-foot">
+        <button class="settings-trigger ${state.settingsOpen ? "active" : ""}" type="button" data-action="toggle-settings" title="设置">⚙</button>
+      </div>
     </aside>
   `;
 }
 
 function renderTaskItem(task) {
   return `
-    <div class="task-item ${task.id === state.activeTaskId ? "selected" : ""}" data-action="select-task" data-task-id="${task.id}">
+    <div class="task-item ${task.id === state.activeTaskId ? "selected" : ""}" data-action="select-task" data-context="task" data-task-id="${task.id}">
       <input class="task-check" type="checkbox" title="完成" data-action="toggle-task-done" data-task-id="${task.id}" ${task.status === "done" ? "checked" : ""} />
-      ${inputHtml("title", task.title, task.id, "task-title")}
+      <input class="task-title" placeholder="任务标题" data-edit-key="title" data-task-id="${task.id}" value="${escAttr(task.title)}" />
       ${selectHtml("priority", task.priority, priorityLabels, task.id)}
     </div>
   `;
@@ -273,13 +292,11 @@ function renderTaskPage(task) {
   const topNodes = sort(task.nodes);
   const selectedNode = state.selectedNodeId ? findNode(task.nodes, state.selectedNodeId) : null;
   const summary = taskSummary(task);
-  const nextNode = nextOpenNode(task.nodes);
   const needsConclusion = state.conclusionPromptTaskId === task.id && !task.conclusion.trim();
   return `
     <section class="task-page">
       <header class="page-header">
         <div class="page-title-block">
-          <div class="page-kicker">问题记录</div>
           <input class="page-title" data-edit-key="title" data-task-id="${task.id}" value="${escAttr(task.title)}" />
           <div class="page-properties">
             <span class="priority ${task.priority}">${priorityLabels[task.priority]}优先</span>
@@ -287,11 +304,6 @@ function renderTaskPage(task) {
             <span>${summary.done}/${summary.total || 0} 节点</span>
             <span>${formatShort(task.updatedAt)}</span>
           </div>
-        </div>
-        <div class="next-step ${nextNode ? nextNode.status : "done"}">
-          <span>下一步</span>
-          <strong>${esc(nextNode?.title || "没有未完成节点")}</strong>
-          <small>${esc(nextNode?.note || (summary.total ? "流程已收束，可以补充结论。" : "先记录第一个处理动作。"))}</small>
         </div>
       </header>
 
@@ -334,7 +346,7 @@ function renderConclusionPrompt() {
 function renderBriefField(label, control, timestamp = "", attention = false, variant = "") {
   return `
     <label class="brief-field ${variant} ${attention ? "needs-attention" : ""}">
-      <span class="brief-label"><b>${label}</b>${timestamp ? `<small>更新于 ${formatMinuteStamp(timestamp)}</small>` : ""}</span>
+      <span class="brief-label"><b>${label}</b>${timestamp ? `<small>${formatMinuteStamp(timestamp)}</small>` : ""}</span>
       ${control}
     </label>
   `;
@@ -344,12 +356,14 @@ function renderFlowNode(taskId, node, depth) {
   const children = sort(node.children);
   const isSelected = state.selectedNodeId === node.id;
   const indent = Math.min(depth, 4) * 16;
+  const branch = depth === 0 ? "main-flow" : "sub-flow";
   return `
     <article class="flow-item depth-${Math.min(depth, 6)}">
-      <div class="flow-row ${node.status} ${isSelected ? "selected" : ""}" style="--indent:${indent}px" data-action="select-node" data-context="node" data-task-id="${taskId}" data-node-id="${node.id}">
+      <div class="flow-row ${branch} ${node.status} ${isSelected ? "selected" : ""}" style="--indent:${indent}px" data-action="select-node" data-context="node" data-task-id="${taskId}" data-node-id="${node.id}">
         <input class="flow-check" type="checkbox" title="完成" data-action="toggle-node-done" data-task-id="${taskId}" data-node-id="${node.id}" ${node.status === "done" ? "checked" : ""} />
         <span class="flow-title-cell">
           <span class="flow-indent"></span>
+          <span class="flow-branch-mark"></span>
           ${nodeTitleInputHtml(node, taskId)}
         </span>
         <span class="flow-note">${esc(node.note || "")}</span>
@@ -433,6 +447,26 @@ function renderEmptyPage() {
 function renderContextMenu() {
   if (!state.contextMenu) return "";
   const menu = state.contextMenu;
+  if (menu.kind === "task-list") {
+    return `
+      <div class="context-menu" style="left:${menu.x}px; top:${menu.y}px">
+        <button data-action="add-task">新增任务</button>
+      </div>
+    `;
+  }
+
+  if (menu.kind === "task") {
+    const task = state.tasks.find((item) => item.id === menu.taskId);
+    return `
+      <div class="context-menu" style="left:${menu.x}px; top:${menu.y}px">
+        <button data-action="select-task" data-task-id="${menu.taskId}">打开任务</button>
+        <button data-action="toggle-task-done" data-task-id="${menu.taskId}">${task?.status === "done" ? "标记为未完成" : "标记为完成"}</button>
+        <hr />
+        <button class="danger" data-action="delete-task" data-task-id="${menu.taskId}">删除任务</button>
+      </div>
+    `;
+  }
+
   if (menu.kind === "flow-root") {
     return `
       <div class="context-menu" style="left:${menu.x}px; top:${menu.y}px">
@@ -534,9 +568,9 @@ function newTaskPrioritySelect() {
   `;
 }
 
-function filterSelectHtml(kind, value, options) {
+function filterSelectHtml(kind, value, options, title = "") {
   return `
-    <select data-${kind}>
+    <select data-${kind} ${title ? `title="${escAttr(title)}"` : ""}>
       ${Object.entries(options)
         .map(([optionValue, label]) => `<option value="${optionValue}" ${optionValue === value ? "selected" : ""}>${label}</option>`)
         .join("")}
@@ -544,17 +578,43 @@ function filterSelectHtml(kind, value, options) {
   `;
 }
 
-function themeSelectHtml() {
+function renderSettingsPanel() {
   return `
-    <select class="theme-select" data-theme-select title="色调">
-      ${Object.entries(themeLabels)
-        .map(([optionValue, label]) => `<option value="${optionValue}" ${optionValue === state.theme ? "selected" : ""}>${label}</option>`)
+    <section class="settings-panel">
+      <div class="settings-title">设置</div>
+      <label>
+        <span>色调</span>
+        ${settingsSelectHtml("theme", state.theme, themeLabels)}
+      </label>
+      <label>
+        <span>字体</span>
+        ${settingsSelectHtml("font", state.font, fontLabels)}
+      </label>
+      <button type="button" data-action="reload-app">重新加载</button>
+    </section>
+  `;
+}
+
+function settingsSelectHtml(key, value, options) {
+  return `
+    <select data-setting="${key}">
+      ${Object.entries(options)
+        .map(([optionValue, label]) => `<option value="${optionValue}" ${optionValue === value ? "selected" : ""}>${label}</option>`)
         .join("")}
     </select>
   `;
 }
 
 function bind() {
+  document.querySelectorAll(".task-item[data-task-id]").forEach((element) => {
+    element.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0 || state.activeTaskId === element.dataset.taskId) return;
+      state.activeTaskId = element.dataset.taskId;
+      state.selectedNodeId = "";
+      window.requestAnimationFrame(() => render());
+    });
+  });
+
   document.querySelectorAll("[data-action]").forEach((element) => {
     element.addEventListener("click", (event) => {
       event.stopPropagation();
@@ -585,6 +645,10 @@ function bind() {
         x,
         y,
       };
+      if (element.dataset.context === "task" && element.dataset.taskId) {
+        state.activeTaskId = element.dataset.taskId;
+        state.selectedNodeId = "";
+      }
       render();
     });
   });
@@ -626,6 +690,16 @@ function bind() {
       render();
     });
   }
+
+  document.querySelectorAll("[data-setting]").forEach((element) => {
+    element.addEventListener("click", (event) => event.stopPropagation());
+    element.addEventListener("change", (event) => {
+      if (event.target.dataset.setting === "theme") state.theme = normalizeTheme(event.target.value);
+      if (event.target.dataset.setting === "font") state.font = normalizeFont(event.target.value);
+      save();
+      render();
+    });
+  });
 
   const search = document.querySelector("#search");
   if (search) {
@@ -672,9 +746,15 @@ function bind() {
     app.addEventListener("click", (event) => {
       let needsRender = false;
       const keepNodeDetail = event.target.closest(".node-detail, .flow-row:not(.flow-header), .context-menu");
+      const keepSettings = event.target.closest(".settings-panel, .settings-trigger");
 
       if (state.contextMenu) {
         state.contextMenu = null;
+        needsRender = true;
+      }
+
+      if (state.settingsOpen && !keepSettings) {
+        state.settingsOpen = false;
         needsRender = true;
       }
 
@@ -720,13 +800,38 @@ function exitNodeDetail() {
   return true;
 }
 
+function focusPendingElement() {
+  if (state.focusTaskTitleId) {
+    const input = document.querySelector(`.task-title[data-task-id="${state.focusTaskTitleId}"]`);
+    state.focusTaskTitleId = "";
+    if (input) {
+      input.focus();
+      input.select();
+    }
+    return;
+  }
+
+  if (state.focusNodeTitleId) {
+    const input = document.querySelector(`.flow-title-input[data-node-id="${state.focusNodeTitleId}"]`);
+    state.focusNodeTitleId = "";
+    if (input) {
+      input.focus();
+      input.select();
+    }
+  }
+}
+
 function action(data) {
   state.contextMenu = null;
   if (data.action === "set-markdown-mode") state.markdownMode = data.mode === "preview" ? "preview" : "edit";
+  if (data.action === "toggle-settings") state.settingsOpen = !state.settingsOpen;
+  if (data.action === "reload-app") window.location.reload();
   if (data.action === "select-task") {
     state.activeTaskId = data.taskId;
     state.selectedNodeId = "";
   }
+  if (data.action === "add-task") addBlankTask();
+  if (data.action === "delete-task") deleteTask(data.taskId);
   if (data.action === "select-node") state.selectedNodeId = data.nodeId;
   if (data.action === "toggle-task-done") toggleTaskDone(data.taskId);
   if (data.action === "add-node") addNode(data.taskId, data.parentId || null);
@@ -773,10 +878,18 @@ function createTaskFromBlank(title) {
   const normalizedTitle = title.trim();
   if (!normalizedTitle) return;
 
+  createTask(normalizedTitle);
+}
+
+function addBlankTask() {
+  createTask("", false);
+}
+
+function createTask(title, shouldRender = true) {
   const task = {
     id: id("task"),
     order: state.tasks.length + 1,
-    title: normalizedTitle,
+    title,
     description: "",
     status: "active",
     priority: state.newTaskPriority,
@@ -793,8 +906,22 @@ function createTaskFromBlank(title) {
   state.taskFilter = "all";
   state.priorityFilter = "all";
   state.query = "";
+  state.focusTaskTitleId = task.id;
   save();
-  render();
+  if (shouldRender) render();
+}
+
+function deleteTask(taskId) {
+  const task = state.tasks.find((item) => item.id === taskId);
+  if (!task || !confirm(`确定删除任务「${task.title || "未命名任务"}」及其所有节点？`)) return;
+  const index = state.tasks.findIndex((item) => item.id === taskId);
+  state.tasks = state.tasks.filter((item) => item.id !== taskId);
+  reorder(state.tasks);
+  if (state.activeTaskId === taskId) {
+    state.activeTaskId = state.tasks[Math.max(0, index - 1)]?.id || state.tasks[0]?.id || "";
+    state.selectedNodeId = "";
+  }
+  save();
 }
 
 function toggleTaskDone(taskId) {
@@ -826,6 +953,7 @@ function addNode(taskId, parentId) {
   }
   task.updatedAt = now();
   state.selectedNodeId = created.id;
+  state.focusNodeTitleId = created.id;
 }
 
 function addSiblingNode(taskId, nodeId) {
@@ -839,6 +967,7 @@ function addSiblingNode(taskId, nodeId) {
   reorder(found.items);
   task.updatedAt = now();
   state.selectedNodeId = created.id;
+  state.focusNodeTitleId = created.id;
 }
 
 function toggleNodeDone(taskId, nodeId) {

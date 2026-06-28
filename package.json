@@ -1,6 +1,6 @@
 {
   "name": "personal-task-track",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "A local-first personal task flow tracker for programmer daily work.",
   "private": true,
   "license": "UNLICENSED",
@@ -25,6 +25,7 @@
   "build": {
     "appId": "io.github.tangyuanx.personal-task-track",
     "productName": "Personal Task Track",
+    "icon": "build/icon",
     "directories": {
       "output": "release"
     },
@@ -32,6 +33,7 @@
       "index.html",
       "src/**/*",
       "electron/**/*",
+      "build/icon.*",
       "package.json"
     ],
     "mac": {
@@ -56,7 +58,8 @@
     "nsis": {
       "oneClick": false,
       "perMachine": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "include": "build/installer.nsh"
     }
   },
   "devDependencies": {

@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="Task Track icon">
+  <defs>
+    <linearGradient id="bg" x1="170" y1="98" x2="854" y2="934" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1fb6d9"/>
+      <stop offset="1" stop-color="#155e75"/>
+    </linearGradient>
+    <linearGradient id="shine" x1="212" y1="126" x2="812" y2="816" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff" stop-opacity=".24"/>
+      <stop offset=".58" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" rx="220" fill="url(#bg)"/>
+  <path d="M196 158h632c72 0 130 58 130 130v448c-92-300-332-494-762-578Z" fill="url(#shine)"/>
+  <path d="M258 248h508c30 0 54 24 54 54v12c0 30-24 54-54 54H572v370c0 30-24 54-54 54h-12c-30 0-54-24-54-54V368H258c-30 0-54-24-54-54v-12c0-30 24-54 54-54Z" fill="#f8fafc"/>
+  <path d="M322 718h164c36 0 64-28 64-64V522" fill="none" stroke="#bae6fd" stroke-width="32" stroke-linecap="round"/>
+  <circle cx="318" cy="718" r="28" fill="#f8fafc"/>
+  <circle cx="454" cy="718" r="28" fill="#f8fafc"/>
+  <circle cx="550" cy="522" r="24" fill="#f8fafc"/>
+</svg>
