@@ -41,6 +41,7 @@ function normalizeTaskData(data) {
     activeGroupId: typeof safeData.activeGroupId === "string" ? safeData.activeGroupId : "",
     flowWidths: safeData.flowWidths && typeof safeData.flowWidths === "object" ? safeData.flowWidths : {},
     sidebarWidth: Number.isFinite(Number(safeData.sidebarWidth)) ? Number(safeData.sidebarWidth) : 272,
+    detailHeight: Number.isFinite(Number(safeData.detailHeight)) ? Number(safeData.detailHeight) : 58,
     theme: safeData.theme === "dark" ? "dark" : "light",
     font: ["songti", "heiti", "system", "mono"].includes(safeData.font) ? safeData.font : "songti",
     zhFont: typeof safeData.zhFont === "string" ? safeData.zhFont : "",

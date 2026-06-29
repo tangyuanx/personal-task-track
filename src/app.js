@@ -10,6 +10,7 @@ const NEW_TASK_PRIORITY_KEY = "task-track-new-task-priority";
 const TASK_GROUPS_KEY = "task-track-groups";
 const ACTIVE_GROUP_KEY = "task-track-active-group";
 const SIDEBAR_WIDTH_KEY = "task-track-sidebar-width";
+const DETAIL_HEIGHT_KEY = "task-track-detail-height";
 const DATA_VERSION = 1;
 const desktopStorage = window.personalTaskTrack?.storage;
 
@@ -89,6 +90,8 @@ const flowWidthLimits = {
 const defaultTaskGroup = { id: "group_inbox", title: "默认", order: 1 };
 const defaultSidebarWidth = 272;
 const sidebarWidthLimits = [220, 420];
+const defaultDetailHeight = 58;
+const detailHeightLimits = [50, 82];
 const taskTagLabels = {
   today: "Today",
   later: "稍后",
@@ -131,6 +134,7 @@ let state = {
   focusGroupTitleId: "",
   flowWidths: { ...defaultFlowWidths },
   sidebarWidth: defaultSidebarWidth,
+  detailHeight: defaultDetailHeight,
   conclusionPromptTaskId: "",
   contextMenu: null,
 };
@@ -322,6 +326,10 @@ function loadBrowserSidebarWidth() {
   return normalizeSidebarWidth(localStorage.getItem(SIDEBAR_WIDTH_KEY));
 }
 
+function loadBrowserDetailHeight() {
+  return normalizeDetailHeight(localStorage.getItem(DETAIL_HEIGHT_KEY));
+}
+
 async function loadAppData() {
   if (desktopStorage?.read) {
     try {
@@ -339,7 +347,8 @@ async function loadAppData() {
       const priorityFilter = normalizePriorityFilter(stored?.priorityFilter);
       const newTaskPriority = normalizePriority(stored?.newTaskPriority);
       const sidebarWidth = normalizeSidebarWidth(stored?.sidebarWidth);
-      return { tasks, taskGroups, activeGroupId, flowWidths, sidebarWidth, theme, zhFont, enFont, tone, taskFilter, priorityFilter, newTaskPriority };
+      const detailHeight = normalizeDetailHeight(stored?.detailHeight);
+      return { tasks, taskGroups, activeGroupId, flowWidths, sidebarWidth, detailHeight, theme, zhFont, enFont, tone, taskFilter, priorityFilter, newTaskPriority };
     } catch (error) {
       console.error("Failed to read local task data.", error);
     }
@@ -355,6 +364,7 @@ async function loadAppData() {
     activeGroupId: normalizeActiveGroupId(localStorage.getItem(ACTIVE_GROUP_KEY), taskGroups),
     flowWidths: loadBrowserFlowWidths(),
     sidebarWidth: loadBrowserSidebarWidth(),
+    detailHeight: loadBrowserDetailHeight(),
     theme: loadBrowserTheme(),
     ...typography,
     ...preferences,
@@ -369,6 +379,7 @@ function save() {
     activeGroupId: state.activeGroupId,
     flowWidths: state.flowWidths,
     sidebarWidth: state.sidebarWidth,
+    detailHeight: state.detailHeight,
     theme: state.theme,
     zhFont: state.zhFont,
     enFont: state.enFont,
@@ -385,6 +396,7 @@ function save() {
     localStorage.setItem(ACTIVE_GROUP_KEY, state.activeGroupId);
     localStorage.setItem(FLOW_WIDTH_KEY, JSON.stringify(state.flowWidths));
     localStorage.setItem(SIDEBAR_WIDTH_KEY, String(state.sidebarWidth));
+    localStorage.setItem(DETAIL_HEIGHT_KEY, String(state.detailHeight));
     localStorage.setItem(THEME_KEY, state.theme);
     localStorage.setItem(ZH_FONT_KEY, state.zhFont);
     localStorage.setItem(EN_FONT_KEY, state.enFont);
@@ -432,10 +444,21 @@ function normalizeSidebarWidth(value) {
   return Math.max(sidebarWidthLimits[0], Math.min(sidebarWidthLimits[1], Math.round(width)));
 }
 
+function normalizeDetailHeight(value) {
+  const height = Number(value);
+  if (!Number.isFinite(height)) return defaultDetailHeight;
+  return Math.max(detailHeightLimits[0], Math.min(detailHeightLimits[1], Math.round(height)));
+}
+
 function flowWidthStyle() {
   return Object.entries(defaultFlowWidths)
     .map(([key]) => `--flow-${key}-width:${normalizeFlowWidth(key, state.flowWidths[key])}px`)
     .join(";");
+}
+
+function workbenchStyle() {
+  const detailHeight = normalizeDetailHeight(state.detailHeight);
+  return `--detail-pane-height:${detailHeight}%;--flow-pane-height:${100 - detailHeight}%`;
 }
 
 function render() {
@@ -579,7 +602,7 @@ function renderTaskPage(task) {
         ${renderBriefField("结论", textareaHtml("conclusion", task.conclusion, task.id), "", needsConclusion, "conclusion")}
       </section>
 
-      <section class="task-workbench ${selectedNode ? "with-detail" : ""}">
+      <section class="task-workbench ${selectedNode ? "with-detail" : ""}" style="${selectedNode ? workbenchStyle() : ""}">
         <section class="flow-section" data-context="flow-root" data-task-id="${task.id}">
           <div class="section-heading">
             <div>
@@ -594,6 +617,7 @@ function renderTaskPage(task) {
           }
         </section>
 
+        ${selectedNode ? `<div class="detail-resizer" data-detail-resizer title="拖拽调整节点详情高度"></div>` : ""}
         ${selectedNode ? renderNodeDetail(task.id, selectedNode) : ""}
       </section>
     </section>
@@ -1180,6 +1204,11 @@ function bind() {
     handle.addEventListener("pointerdown", startSidebarResize);
   });
 
+  document.querySelectorAll("[data-detail-resizer]").forEach((handle) => {
+    handle.addEventListener("click", (event) => event.stopPropagation());
+    handle.addEventListener("pointerdown", startDetailResize);
+  });
+
   document.querySelectorAll(".markdown-editor").forEach((editor) => {
     editor.addEventListener("paste", handleMarkdownPaste);
     editor.addEventListener("keydown", (event) => {
@@ -1286,6 +1315,37 @@ function startSidebarResize(event) {
 
   function end() {
     document.body.classList.remove("resizing-sidebar");
+    save();
+    window.removeEventListener("pointermove", move);
+    window.removeEventListener("pointerup", end);
+  }
+
+  window.addEventListener("pointermove", move);
+  window.addEventListener("pointerup", end);
+}
+
+function startDetailResize(event) {
+  event.preventDefault();
+  event.stopPropagation();
+
+  const startY = event.clientY;
+  const startHeight = normalizeDetailHeight(state.detailHeight);
+  const workbench = event.target.closest(".task-workbench");
+  const totalHeight = Math.max(1, workbench?.getBoundingClientRect().height || window.innerHeight);
+  document.body.classList.add("resizing-detail");
+
+  function move(moveEvent) {
+    const delta = ((moveEvent.clientY - startY) / totalHeight) * 100;
+    const nextHeight = normalizeDetailHeight(startHeight - delta);
+    state.detailHeight = nextHeight;
+    if (workbench) {
+      workbench.style.setProperty("--detail-pane-height", `${nextHeight}%`);
+      workbench.style.setProperty("--flow-pane-height", `${100 - nextHeight}%`);
+    }
+  }
+
+  function end() {
+    document.body.classList.remove("resizing-detail");
     save();
     window.removeEventListener("pointermove", move);
     window.removeEventListener("pointerup", end);

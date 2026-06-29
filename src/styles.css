@@ -1300,7 +1300,31 @@ p {
 }
 
 .task-workbench.with-detail {
-  grid-template-rows: minmax(260px, 0.92fr) minmax(300px, 0.78fr);
+  grid-template-rows:
+    minmax(180px, var(--flow-pane-height, 42%))
+    10px
+    minmax(50%, var(--detail-pane-height, 58%));
+}
+
+.detail-resizer {
+  position: relative;
+  margin: -2px 42px 0;
+  cursor: row-resize;
+}
+
+.detail-resizer::before {
+  position: absolute;
+  top: 4px;
+  right: 0;
+  left: 0;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--line);
+  content: "";
+}
+
+.detail-resizer:hover::before {
+  background: var(--focus);
 }
 
 .section-heading {
@@ -1427,6 +1451,11 @@ body.resizing-column {
 
 body.resizing-sidebar {
   cursor: col-resize;
+  user-select: none;
+}
+
+body.resizing-detail {
+  cursor: row-resize;
   user-select: none;
 }
 
@@ -1991,7 +2020,10 @@ body.resizing-sidebar {
 
   .task-workbench.with-detail {
     grid-template-columns: 1fr;
-    grid-template-rows: minmax(240px, auto) minmax(300px, auto);
+    grid-template-rows:
+      minmax(180px, var(--flow-pane-height, 42%))
+      10px
+      minmax(50%, var(--detail-pane-height, 58%));
   }
 
   .node-detail {
@@ -2080,7 +2112,10 @@ body.resizing-sidebar {
 
   .task-workbench.with-detail {
     grid-template-columns: 1fr;
-    grid-template-rows: minmax(220px, auto) minmax(300px, auto);
+    grid-template-rows:
+      minmax(170px, var(--flow-pane-height, 42%))
+      10px
+      minmax(50%, var(--detail-pane-height, 58%));
   }
 
   .section-heading {
