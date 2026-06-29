@@ -4,6 +4,9 @@ const THEME_KEY = "task-track-theme";
 const ZH_FONT_KEY = "task-track-zh-font";
 const EN_FONT_KEY = "task-track-en-font";
 const TONE_KEY = "task-track-tone";
+const TASK_FILTER_KEY = "task-track-task-filter";
+const PRIORITY_FILTER_KEY = "task-track-priority-filter";
+const NEW_TASK_PRIORITY_KEY = "task-track-new-task-priority";
 const DATA_VERSION = 1;
 const desktopStorage = window.personalTaskTrack?.storage;
 
@@ -36,10 +39,16 @@ const themeLabels = {
 
 const toneLabels = {
   moss: "松石绿",
-  blue: "深海蓝",
+  indigo: "Linear 靛蓝",
+  azure: "Apple 蓝",
+  sky: "飞书天蓝",
+  mint: "Notion 薄荷",
+  emerald: "Slack 绿",
   violet: "烟紫色",
-  graphite: "石墨灰",
+  rose: "Instagram 玫瑰",
+  coral: "Airbnb 珊瑚",
   amber: "琥珀棕",
+  graphite: "石墨灰",
 };
 
 const zhFontLabels = {
@@ -169,6 +178,18 @@ function normalizeTone(value) {
   return Object.hasOwn(toneLabels, value) ? value : "moss";
 }
 
+function normalizeTaskFilter(value) {
+  return Object.hasOwn(taskFilterLabels, value) ? value : "all";
+}
+
+function normalizePriorityFilter(value) {
+  return Object.hasOwn(priorityFilterLabels, value) ? value : "all";
+}
+
+function normalizePriority(value) {
+  return Object.hasOwn(priorityLabels, value) ? value : "medium";
+}
+
 function normalizeZhFont(value) {
   return Object.hasOwn(zhFontLabels, value) ? value : "system";
 }
@@ -197,6 +218,14 @@ function loadBrowserTypography() {
   };
 }
 
+function loadBrowserPreferences() {
+  return {
+    taskFilter: normalizeTaskFilter(localStorage.getItem(TASK_FILTER_KEY)),
+    priorityFilter: normalizePriorityFilter(localStorage.getItem(PRIORITY_FILTER_KEY)),
+    newTaskPriority: normalizePriority(localStorage.getItem(NEW_TASK_PRIORITY_KEY)),
+  };
+}
+
 async function loadAppData() {
   if (desktopStorage?.read) {
     try {
@@ -208,18 +237,23 @@ async function loadAppData() {
       const zhFont = normalizeZhFont(stored?.zhFont || legacy.zhFont);
       const enFont = normalizeEnFont(stored?.enFont || legacy.enFont);
       const tone = normalizeTone(stored?.tone);
-      return { tasks, flowWidths, theme, zhFont, enFont, tone };
+      const taskFilter = normalizeTaskFilter(stored?.taskFilter);
+      const priorityFilter = normalizePriorityFilter(stored?.priorityFilter);
+      const newTaskPriority = normalizePriority(stored?.newTaskPriority);
+      return { tasks, flowWidths, theme, zhFont, enFont, tone, taskFilter, priorityFilter, newTaskPriority };
     } catch (error) {
       console.error("Failed to read local task data.", error);
     }
   }
 
   const typography = loadBrowserTypography();
+  const preferences = loadBrowserPreferences();
   return {
     tasks: loadBrowserTasks(),
     flowWidths: loadBrowserFlowWidths(),
     theme: loadBrowserTheme(),
     ...typography,
+    ...preferences,
   };
 }
 
@@ -232,6 +266,9 @@ function save() {
     zhFont: state.zhFont,
     enFont: state.enFont,
     tone: state.tone,
+    taskFilter: state.taskFilter,
+    priorityFilter: state.priorityFilter,
+    newTaskPriority: state.newTaskPriority,
     updatedAt: now(),
   };
 
@@ -242,6 +279,9 @@ function save() {
     localStorage.setItem(ZH_FONT_KEY, state.zhFont);
     localStorage.setItem(EN_FONT_KEY, state.enFont);
     localStorage.setItem(TONE_KEY, state.tone);
+    localStorage.setItem(TASK_FILTER_KEY, state.taskFilter);
+    localStorage.setItem(PRIORITY_FILTER_KEY, state.priorityFilter);
+    localStorage.setItem(NEW_TASK_PRIORITY_KEY, state.newTaskPriority);
     return;
   }
 
@@ -363,7 +403,6 @@ function renderTaskPage(task) {
   const topNodes = sort(task.nodes);
   const selectedNode = state.selectedNodeId ? findNode(task.nodes, state.selectedNodeId) : null;
   const summary = taskSummary(task);
-  const nextNode = nextOpenNode(task.nodes);
   const needsConclusion = state.conclusionPromptTaskId === task.id && !task.conclusion.trim();
   return `
     <section class="task-page">
@@ -378,11 +417,6 @@ function renderTaskPage(task) {
             <span>${formatShort(task.updatedAt)}</span>
           </div>
         </div>
-        <aside class="next-step ${nextNode?.status || (task.status === "done" ? "done" : "")}">
-          <span>Next checkpoint</span>
-          <strong>${nextNode ? esc(nextNode.title || "未命名节点") : task.status === "done" ? "任务已收束" : "右键添加第一个节点"}</strong>
-          <small>${nextNode ? nodeStatusText(nextNode.status) : "把下一步写进处理流"}</small>
-        </aside>
       </header>
 
       ${needsConclusion ? renderConclusionPrompt() : ""}
@@ -424,8 +458,9 @@ function renderConclusionPrompt() {
 function renderBriefField(label, control, timestamp = "", attention = false, variant = "") {
   return `
     <label class="brief-field ${variant} ${attention ? "needs-attention" : ""}">
-      <span class="brief-label"><b>${label}</b>${timestamp ? `<small>${formatMinuteStamp(timestamp)}</small>` : ""}</span>
+      <span class="brief-label"><b>${label}</b></span>
       ${control}
+      ${timestamp ? `<small class="brief-stamp">${formatShort(timestamp)}</small>` : ""}
     </label>
   `;
 }
@@ -669,11 +704,6 @@ function renderSettingsPanel() {
           <button class="settings-close" type="button" data-action="close-settings" title="关闭">×</button>
         </header>
         <div class="settings-body">
-          <nav class="settings-nav" aria-label="设置分组">
-            <span class="active">外观</span>
-            <span>字体</span>
-            <span>色调</span>
-          </nav>
           <div class="settings-content">
             <section class="settings-group">
               <div class="settings-group-head">
@@ -685,7 +715,7 @@ function renderSettingsPanel() {
             <section class="settings-group">
               <div class="settings-group-head">
                 <h3>色调</h3>
-                <p>用于高亮、选中状态和流程标记。</p>
+                <p>用于高亮、选中状态和流程标记，参考常见生产力应用色系。</p>
               </div>
               ${settingsOptionGroup("tone", state.tone, toneLabels, true)}
             </section>
@@ -699,13 +729,34 @@ function renderSettingsPanel() {
             <section class="settings-group">
               <div class="settings-group-head">
                 <h3>英文字体</h3>
-                <p>用于英文、数字和大部分界面文字。</p>
+                <p>用于英文、数字和拉丁字符。</p>
               </div>
               ${settingsSelectHtml("en-font", state.enFont, enFontLabels)}
             </section>
+            <section class="settings-group">
+              <div class="settings-group-head">
+                <h3>任务视图</h3>
+                <p>设置左侧任务标签和默认新任务优先级。</p>
+              </div>
+              <div class="settings-stack">
+                <label>
+                  <span>任务范围</span>
+                  ${settingsSelectHtml("task-filter", state.taskFilter, taskFilterLabels)}
+                </label>
+                <label>
+                  <span>优先级范围</span>
+                  ${settingsSelectHtml("priority-filter", state.priorityFilter, priorityFilterLabels)}
+                </label>
+                <label>
+                  <span>新任务优先级</span>
+                  ${settingsSelectHtml("new-task-priority", state.newTaskPriority, priorityLabels)}
+                </label>
+              </div>
+            </section>
             <div class="settings-preview">
               <span>Preview</span>
-              <strong>任务流 Task flow 123</strong>
+              <strong class="settings-preview-zh">任务流中文字体预览</strong>
+              <strong class="settings-preview-en">Task flow English 123</strong>
               <p>背景、当前判断、结论保持轻量，处理流保持主视线。</p>
             </div>
           </div>
@@ -828,6 +879,9 @@ function bind() {
       if (event.target.dataset.setting === "tone") state.tone = normalizeTone(event.target.value);
       if (event.target.dataset.setting === "zh-font") state.zhFont = normalizeZhFont(event.target.value);
       if (event.target.dataset.setting === "en-font") state.enFont = normalizeEnFont(event.target.value);
+      if (event.target.dataset.setting === "task-filter") state.taskFilter = normalizeTaskFilter(event.target.value);
+      if (event.target.dataset.setting === "priority-filter") state.priorityFilter = normalizePriorityFilter(event.target.value);
+      if (event.target.dataset.setting === "new-task-priority") state.newTaskPriority = normalizePriority(event.target.value);
       save();
       render();
     });
@@ -933,6 +987,9 @@ function applySetting(key, value) {
   if (key === "tone") state.tone = normalizeTone(value);
   if (key === "zh-font") state.zhFont = normalizeZhFont(value);
   if (key === "en-font") state.enFont = normalizeEnFont(value);
+  if (key === "task-filter") state.taskFilter = normalizeTaskFilter(value);
+  if (key === "priority-filter") state.priorityFilter = normalizePriorityFilter(value);
+  if (key === "new-task-priority") state.newTaskPriority = normalizePriority(value);
 }
 
 function startColumnResize(event, column) {
@@ -1456,6 +1513,9 @@ async function bootstrap() {
   state.zhFont = data.zhFont;
   state.enFont = data.enFont;
   state.tone = data.tone;
+  state.taskFilter = data.taskFilter;
+  state.priorityFilter = data.priorityFilter;
+  state.newTaskPriority = data.newTaskPriority;
   state.activeTaskId = state.tasks[0]?.id || "";
   render();
 }
