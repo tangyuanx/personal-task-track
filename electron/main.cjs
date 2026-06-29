@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, ipcMain, shell } = require("electron");
+const { app, BrowserWindow, Menu, clipboard, ipcMain, shell } = require("electron");
 const path = require("node:path");
 const { readTaskData, writeTaskData } = require("./storage.cjs");
 
@@ -45,6 +45,10 @@ function openExternalUrl(url) {
 function registerStorageHandlers() {
   ipcMain.handle("task-data:read", () => readTaskData(app.getPath("userData")));
   ipcMain.handle("task-data:write", (_event, data) => writeTaskData(app.getPath("userData"), data));
+  ipcMain.handle("clipboard:read-image-data-url", () => {
+    const image = clipboard.readImage();
+    return image.isEmpty() ? "" : image.toDataURL();
+  });
 }
 
 function createMenu() {

@@ -6,4 +6,7 @@ contextBridge.exposeInMainWorld("personalTaskTrack", {
     read: () => ipcRenderer.invoke("task-data:read"),
     write: (data) => ipcRenderer.invoke("task-data:write", data),
   },
+  clipboard: {
+    readImageDataUrl: () => ipcRenderer.invoke("clipboard:read-image-data-url"),
+  },
 });

@@ -96,17 +96,17 @@ const taskTagLabels = {
 };
 
 const markdownTools = [
-  { action: "heading", label: "H", title: "标题" },
+  { action: "heading", label: "H1", title: "标题" },
   { action: "bold", label: "B", title: "加粗" },
   { action: "italic", label: "I", title: "斜体" },
-  { action: "quote", label: "“", title: "引用" },
-  { action: "code", label: "</>", title: "代码" },
-  { action: "list", label: "•", title: "无序列表" },
+  { action: "quote", label: ">", title: "引用" },
+  { action: "code", label: "{}", title: "代码" },
+  { action: "list", label: "-", title: "无序列表" },
   { action: "ordered", label: "1.", title: "有序列表" },
-  { action: "todo", label: "☐", title: "任务清单" },
-  { action: "link", label: "↗", title: "链接" },
-  { action: "image", label: "▧", title: "图片" },
-  { action: "divider", label: "—", title: "分割线" },
+  { action: "todo", label: "[ ]", title: "任务清单" },
+  { action: "link", label: "lnk", title: "链接" },
+  { action: "image", label: "img", title: "图片" },
+  { action: "divider", label: "hr", title: "分割线" },
 ];
 
 let state = {
@@ -999,7 +999,10 @@ function bind() {
   document.querySelectorAll("[data-group-title]").forEach((element) => {
     element.addEventListener("click", (event) => event.stopPropagation());
     element.addEventListener("input", (event) => renameGroup(event.target.dataset.groupTitle, event.target.value, false));
-    element.addEventListener("blur", (event) => renameGroup(event.target.dataset.groupTitle, event.target.value, true));
+    element.addEventListener("blur", (event) => {
+      renameGroup(event.target.dataset.groupTitle, event.target.value, true);
+      window.setTimeout(render, 0);
+    });
     element.addEventListener("keydown", (event) => {
       if (event.key === "Enter") {
         event.preventDefault();
@@ -1038,6 +1041,9 @@ function bind() {
       if (event.target.closest(".task-brief")) resizeTaskBriefTextarea(event.target);
     });
     element.addEventListener("change", (event) => edit(event.target.dataset, event.target.value));
+    element.addEventListener("change", (event) => {
+      if (event.target.dataset.editKey === "groupId") render();
+    });
     element.addEventListener("click", (event) => {
       event.stopPropagation();
     });
@@ -1198,8 +1204,9 @@ function bind() {
       let needsRender = false;
       const keepNodeDetail = event.target.closest(".node-detail, .flow-row:not(.flow-header), .context-menu, [data-action], [data-edit-key], button, input, textarea, select");
       const keepSettings = event.target.closest(".settings-overlay, .settings-trigger");
+      const keepContextMenu = event.target.closest(".context-menu");
 
-      if (state.contextMenu) {
+      if (state.contextMenu && !keepContextMenu) {
         state.contextMenu = null;
         needsRender = true;
       }
@@ -1592,22 +1599,34 @@ function replaceEditorSelection(editor, value, cursorStart, cursorEnd = cursorSt
   edit(editor.dataset, editor.value);
 }
 
-function handleMarkdownPaste(event) {
+async function handleMarkdownPaste(event) {
   const items = Array.from(event.clipboardData?.items || []);
+  const files = Array.from(event.clipboardData?.files || []);
   const imageItem = items.find((item) => item.type.startsWith("image/"));
-  if (!imageItem) return;
-  const file = imageItem.getAsFile();
-  if (!file) return;
+  const file = files.find((item) => item.type.startsWith("image/")) || imageItem?.getAsFile();
+  if (!file) {
+    const text = event.clipboardData?.getData("text/plain") || "";
+    if (text) return;
+    event.preventDefault();
+    const dataUrl = await window.personalTaskTrack?.clipboard?.readImageDataUrl?.();
+    if (!dataUrl) return;
+    insertMarkdownImage(event.currentTarget, dataUrl);
+    return;
+  }
   event.preventDefault();
   const reader = new FileReader();
   reader.addEventListener("load", () => {
-    const editor = event.currentTarget;
-    const alt = `粘贴图片 ${formatImageStamp(new Date())}`;
-    const markdown = `\n![${alt}](${reader.result})\n`;
-    const start = editor.selectionStart || editor.value.length;
-    replaceEditorSelection(editor, markdown, start + markdown.length);
+    insertMarkdownImage(event.currentTarget, reader.result);
   });
   reader.readAsDataURL(file);
+}
+
+function insertMarkdownImage(editor, dataUrl) {
+  const alt = `粘贴图片 ${formatImageStamp(new Date())}`;
+  const markdown = `\n![${alt}](${dataUrl})\n`;
+  const start = editor.selectionStart || editor.value.length;
+  replaceEditorSelection(editor, markdown, start + markdown.length);
+  save();
 }
 
 function toggleTaskTag(taskId, tag) {

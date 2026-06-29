@@ -1300,7 +1300,7 @@ p {
 }
 
 .task-workbench.with-detail {
-  grid-template-columns: minmax(460px, 1fr) minmax(360px, 0.38fr);
+  grid-template-rows: minmax(260px, 0.92fr) minmax(300px, 0.78fr);
 }
 
 .section-heading {
@@ -1557,12 +1557,12 @@ body.resizing-sidebar {
   min-width: 0;
   min-height: 0;
   flex-direction: column;
-  margin: 10px 42px 18px 0;
+  margin: 0 42px 18px;
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--panel);
-  box-shadow: -8px 0 26px rgba(46, 42, 35, 0.06);
+  box-shadow: 0 -8px 24px rgba(46, 42, 35, 0.05);
 }
 
 .detail-head {
@@ -1991,6 +1991,7 @@ body.resizing-sidebar {
 
   .task-workbench.with-detail {
     grid-template-columns: 1fr;
+    grid-template-rows: minmax(240px, auto) minmax(300px, auto);
   }
 
   .node-detail {
@@ -2079,6 +2080,7 @@ body.resizing-sidebar {
 
   .task-workbench.with-detail {
     grid-template-columns: 1fr;
+    grid-template-rows: minmax(220px, auto) minmax(300px, auto);
   }
 
   .section-heading {
