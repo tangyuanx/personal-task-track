@@ -1346,6 +1346,24 @@ p {
   font-size: 13px;
 }
 
+.flow-add-button {
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--heading);
+  background: var(--field);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.flow-add-button:hover,
+.flow-add-button:focus-visible {
+  border-color: var(--focus);
+  background: var(--focus-field);
+  box-shadow: 0 0 0 2px var(--focus-ring);
+}
+
 .flow-list {
   min-height: 0;
   flex: 1;

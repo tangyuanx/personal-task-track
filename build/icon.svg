@@ -1,19 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="Task Track icon">
-  <defs>
-    <linearGradient id="bg" x1="170" y1="98" x2="854" y2="934" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#1fb6d9"/>
-      <stop offset="1" stop-color="#155e75"/>
-    </linearGradient>
-    <linearGradient id="shine" x1="212" y1="126" x2="812" y2="816" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#ffffff" stop-opacity=".24"/>
-      <stop offset=".58" stop-color="#ffffff" stop-opacity="0"/>
-    </linearGradient>
-  </defs>
-  <rect width="1024" height="1024" rx="220" fill="url(#bg)"/>
-  <path d="M196 158h632c72 0 130 58 130 130v448c-92-300-332-494-762-578Z" fill="url(#shine)"/>
-  <path d="M258 248h508c30 0 54 24 54 54v12c0 30-24 54-54 54H572v370c0 30-24 54-54 54h-12c-30 0-54-24-54-54V368H258c-30 0-54-24-54-54v-12c0-30 24-54 54-54Z" fill="#f8fafc"/>
-  <path d="M322 718h164c36 0 64-28 64-64V522" fill="none" stroke="#bae6fd" stroke-width="32" stroke-linecap="round"/>
-  <circle cx="318" cy="718" r="28" fill="#f8fafc"/>
-  <circle cx="454" cy="718" r="28" fill="#f8fafc"/>
-  <circle cx="550" cy="522" r="24" fill="#f8fafc"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="Personal Task Track">
+  <rect width="1024" height="1024" rx="232" fill="#ffffff"/>
+  <path d="M238 166h548c39 0 70 31 70 70v552c0 39-31 70-70 70H238c-39 0-70-31-70-70V236c0-39 31-70 70-70Z" fill="#fff"/>
+  <path d="M236 164h552c40 0 72 32 72 72v552c0 40-32 72-72 72H236c-40 0-72-32-72-72V236c0-40 32-72 72-72Zm4 62c-8 0-14 6-14 14v544c0 8 6 14 14 14h544c8 0 14-6 14-14V240c0-8-6-14-14-14H240Z" fill="#dc2626"/>
+  <path d="M323 292h378c18 0 32 14 32 32v72c0 18-14 32-32 32H580v326c0 18-14 32-32 32h-74c-18 0-32-14-32-32V428H323c-18 0-32-14-32-32v-72c0-18 14-32 32-32Z" fill="#dc2626"/>
+  <path d="M638 261c13-13 34-13 47 0l78 78c13 13 13 34 0 47l-36 36-125-125 36-36Z" fill="#ef4444"/>
+  <path d="M580 320l125 125-56 56-125-125 56-56Z" fill="#b91c1c"/>
+  <path d="M628 498l32-32 123 123c15 15 15 39 0 54l-34 34c-15 15-39 15-54 0L572 554l56-56Z" fill="#dc2626"/>
+  <path d="M292 826h440" stroke="#dc2626" stroke-width="38" stroke-linecap="round"/>
 </svg>

@@ -609,6 +609,7 @@ function renderTaskPage(task) {
               <h2>处理流</h2>
               <p>${summary.open ? `${summary.open} 个节点未完成` : "所有节点已完成"}</p>
             </div>
+            <button class="flow-add-button" type="button" data-action="add-root-node" data-task-id="${task.id}" title="新增主节点">+ 主节点</button>
           </div>
           ${
             topNodes.length
@@ -1223,6 +1224,16 @@ function bind() {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
         applyMarkdownTool("link");
+      }
+    });
+  });
+
+  document.querySelectorAll(".node-detail").forEach((element) => {
+    element.addEventListener("keydown", (event) => {
+      if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+        event.preventDefault();
+        state.selectedNodeId = "";
+        render();
       }
     });
   });
