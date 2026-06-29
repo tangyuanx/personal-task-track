@@ -7,6 +7,9 @@ const TONE_KEY = "task-track-tone";
 const TASK_FILTER_KEY = "task-track-task-filter";
 const PRIORITY_FILTER_KEY = "task-track-priority-filter";
 const NEW_TASK_PRIORITY_KEY = "task-track-new-task-priority";
+const TASK_GROUPS_KEY = "task-track-groups";
+const ACTIVE_GROUP_KEY = "task-track-active-group";
+const SIDEBAR_WIDTH_KEY = "task-track-sidebar-width";
 const DATA_VERSION = 1;
 const desktopStorage = window.personalTaskTrack?.storage;
 
@@ -83,8 +86,19 @@ const flowWidthLimits = {
   note: [180, 760],
 };
 
+const defaultTaskGroup = { id: "group_inbox", title: "默认", order: 1 };
+const defaultSidebarWidth = 272;
+const sidebarWidthLimits = [220, 420];
+const taskTagLabels = {
+  today: "Today",
+  later: "稍后",
+  blocked: "卡住",
+};
+
 let state = {
   tasks: [],
+  taskGroups: [{ ...defaultTaskGroup }],
+  activeGroupId: defaultTaskGroup.id,
   activeTaskId: "",
   selectedNodeId: "",
   query: "",
@@ -100,6 +114,7 @@ let state = {
   focusTaskTitleId: "",
   focusNodeTitleId: "",
   flowWidths: { ...defaultFlowWidths },
+  sidebarWidth: defaultSidebarWidth,
   conclusionPromptTaskId: "",
   contextMenu: null,
 };
@@ -148,8 +163,60 @@ function loadBrowserTasks() {
 function normalizeTasks(tasks) {
   return tasks.map((task) => ({
     ...task,
+    groupId: task.groupId || defaultTaskGroup.id,
+    tags: normalizeTaskTags(task.tags),
     hypothesisUpdatedAt: task.hypothesisUpdatedAt || (task.hypothesis ? task.updatedAt || task.createdAt || now() : ""),
   }));
+}
+
+function normalizeTaskTags(tags) {
+  const raw = tags && typeof tags === "object" ? tags : {};
+  return {
+    today: Boolean(raw.today),
+    later: Boolean(raw.later),
+    blocked: Boolean(raw.blocked),
+  };
+}
+
+function normalizeTaskGroups(groups, tasks = []) {
+  const safeGroups = Array.isArray(groups) ? groups : [];
+  const seen = new Set();
+  const normalized = safeGroups
+    .map((group, index) => {
+      const raw = group && typeof group === "object" ? group : {};
+      const title = String(raw.title || "").trim();
+      const groupId = String(raw.id || "").trim();
+      if (!groupId || !title || seen.has(groupId)) return null;
+      seen.add(groupId);
+      return {
+        id: groupId,
+        title,
+        order: Number.isFinite(Number(raw.order)) ? Number(raw.order) : index + 1,
+      };
+    })
+    .filter(Boolean);
+
+  if (!seen.has(defaultTaskGroup.id)) {
+    normalized.unshift({ ...defaultTaskGroup });
+    seen.add(defaultTaskGroup.id);
+  }
+
+  tasks.forEach((task) => {
+    if (task.groupId && !seen.has(task.groupId)) {
+      seen.add(task.groupId);
+      normalized.push({
+        id: task.groupId,
+        title: "未命名分组",
+        order: normalized.length + 1,
+      });
+    }
+  });
+
+  return sort(normalized).map((group, index) => ({ ...group, order: index + 1 }));
+}
+
+function normalizeActiveGroupId(value, groups) {
+  return groups.some((group) => group.id === value) ? value : groups[0]?.id || defaultTaskGroup.id;
 }
 
 function loadBrowserFlowWidths() {
@@ -226,11 +293,26 @@ function loadBrowserPreferences() {
   };
 }
 
+function loadBrowserTaskGroups(tasks) {
+  const raw = localStorage.getItem(TASK_GROUPS_KEY);
+  try {
+    return normalizeTaskGroups(raw ? JSON.parse(raw) : [], tasks);
+  } catch {
+    return normalizeTaskGroups([], tasks);
+  }
+}
+
+function loadBrowserSidebarWidth() {
+  return normalizeSidebarWidth(localStorage.getItem(SIDEBAR_WIDTH_KEY));
+}
+
 async function loadAppData() {
   if (desktopStorage?.read) {
     try {
       const stored = await desktopStorage.read();
       const tasks = stored && Array.isArray(stored.tasks) ? normalizeTasks(stored.tasks) : [];
+      const taskGroups = normalizeTaskGroups(stored?.taskGroups, tasks);
+      const activeGroupId = normalizeActiveGroupId(stored?.activeGroupId, taskGroups);
       const flowWidths = normalizeLoadedFlowWidths(stored?.flowWidths || {});
       const theme = normalizeTheme(stored?.theme);
       const legacy = migrateLegacyFont(stored?.font);
@@ -240,17 +322,23 @@ async function loadAppData() {
       const taskFilter = normalizeTaskFilter(stored?.taskFilter);
       const priorityFilter = normalizePriorityFilter(stored?.priorityFilter);
       const newTaskPriority = normalizePriority(stored?.newTaskPriority);
-      return { tasks, flowWidths, theme, zhFont, enFont, tone, taskFilter, priorityFilter, newTaskPriority };
+      const sidebarWidth = normalizeSidebarWidth(stored?.sidebarWidth);
+      return { tasks, taskGroups, activeGroupId, flowWidths, sidebarWidth, theme, zhFont, enFont, tone, taskFilter, priorityFilter, newTaskPriority };
     } catch (error) {
       console.error("Failed to read local task data.", error);
     }
   }
 
+  const tasks = loadBrowserTasks();
+  const taskGroups = loadBrowserTaskGroups(tasks);
   const typography = loadBrowserTypography();
   const preferences = loadBrowserPreferences();
   return {
-    tasks: loadBrowserTasks(),
+    tasks,
+    taskGroups,
+    activeGroupId: normalizeActiveGroupId(localStorage.getItem(ACTIVE_GROUP_KEY), taskGroups),
     flowWidths: loadBrowserFlowWidths(),
+    sidebarWidth: loadBrowserSidebarWidth(),
     theme: loadBrowserTheme(),
     ...typography,
     ...preferences,
@@ -261,7 +349,10 @@ function save() {
   const payload = {
     version: DATA_VERSION,
     tasks: state.tasks,
+    taskGroups: state.taskGroups,
+    activeGroupId: state.activeGroupId,
     flowWidths: state.flowWidths,
+    sidebarWidth: state.sidebarWidth,
     theme: state.theme,
     zhFont: state.zhFont,
     enFont: state.enFont,
@@ -274,7 +365,10 @@ function save() {
 
   if (!desktopStorage?.write) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state.tasks));
+    localStorage.setItem(TASK_GROUPS_KEY, JSON.stringify(state.taskGroups));
+    localStorage.setItem(ACTIVE_GROUP_KEY, state.activeGroupId);
     localStorage.setItem(FLOW_WIDTH_KEY, JSON.stringify(state.flowWidths));
+    localStorage.setItem(SIDEBAR_WIDTH_KEY, String(state.sidebarWidth));
     localStorage.setItem(THEME_KEY, state.theme);
     localStorage.setItem(ZH_FONT_KEY, state.zhFont);
     localStorage.setItem(EN_FONT_KEY, state.enFont);
@@ -316,6 +410,12 @@ function normalizeFlowWidth(key, value) {
   return Math.max(min, Math.min(max, Math.round(width)));
 }
 
+function normalizeSidebarWidth(value) {
+  const width = Number(value);
+  if (!Number.isFinite(width)) return defaultSidebarWidth;
+  return Math.max(sidebarWidthLimits[0], Math.min(sidebarWidthLimits[1], Math.round(width)));
+}
+
 function flowWidthStyle() {
   return Object.entries(defaultFlowWidths)
     .map(([key]) => `--flow-${key}-width:${normalizeFlowWidth(key, state.flowWidths[key])}px`)
@@ -331,7 +431,7 @@ function render() {
   const task = activeTask();
   if (task) state.activeTaskId = task.id;
   document.querySelector("#root").innerHTML = `
-    <main class="ops-app">
+    <main class="ops-app" style="--sidebar-width:${normalizeSidebarWidth(state.sidebarWidth)}px">
       ${renderSidebar()}
       ${task ? renderTaskPage(task) : renderEmptyPage()}
       ${renderContextMenu()}
@@ -345,17 +445,21 @@ function render() {
 
 function renderSidebar() {
   const visibleCount = filteredTasks().length;
-  const openCount = state.tasks.filter((task) => task.status !== "done").length;
-  const blockedCount = state.tasks.filter((task) => flatten(task.nodes).some((node) => node.status === "blocked")).length;
+  const groupTasks = tasksInActiveGroup();
+  const openCount = groupTasks.filter((task) => task.status !== "done").length;
+  const blockedCount = groupTasks.filter((task) => task.tags.blocked || flatten(task.nodes).some((node) => node.status === "blocked")).length;
   return `
     <aside class="sidebar">
+      <span class="sidebar-resizer" data-sidebar-resizer title="调整侧栏宽度"></span>
       <div class="sidebar-head">
         <div>
           <strong>Task Track</strong>
           <small>Personal operations</small>
         </div>
-        <span>${visibleCount}/${state.tasks.length}</span>
+        <span>${visibleCount}/${groupTasks.length}</span>
       </div>
+
+      ${renderGroupTabs()}
 
       <div class="sidebar-stats" aria-label="任务统计">
         <span><b>${openCount}</b> 进行中</span>
@@ -389,11 +493,32 @@ function renderSidebar() {
   `;
 }
 
+function renderGroupTabs() {
+  return `
+    <div class="sheet-tabs" aria-label="任务分组">
+      ${sort(state.taskGroups)
+        .map(
+          (group) => `
+            <button class="sheet-tab ${group.id === state.activeGroupId ? "active" : ""}" type="button" data-action="select-group" data-group-id="${group.id}" title="${escAttr(group.title)}">
+              ${esc(group.title)}
+            </button>
+          `,
+        )
+        .join("")}
+      <button class="sheet-add" type="button" data-action="add-group" title="新增分组">+</button>
+    </div>
+  `;
+}
+
 function renderTaskItem(task) {
+  const activeTags = Object.entries(normalizeTaskTags(task.tags)).filter(([, active]) => active);
   return `
     <div class="task-item ${task.id === state.activeTaskId ? "selected" : ""}" data-action="select-task" data-context="task" data-task-id="${task.id}">
       <input class="task-check" type="checkbox" title="完成" data-action="toggle-task-done" data-task-id="${task.id}" ${task.status === "done" ? "checked" : ""} />
-      <input class="task-title" placeholder="任务标题" data-edit-key="title" data-task-id="${task.id}" value="${escAttr(task.title)}" />
+      <span class="task-title-wrap">
+        <input class="task-title" placeholder="任务标题" data-edit-key="title" data-task-id="${task.id}" value="${escAttr(task.title)}" />
+        ${activeTags.length ? `<span class="task-mini-tags">${activeTags.map(([tag]) => `<i>${taskTagLabels[tag]}</i>`).join("")}</span>` : ""}
+      </span>
       ${selectHtml("priority", task.priority, priorityLabels, task.id)}
     </div>
   `;
@@ -415,6 +540,10 @@ function renderTaskPage(task) {
             <span class="status ${task.status === "done" ? "resolved" : "attention"}">${task.status === "done" ? "已完成" : "处理中"}</span>
             <span>${summary.done}/${summary.total || 0} 节点</span>
             <span>${formatShort(task.updatedAt)}</span>
+            <label class="property-select">分组 ${selectHtml("groupId", task.groupId, taskGroupOptions(), task.id)}</label>
+          </div>
+          <div class="task-tag-row" aria-label="任务标签">
+            ${Object.entries(taskTagLabels).map(([tag, label]) => renderTaskTagButton(task, tag, label)).join("")}
           </div>
         </div>
       </header>
@@ -427,7 +556,7 @@ function renderTaskPage(task) {
         ${renderBriefField("结论", textareaHtml("conclusion", task.conclusion, task.id), "", needsConclusion, "conclusion")}
       </section>
 
-      <section class="flow-section">
+      <section class="flow-section" data-context="flow-root" data-task-id="${task.id}">
         <div class="section-heading">
           <div>
             <h2>处理流</h2>
@@ -453,6 +582,11 @@ function renderConclusionPrompt() {
       <span>这个任务还没有结论，补充后再标记为已完成。</span>
     </div>
   `;
+}
+
+function renderTaskTagButton(task, tag, label) {
+  const active = normalizeTaskTags(task.tags)[tag];
+  return `<button class="task-tag-toggle ${active ? "active" : ""}" type="button" data-action="toggle-task-tag" data-task-id="${task.id}" data-tag="${tag}">${label}</button>`;
 }
 
 function renderBriefField(label, control, timestamp = "", attention = false, variant = "") {
@@ -523,6 +657,7 @@ function renderNodeDetail(taskId, node) {
             <input type="checkbox" data-action="toggle-node-done" data-task-id="${taskId}" data-node-id="${node.id}" ${node.status === "done" ? "checked" : ""} />
             完成
           </label>
+          <button class="detail-save" type="button" data-action="save-node-detail">保存</button>
         </div>
       </div>
       <label class="detail-title-row">
@@ -571,10 +706,14 @@ function renderContextMenu() {
 
   if (menu.kind === "task") {
     const task = state.tasks.find((item) => item.id === menu.taskId);
+    const tags = normalizeTaskTags(task?.tags);
     return `
       <div class="context-menu" style="left:${menu.x}px; top:${menu.y}px">
         <button data-action="select-task" data-task-id="${menu.taskId}">打开任务</button>
         <button data-action="toggle-task-done" data-task-id="${menu.taskId}">${task?.status === "done" ? "标记为未完成" : "标记为完成"}</button>
+        <button data-action="toggle-task-tag" data-task-id="${menu.taskId}" data-tag="today">${tags.today ? "取消 Today" : "标记 Today"}</button>
+        <button data-action="toggle-task-tag" data-task-id="${menu.taskId}" data-tag="later">${tags.later ? "取消稍后" : "标记稍后"}</button>
+        <button data-action="toggle-task-tag" data-task-id="${menu.taskId}" data-tag="blocked">${tags.blocked ? "取消卡住" : "标记卡住"}</button>
         <hr />
         <button class="danger" data-action="delete-task" data-task-id="${menu.taskId}">删除任务</button>
       </div>
@@ -610,16 +749,16 @@ function renderContextMenu() {
 
 function filteredTasks() {
   const q = state.query.trim().toLowerCase();
-  return state.tasks
+  return tasksInActiveGroup()
     .filter((task) => {
-      const openNodes = flatten(task.nodes).filter((node) => node.status !== "done");
+      const tags = normalizeTaskTags(task.tags);
       const hasBlocked = flatten(task.nodes).some((node) => node.status === "blocked");
       const hasLater = flatten(task.nodes).some((node) => node.status === "later");
-      if (state.taskFilter === "today" && task.status === "done") return false;
+      if (state.taskFilter === "today" && !tags.today) return false;
       if (state.taskFilter === "active" && task.status === "done") return false;
       if (state.taskFilter === "done" && task.status !== "done") return false;
-      if (state.taskFilter === "blocked" && !hasBlocked) return false;
-      if (state.taskFilter === "later" && !hasLater) return false;
+      if (state.taskFilter === "blocked" && !tags.blocked && !hasBlocked) return false;
+      if (state.taskFilter === "later" && !tags.later && !hasLater) return false;
       if (state.priorityFilter !== "all" && task.priority !== state.priorityFilter) return false;
       if (q) {
         const taskText = `${task.title} ${task.description} ${task.hypothesis} ${task.conclusion}`.toLowerCase();
@@ -629,6 +768,15 @@ function filteredTasks() {
       return true;
     })
     .sort((a, b) => a.order - b.order);
+}
+
+function tasksInActiveGroup() {
+  const groupId = normalizeActiveGroupId(state.activeGroupId, state.taskGroups);
+  return state.tasks.filter((task) => (task.groupId || defaultTaskGroup.id) === groupId);
+}
+
+function taskGroupOptions() {
+  return Object.fromEntries(sort(state.taskGroups).map((group) => [group.id, group.title]));
 }
 
 function taskSummary(task) {
@@ -817,7 +965,7 @@ function bind() {
     });
     element.addEventListener("change", (event) => edit(event.target.dataset, event.target.value));
     element.addEventListener("click", (event) => {
-      if (!event.currentTarget.dataset.nodeId) exitNodeDetail();
+      if (!event.currentTarget.dataset.nodeId && !event.currentTarget.closest(".task-brief")) exitNodeDetail();
       event.stopPropagation();
     });
     element.addEventListener("blur", () => render());
@@ -949,6 +1097,11 @@ function bind() {
     handle.addEventListener("pointerdown", (event) => startColumnResize(event, handle.dataset.resizeCol));
   });
 
+  document.querySelectorAll("[data-sidebar-resizer]").forEach((handle) => {
+    handle.addEventListener("click", (event) => event.stopPropagation());
+    handle.addEventListener("pointerdown", startSidebarResize);
+  });
+
   const app = document.querySelector(".ops-app");
   if (app) {
     app.addEventListener("click", (event) => {
@@ -1019,6 +1172,32 @@ function startColumnResize(event, column) {
   window.addEventListener("pointerup", end);
 }
 
+function startSidebarResize(event) {
+  event.preventDefault();
+  event.stopPropagation();
+
+  const startX = event.clientX;
+  const startWidth = normalizeSidebarWidth(state.sidebarWidth);
+  const app = document.querySelector(".ops-app");
+  document.body.classList.add("resizing-sidebar");
+
+  function move(moveEvent) {
+    const nextWidth = normalizeSidebarWidth(startWidth + moveEvent.clientX - startX);
+    state.sidebarWidth = nextWidth;
+    if (app) app.style.setProperty("--sidebar-width", `${nextWidth}px`);
+  }
+
+  function end() {
+    document.body.classList.remove("resizing-sidebar");
+    save();
+    window.removeEventListener("pointermove", move);
+    window.removeEventListener("pointerup", end);
+  }
+
+  window.addEventListener("pointermove", move);
+  window.addEventListener("pointerup", end);
+}
+
 function exitNodeDetail() {
   if (!state.selectedNodeId) return false;
   state.selectedNodeId = "";
@@ -1054,6 +1233,8 @@ function action(data) {
   if (data.action === "toggle-settings") state.settingsOpen = !state.settingsOpen;
   if (data.action === "close-settings") state.settingsOpen = false;
   if (data.action === "reload-app") window.location.reload();
+  if (data.action === "select-group") selectGroup(data.groupId);
+  if (data.action === "add-group") addGroup();
   if (data.action === "select-task") {
     state.activeTaskId = data.taskId;
     state.selectedNodeId = "";
@@ -1062,6 +1243,7 @@ function action(data) {
   if (data.action === "delete-task") deleteTask(data.taskId);
   if (data.action === "select-node") state.selectedNodeId = data.nodeId;
   if (data.action === "toggle-task-done") toggleTaskDone(data.taskId);
+  if (data.action === "toggle-task-tag") toggleTaskTag(data.taskId, data.tag);
   if (data.action === "add-node") addNode(data.taskId, data.parentId || null);
   if (data.action === "add-root-node") addNode(data.taskId, null);
   if (data.action === "add-child-node") addNode(data.taskId, data.nodeId);
@@ -1069,6 +1251,7 @@ function action(data) {
   if (data.action === "toggle-node-done") toggleNodeDone(data.taskId, data.nodeId);
   if (data.action === "mark-node-status") markNodeStatus(data.taskId, data.nodeId, data.status);
   if (data.action === "delete-node") deleteNode(data.taskId, data.nodeId);
+  if (data.action === "save-node-detail") state.selectedNodeId = "";
   render();
 }
 
@@ -1077,7 +1260,12 @@ function edit(data, value) {
   if (!task) return;
 
   if (!data.nodeId) {
-    task[data.editKey] = value;
+    if (data.editKey === "groupId") {
+      task.groupId = normalizeActiveGroupId(value, state.taskGroups);
+      state.activeGroupId = task.groupId;
+    } else {
+      task[data.editKey] = value;
+    }
     if (data.editKey === "hypothesis") task.hypothesisUpdatedAt = now();
     if (data.editKey === "conclusion" && value.trim()) {
       state.conclusionPromptTaskId = "";
@@ -1117,10 +1305,12 @@ function createTask(title, shouldRender = true) {
   const task = {
     id: id("task"),
     order: state.tasks.length + 1,
+    groupId: normalizeActiveGroupId(state.activeGroupId, state.taskGroups),
     title,
     description: "",
     status: "active",
     priority: state.newTaskPriority,
+    tags: normalizeTaskTags({}),
     hypothesis: "",
     hypothesisUpdatedAt: "",
     conclusion: "",
@@ -1139,6 +1329,39 @@ function createTask(title, shouldRender = true) {
   if (shouldRender) render();
 }
 
+function selectGroup(groupId) {
+  state.activeGroupId = normalizeActiveGroupId(groupId, state.taskGroups);
+  state.activeTaskId = "";
+  state.selectedNodeId = "";
+  state.contextMenu = null;
+  state.query = "";
+}
+
+function addGroup() {
+  const title = prompt("分组名称", `分组 ${state.taskGroups.length + 1}`);
+  const normalizedTitle = String(title || "").trim();
+  if (!normalizedTitle) return;
+  const group = {
+    id: id("group"),
+    title: normalizedTitle,
+    order: state.taskGroups.length + 1,
+  };
+  state.taskGroups.push(group);
+  state.activeGroupId = group.id;
+  state.activeTaskId = "";
+  state.selectedNodeId = "";
+  state.query = "";
+}
+
+function toggleTaskTag(taskId, tag) {
+  if (!Object.hasOwn(taskTagLabels, tag)) return;
+  const task = state.tasks.find((item) => item.id === taskId);
+  if (!task) return;
+  task.tags = normalizeTaskTags(task.tags);
+  task.tags[tag] = !task.tags[tag];
+  task.updatedAt = now();
+}
+
 function deleteTask(taskId) {
   const task = state.tasks.find((item) => item.id === taskId);
   if (!task || !confirm(`确定删除任务「${task.title || "未命名任务"}」及其所有节点？`)) return;
@@ -1146,7 +1369,8 @@ function deleteTask(taskId) {
   state.tasks = state.tasks.filter((item) => item.id !== taskId);
   reorder(state.tasks);
   if (state.activeTaskId === taskId) {
-    state.activeTaskId = state.tasks[Math.max(0, index - 1)]?.id || state.tasks[0]?.id || "";
+    const groupTasks = tasksInActiveGroup();
+    state.activeTaskId = groupTasks[Math.max(0, index - 1)]?.id || groupTasks[0]?.id || "";
     state.selectedNodeId = "";
   }
   save();
@@ -1508,7 +1732,10 @@ function escAttr(value) {
 async function bootstrap() {
   const data = await loadAppData();
   state.tasks = data.tasks;
+  state.taskGroups = data.taskGroups;
+  state.activeGroupId = data.activeGroupId;
   state.flowWidths = data.flowWidths;
+  state.sidebarWidth = data.sidebarWidth;
   state.theme = data.theme;
   state.zhFont = data.zhFont;
   state.enFont = data.enFont;
@@ -1516,7 +1743,7 @@ async function bootstrap() {
   state.taskFilter = data.taskFilter;
   state.priorityFilter = data.priorityFilter;
   state.newTaskPriority = data.newTaskPriority;
-  state.activeTaskId = state.tasks[0]?.id || "";
+  state.activeTaskId = tasksInActiveGroup()[0]?.id || "";
   render();
 }
 

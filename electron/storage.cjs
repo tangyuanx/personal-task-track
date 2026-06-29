@@ -37,9 +37,18 @@ function normalizeTaskData(data) {
   return {
     version: DATA_VERSION,
     tasks: Array.isArray(safeData.tasks) ? safeData.tasks : [],
+    taskGroups: Array.isArray(safeData.taskGroups) ? safeData.taskGroups : [],
+    activeGroupId: typeof safeData.activeGroupId === "string" ? safeData.activeGroupId : "",
     flowWidths: safeData.flowWidths && typeof safeData.flowWidths === "object" ? safeData.flowWidths : {},
+    sidebarWidth: Number.isFinite(Number(safeData.sidebarWidth)) ? Number(safeData.sidebarWidth) : 272,
     theme: safeData.theme === "dark" ? "dark" : "light",
     font: ["songti", "heiti", "system", "mono"].includes(safeData.font) ? safeData.font : "songti",
+    zhFont: typeof safeData.zhFont === "string" ? safeData.zhFont : "",
+    enFont: typeof safeData.enFont === "string" ? safeData.enFont : "",
+    tone: typeof safeData.tone === "string" ? safeData.tone : "",
+    taskFilter: typeof safeData.taskFilter === "string" ? safeData.taskFilter : "",
+    priorityFilter: typeof safeData.priorityFilter === "string" ? safeData.priorityFilter : "",
+    newTaskPriority: typeof safeData.newTaskPriority === "string" ? safeData.newTaskPriority : "",
     updatedAt: typeof safeData.updatedAt === "string" ? safeData.updatedAt : new Date().toISOString(),
   };
 }

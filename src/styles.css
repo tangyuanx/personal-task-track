@@ -392,21 +392,36 @@ p {
 
 .ops-app {
   display: grid;
-  grid-template-columns: 272px minmax(760px, 1fr);
+  grid-template-columns: var(--sidebar-width, 272px) minmax(760px, 1fr);
   height: 100vh;
   overflow: hidden;
   background:
-    linear-gradient(90deg, var(--paper) 0, var(--paper) 272px, transparent 272px),
+    linear-gradient(90deg, var(--paper) 0, var(--paper) var(--sidebar-width, 272px), transparent var(--sidebar-width, 272px)),
     var(--panel);
 }
 
 .sidebar {
+  position: relative;
   display: flex;
   min-height: 0;
   flex-direction: column;
   overflow: hidden;
   border-right: 1px solid var(--line);
   background: var(--paper);
+}
+
+.sidebar-resizer {
+  position: absolute;
+  z-index: 5;
+  top: 0;
+  right: -5px;
+  bottom: 0;
+  width: 10px;
+  cursor: col-resize;
+}
+
+.sidebar-resizer:hover {
+  background: color-mix(in srgb, var(--focus) 16%, transparent);
 }
 
 .sidebar-head {
@@ -491,6 +506,43 @@ p {
   font-family: var(--mono);
   font-size: 15px;
   font-weight: 680;
+}
+
+.sheet-tabs {
+  display: flex;
+  gap: 3px;
+  min-height: 31px;
+  padding: 0 12px 8px;
+  overflow-x: auto;
+}
+
+.sheet-tab,
+.sheet-add {
+  flex: 0 0 auto;
+  height: 27px;
+  max-width: 118px;
+  padding: 0 10px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 7px 7px 3px 3px;
+  color: var(--muted);
+  background: var(--field);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sheet-tab.active {
+  color: var(--heading);
+  border-color: var(--focus);
+  background: var(--panel);
+  box-shadow: inset 0 -2px 0 var(--focus);
+}
+
+.sheet-add {
+  width: 28px;
+  padding: 0;
+  font-size: 16px;
 }
 
 .search-box {
@@ -880,6 +932,35 @@ p {
   font-weight: 620;
 }
 
+.task-title-wrap {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
+.task-mini-tags {
+  display: flex;
+  min-width: 0;
+  gap: 3px;
+  overflow: hidden;
+}
+
+.task-mini-tags i {
+  display: inline-flex;
+  max-width: 48px;
+  height: 15px;
+  align-items: center;
+  padding: 0 4px;
+  overflow: hidden;
+  border-radius: 4px;
+  color: var(--todo);
+  background: var(--todo-bg);
+  font-size: 10px;
+  font-style: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .task-item:has(.task-check:checked) .task-title {
   color: var(--faint);
   text-decoration: line-through;
@@ -968,6 +1049,7 @@ p {
 }
 
 .page-properties span,
+.property-select,
 .flow-status {
   display: inline-flex;
   min-height: 22px;
@@ -979,6 +1061,44 @@ p {
   color: var(--muted);
   background: var(--slate-bg);
   font-size: 13px;
+}
+
+.property-select {
+  gap: 6px;
+  padding-right: 3px;
+}
+
+.property-select select {
+  height: 20px;
+  max-width: 120px;
+  border: 0;
+  color: var(--muted);
+  background: transparent;
+  outline: 0;
+  font-size: 12px;
+}
+
+.task-tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.task-tag-toggle {
+  height: 25px;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  background: var(--field);
+  font-size: 12px;
+}
+
+.task-tag-toggle.active {
+  color: var(--todo);
+  border-color: color-mix(in srgb, var(--todo) 36%, var(--line));
+  background: var(--todo-bg);
 }
 
 .priority.high {
@@ -1257,6 +1377,11 @@ body.resizing-column {
   user-select: none;
 }
 
+body.resizing-sidebar {
+  cursor: col-resize;
+  user-select: none;
+}
+
 .flow-indent {
   flex: 0 0 var(--indent);
   display: block;
@@ -1409,6 +1534,10 @@ body.resizing-column {
   align-items: center;
 }
 
+.detail-actions {
+  gap: 8px;
+}
+
 .detail-check {
   gap: 6px;
   color: var(--muted);
@@ -1420,6 +1549,22 @@ body.resizing-column {
   height: 13px;
   margin: 0;
   accent-color: var(--focus);
+}
+
+.detail-save {
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--focus);
+  border-radius: 7px;
+  color: var(--heading);
+  background: var(--focus-field);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.detail-save:hover,
+.detail-save:focus-visible {
+  box-shadow: 0 0 0 2px var(--focus-ring);
 }
 
 .detail-title-row {
@@ -1737,7 +1882,7 @@ body.resizing-column {
   }
 
   .ops-app {
-    grid-template-columns: 260px minmax(0, 1fr);
+    grid-template-columns: var(--sidebar-width, 260px) minmax(0, 1fr);
     height: auto;
     min-height: 100vh;
     overflow: visible;
