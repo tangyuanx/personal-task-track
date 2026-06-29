@@ -95,10 +95,25 @@ const taskTagLabels = {
   blocked: "卡住",
 };
 
+const markdownTools = [
+  { action: "heading", label: "H", title: "标题" },
+  { action: "bold", label: "B", title: "加粗" },
+  { action: "italic", label: "I", title: "斜体" },
+  { action: "quote", label: "“", title: "引用" },
+  { action: "code", label: "</>", title: "代码" },
+  { action: "list", label: "•", title: "无序列表" },
+  { action: "ordered", label: "1.", title: "有序列表" },
+  { action: "todo", label: "☐", title: "任务清单" },
+  { action: "link", label: "↗", title: "链接" },
+  { action: "image", label: "▧", title: "图片" },
+  { action: "divider", label: "—", title: "分割线" },
+];
+
 let state = {
   tasks: [],
   taskGroups: [{ ...defaultTaskGroup }],
   activeGroupId: defaultTaskGroup.id,
+  editingGroupId: "",
   activeTaskId: "",
   selectedNodeId: "",
   query: "",
@@ -113,6 +128,7 @@ let state = {
   settingsOpen: false,
   focusTaskTitleId: "",
   focusNodeTitleId: "",
+  focusGroupTitleId: "",
   flowWidths: { ...defaultFlowWidths },
   sidebarWidth: defaultSidebarWidth,
   conclusionPromptTaskId: "",
@@ -459,8 +475,6 @@ function renderSidebar() {
         <span>${visibleCount}/${groupTasks.length}</span>
       </div>
 
-      ${renderGroupTabs()}
-
       <div class="sidebar-stats" aria-label="任务统计">
         <span><b>${openCount}</b> 进行中</span>
         <span><b>${blockedCount}</b> 卡住</span>
@@ -488,6 +502,7 @@ function renderSidebar() {
       </div>
       <div class="sidebar-foot">
         <button class="settings-trigger ${state.settingsOpen ? "active" : ""}" type="button" data-action="toggle-settings" title="设置">⚙</button>
+        ${renderGroupTabs()}
       </div>
     </aside>
   `;
@@ -495,16 +510,24 @@ function renderSidebar() {
 
 function renderGroupTabs() {
   return `
-    <div class="sheet-tabs" aria-label="任务分组">
-      ${sort(state.taskGroups)
-        .map(
-          (group) => `
-            <button class="sheet-tab ${group.id === state.activeGroupId ? "active" : ""}" type="button" data-action="select-group" data-group-id="${group.id}" title="${escAttr(group.title)}">
-              ${esc(group.title)}
-            </button>
-          `,
-        )
-        .join("")}
+    <div class="sheet-bar" aria-label="任务分组">
+      <button class="sheet-nav" type="button" data-action="scroll-sheets" data-direction="-1" title="查看前面的分组">‹</button>
+      <div class="sheet-tabs" data-sheet-tabs>
+        ${sort(state.taskGroups)
+          .map(
+            (group) => `
+              <span class="sheet-tab-wrap" draggable="true" data-group-id="${group.id}">
+                ${
+                  state.editingGroupId === group.id
+                    ? `<input class="sheet-edit" data-group-title="${group.id}" value="${escAttr(group.title)}" />`
+                    : `<button class="sheet-tab ${group.id === state.activeGroupId ? "active" : ""}" type="button" data-action="select-group" data-group-id="${group.id}" title="${escAttr(group.title)}">${esc(group.title)}</button>`
+                }
+              </span>
+            `,
+          )
+          .join("")}
+      </div>
+      <button class="sheet-nav" type="button" data-action="scroll-sheets" data-direction="1" title="查看后面的分组">›</button>
       <button class="sheet-add" type="button" data-action="add-group" title="新增分组">+</button>
     </div>
   `;
@@ -556,21 +579,23 @@ function renderTaskPage(task) {
         ${renderBriefField("结论", textareaHtml("conclusion", task.conclusion, task.id), "", needsConclusion, "conclusion")}
       </section>
 
-      <section class="flow-section" data-context="flow-root" data-task-id="${task.id}">
-        <div class="section-heading">
-          <div>
-            <h2>处理流</h2>
-            <p>${summary.open ? `${summary.open} 个节点未完成` : "所有节点已完成"}</p>
+      <section class="task-workbench ${selectedNode ? "with-detail" : ""}">
+        <section class="flow-section" data-context="flow-root" data-task-id="${task.id}">
+          <div class="section-heading">
+            <div>
+              <h2>处理流</h2>
+              <p>${summary.open ? `${summary.open} 个节点未完成` : "所有节点已完成"}</p>
+            </div>
           </div>
-        </div>
-        ${
-          topNodes.length
-            ? `<div class="flow-list" style="${flowWidthStyle()}" data-context="flow-root" data-task-id="${task.id}">${renderFlowHeader()}${topNodes.map((node) => renderFlowNode(task.id, node, 0)).join("")}</div>`
-            : `<div class="empty-flow" data-context="flow-root" data-task-id="${task.id}">右键添加第一个节点。</div>`
-        }
-      </section>
+          ${
+            topNodes.length
+              ? `<div class="flow-list" style="${flowWidthStyle()}" data-context="flow-root" data-task-id="${task.id}">${renderFlowHeader()}${topNodes.map((node) => renderFlowNode(task.id, node, 0)).join("")}</div>`
+              : `<div class="empty-flow" data-context="flow-root" data-task-id="${task.id}">右键添加第一个节点。</div>`
+          }
+        </section>
 
-      ${selectedNode ? renderNodeDetail(task.id, selectedNode) : ""}
+        ${selectedNode ? renderNodeDetail(task.id, selectedNode) : ""}
+      </section>
     </section>
   `;
 }
@@ -666,7 +691,11 @@ function renderNodeDetail(taskId, node) {
       </label>
       <section class="markdown-panel">
         <div class="markdown-toolbar">
-          <span>Markdown 注释</span>
+          <div class="markdown-tools" aria-label="Markdown tools">
+            ${markdownTools
+              .map((tool) => `<button type="button" data-action="markdown-tool" data-tool="${tool.action}" title="${tool.title}">${tool.label}</button>`)
+              .join("")}
+          </div>
           <div class="markdown-tabs" role="tablist" aria-label="Markdown view">
             <button class="${mode === "edit" ? "active" : ""}" type="button" role="tab" aria-selected="${mode === "edit"}" data-action="set-markdown-mode" data-mode="edit">编辑</button>
             <button class="${mode === "preview" ? "active" : ""}" type="button" role="tab" aria-selected="${mode === "preview"}" data-action="set-markdown-mode" data-mode="preview">预览</button>
@@ -675,7 +704,7 @@ function renderNodeDetail(taskId, node) {
         ${
           mode === "preview"
             ? `<article class="markdown-preview">${renderMarkdown(node.note)}</article>`
-            : `<textarea class="markdown-editor" data-edit-key="note" data-task-id="${taskId}" data-node-id="${node.id}" placeholder="支持 Markdown：标题、列表、代码块、链接、图片、表格等。">${esc(node.note)}</textarea>`
+            : `<textarea class="markdown-editor" data-edit-key="note" data-task-id="${taskId}" data-node-id="${node.id}" placeholder="支持 Markdown：标题、任务清单、链接、图片、表格、代码块。可直接粘贴截图。">${esc(node.note)}</textarea>`
         }
       </section>
     </section>
@@ -958,6 +987,51 @@ function bind() {
     });
   });
 
+  document.querySelectorAll(".sheet-tab").forEach((element) => {
+    element.addEventListener("dblclick", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      startRenameGroup(element.dataset.groupId);
+      render();
+    });
+  });
+
+  document.querySelectorAll("[data-group-title]").forEach((element) => {
+    element.addEventListener("click", (event) => event.stopPropagation());
+    element.addEventListener("input", (event) => renameGroup(event.target.dataset.groupTitle, event.target.value, false));
+    element.addEventListener("blur", (event) => renameGroup(event.target.dataset.groupTitle, event.target.value, true));
+    element.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        renameGroup(event.target.dataset.groupTitle, event.target.value, true);
+        render();
+      }
+      if (event.key === "Escape") {
+        state.editingGroupId = "";
+        render();
+      }
+    });
+  });
+
+  document.querySelectorAll(".sheet-tab-wrap").forEach((element) => {
+    element.addEventListener("dragstart", (event) => {
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", element.dataset.groupId);
+      element.classList.add("dragging");
+    });
+    element.addEventListener("dragend", () => element.classList.remove("dragging"));
+    element.addEventListener("dragover", (event) => {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "move";
+    });
+    element.addEventListener("drop", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      reorderGroups(event.dataTransfer.getData("text/plain"), element.dataset.groupId);
+      render();
+    });
+  });
+
   document.querySelectorAll("[data-edit-key]").forEach((element) => {
     element.addEventListener("input", (event) => {
       edit(event.target.dataset, event.target.value);
@@ -965,10 +1039,12 @@ function bind() {
     });
     element.addEventListener("change", (event) => edit(event.target.dataset, event.target.value));
     element.addEventListener("click", (event) => {
-      if (!event.currentTarget.dataset.nodeId && !event.currentTarget.closest(".task-brief")) exitNodeDetail();
       event.stopPropagation();
     });
-    element.addEventListener("blur", () => render());
+    element.addEventListener("blur", (event) => {
+      if (event.relatedTarget?.closest?.("[data-action], .sheet-bar, .node-detail, .task-page")) return;
+      render();
+    });
   });
 
   document.querySelectorAll("[data-context]").forEach((element) => {
@@ -998,7 +1074,6 @@ function bind() {
       state.newTaskPriority = event.target.value;
     });
     newTaskPriority.addEventListener("click", (event) => {
-      exitNodeDetail();
       event.stopPropagation();
     });
   }
@@ -1006,7 +1081,6 @@ function bind() {
   const newTaskTitle = document.querySelector("[data-new-task-title]");
   if (newTaskTitle) {
     newTaskTitle.addEventListener("click", (event) => {
-      exitNodeDetail();
       event.stopPropagation();
     });
     newTaskTitle.addEventListener("blur", (event) => createTaskFromBlank(event.target.value));
@@ -1059,7 +1133,7 @@ function bind() {
 
   const search = document.querySelector("#search");
   if (search) {
-    search.addEventListener("click", () => exitNodeDetail());
+    search.addEventListener("click", (event) => event.stopPropagation());
     search.addEventListener("input", (event) => {
       state.query = event.target.value;
       render();
@@ -1069,7 +1143,6 @@ function bind() {
   const taskFilter = document.querySelector("[data-task-filter]");
   if (taskFilter) {
     taskFilter.addEventListener("click", (event) => {
-      exitNodeDetail();
       event.stopPropagation();
     });
     taskFilter.addEventListener("change", (event) => {
@@ -1082,7 +1155,6 @@ function bind() {
   const priorityFilter = document.querySelector("[data-priority-filter]");
   if (priorityFilter) {
     priorityFilter.addEventListener("click", (event) => {
-      exitNodeDetail();
       event.stopPropagation();
     });
     priorityFilter.addEventListener("change", (event) => {
@@ -1102,11 +1174,29 @@ function bind() {
     handle.addEventListener("pointerdown", startSidebarResize);
   });
 
+  document.querySelectorAll(".markdown-editor").forEach((editor) => {
+    editor.addEventListener("paste", handleMarkdownPaste);
+    editor.addEventListener("keydown", (event) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "b") {
+        event.preventDefault();
+        applyMarkdownTool("bold");
+      }
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "i") {
+        event.preventDefault();
+        applyMarkdownTool("italic");
+      }
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        applyMarkdownTool("link");
+      }
+    });
+  });
+
   const app = document.querySelector(".ops-app");
   if (app) {
-    app.addEventListener("click", (event) => {
+    app.addEventListener("pointerdown", (event) => {
       let needsRender = false;
-      const keepNodeDetail = event.target.closest(".node-detail, .flow-row:not(.flow-header), .context-menu");
+      const keepNodeDetail = event.target.closest(".node-detail, .flow-row:not(.flow-header), .context-menu, [data-action], [data-edit-key], button, input, textarea, select");
       const keepSettings = event.target.closest(".settings-overlay, .settings-trigger");
 
       if (state.contextMenu) {
@@ -1225,10 +1315,27 @@ function focusPendingElement() {
       input.select();
     }
   }
+
+  if (state.focusGroupTitleId) {
+    const input = document.querySelector(`[data-group-title="${state.focusGroupTitleId}"]`);
+    state.focusGroupTitleId = "";
+    if (input) {
+      input.focus();
+      input.select();
+    }
+  }
 }
 
 function action(data) {
   state.contextMenu = null;
+  if (data.action === "markdown-tool") {
+    applyMarkdownTool(data.tool);
+    return;
+  }
+  if (data.action === "scroll-sheets") {
+    scrollSheets(Number(data.direction || 1));
+    return;
+  }
   if (data.action === "set-markdown-mode") state.markdownMode = data.mode === "preview" ? "preview" : "edit";
   if (data.action === "toggle-settings") state.settingsOpen = !state.settingsOpen;
   if (data.action === "close-settings") state.settingsOpen = false;
@@ -1338,19 +1445,169 @@ function selectGroup(groupId) {
 }
 
 function addGroup() {
-  const title = prompt("分组名称", `分组 ${state.taskGroups.length + 1}`);
-  const normalizedTitle = String(title || "").trim();
-  if (!normalizedTitle) return;
   const group = {
     id: id("group"),
-    title: normalizedTitle,
+    title: `分组 ${state.taskGroups.length + 1}`,
     order: state.taskGroups.length + 1,
   };
   state.taskGroups.push(group);
   state.activeGroupId = group.id;
+  state.editingGroupId = group.id;
+  state.focusGroupTitleId = group.id;
   state.activeTaskId = "";
   state.selectedNodeId = "";
   state.query = "";
+}
+
+function startRenameGroup(groupId) {
+  if (!state.taskGroups.some((group) => group.id === groupId)) return;
+  state.editingGroupId = groupId;
+  state.focusGroupTitleId = groupId;
+}
+
+function renameGroup(groupId, value, commit = false) {
+  const group = state.taskGroups.find((item) => item.id === groupId);
+  if (!group) return;
+  const title = String(value || "").trim();
+  if (title) group.title = title;
+  if (commit) state.editingGroupId = "";
+  save();
+}
+
+function reorderGroups(sourceId, targetId) {
+  if (!sourceId || !targetId || sourceId === targetId) return;
+  const groups = sort(state.taskGroups);
+  const sourceIndex = groups.findIndex((group) => group.id === sourceId);
+  const targetIndex = groups.findIndex((group) => group.id === targetId);
+  if (sourceIndex < 0 || targetIndex < 0) return;
+  const [source] = groups.splice(sourceIndex, 1);
+  groups.splice(targetIndex, 0, source);
+  reorder(groups);
+  state.taskGroups = groups;
+  save();
+}
+
+function scrollSheets(direction) {
+  const tabs = document.querySelector("[data-sheet-tabs]");
+  if (!tabs) return;
+  tabs.scrollBy({ left: direction * Math.max(120, tabs.clientWidth * 0.72), behavior: "smooth" });
+}
+
+function activeMarkdownEditor() {
+  const active = document.activeElement;
+  if (active?.classList?.contains("markdown-editor")) return active;
+  return document.querySelector(".markdown-editor");
+}
+
+function applyMarkdownTool(tool) {
+  const editor = activeMarkdownEditor();
+  if (!editor) return;
+  editor.focus();
+  const start = editor.selectionStart || 0;
+  const end = editor.selectionEnd || 0;
+  const selected = editor.value.slice(start, end);
+  const fallback = selected || "文本";
+  const lineStart = editor.value.lastIndexOf("\n", Math.max(0, start - 1)) + 1;
+  const beforeLine = editor.value.slice(lineStart, start);
+  let next = "";
+  let cursorStart = start;
+  let cursorEnd = end;
+
+  if (tool === "heading") {
+    next = `${beforeLine ? "\n" : ""}## ${fallback}`;
+    cursorStart = start + next.length;
+    cursorEnd = cursorStart;
+  } else if (tool === "bold") {
+    next = `**${fallback}**`;
+    cursorStart = start + 2;
+    cursorEnd = cursorStart + fallback.length;
+  } else if (tool === "italic") {
+    next = `*${fallback}*`;
+    cursorStart = start + 1;
+    cursorEnd = cursorStart + fallback.length;
+  } else if (tool === "quote") {
+    next = selected
+      ? selected
+          .split("\n")
+          .map((line) => `> ${line}`)
+          .join("\n")
+      : `${beforeLine ? "\n" : ""}> 引用`;
+    cursorStart = start + next.length;
+    cursorEnd = cursorStart;
+  } else if (tool === "code") {
+    next = selected.includes("\n") ? `\n\`\`\`\n${selected}\n\`\`\`\n` : `\`${fallback}\``;
+    cursorStart = start + (selected.includes("\n") ? next.length : 1);
+    cursorEnd = selected.includes("\n") ? cursorStart : cursorStart + fallback.length;
+  } else if (tool === "list") {
+    next = selected
+      ? selected
+          .split("\n")
+          .map((line) => `- ${line}`)
+          .join("\n")
+      : `${beforeLine ? "\n" : ""}- 列表项`;
+    cursorStart = start + next.length;
+    cursorEnd = cursorStart;
+  } else if (tool === "ordered") {
+    next = selected
+      ? selected
+          .split("\n")
+          .map((line, index) => `${index + 1}. ${line}`)
+          .join("\n")
+      : `${beforeLine ? "\n" : ""}1. 列表项`;
+    cursorStart = start + next.length;
+    cursorEnd = cursorStart;
+  } else if (tool === "todo") {
+    next = selected
+      ? selected
+          .split("\n")
+          .map((line) => `- [ ] ${line}`)
+          .join("\n")
+      : `${beforeLine ? "\n" : ""}- [ ] 待办事项`;
+    cursorStart = start + next.length;
+    cursorEnd = cursorStart;
+  } else if (tool === "link") {
+    next = `[${fallback}](https://example.com)`;
+    cursorStart = start + fallback.length + 3;
+    cursorEnd = cursorStart + "https://example.com".length;
+  } else if (tool === "image") {
+    next = `![图片](https://example.com/image.png)`;
+    cursorStart = start + 6;
+    cursorEnd = cursorStart + "https://example.com/image.png".length;
+  } else if (tool === "divider") {
+    next = `${beforeLine ? "\n" : ""}---\n`;
+    cursorStart = start + next.length;
+    cursorEnd = cursorStart;
+  }
+
+  if (!next) return;
+  replaceEditorSelection(editor, next, cursorStart, cursorEnd);
+}
+
+function replaceEditorSelection(editor, value, cursorStart, cursorEnd = cursorStart) {
+  const start = editor.selectionStart || 0;
+  const end = editor.selectionEnd || 0;
+  editor.value = `${editor.value.slice(0, start)}${value}${editor.value.slice(end)}`;
+  editor.selectionStart = cursorStart;
+  editor.selectionEnd = cursorEnd;
+  edit(editor.dataset, editor.value);
+}
+
+function handleMarkdownPaste(event) {
+  const items = Array.from(event.clipboardData?.items || []);
+  const imageItem = items.find((item) => item.type.startsWith("image/"));
+  if (!imageItem) return;
+  const file = imageItem.getAsFile();
+  if (!file) return;
+  event.preventDefault();
+  const reader = new FileReader();
+  reader.addEventListener("load", () => {
+    const editor = event.currentTarget;
+    const alt = `粘贴图片 ${formatImageStamp(new Date())}`;
+    const markdown = `\n![${alt}](${reader.result})\n`;
+    const start = editor.selectionStart || editor.value.length;
+    replaceEditorSelection(editor, markdown, start + markdown.length);
+  });
+  reader.readAsDataURL(file);
 }
 
 function toggleTaskTag(taskId, tag) {
@@ -1519,7 +1776,11 @@ function renderMarkdown(value) {
 
   function flushList() {
     if (!listType) return;
-    html.push(`<${listType}>${listItems.map((item) => `<li>${renderInlineMarkdown(item)}</li>`).join("")}</${listType}>`);
+    html.push(
+      `<${listType}>${listItems
+        .map((item) => `<li>${typeof item === "object" ? item.html : renderInlineMarkdown(item)}</li>`)
+        .join("")}</${listType}>`,
+    );
     listType = "";
     listItems = [];
   }
@@ -1595,6 +1856,16 @@ function renderMarkdown(value) {
       continue;
     }
 
+    const taskItem = line.match(/^\s*[-*+]\s+\[([ xX])\]\s+(.+)$/);
+    if (taskItem) {
+      if (listType && listType !== "ul") flushList();
+      listType = "ul";
+      listItems.push({
+        html: `<span class="md-task"><input type="checkbox" disabled ${taskItem[1].toLowerCase() === "x" ? "checked" : ""} /><span>${renderInlineMarkdown(taskItem[2])}</span></span>`,
+      });
+      continue;
+    }
+
     const ordered = line.match(/^\s*\d+\.\s+(.+)$/);
     const unordered = line.match(/^\s*[-*+]\s+(.+)$/);
     if (ordered || unordered) {
@@ -1617,6 +1888,7 @@ function renderMarkdown(value) {
 
 function renderInlineMarkdown(value) {
   const codeSpans = [];
+  const richTokens = [];
   let output = esc(value).replace(/`([^`]+)`/g, (_, code) => {
     const token = `@@CODE_SPAN_${codeSpans.length}@@`;
     codeSpans.push(`<code>${code}</code>`);
@@ -1626,13 +1898,33 @@ function renderInlineMarkdown(value) {
   output = output.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt, url) => {
     const safeUrl = safeMarkdownUrl(url);
     if (!safeUrl) return esc(`![${alt}](${url})`);
-    return `<img src="${safeUrl}" alt="${escAttr(alt)}" loading="lazy" />`;
+    const token = `@@RICH_${richTokens.length}@@`;
+    richTokens.push(`<img src="${safeUrl}" alt="${escAttr(alt)}" loading="lazy" />`);
+    return token;
   });
 
   output = output.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, label, url) => {
     const safeUrl = safeMarkdownUrl(url);
     if (!safeUrl) return esc(`[${label}](${url})`);
-    return `<a href="${safeUrl}" target="_blank" rel="noreferrer">${label}</a>`;
+    const token = `@@RICH_${richTokens.length}@@`;
+    richTokens.push(`<a href="${safeUrl}" target="_blank" rel="noreferrer">${label}</a>`);
+    return token;
+  });
+
+  output = output.replace(/&lt;(https?:\/\/[^&]+)&gt;/g, (_, url) => {
+    const safeUrl = safeMarkdownUrl(url);
+    if (!safeUrl) return `&lt;${url}&gt;`;
+    const token = `@@RICH_${richTokens.length}@@`;
+    richTokens.push(`<a href="${safeUrl}" target="_blank" rel="noreferrer">${safeUrl}</a>`);
+    return token;
+  });
+
+  output = output.replace(/(^|[\s(])((https?:\/\/|mailto:)[^\s<)]+)/g, (match, prefix, url) => {
+    const safeUrl = safeMarkdownUrl(url);
+    if (!safeUrl) return match;
+    const token = `@@RICH_${richTokens.length}@@`;
+    richTokens.push(`<a href="${safeUrl}" target="_blank" rel="noreferrer">${safeUrl}</a>`);
+    return `${prefix}${token}`;
   });
 
   output = output
@@ -1642,6 +1934,9 @@ function renderInlineMarkdown(value) {
 
   codeSpans.forEach((code, index) => {
     output = output.replace(`@@CODE_SPAN_${index}@@`, code);
+  });
+  richTokens.forEach((html, index) => {
+    output = output.replace(`@@RICH_${index}@@`, html);
   });
 
   return output;
@@ -1714,6 +2009,18 @@ function formatMinuteStamp(value) {
     minute: "2-digit",
     hour12: false,
   }).format(new Date(value));
+}
+
+function formatImageStamp(value) {
+  return new Intl.DateTimeFormat("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  })
+    .format(value)
+    .replace(/[\/:\s]/g, "-");
 }
 
 function esc(value) {
