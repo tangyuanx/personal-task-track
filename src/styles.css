@@ -110,6 +110,16 @@
   background: rgba(255, 255, 255, 0.03);
 }
 
+:root[data-tone="focus"] {
+  --focus: #0ea5e9;
+  --focus-field: #eaf6ff;
+  --focus-ring: rgba(14, 165, 233, 0.16);
+  --todo: #0369a1;
+  --todo-bg: #e0f2fe;
+  --selected: rgba(14, 116, 144, 0.12);
+  --hover: rgba(14, 116, 144, 0.06);
+}
+
 :root[data-tone="indigo"] {
   --focus: #5e6ad2;
   --focus-field: #eeeffb;
@@ -208,6 +218,16 @@
   --todo-bg: #f3e8d8;
   --selected: rgba(161, 106, 42, 0.14);
   --hover: rgba(161, 106, 42, 0.08);
+}
+
+:root[data-theme="dark"][data-tone="focus"] {
+  --focus: #7dd3fc;
+  --focus-field: #202936;
+  --focus-ring: rgba(125, 211, 252, 0.12);
+  --todo: #8bd5ff;
+  --todo-bg: rgba(125, 211, 252, 0.14);
+  --selected: rgba(125, 211, 252, 0.14);
+  --hover: rgba(125, 211, 252, 0.07);
 }
 
 :root[data-theme="dark"][data-tone="indigo"] {
@@ -506,6 +526,163 @@ p {
   font-family: var(--mono);
   font-size: 15px;
   font-weight: 680;
+}
+
+.today-focus {
+  margin: 0 10px 10px;
+  border-top: 1px solid var(--line-soft);
+  border-bottom: 1px solid var(--line);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--focus) 10%, transparent), transparent);
+}
+
+.today-head {
+  display: flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 5px 5px;
+}
+
+.today-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--heading);
+  font-size: 14px;
+  font-weight: 760;
+}
+
+.today-title::before {
+  width: 7px;
+  height: 20px;
+  border-radius: 999px;
+  background: var(--focus);
+  content: "";
+}
+
+.today-date {
+  color: var(--faint);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.focus-list {
+  display: grid;
+  gap: 3px;
+  padding: 0 0 7px;
+}
+
+.focus-item {
+  display: grid;
+  grid-template-columns: 7px minmax(0, 1fr);
+  gap: 8px;
+  min-height: 50px;
+  padding: 8px 8px 8px 0;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.44);
+  cursor: pointer;
+}
+
+.focus-item:hover {
+  background: var(--hover);
+}
+
+.focus-item.selected {
+  border-color: color-mix(in srgb, var(--focus) 38%, transparent);
+  background: var(--focus-field);
+  box-shadow: inset 3px 0 0 var(--focus);
+}
+
+.focus-item.high .focus-rail {
+  background: var(--priority-high);
+}
+
+.focus-item.blocked .focus-rail {
+  background: var(--red);
+}
+
+.focus-item.normal .focus-rail {
+  background: var(--focus);
+}
+
+.focus-rail {
+  width: 3px;
+  min-height: 100%;
+  justify-self: center;
+  border-radius: 999px;
+}
+
+.focus-content {
+  min-width: 0;
+}
+
+.focus-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.focus-title {
+  overflow: hidden;
+  color: var(--heading);
+  font-size: 14px;
+  font-weight: 690;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.focus-badge {
+  flex: 0 0 auto;
+  display: inline-flex;
+  min-height: 18px;
+  align-items: center;
+  padding: 0 5px;
+  border-radius: 4px;
+  color: var(--todo);
+  background: var(--todo-bg);
+  font-size: 11px;
+}
+
+.focus-badge.high {
+  color: var(--priority-high);
+  background: var(--priority-high-bg);
+}
+
+.focus-badge.blocked {
+  color: var(--red);
+  background: var(--red-bg);
+}
+
+.focus-next,
+.focus-empty {
+  overflow: hidden;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.focus-next b {
+  color: var(--heading);
+  font-weight: 640;
+}
+
+.focus-empty {
+  margin: 0;
+  padding: 8px 5px 10px;
+  color: var(--faint);
+}
+
+:root[data-theme="dark"] .today-focus {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--focus) 8%, transparent), transparent);
+}
+
+:root[data-theme="dark"] .focus-item {
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .sheet-bar {
@@ -1792,6 +1969,12 @@ body.resizing-detail {
   border: 0;
   outline: 0;
   resize: vertical;
+}
+
+.bear-editor {
+  padding: 18px 20px;
+  caret-color: var(--focus);
+  line-height: 1.72;
 }
 
 .markdown-preview {

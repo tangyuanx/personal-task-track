@@ -42,6 +42,7 @@ const themeLabels = {
 };
 
 const toneLabels = {
+  focus: "今日焦点",
   moss: "松石绿",
   indigo: "Linear 靛蓝",
   azure: "Apple 蓝",
@@ -125,9 +126,9 @@ let state = {
   newTaskPriority: "medium",
   markdownMode: "edit",
   theme: "light",
-  zhFont: "system",
+  zhFont: "songti",
   enFont: "inter",
-  tone: "moss",
+  tone: "focus",
   settingsOpen: false,
   focusTaskTitleId: "",
   focusNodeTitleId: "",
@@ -262,7 +263,7 @@ function normalizeTheme(value) {
 }
 
 function normalizeTone(value) {
-  return Object.hasOwn(toneLabels, value) ? value : "moss";
+  return Object.hasOwn(toneLabels, value) ? value : "focus";
 }
 
 function normalizeTaskFilter(value) {
@@ -289,7 +290,7 @@ function migrateLegacyFont(value) {
   if (value === "songti") return { zhFont: "songti", enFont: "inter" };
   if (value === "heiti") return { zhFont: "heiti", enFont: "inter" };
   if (value === "mono") return { zhFont: "yahei", enFont: "mono" };
-  return { zhFont: "system", enFont: "inter" };
+  return { zhFont: "songti", enFont: "inter" };
 }
 
 function loadBrowserTheme() {
@@ -487,6 +488,7 @@ function renderSidebar() {
   const groupTasks = tasksInActiveGroup();
   const openCount = groupTasks.filter((task) => task.status !== "done").length;
   const blockedCount = groupTasks.filter((task) => task.tags.blocked || flatten(task.nodes).some((node) => node.status === "blocked")).length;
+  const focusItems = todayFocusItems(groupTasks);
   return `
     <aside class="sidebar">
       <span class="sidebar-resizer" data-sidebar-resizer title="调整侧栏宽度"></span>
@@ -508,6 +510,8 @@ function renderSidebar() {
         <input id="search" value="${escAttr(state.query)}" placeholder="搜索" />
       </label>
 
+      ${renderTodayFocus(focusItems)}
+
       <div class="task-list" data-context="task-list">
         <div class="task-list-head">
           <span></span>
@@ -528,6 +532,42 @@ function renderSidebar() {
         ${renderGroupTabs()}
       </div>
     </aside>
+  `;
+}
+
+function renderTodayFocus(items) {
+  const today = new Intl.DateTimeFormat("zh-CN", { month: "2-digit", day: "2-digit" }).format(new Date());
+  return `
+    <section class="today-focus" aria-label="今日焦点">
+      <div class="today-head">
+        <div class="today-title">今日焦点</div>
+        <div class="today-date">${today}</div>
+      </div>
+      <div class="focus-list">
+        ${
+          items.length
+            ? items.map((item) => renderTodayFocusItem(item)).join("")
+            : `<div class="focus-empty">今天没有焦点任务</div>`
+        }
+      </div>
+    </section>
+  `;
+}
+
+function renderTodayFocusItem(item) {
+  const { task, node, kind, badge, nextText } = item;
+  const selected = task.id === state.activeTaskId && (!node?.id || node.id === state.selectedNodeId);
+  return `
+    <article class="focus-item ${kind} ${selected ? "selected" : ""}" data-action="select-focus" data-task-id="${task.id}" data-node-id="${node?.id || ""}">
+      <span class="focus-rail"></span>
+      <div class="focus-content">
+        <div class="focus-title-row">
+          <span class="focus-title">${esc(task.title || "未命名任务")}</span>
+          <span class="focus-badge ${kind}">${badge}</span>
+        </div>
+        <p class="focus-next"><b>下一步</b> ${esc(nextText)}</p>
+      </div>
+    </article>
   `;
 }
 
@@ -729,7 +769,7 @@ function renderNodeDetail(taskId, node) {
         ${
           mode === "preview"
             ? `<article class="markdown-preview">${renderMarkdown(node.note)}</article>`
-            : `<textarea class="markdown-editor" data-edit-key="note" data-task-id="${taskId}" data-node-id="${node.id}" placeholder="支持 Markdown：标题、任务清单、链接、图片、表格、代码块。可直接粘贴截图。">${esc(node.note)}</textarea>`
+            : `<textarea class="markdown-editor bear-editor" data-edit-key="note" data-task-id="${taskId}" data-node-id="${node.id}" placeholder="支持 Markdown：标题、任务清单、链接、图片、表格、代码块。可直接粘贴截图。">${esc(node.note)}</textarea>`
         }
       </section>
     </section>
@@ -808,7 +848,7 @@ function filteredTasks() {
       const tags = normalizeTaskTags(task.tags);
       const hasBlocked = flatten(task.nodes).some((node) => node.status === "blocked");
       const hasLater = flatten(task.nodes).some((node) => node.status === "later");
-      if (state.taskFilter === "today" && !tags.today) return false;
+      if (state.taskFilter === "today" && !tags.today && !isTaskTouchedToday(task)) return false;
       if (state.taskFilter === "active" && task.status === "done") return false;
       if (state.taskFilter === "done" && task.status !== "done") return false;
       if (state.taskFilter === "blocked" && !tags.blocked && !hasBlocked) return false;
@@ -831,6 +871,48 @@ function tasksInActiveGroup() {
 
 function taskGroupOptions() {
   return Object.fromEntries(sort(state.taskGroups).map((group) => [group.id, group.title]));
+}
+
+function todayFocusItems(tasks = tasksInActiveGroup()) {
+  return tasks
+    .filter((task) => task.status !== "done")
+    .map((task) => {
+      const tags = normalizeTaskTags(task.tags);
+      const nodes = flatten(task.nodes);
+      const blockedNode = nodes.find((node) => node.status === "blocked");
+      const openNode = nextOpenNode(task.nodes);
+      const todayTouched = tags.today || isTaskTouchedToday(task);
+      const score =
+        (task.priority === "high" ? 80 : task.priority === "medium" ? 35 : 15) +
+        (tags.today ? 70 : 0) +
+        (blockedNode || tags.blocked ? 55 : 0) +
+        (todayTouched ? 40 : 0) +
+        (openNode ? 8 : 0);
+      const node = blockedNode || openNode || null;
+      const kind = blockedNode || tags.blocked ? "blocked" : task.priority === "high" ? "high" : "normal";
+      const badge = blockedNode || tags.blocked ? "卡住" : task.priority === "high" ? "高" : todayTouched ? "今日" : priorityLabels[task.priority];
+      const nextText = node?.title || (task.description.trim() ? task.description.trim() : "补充任务背景或新增第一个节点");
+      return { task, node, kind, badge, nextText, score, todayTouched, updatedAt: latestTaskTime(task) };
+    })
+    .filter((item) => item.score >= 45 || item.todayTouched)
+    .sort((a, b) => b.score - a.score || b.updatedAt - a.updatedAt || a.task.order - b.task.order)
+    .slice(0, 3);
+}
+
+function isTaskTouchedToday(task) {
+  return isToday(task.updatedAt) || flatten(task.nodes).some((node) => isToday(node.updatedAt));
+}
+
+function latestTaskTime(task) {
+  const times = [Date.parse(task.updatedAt), ...flatten(task.nodes).map((node) => Date.parse(node.updatedAt))].filter(Number.isFinite);
+  return times.length ? Math.max(...times) : 0;
+}
+
+function isToday(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return false;
+  const today = new Date();
+  return date.getFullYear() === today.getFullYear() && date.getMonth() === today.getMonth() && date.getDate() === today.getDate();
 }
 
 function taskSummary(task) {
@@ -1420,6 +1502,10 @@ function action(data) {
   if (data.action === "reload-app") window.location.reload();
   if (data.action === "select-group") selectGroup(data.groupId);
   if (data.action === "add-group") addGroup();
+  if (data.action === "select-focus") {
+    state.activeTaskId = data.taskId;
+    state.selectedNodeId = data.nodeId || "";
+  }
   if (data.action === "select-task") {
     state.activeTaskId = data.taskId;
     state.selectedNodeId = "";
