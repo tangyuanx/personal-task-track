@@ -761,6 +761,7 @@ function renderFlowHeadCell(key, label) {
 
 function renderNodeDetail(taskId, node) {
   const mode = state.markdownMode === "preview" ? "preview" : "edit";
+  const stats = markdownStats(node.note);
   return `
     <section class="node-detail">
       <div class="detail-head">
@@ -781,26 +782,39 @@ function renderNodeDetail(taskId, node) {
         <span>标题</span>
         ${inputHtml("title", node.title, taskId, "node-detail-title", node.id)}
       </label>
-      <section class="markdown-panel">
-        <div class="markdown-toolbar">
+      <section class="markdown-panel codex-composer ${mode === "preview" ? "previewing" : "editing"}">
+        <div class="markdown-surface">
+        ${
+          mode === "preview"
+            ? `<article class="markdown-preview">${renderMarkdown(node.note)}</article>`
+            : `<textarea class="markdown-editor codex-editor" data-edit-key="note" data-task-id="${taskId}" data-node-id="${node.id}" placeholder="记录处理过程">${esc(node.note)}</textarea>`
+        }
+        </div>
+        <div class="markdown-toolbar composer-toolbar">
           <div class="markdown-tools" aria-label="Markdown tools">
             ${markdownTools
               .map((tool) => `<button type="button" data-action="markdown-tool" data-tool="${tool.action}" title="${tool.title}">${tool.label}</button>`)
               .join("")}
           </div>
-          <div class="markdown-tabs" role="tablist" aria-label="Markdown view">
-            <button class="${mode === "edit" ? "active" : ""}" type="button" role="tab" aria-selected="${mode === "edit"}" data-action="set-markdown-mode" data-mode="edit">编辑</button>
-            <button class="${mode === "preview" ? "active" : ""}" type="button" role="tab" aria-selected="${mode === "preview"}" data-action="set-markdown-mode" data-mode="preview">预览</button>
+          <div class="composer-meta">
+            <span class="markdown-stats" data-markdown-stats>${stats.lines} 行 · ${stats.characters} 字</span>
+            <div class="markdown-tabs" role="tablist" aria-label="Markdown view">
+              <button class="${mode === "edit" ? "active" : ""}" type="button" role="tab" aria-selected="${mode === "edit"}" data-action="set-markdown-mode" data-mode="edit">编辑</button>
+              <button class="${mode === "preview" ? "active" : ""}" type="button" role="tab" aria-selected="${mode === "preview"}" data-action="set-markdown-mode" data-mode="preview">预览</button>
+            </div>
           </div>
         </div>
-        ${
-          mode === "preview"
-            ? `<article class="markdown-preview">${renderMarkdown(node.note)}</article>`
-            : `<textarea class="markdown-editor bear-editor" data-edit-key="note" data-task-id="${taskId}" data-node-id="${node.id}" placeholder="支持 Markdown：标题、任务清单、链接、图片、表格、代码块。可直接粘贴截图。">${esc(node.note)}</textarea>`
-        }
       </section>
     </section>
   `;
+}
+
+function markdownStats(value) {
+  const text = String(value || "");
+  return {
+    characters: text.trim().length,
+    lines: text ? text.split(/\r\n|\r|\n/).length : 1,
+  };
 }
 
 function renderEmptyPage() {
@@ -1328,9 +1342,24 @@ function bind() {
 
   document.querySelectorAll(".markdown-editor").forEach((editor) => {
     editor.addEventListener("paste", handleMarkdownPaste);
+    editor.addEventListener("input", () => updateMarkdownStats(editor));
+    editor.addEventListener("dragover", (event) => {
+      if (hasDraggedImage(event)) {
+        event.preventDefault();
+        editor.closest(".markdown-panel")?.classList.add("dragging-image");
+      }
+    });
+    editor.addEventListener("dragleave", () => {
+      editor.closest(".markdown-panel")?.classList.remove("dragging-image");
+    });
+    editor.addEventListener("drop", handleMarkdownDrop);
     editor.addEventListener("keydown", (event) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "v") {
         handleMarkdownPasteShortcut(event);
+      }
+      if (event.key === "Tab") {
+        event.preventDefault();
+        insertEditorText(editor, "  ");
       }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "b") {
         event.preventDefault();
@@ -1795,6 +1824,7 @@ function replaceEditorSelection(editor, value, cursorStart, cursorEnd = cursorSt
   editor.selectionStart = cursorStart;
   editor.selectionEnd = cursorEnd;
   edit(editor.dataset, editor.value);
+  if (editor.classList.contains("markdown-editor")) updateMarkdownStats(editor);
 }
 
 async function handleMarkdownPaste(event) {
@@ -1824,6 +1854,15 @@ async function handleMarkdownPaste(event) {
   reader.readAsDataURL(file);
 }
 
+function handleMarkdownDrop(event) {
+  const editor = event.currentTarget;
+  editor.closest(".markdown-panel")?.classList.remove("dragging-image");
+  const files = Array.from(event.dataTransfer?.files || []).filter((file) => file.type.startsWith("image/"));
+  if (!files.length) return;
+  event.preventDefault();
+  files.forEach((file) => insertImageFile(editor, file));
+}
+
 function handleMarkdownPasteShortcut(event) {
   const editor = event.currentTarget;
   const dataUrl = window.personalTaskTrack?.clipboard?.readImageDataUrlSync?.();
@@ -1837,6 +1876,12 @@ function insertEditorText(editor, text) {
   replaceEditorSelection(editor, text, start + text.length);
 }
 
+function insertImageFile(editor, file) {
+  const reader = new FileReader();
+  reader.addEventListener("load", () => insertMarkdownImage(editor, reader.result));
+  reader.readAsDataURL(file);
+}
+
 function insertMarkdownImage(editor, dataUrl) {
   if (typeof dataUrl !== "string" || !dataUrl.startsWith("data:image/")) return;
   const imageId = id("image");
@@ -1847,6 +1892,18 @@ function insertMarkdownImage(editor, dataUrl) {
   const start = editor.selectionStart || editor.value.length;
   replaceEditorSelection(editor, markdown, start + markdown.length);
   save();
+}
+
+function hasDraggedImage(event) {
+  const items = Array.from(event.dataTransfer?.items || []);
+  const files = Array.from(event.dataTransfer?.files || []);
+  return items.some((item) => item.type.startsWith("image/")) || files.some((file) => file.type.startsWith("image/"));
+}
+
+function updateMarkdownStats(editor) {
+  const stats = markdownStats(editor.value);
+  const statsElement = editor.closest(".markdown-panel")?.querySelector("[data-markdown-stats]");
+  if (statsElement) statsElement.textContent = `${stats.lines} 行 · ${stats.characters} 字`;
 }
 
 async function exportNodePdf(taskId, nodeId) {

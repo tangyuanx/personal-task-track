@@ -1892,20 +1892,47 @@ body.resizing-detail {
   flex: 1;
   flex-direction: column;
   overflow: hidden;
-  border: 0;
-  border-top: 1px solid var(--line-soft);
-  border-radius: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  margin: 0 13px 13px;
   background: var(--markdown-panel-bg);
+}
+
+.markdown-surface {
+  position: relative;
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+}
+
+.codex-composer {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+
+.codex-composer.dragging-image .markdown-surface::after {
+  position: absolute;
+  inset: 12px;
+  display: grid;
+  place-items: center;
+  border: 1px dashed var(--focus);
+  border-radius: 10px;
+  color: var(--focus);
+  background: var(--focus-field);
+  content: "松开添加图片";
+  font-size: 14px;
+  font-weight: 680;
+  pointer-events: none;
 }
 
 .markdown-toolbar {
   display: flex;
-  min-height: 46px;
-  align-items: flex-start;
+  min-height: 48px;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 8px 10px;
-  border-bottom: 1px solid var(--line-soft);
+  padding: 8px 10px 9px;
+  border-top: 1px solid var(--line-soft);
   background: var(--markdown-toolbar-bg);
 }
 
@@ -1916,11 +1943,11 @@ body.resizing-detail {
 }
 
 .markdown-tools button {
-  min-width: 28px;
-  height: 28px;
-  padding: 0 8px;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 9px;
   border: 1px solid transparent;
-  border-radius: 7px;
+  border-radius: 8px;
   color: var(--muted);
   background: transparent;
   font-size: 12px;
@@ -1932,6 +1959,20 @@ body.resizing-detail {
   color: var(--heading);
   border-color: var(--line);
   background: var(--field);
+}
+
+.composer-meta {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.markdown-stats {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 11px;
+  white-space: nowrap;
 }
 
 .markdown-tabs {
@@ -1977,21 +2018,22 @@ body.resizing-detail {
 
 .markdown-editor {
   display: block;
-  padding: 16px 18px;
+  min-height: 100%;
+  padding: 18px 20px 20px;
   border: 0;
   outline: 0;
-  resize: vertical;
+  resize: none;
 }
 
-.bear-editor {
-  padding: 18px 20px;
+.codex-editor {
   caret-color: var(--focus);
-  line-height: 1.72;
+  line-height: 1.7;
+  tab-size: 2;
 }
 
 .markdown-preview {
   overflow: auto;
-  padding: 16px 20px 20px;
+  padding: 18px 20px 20px;
 }
 
 .markdown-preview > *:first-child {
@@ -2299,6 +2341,15 @@ body.resizing-detail {
   .detail-title-row {
     grid-template-columns: 1fr;
     gap: 5px;
+  }
+
+  .markdown-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .composer-meta {
+    justify-content: space-between;
   }
 
   .brief-field.background {
