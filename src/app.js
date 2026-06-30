@@ -1295,6 +1295,9 @@ function bind() {
   document.querySelectorAll(".markdown-editor").forEach((editor) => {
     editor.addEventListener("paste", handleMarkdownPaste);
     editor.addEventListener("keydown", (event) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "v") {
+        handleMarkdownPasteShortcut(event);
+      }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "b") {
         event.preventDefault();
         applyMarkdownTool("bold");
@@ -1781,6 +1784,14 @@ async function handleMarkdownPaste(event) {
     insertMarkdownImage(event.currentTarget, reader.result);
   });
   reader.readAsDataURL(file);
+}
+
+function handleMarkdownPasteShortcut(event) {
+  const editor = event.currentTarget;
+  const dataUrl = window.personalTaskTrack?.clipboard?.readImageDataUrlSync?.();
+  if (!dataUrl) return;
+  event.preventDefault();
+  insertMarkdownImage(editor, dataUrl);
 }
 
 function insertEditorText(editor, text) {

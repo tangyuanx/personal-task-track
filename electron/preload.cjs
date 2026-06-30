@@ -8,5 +8,6 @@ contextBridge.exposeInMainWorld("personalTaskTrack", {
   },
   clipboard: {
     readImageDataUrl: () => ipcRenderer.invoke("clipboard:read-image-data-url"),
+    readImageDataUrlSync: () => ipcRenderer.sendSync("clipboard:read-image-data-url-sync"),
   },
 });

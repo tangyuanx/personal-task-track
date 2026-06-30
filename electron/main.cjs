@@ -49,6 +49,10 @@ function registerStorageHandlers() {
     const image = clipboard.readImage();
     return image.isEmpty() ? "" : image.toDataURL();
   });
+  ipcMain.on("clipboard:read-image-data-url-sync", (event) => {
+    const image = clipboard.readImage();
+    event.returnValue = image.isEmpty() ? "" : image.toDataURL();
+  });
 }
 
 function createMenu() {
