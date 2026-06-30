@@ -1256,7 +1256,7 @@ function bind() {
         needsRender = true;
       }
 
-      if (state.selectedNodeId && !keepNodeDetail) exitNodeDetail();
+      if (state.selectedNodeId && !keepNodeDetail && exitNodeDetail()) needsRender = true;
 
       if (needsRender) render();
     });
@@ -1673,14 +1673,19 @@ function replaceEditorSelection(editor, value, cursorStart, cursorEnd = cursorSt
 async function handleMarkdownPaste(event) {
   const items = Array.from(event.clipboardData?.items || []);
   const files = Array.from(event.clipboardData?.files || []);
+  const types = Array.from(event.clipboardData?.types || []);
   const imageItem = items.find((item) => item.type.startsWith("image/"));
   const file = files.find((item) => item.type.startsWith("image/")) || imageItem?.getAsFile();
   if (!file) {
     const text = event.clipboardData?.getData("text/plain") || "";
-    if (text) return;
+    const mayContainImage = types.some((type) => /image|file|tiff|png/i.test(type));
+    if (text && !mayContainImage) return;
     event.preventDefault();
     const dataUrl = await window.personalTaskTrack?.clipboard?.readImageDataUrl?.();
-    if (!dataUrl) return;
+    if (!dataUrl) {
+      if (text) insertEditorText(event.currentTarget, text);
+      return;
+    }
     insertMarkdownImage(event.currentTarget, dataUrl);
     return;
   }
@@ -1690,6 +1695,11 @@ async function handleMarkdownPaste(event) {
     insertMarkdownImage(event.currentTarget, reader.result);
   });
   reader.readAsDataURL(file);
+}
+
+function insertEditorText(editor, text) {
+  const start = editor.selectionStart || 0;
+  replaceEditorSelection(editor, text, start + text.length);
 }
 
 function insertMarkdownImage(editor, dataUrl) {
