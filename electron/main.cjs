@@ -1,4 +1,5 @@
-const { app, BrowserWindow, Menu, clipboard, ipcMain, shell } = require("electron");
+const { app, BrowserWindow, Menu, clipboard, dialog, ipcMain, shell } = require("electron");
+const fs = require("node:fs/promises");
 const path = require("node:path");
 const { readTaskData, writeTaskData } = require("./storage.cjs");
 
@@ -53,6 +54,109 @@ function registerStorageHandlers() {
     const image = clipboard.readImage();
     event.returnValue = image.isEmpty() ? "" : image.toDataURL();
   });
+  ipcMain.handle("node-detail:export-pdf", async (_event, payload) => exportNodeDetailPdf(payload));
+}
+
+async function exportNodeDetailPdf(payload) {
+  const safePayload = payload && typeof payload === "object" ? payload : {};
+  const nodeTitle = String(safePayload.nodeTitle || "未命名节点").trim() || "未命名节点";
+  const taskTitle = String(safePayload.taskTitle || "未命名任务").trim() || "未命名任务";
+  const { canceled, filePath } = await dialog.showSaveDialog({
+    title: "导出节点详情",
+    defaultPath: `${sanitizeFileName(nodeTitle)}.pdf`,
+    filters: [{ name: "PDF", extensions: ["pdf"] }],
+  });
+  if (canceled || !filePath) return { canceled: true };
+
+  const window = new BrowserWindow({
+    width: 900,
+    height: 1200,
+    show: false,
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  });
+
+  try {
+    const html = nodeDetailPdfHtml({
+      taskTitle,
+      nodeTitle,
+      status: String(safePayload.status || ""),
+      updatedAt: String(safePayload.updatedAt || ""),
+      bodyHtml: String(safePayload.html || ""),
+    });
+    await window.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+    const pdf = await window.webContents.printToPDF({
+      printBackground: true,
+      pageSize: "A4",
+      margins: { marginType: "custom", top: 0.48, bottom: 0.48, left: 0.52, right: 0.52 },
+    });
+    await fs.writeFile(filePath, pdf);
+    return { canceled: false, filePath };
+  } finally {
+    window.destroy();
+  }
+}
+
+function nodeDetailPdfHtml({ taskTitle, nodeTitle, status, updatedAt, bodyHtml }) {
+  return `<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <style>
+    :root { color: #24221f; font-family: Inter, "Microsoft YaHei", "PingFang SC", Arial, sans-serif; }
+    body { margin: 0; padding: 34px 38px; background: #ffffff; }
+    header { margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid #ddd8cf; }
+    .kicker { margin: 0 0 7px; color: #83796c; font-size: 12px; letter-spacing: 0; }
+    h1 { margin: 0; color: #171512; font-size: 25px; line-height: 1.25; }
+    .meta { display: flex; gap: 12px; margin-top: 10px; color: #6f665b; font-size: 12px; }
+    main { font-size: 14px; line-height: 1.7; }
+    h1, h2, h3, h4, h5, h6 { color: #171512; page-break-after: avoid; }
+    h2 { margin-top: 22px; font-size: 20px; }
+    h3 { margin-top: 18px; font-size: 17px; }
+    p, ul, ol, blockquote, pre, table, img { margin: 0 0 13px; }
+    a { color: #b4232f; text-decoration: none; }
+    blockquote { padding: 10px 13px; border-left: 3px solid #b4232f; color: #62594f; background: #faf7f2; }
+    code { padding: 1px 5px; border: 1px solid #e4ded4; border-radius: 5px; background: #f7f4ee; font-family: "SFMono-Regular", Consolas, monospace; font-size: 0.92em; }
+    pre { overflow-wrap: anywhere; padding: 12px; border: 1px solid #e4ded4; border-radius: 8px; background: #f7f4ee; white-space: pre-wrap; }
+    pre code { padding: 0; border: 0; background: transparent; }
+    img { display: block; max-width: 100%; border: 1px solid #e4ded4; border-radius: 6px; page-break-inside: avoid; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { padding: 7px 8px; border: 1px solid #e4ded4; text-align: left; vertical-align: top; }
+    th { background: #f8f5ef; }
+    hr { border: 0; border-top: 1px solid #e4ded4; margin: 18px 0; }
+    .md-task { display: inline-flex; gap: 8px; align-items: flex-start; }
+    .markdown-empty { color: #83796c; }
+  </style>
+</head>
+<body>
+  <header>
+    <p class="kicker">${escapeHtml(taskTitle)}</p>
+    <h1>${escapeHtml(nodeTitle)}</h1>
+    <div class="meta"><span>${escapeHtml(status)}</span><span>${escapeHtml(updatedAt)}</span></div>
+  </header>
+  <main>${bodyHtml}</main>
+</body>
+</html>`;
+}
+
+function sanitizeFileName(value) {
+  return String(value || "node-detail")
+    .replace(/[<>:"/\\|?*\u0000-\u001f]/g, "-")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 90) || "node-detail";
+}
+
+function escapeHtml(value) {
+  return String(value || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
 
 function createMenu() {

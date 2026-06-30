@@ -11,8 +11,10 @@ const TASK_GROUPS_KEY = "task-track-groups";
 const ACTIVE_GROUP_KEY = "task-track-active-group";
 const SIDEBAR_WIDTH_KEY = "task-track-sidebar-width";
 const DETAIL_HEIGHT_KEY = "task-track-detail-height";
+const ATTACHMENTS_KEY = "task-track-attachments";
 const DATA_VERSION = 1;
 const desktopStorage = window.personalTaskTrack?.storage;
+const desktopExport = window.personalTaskTrack?.export;
 
 const priorityLabels = {
   high: "高",
@@ -136,6 +138,7 @@ let state = {
   flowWidths: { ...defaultFlowWidths },
   sidebarWidth: defaultSidebarWidth,
   detailHeight: defaultDetailHeight,
+  attachments: { images: {} },
   conclusionPromptTaskId: "",
   contextMenu: null,
 };
@@ -196,6 +199,16 @@ function normalizeTaskTags(tags) {
     today: Boolean(raw.today),
     later: Boolean(raw.later),
     blocked: Boolean(raw.blocked),
+  };
+}
+
+function normalizeAttachments(value) {
+  const raw = value && typeof value === "object" ? value : {};
+  const images = raw.images && typeof raw.images === "object" ? raw.images : {};
+  return {
+    images: Object.fromEntries(
+      Object.entries(images).filter(([, dataUrl]) => typeof dataUrl === "string" && dataUrl.startsWith("data:image/")),
+    ),
   };
 }
 
@@ -331,6 +344,15 @@ function loadBrowserDetailHeight() {
   return normalizeDetailHeight(localStorage.getItem(DETAIL_HEIGHT_KEY));
 }
 
+function loadBrowserAttachments() {
+  const raw = localStorage.getItem(ATTACHMENTS_KEY);
+  try {
+    return normalizeAttachments(raw ? JSON.parse(raw) : {});
+  } catch {
+    return normalizeAttachments({});
+  }
+}
+
 async function loadAppData() {
   if (desktopStorage?.read) {
     try {
@@ -349,7 +371,8 @@ async function loadAppData() {
       const newTaskPriority = normalizePriority(stored?.newTaskPriority);
       const sidebarWidth = normalizeSidebarWidth(stored?.sidebarWidth);
       const detailHeight = normalizeDetailHeight(stored?.detailHeight);
-      return { tasks, taskGroups, activeGroupId, flowWidths, sidebarWidth, detailHeight, theme, zhFont, enFont, tone, taskFilter, priorityFilter, newTaskPriority };
+      const attachments = normalizeAttachments(stored?.attachments);
+      return { tasks, taskGroups, activeGroupId, flowWidths, sidebarWidth, detailHeight, attachments, theme, zhFont, enFont, tone, taskFilter, priorityFilter, newTaskPriority };
     } catch (error) {
       console.error("Failed to read local task data.", error);
     }
@@ -366,6 +389,7 @@ async function loadAppData() {
     flowWidths: loadBrowserFlowWidths(),
     sidebarWidth: loadBrowserSidebarWidth(),
     detailHeight: loadBrowserDetailHeight(),
+    attachments: loadBrowserAttachments(),
     theme: loadBrowserTheme(),
     ...typography,
     ...preferences,
@@ -381,6 +405,7 @@ function save() {
     flowWidths: state.flowWidths,
     sidebarWidth: state.sidebarWidth,
     detailHeight: state.detailHeight,
+    attachments: state.attachments,
     theme: state.theme,
     zhFont: state.zhFont,
     enFont: state.enFont,
@@ -398,6 +423,7 @@ function save() {
     localStorage.setItem(FLOW_WIDTH_KEY, JSON.stringify(state.flowWidths));
     localStorage.setItem(SIDEBAR_WIDTH_KEY, String(state.sidebarWidth));
     localStorage.setItem(DETAIL_HEIGHT_KEY, String(state.detailHeight));
+    localStorage.setItem(ATTACHMENTS_KEY, JSON.stringify(state.attachments));
     localStorage.setItem(THEME_KEY, state.theme);
     localStorage.setItem(ZH_FONT_KEY, state.zhFont);
     localStorage.setItem(EN_FONT_KEY, state.enFont);
@@ -485,10 +511,10 @@ function render() {
 
 function renderSidebar() {
   const visibleCount = filteredTasks().length;
-  const groupTasks = tasksInActiveGroup();
-  const openCount = groupTasks.filter((task) => task.status !== "done").length;
-  const blockedCount = groupTasks.filter((task) => task.tags.blocked || flatten(task.nodes).some((node) => node.status === "blocked")).length;
-  const focusItems = todayFocusItems(groupTasks);
+  const scopedTasks = taskListStatsTasks();
+  const openCount = scopedTasks.filter((task) => task.status !== "done").length;
+  const blockedCount = scopedTasks.filter((task) => task.tags.blocked || flatten(task.nodes).some((node) => node.status === "blocked")).length;
+  const focusItems = todayFocusItems();
   return `
     <aside class="sidebar">
       <span class="sidebar-resizer" data-sidebar-resizer title="调整侧栏宽度"></span>
@@ -497,7 +523,7 @@ function renderSidebar() {
           <strong>Task Track</strong>
           <small>Personal operations</small>
         </div>
-        <span>${visibleCount}/${groupTasks.length}</span>
+        <span>${visibleCount}/${scopedTasks.length}</span>
       </div>
 
       <div class="sidebar-stats" aria-label="任务统计">
@@ -747,6 +773,7 @@ function renderNodeDetail(taskId, node) {
             <input type="checkbox" data-action="toggle-node-done" data-task-id="${taskId}" data-node-id="${node.id}" ${node.status === "done" ? "checked" : ""} />
             完成
           </label>
+          <button class="detail-export" type="button" data-action="export-node-pdf" data-task-id="${taskId}" data-node-id="${node.id}">导出 PDF</button>
           <button class="detail-save" type="button" data-action="save-node-detail">保存</button>
         </div>
       </div>
@@ -843,12 +870,12 @@ function renderContextMenu() {
 
 function filteredTasks() {
   const q = state.query.trim().toLowerCase();
-  return tasksInActiveGroup()
+  return taskListScopeTasks()
     .filter((task) => {
       const tags = normalizeTaskTags(task.tags);
       const hasBlocked = flatten(task.nodes).some((node) => node.status === "blocked");
       const hasLater = flatten(task.nodes).some((node) => node.status === "later");
-      if (state.taskFilter === "today" && !tags.today && !isTaskTouchedToday(task)) return false;
+      if (state.taskFilter === "today" && !tags.today) return false;
       if (state.taskFilter === "active" && task.status === "done") return false;
       if (state.taskFilter === "done" && task.status !== "done") return false;
       if (state.taskFilter === "blocked" && !tags.blocked && !hasBlocked) return false;
@@ -864,6 +891,15 @@ function filteredTasks() {
     .sort((a, b) => a.order - b.order);
 }
 
+function taskListScopeTasks() {
+  return state.taskFilter === "today" ? state.tasks : tasksInActiveGroup();
+}
+
+function taskListStatsTasks() {
+  if (state.taskFilter !== "today") return tasksInActiveGroup();
+  return state.tasks.filter((task) => normalizeTaskTags(task.tags).today);
+}
+
 function tasksInActiveGroup() {
   const groupId = normalizeActiveGroupId(state.activeGroupId, state.taskGroups);
   return state.tasks.filter((task) => (task.groupId || defaultTaskGroup.id) === groupId);
@@ -873,28 +909,26 @@ function taskGroupOptions() {
   return Object.fromEntries(sort(state.taskGroups).map((group) => [group.id, group.title]));
 }
 
-function todayFocusItems(tasks = tasksInActiveGroup()) {
-  return tasks
+function todayFocusItems() {
+  return state.tasks
     .filter((task) => task.status !== "done")
+    .filter((task) => normalizeTaskTags(task.tags).today)
     .map((task) => {
       const tags = normalizeTaskTags(task.tags);
       const nodes = flatten(task.nodes);
       const blockedNode = nodes.find((node) => node.status === "blocked");
       const openNode = nextOpenNode(task.nodes);
-      const todayTouched = tags.today || isTaskTouchedToday(task);
       const score =
         (task.priority === "high" ? 80 : task.priority === "medium" ? 35 : 15) +
-        (tags.today ? 70 : 0) +
+        70 +
         (blockedNode || tags.blocked ? 55 : 0) +
-        (todayTouched ? 40 : 0) +
         (openNode ? 8 : 0);
       const node = blockedNode || openNode || null;
       const kind = blockedNode || tags.blocked ? "blocked" : task.priority === "high" ? "high" : "normal";
-      const badge = blockedNode || tags.blocked ? "卡住" : task.priority === "high" ? "高" : todayTouched ? "今日" : priorityLabels[task.priority];
+      const badge = blockedNode || tags.blocked ? "卡住" : task.priority === "high" ? "高" : "Today";
       const nextText = node?.title || (task.description.trim() ? task.description.trim() : "补充任务背景或新增第一个节点");
-      return { task, node, kind, badge, nextText, score, todayTouched, updatedAt: latestTaskTime(task) };
+      return { task, node, kind, badge, nextText, score, updatedAt: latestTaskTime(task) };
     })
-    .filter((item) => item.score >= 45 || item.todayTouched)
     .sort((a, b) => b.score - a.score || b.updatedAt - a.updatedAt || a.task.order - b.task.order)
     .slice(0, 3);
 }
@@ -1495,6 +1529,10 @@ function action(data) {
     applyMarkdownTool(data.tool);
     return;
   }
+  if (data.action === "export-node-pdf") {
+    exportNodePdf(data.taskId, data.nodeId);
+    return;
+  }
   if (data.action === "scroll-sheets") {
     scrollSheets(Number(data.direction || 1));
     return;
@@ -1800,11 +1838,38 @@ function insertEditorText(editor, text) {
 }
 
 function insertMarkdownImage(editor, dataUrl) {
+  if (typeof dataUrl !== "string" || !dataUrl.startsWith("data:image/")) return;
+  const imageId = id("image");
+  state.attachments = normalizeAttachments(state.attachments);
+  state.attachments.images[imageId] = dataUrl;
   const alt = `粘贴图片 ${formatImageStamp(new Date())}`;
-  const markdown = `\n![${alt}](${dataUrl})\n`;
+  const markdown = `\n![${alt}](task-image:${imageId})\n`;
   const start = editor.selectionStart || editor.value.length;
   replaceEditorSelection(editor, markdown, start + markdown.length);
   save();
+}
+
+async function exportNodePdf(taskId, nodeId) {
+  const task = state.tasks.find((item) => item.id === taskId);
+  const node = task ? findNode(task.nodes, nodeId) : null;
+  if (!task || !node) return;
+  if (!desktopExport?.nodeDetailPdf) {
+    alert("当前环境不支持 PDF 导出。请在桌面应用中使用。");
+    return;
+  }
+
+  try {
+    await desktopExport.nodeDetailPdf({
+      taskTitle: task.title || "未命名任务",
+      nodeTitle: node.title || "未命名节点",
+      status: nodeStatusText(node.status),
+      updatedAt: formatShort(node.updatedAt || task.updatedAt || now()),
+      html: renderMarkdown(node.note),
+    });
+  } catch (error) {
+    console.error("Failed to export node detail PDF.", error);
+    alert("PDF 导出失败，请稍后重试。");
+  }
 }
 
 function toggleTaskTag(taskId, tag) {
@@ -2093,7 +2158,7 @@ function renderInlineMarkdown(value) {
   });
 
   output = output.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt, url) => {
-    const safeUrl = safeMarkdownUrl(url);
+    const safeUrl = resolveMarkdownImageUrl(url);
     if (!safeUrl) return esc(`![${alt}](${url})`);
     const token = `@@RICH_${richTokens.length}@@`;
     richTokens.push(`<img src="${safeUrl}" alt="${escAttr(alt)}" loading="lazy" />`);
@@ -2145,6 +2210,16 @@ function safeMarkdownUrl(value) {
   if (!cleaned || /^(javascript|vbscript):/.test(lower)) return "";
   if (lower.startsWith("data:") && !lower.startsWith("data:image/")) return "";
   return escAttr(cleaned);
+}
+
+function resolveMarkdownImageUrl(value) {
+  const cleaned = cleanMarkdownUrl(value);
+  if (cleaned.startsWith("task-image:")) {
+    const imageId = cleaned.slice("task-image:".length);
+    const dataUrl = state.attachments?.images?.[imageId];
+    return typeof dataUrl === "string" && dataUrl.startsWith("data:image/") ? escAttr(dataUrl) : "";
+  }
+  return safeMarkdownUrl(cleaned);
 }
 
 function cleanMarkdownUrl(value) {
@@ -2240,6 +2315,8 @@ async function bootstrap() {
   state.activeGroupId = data.activeGroupId;
   state.flowWidths = data.flowWidths;
   state.sidebarWidth = data.sidebarWidth;
+  state.detailHeight = data.detailHeight;
+  state.attachments = data.attachments;
   state.theme = data.theme;
   state.zhFont = data.zhFont;
   state.enFont = data.enFont;

@@ -10,4 +10,7 @@ contextBridge.exposeInMainWorld("personalTaskTrack", {
     readImageDataUrl: () => ipcRenderer.invoke("clipboard:read-image-data-url"),
     readImageDataUrlSync: () => ipcRenderer.sendSync("clipboard:read-image-data-url-sync"),
   },
+  export: {
+    nodeDetailPdf: (payload) => ipcRenderer.invoke("node-detail:export-pdf", payload),
+  },
 });

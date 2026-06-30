@@ -1833,19 +1833,31 @@ body.resizing-detail {
   accent-color: var(--focus);
 }
 
-.detail-save {
+.detail-save,
+.detail-export {
   height: 30px;
   padding: 0 12px;
-  border: 1px solid var(--focus);
   border-radius: 7px;
-  color: var(--heading);
-  background: var(--focus-field);
   font-size: 13px;
   font-weight: 650;
 }
 
+.detail-save {
+  border: 1px solid var(--focus);
+  color: var(--heading);
+  background: var(--focus-field);
+}
+
+.detail-export {
+  border: 1px solid var(--line);
+  color: var(--muted);
+  background: var(--field);
+}
+
 .detail-save:hover,
-.detail-save:focus-visible {
+.detail-save:focus-visible,
+.detail-export:hover,
+.detail-export:focus-visible {
   box-shadow: 0 0 0 2px var(--focus-ring);
 }
 
