@@ -101,6 +101,19 @@ const taskTagLabels = {
   blocked: "卡住",
 };
 
+const reviewPresetLabels = {
+  week: "本周",
+  month: "本月",
+  year: "今年",
+  all: "全部",
+};
+
+const reviewDateFieldLabels = {
+  updated: "更新日期",
+  created: "创建日期",
+  resolved: "解决日期",
+};
+
 const markdownTools = [
   { action: "heading", label: "H1", title: "标题" },
   { action: "bold", label: "B", title: "加粗" },
@@ -132,9 +145,16 @@ let state = {
   enFont: "inter",
   tone: "focus",
   settingsOpen: false,
+  reviewOpen: false,
+  reviewPreset: "week",
+  reviewDateField: "updated",
   focusTaskTitleId: "",
   focusNodeTitleId: "",
   focusGroupTitleId: "",
+  focusSearch: false,
+  searchCursor: 0,
+  markdownSelection: null,
+  restoreMarkdownFocus: false,
   flowWidths: { ...defaultFlowWidths },
   sidebarWidth: defaultSidebarWidth,
   detailHeight: defaultDetailHeight,
@@ -502,6 +522,7 @@ function render() {
       ${task ? renderTaskPage(task) : renderEmptyPage()}
       ${renderContextMenu()}
       ${state.settingsOpen ? renderSettingsPanel() : ""}
+      ${state.reviewOpen ? renderReviewPanel() : ""}
     </main>
   `;
   bind();
@@ -554,6 +575,7 @@ function renderSidebar() {
         </div>
       </div>
       <div class="sidebar-foot">
+        <button class="review-trigger ${state.reviewOpen ? "active" : ""}" type="button" data-action="toggle-review" title="任务回顾">日</button>
         <button class="settings-trigger ${state.settingsOpen ? "active" : ""}" type="button" data-action="toggle-settings" title="设置">⚙</button>
         ${renderGroupTabs()}
       </div>
@@ -787,7 +809,7 @@ function renderNodeDetail(taskId, node) {
         ${
           mode === "preview"
             ? `<article class="markdown-preview">${renderMarkdown(node.note)}</article>`
-            : `<textarea class="markdown-editor codex-editor" data-edit-key="note" data-task-id="${taskId}" data-node-id="${node.id}" placeholder="记录处理过程">${esc(node.note)}</textarea>`
+            : `<textarea class="markdown-editor codex-editor" data-edit-key="note" data-task-id="${taskId}" data-node-id="${node.id}" placeholder="记录处理过程">${esc(node.note)}</textarea>${renderEditorImagePreview(node.note)}`
         }
         </div>
         <div class="markdown-toolbar composer-toolbar">
@@ -815,6 +837,23 @@ function markdownStats(value) {
     characters: text.trim().length,
     lines: text ? text.split(/\r\n|\r|\n/).length : 1,
   };
+}
+
+function renderEditorImagePreview(value) {
+  const images = markdownImages(value);
+  return `
+    <div class="editor-image-strip ${images.length ? "" : "empty"}" aria-label="编辑器图片预览">
+      ${images
+        .map((image) => `<figure><img src="${image.src}" alt="${escAttr(image.alt || "图片")}" /><figcaption>${esc(image.alt || "图片")}</figcaption></figure>`)
+        .join("")}
+    </div>
+  `;
+}
+
+function markdownImages(value) {
+  return Array.from(String(value || "").matchAll(/!\[([^\]]*)\]\(([^)]+)\)/g))
+    .map((match) => ({ alt: match[1], src: resolveMarkdownImageUrl(match[2]) }))
+    .filter((image) => image.src);
 }
 
 function renderEmptyPage() {
@@ -1098,6 +1137,122 @@ function renderSettingsPanel() {
   `;
 }
 
+function renderReviewPanel() {
+  const range = reviewRange();
+  const items = reviewTasks(range);
+  return `
+    <div class="review-overlay" role="presentation">
+      <section class="review-panel" role="dialog" aria-modal="true" aria-labelledby="review-title">
+        <header class="review-head">
+          <div>
+            <span>Task Review</span>
+            <h2 id="review-title">任务回顾</h2>
+          </div>
+          <button class="settings-close" type="button" data-action="close-review" title="关闭">×</button>
+        </header>
+        <div class="review-controls">
+          <div class="review-segment" aria-label="时间范围">
+            ${Object.entries(reviewPresetLabels)
+              .map(([preset, label]) => `<button class="${state.reviewPreset === preset ? "active" : ""}" type="button" data-action="set-review-preset" data-preset="${preset}">${label}</button>`)
+              .join("")}
+          </div>
+          <label class="review-field">
+            <span>按</span>
+            ${selectReviewDateField()}
+          </label>
+        </div>
+        <div class="review-summary">
+          <strong>${items.length}</strong>
+          <span>${range.label}</span>
+        </div>
+        <div class="review-list">
+          ${
+            items.length
+              ? items.map((item) => renderReviewItem(item)).join("")
+              : `<div class="review-empty">这个范围内没有匹配任务。</div>`
+          }
+        </div>
+      </section>
+    </div>
+  `;
+}
+
+function selectReviewDateField() {
+  return `
+    <select data-review-date-field>
+      ${Object.entries(reviewDateFieldLabels)
+        .map(([value, label]) => `<option value="${value}" ${state.reviewDateField === value ? "selected" : ""}>${label}</option>`)
+        .join("")}
+    </select>
+  `;
+}
+
+function renderReviewItem({ task, date }) {
+  const group = state.taskGroups.find((item) => item.id === (task.groupId || defaultTaskGroup.id));
+  const summary = taskSummary(task);
+  return `
+    <article class="review-item" data-action="open-review-task" data-task-id="${task.id}">
+      <div>
+        <strong>${esc(task.title || "未命名任务")}</strong>
+        <p>${esc((task.conclusion || task.hypothesis || task.description || "").trim() || "没有摘要")}</p>
+      </div>
+      <aside>
+        <span>${esc(group?.title || "默认")}</span>
+        <span>${reviewDateText(date)}</span>
+        <span>${summary.done}/${summary.total || 0} 节点</span>
+      </aside>
+    </article>
+  `;
+}
+
+function reviewTasks(range = reviewRange()) {
+  return state.tasks
+    .map((task) => ({ task, date: taskReviewDate(task, state.reviewDateField) }))
+    .filter((item) => item.date && isWithinRange(item.date, range))
+    .sort((a, b) => b.date.getTime() - a.date.getTime() || a.task.order - b.task.order);
+}
+
+function taskReviewDate(task, field) {
+  if (field === "created") return safeDate(task.createdAt);
+  if (field === "resolved") return task.status === "done" ? safeDate(task.resolvedAt || task.updatedAt) : null;
+  return safeDate(latestTaskTime(task) || task.updatedAt);
+}
+
+function reviewRange() {
+  const nowDate = new Date();
+  if (state.reviewPreset === "all") return { start: null, end: null, label: "全部任务" };
+  if (state.reviewPreset === "year") {
+    const start = new Date(nowDate.getFullYear(), 0, 1);
+    const end = new Date(nowDate.getFullYear() + 1, 0, 1);
+    return { start, end, label: `${nowDate.getFullYear()} 年` };
+  }
+  if (state.reviewPreset === "month") {
+    const start = new Date(nowDate.getFullYear(), nowDate.getMonth(), 1);
+    const end = new Date(nowDate.getFullYear(), nowDate.getMonth() + 1, 1);
+    return { start, end, label: `${nowDate.getFullYear()}-${String(nowDate.getMonth() + 1).padStart(2, "0")}` };
+  }
+  const day = nowDate.getDay() || 7;
+  const start = new Date(nowDate.getFullYear(), nowDate.getMonth(), nowDate.getDate() - day + 1);
+  const end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 7);
+  return { start, end, label: "本周" };
+}
+
+function isWithinRange(date, range) {
+  if (!date) return false;
+  if (!range.start || !range.end) return true;
+  return date >= range.start && date < range.end;
+}
+
+function safeDate(value) {
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isFinite(date.getTime()) ? date : null;
+}
+
+function reviewDateText(value) {
+  if (!value) return "-";
+  return new Intl.DateTimeFormat("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(value);
+}
+
 function settingsSelectHtml(key, value, options) {
   return `
     <select data-setting="${key}">
@@ -1203,6 +1358,10 @@ function bind() {
       event.stopPropagation();
     });
     element.addEventListener("blur", (event) => {
+      if (event.target.classList.contains("markdown-editor")) {
+        storeMarkdownSelection(event.target, !event.relatedTarget);
+        if (!event.relatedTarget) return;
+      }
       if (event.relatedTarget?.closest?.("[data-action], .sheet-bar, .node-detail, .task-page")) return;
       render();
     });
@@ -1279,6 +1438,27 @@ function bind() {
     });
   });
 
+  document.querySelectorAll("[data-review-date-field]").forEach((element) => {
+    element.addEventListener("click", (event) => event.stopPropagation());
+    element.addEventListener("change", (event) => {
+      state.reviewDateField = Object.hasOwn(reviewDateFieldLabels, event.target.value) ? event.target.value : "updated";
+      render();
+    });
+  });
+
+  const reviewPanel = document.querySelector(".review-panel");
+  if (reviewPanel) {
+    reviewPanel.addEventListener("click", (event) => event.stopPropagation());
+  }
+
+  const reviewOverlay = document.querySelector(".review-overlay");
+  if (reviewOverlay) {
+    reviewOverlay.addEventListener("click", () => {
+      state.reviewOpen = false;
+      render();
+    });
+  }
+
   const settingsPanel = document.querySelector(".settings-panel");
   if (settingsPanel) {
     settingsPanel.addEventListener("click", (event) => event.stopPropagation());
@@ -1297,6 +1477,8 @@ function bind() {
     search.addEventListener("click", (event) => event.stopPropagation());
     search.addEventListener("input", (event) => {
       state.query = event.target.value;
+      state.focusSearch = true;
+      state.searchCursor = event.target.selectionStart || state.query.length;
       render();
     });
   }
@@ -1342,7 +1524,7 @@ function bind() {
 
   document.querySelectorAll(".markdown-editor").forEach((editor) => {
     editor.addEventListener("paste", handleMarkdownPaste);
-    editor.addEventListener("input", () => updateMarkdownStats(editor));
+    editor.addEventListener("input", () => updateMarkdownEditorState(editor));
     editor.addEventListener("dragover", (event) => {
       if (hasDraggedImage(event)) {
         event.preventDefault();
@@ -1359,7 +1541,7 @@ function bind() {
       }
       if (event.key === "Tab") {
         event.preventDefault();
-        insertEditorText(editor, "  ");
+        insertEditorText(editor, "    ");
       }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "b") {
         event.preventDefault();
@@ -1392,6 +1574,7 @@ function bind() {
       let needsRender = false;
       const keepNodeDetail = event.target.closest(".node-detail, .flow-row:not(.flow-header), .context-menu, [data-action], [data-edit-key], button, input, textarea, select");
       const keepSettings = event.target.closest(".settings-overlay, .settings-trigger");
+      const keepReview = event.target.closest(".review-overlay, .review-trigger");
       const keepContextMenu = event.target.closest(".context-menu");
 
       if (state.contextMenu && !keepContextMenu) {
@@ -1401,6 +1584,11 @@ function bind() {
 
       if (state.settingsOpen && !keepSettings) {
         state.settingsOpen = false;
+        needsRender = true;
+      }
+
+      if (state.reviewOpen && !keepReview) {
+        state.reviewOpen = false;
         needsRender = true;
       }
 
@@ -1523,6 +1711,17 @@ function exitNodeDetail() {
 }
 
 function focusPendingElement() {
+  if (state.focusSearch) {
+    const input = document.querySelector("#search");
+    state.focusSearch = false;
+    if (input) {
+      input.focus();
+      const cursor = Math.min(state.searchCursor, input.value.length);
+      input.setSelectionRange(cursor, cursor);
+    }
+    return;
+  }
+
   if (state.focusTaskTitleId) {
     const input = document.querySelector(`.task-title[data-task-id="${state.focusTaskTitleId}"]`);
     state.focusTaskTitleId = "";
@@ -1550,6 +1749,31 @@ function focusPendingElement() {
       input.select();
     }
   }
+
+  restoreMarkdownSelection();
+}
+
+function storeMarkdownSelection(editor = activeMarkdownEditor(), shouldRestore = false) {
+  if (!editor) return;
+  state.markdownSelection = {
+    taskId: editor.dataset.taskId,
+    nodeId: editor.dataset.nodeId,
+    start: editor.selectionStart || 0,
+    end: editor.selectionEnd || editor.selectionStart || 0,
+  };
+  if (shouldRestore) state.restoreMarkdownFocus = true;
+}
+
+function restoreMarkdownSelection() {
+  const selection = state.markdownSelection;
+  if (!state.restoreMarkdownFocus || !selection || state.markdownMode !== "edit" || state.selectedNodeId !== selection.nodeId) return;
+  const editor = document.querySelector(`.markdown-editor[data-node-id="${selection.nodeId}"]`);
+  if (!editor) return;
+  const start = Math.min(selection.start, editor.value.length);
+  const end = Math.min(selection.end, editor.value.length);
+  editor.focus();
+  editor.setSelectionRange(start, end);
+  state.restoreMarkdownFocus = false;
 }
 
 function action(data) {
@@ -1567,14 +1791,23 @@ function action(data) {
     return;
   }
   if (data.action === "set-markdown-mode") state.markdownMode = data.mode === "preview" ? "preview" : "edit";
-  if (data.action === "toggle-settings") state.settingsOpen = !state.settingsOpen;
+  if (data.action === "toggle-settings") {
+    state.settingsOpen = !state.settingsOpen;
+    if (state.settingsOpen) state.reviewOpen = false;
+  }
   if (data.action === "close-settings") state.settingsOpen = false;
+  if (data.action === "toggle-review") {
+    state.reviewOpen = !state.reviewOpen;
+    if (state.reviewOpen) state.settingsOpen = false;
+  }
+  if (data.action === "close-review") state.reviewOpen = false;
+  if (data.action === "set-review-preset") state.reviewPreset = Object.hasOwn(reviewPresetLabels, data.preset) ? data.preset : "week";
+  if (data.action === "open-review-task") openTaskFromGlobalList(data.taskId);
   if (data.action === "reload-app") window.location.reload();
   if (data.action === "select-group") selectGroup(data.groupId);
   if (data.action === "add-group") addGroup();
   if (data.action === "select-focus") {
-    state.activeTaskId = data.taskId;
-    state.selectedNodeId = data.nodeId || "";
+    openTaskFromGlobalList(data.taskId, data.nodeId || "");
   }
   if (data.action === "select-task") {
     state.activeTaskId = data.taskId;
@@ -1629,6 +1862,18 @@ function edit(data, value) {
     const title = document.querySelector(`.flow-title-input[data-node-id="${data.nodeId}"]`);
     if (title) title.value = value || "";
   }
+}
+
+function openTaskFromGlobalList(taskId, nodeId = "") {
+  const task = state.tasks.find((item) => item.id === taskId);
+  if (!task) return;
+  state.activeGroupId = task.groupId || defaultTaskGroup.id;
+  state.activeTaskId = task.id;
+  state.selectedNodeId = nodeId;
+  state.taskFilter = "all";
+  state.priorityFilter = "all";
+  state.query = "";
+  state.reviewOpen = false;
 }
 
 function createTaskFromBlank(title) {
@@ -1824,7 +2069,7 @@ function replaceEditorSelection(editor, value, cursorStart, cursorEnd = cursorSt
   editor.selectionStart = cursorStart;
   editor.selectionEnd = cursorEnd;
   edit(editor.dataset, editor.value);
-  if (editor.classList.contains("markdown-editor")) updateMarkdownStats(editor);
+  if (editor.classList.contains("markdown-editor")) updateMarkdownEditorState(editor);
 }
 
 async function handleMarkdownPaste(event) {
@@ -1906,6 +2151,17 @@ function updateMarkdownStats(editor) {
   if (statsElement) statsElement.textContent = `${stats.lines} 行 · ${stats.characters} 字`;
 }
 
+function updateMarkdownEditorState(editor) {
+  updateMarkdownStats(editor);
+  const strip = editor.closest(".markdown-panel")?.querySelector(".editor-image-strip");
+  if (!strip) return;
+  const images = markdownImages(editor.value);
+  strip.classList.toggle("empty", images.length === 0);
+  strip.innerHTML = images
+    .map((image) => `<figure><img src="${image.src}" alt="${escAttr(image.alt || "图片")}" /><figcaption>${esc(image.alt || "图片")}</figcaption></figure>`)
+    .join("");
+}
+
 async function exportNodePdf(taskId, nodeId) {
   const task = state.tasks.find((item) => item.id === taskId);
   const node = task ? findNode(task.nodes, nodeId) : null;
@@ -1962,7 +2218,10 @@ function toggleTaskDone(taskId) {
     return;
   }
   task.status = task.status === "done" ? "active" : "done";
-  if (task.status === "done") state.conclusionPromptTaskId = "";
+  if (task.status === "done") {
+    task.resolvedAt = now();
+    state.conclusionPromptTaskId = "";
+  }
   task.updatedAt = now();
 }
 
@@ -2384,5 +2643,13 @@ async function bootstrap() {
   state.activeTaskId = tasksInActiveGroup()[0]?.id || "";
   render();
 }
+
+window.addEventListener("blur", () => {
+  storeMarkdownSelection(activeMarkdownEditor(), true);
+});
+
+window.addEventListener("focus", () => {
+  if (state.restoreMarkdownFocus) window.requestAnimationFrame(restoreMarkdownSelection);
+});
 
 bootstrap();
