@@ -1,10 +1,10 @@
-# Task Plan: Product Design Frontend Redesign + Milkdown Detail Editor
+# Task Plan: Personal Task Track Feature Development
 
 ## Goal
-Apply the approved revised frontend direction to the real personal task management app with minimal disruption, and replace the old node-detail Markdown textarea with an embedded Milkdown editor.
+Maintain the personal task management app through scoped, low-risk improvements while preserving existing task flow behavior and release discipline.
 
 ## Current Phase
-Phase 7
+Phase 8
 
 ## Phases
 
@@ -55,12 +55,23 @@ Phase 7
 - [x] Run git diff --check
 - **Status:** complete
 
+### Phase 8: Review Date Range + Task Drag Ordering
+- [x] Inspect task review modal date filtering and task sidebar rendering/saving
+- [x] Add custom date-range controls to task review
+- [x] Add compact drag handle and drag/drop ordering to task list
+- [x] Preserve task selection, group filtering, and existing save flow
+- [x] Update planning files with decisions and verification
+- [x] Run npm run check and git diff --check
+- **Status:** complete
+
 ## Key Questions
 1. Should this edit production frontend files? Answer: no, create static page first.
 2. What style should guide the mockup? Answer: efficiency tool first, with a touch of today-focus atmosphere.
 3. What existing product structure should be preserved? Answer: task groups/sidebar, focused task list, task flow/detail workspace.
 4. Should the approved direction now be applied to the project? Answer: yes, with minimal impact on existing features.
 5. Which editor should node detail use? Answer: an embedded open-source Milkdown editor.
+6. Should task review support custom date ranges? Answer: yes, users should be able to choose ranges such as 6.13-6.20.
+7. Should sidebar tasks support manual ordering? Answer: yes, add a small left-side drag handle and enable drag reordering.
 
 ## Decisions Made
 | Decision | Rationale |

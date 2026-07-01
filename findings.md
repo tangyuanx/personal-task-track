@@ -9,6 +9,7 @@
 - User feedback on Product Design mockup: too fancy; remove recommendation/rhythm content; prefer a simple, direct, but still beautiful personal task management tool.
 - Latest feedback: return to the previous richer Product Design version, delete the left focus progress bar, delete the central recommendation/rhythm card, and replace the always-visible right node panel with a dynamic large Markdown overlay shown only after clicking a node.
 - Current implementation request: apply the current version to the real project while minimizing impact on previous functionality, and replace the original node-detail Markdown editor with an embedded full Milkdown editor.
+- Current feature request: task review should support custom date ranges such as 6.13-6.20, and sidebar tasks should support drag reordering with a small left-side handle.
 
 ## Research Findings
 - Existing app entry point is index.html, loading src/styles.css and src/app.js.
@@ -18,6 +19,9 @@
 - Milkdown/Crepe can be bundled into a browser script with esbuild and loaded before src/app.js.
 - Existing mockup exists at mockups/today-focus.html and emphasizes a sidebar with today's focus items plus a wider task workspace.
 - Current render structure includes sidebar stats, search, task list, today-focus section, group tabs, task page, task brief fields, flow list, selected node detail, markdown toolbar, and context menus.
+- Task review is currently controlled by `state.reviewPreset`, `state.reviewDateField`, `renderReviewPanel()`, `reviewRange()`, and `reviewTasks()`.
+- Task sidebar sorting already uses `task.order`, so manual drag ordering can preserve the existing storage shape by reassigning order values.
+- Group tab drag/drop code already exists and can guide the task drag/drop interaction pattern.
 - Existing design patterns are compact and operational; the redesign should improve hierarchy and atmosphere without turning the UI into a landing page.
 
 ## Technical Decisions
@@ -38,6 +42,10 @@
 | Generate src/vendor/milkdown-editor.js and .css | Keeps the existing static script app structure and avoids a broad architecture change. |
 | Update npm run check to rebuild Milkdown first | Ensures the generated editor bundle stays in sync with the entry file during validation. |
 | Leave old Markdown helpers in place where they are still referenced | Reduces regression risk for export, fallback editing, image preview, and future compatibility. |
+| Add review custom range as a new preset rather than replacing week/month/year/all | Preserves the existing quick filters while adding the requested precise range selection. |
+| Store review custom range in UI state only | Review filters are session controls and do not need to alter task persistence. |
+| Reorder tasks by updating existing `order` fields | Uses the app's current sorting model and avoids a new persistence schema. |
+| Use pointer-based task dragging in addition to native drag affordance | Browser automation and some runtimes do not reliably trigger HTML5 drop; pointer dragging is more predictable for a compact sidebar list. |
 
 ## Issues Encountered
 | Issue | Resolution |
@@ -45,6 +53,7 @@
 | No existing planning files | Created task_plan.md, findings.md, and progress.md in the project root. |
 | Browser policy blocked file:// local mockup URL | Used a local 127.0.0.1 static HTTP preview for verification. |
 | Milkdown loading placeholder remained inside the host after mount | Cleared the host before creating the Crepe instance and rebuilt the bundle. |
+| Browser CUA drag did not trigger native HTML5 drop for task rows | Added pointer-based drag handling on the small task handle and verified reordering through local browser automation. |
 
 ## Resources
 - /Users/xuetangyuan/Documents/个人任务管理/index.html

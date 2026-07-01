@@ -146,6 +146,8 @@
 | Milkdown bundle build | npm run build:milkdown | Generates vendor JS/CSS | Passed | pass |
 | Project check | npm run check | Build Milkdown and syntax-check app/electron/scripts | Passed | pass |
 | Production browser node detail | Click existing flow node on localhost | Detail overlay opens and Milkdown mounts | ProseMirror mounted, no fallback textarea, no loading residue | pass |
+| Review custom range browser check | Set 2026-06-13 to 2026-06-20 | Review summary and results follow selected range | Summary showed `0 2026-06-13 - 2026-06-20` with empty state | pass |
+| Task drag browser check | Drag first task handle below second task | Task order changes and handles remain visible | Sidebar order changed to second task first, no console errors | pass |
 
 ## Error Log
 | Timestamp | Error | Attempt | Resolution |
@@ -153,6 +155,7 @@
 | 2026-07-01 | No root planning files existed | 1 | Created project-level planning files |
 | 2026-07-01 | Browser blocked file:// URL | 1 | Used localhost static server for verification |
 | 2026-07-01 | Milkdown host still showed loading placeholder after editor mounted | 1 | Cleared the host before creating the Crepe instance and rebuilt vendor assets |
+| 2026-07-02 | CUA drag did not trigger native HTML5 drop | 1 | Added pointer-based task dragging and verified it reordered tasks |
 
 ## 5-Question Reboot Check
 | Question | Answer |
@@ -245,4 +248,39 @@
 - Files created/modified:
   - task_plan.md
   - findings.md
+  - progress.md
+
+## Session: 2026-07-02 Review Range and Task Dragging
+
+### Phase 1: Discovery
+- **Status:** complete
+- Actions taken:
+  - Ran planning session catchup and confirmed prior planning files had been pushed.
+  - Fetched origin/main and confirmed local main was current before edits.
+  - Inspected task review functions, task sidebar rendering, existing group drag/drop, and task ordering helpers.
+- Files created/modified:
+  - task_plan.md
+  - findings.md
+
+### Phase 2: Implementation
+- **Status:** complete
+- Actions taken:
+  - Added a custom task review preset with start/end date inputs.
+  - Added inclusive end-date handling and open-ended range filtering.
+  - Added a compact left-side task drag handle.
+  - Added pointer-based task dragging that reorders existing task `order` values while preserving the current save flow.
+- Files created/modified:
+  - src/app.js
+  - src/styles.css
+  - task_plan.md
+  - findings.md
+
+### Phase 3: Verification
+- **Status:** complete
+- Actions taken:
+  - Ran npm run check successfully.
+  - Ran git diff --check successfully.
+  - Browser verified custom review date range fields and filtering.
+  - Browser verified task handles render at 10x20 and dragging reorders sidebar tasks.
+- Files created/modified:
   - progress.md

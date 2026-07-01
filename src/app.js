@@ -105,6 +105,7 @@ const reviewPresetLabels = {
   week: "本周",
   month: "本月",
   year: "今年",
+  custom: "自定义",
   all: "全部",
 };
 
@@ -148,6 +149,8 @@ let state = {
   reviewOpen: false,
   reviewPreset: "week",
   reviewDateField: "updated",
+  reviewStartDate: "",
+  reviewEndDate: "",
   focusTaskTitleId: "",
   focusNodeTitleId: "",
   focusGroupTitleId: "",
@@ -166,6 +169,7 @@ let state = {
 let saveTimer = 0;
 let pendingPayload = null;
 let saveInFlight = false;
+let taskDragState = null;
 const milkdownEditors = new Map();
 
 function id(prefix) {
@@ -565,6 +569,7 @@ function renderSidebar() {
       <div class="task-list" data-context="task-list">
         <div class="task-list-head">
           <span></span>
+          <span></span>
           ${filterSelectHtml("task-filter", state.taskFilter, taskFilterLabels, "任务筛选")}
           ${filterSelectHtml("priority-filter", state.priorityFilter, priorityFilterLabels, "优先级筛选")}
         </div>
@@ -572,6 +577,7 @@ function renderSidebar() {
           .map((task) => renderTaskItem(task))
           .join("")}
         <div class="task-item new-task-row">
+          <span class="task-drag-spacer"></span>
           <span class="task-check-spacer"></span>
           <input class="task-title" data-new-task-title placeholder="输入任务标题，回车创建" />
           ${newTaskPrioritySelect()}
@@ -650,7 +656,8 @@ function renderGroupTabs() {
 function renderTaskItem(task) {
   const activeTags = Object.entries(normalizeTaskTags(task.tags)).filter(([, active]) => active);
   return `
-    <div class="task-item ${task.id === state.activeTaskId ? "selected" : ""}" data-action="select-task" data-context="task" data-task-id="${task.id}">
+    <div class="task-item ${task.id === state.activeTaskId ? "selected" : ""}" data-action="select-task" data-context="task" data-task-id="${task.id}" data-task-drag-target="${task.id}">
+      <span class="task-drag-handle" draggable="true" data-task-drag-handle data-task-id="${task.id}" title="拖拽排序" aria-label="拖拽排序"></span>
       <input class="task-check" type="checkbox" title="完成" data-action="toggle-task-done" data-task-id="${task.id}" ${task.status === "done" ? "checked" : ""} />
       <span class="task-title-wrap">
         <input class="task-title" placeholder="任务标题" data-edit-key="title" data-task-id="${task.id}" value="${escAttr(task.title)}" />
@@ -1152,6 +1159,7 @@ function renderReviewPanel() {
             <span>按</span>
             ${selectReviewDateField()}
           </label>
+          ${state.reviewPreset === "custom" ? renderReviewDateRangeFields() : ""}
         </div>
         <div class="review-summary">
           <strong>${items.length}</strong>
@@ -1165,6 +1173,21 @@ function renderReviewPanel() {
           }
         </div>
       </section>
+    </div>
+  `;
+}
+
+function renderReviewDateRangeFields() {
+  return `
+    <div class="review-date-range" aria-label="自定义日期范围">
+      <label>
+        <span>从</span>
+        <input type="date" data-review-date-bound="start" value="${escAttr(state.reviewStartDate)}" />
+      </label>
+      <label>
+        <span>到</span>
+        <input type="date" data-review-date-bound="end" value="${escAttr(state.reviewEndDate)}" />
+      </label>
     </div>
   `;
 }
@@ -1213,6 +1236,7 @@ function taskReviewDate(task, field) {
 function reviewRange() {
   const nowDate = new Date();
   if (state.reviewPreset === "all") return { start: null, end: null, label: "全部任务" };
+  if (state.reviewPreset === "custom") return customReviewRange();
   if (state.reviewPreset === "year") {
     const start = new Date(nowDate.getFullYear(), 0, 1);
     const end = new Date(nowDate.getFullYear() + 1, 0, 1);
@@ -1223,16 +1247,54 @@ function reviewRange() {
     const end = new Date(nowDate.getFullYear(), nowDate.getMonth() + 1, 1);
     return { start, end, label: `${nowDate.getFullYear()}-${String(nowDate.getMonth() + 1).padStart(2, "0")}` };
   }
+  const { start, end } = reviewWeekRange();
+  return { start, end, label: "本周" };
+}
+
+function customReviewRange() {
+  const start = parseDateInput(state.reviewStartDate);
+  const rawEnd = parseDateInput(state.reviewEndDate);
+  const end = rawEnd ? new Date(rawEnd.getFullYear(), rawEnd.getMonth(), rawEnd.getDate() + 1) : null;
+  const startText = state.reviewStartDate || "开始";
+  const endText = state.reviewEndDate || "结束";
+  if (start && end && start > end) return { start: rawEnd, end: new Date(start.getFullYear(), start.getMonth(), start.getDate() + 1), label: `${endText} - ${startText}` };
+  return { start, end, label: `${startText} - ${endText}` };
+}
+
+function ensureReviewCustomDates() {
+  if (state.reviewStartDate && state.reviewEndDate) return;
+  const weeklyRange = reviewWeekRange();
+  if (!state.reviewStartDate) state.reviewStartDate = dateInputValue(weeklyRange.start);
+  if (!state.reviewEndDate) {
+    const inclusiveEnd = new Date(weeklyRange.end.getFullYear(), weeklyRange.end.getMonth(), weeklyRange.end.getDate() - 1);
+    state.reviewEndDate = dateInputValue(inclusiveEnd);
+  }
+}
+
+function reviewWeekRange() {
+  const nowDate = new Date();
   const day = nowDate.getDay() || 7;
   const start = new Date(nowDate.getFullYear(), nowDate.getMonth(), nowDate.getDate() - day + 1);
   const end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 7);
-  return { start, end, label: "本周" };
+  return { start, end };
+}
+
+function dateInputValue(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
 function isWithinRange(date, range) {
   if (!date) return false;
-  if (!range.start || !range.end) return true;
-  return date >= range.start && date < range.end;
+  if (range.start && date < range.start) return false;
+  if (range.end && date >= range.end) return false;
+  return true;
+}
+
+function parseDateInput(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value || "")) return null;
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+  return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day ? date : null;
 }
 
 function safeDate(value) {
@@ -1272,13 +1334,91 @@ function settingsOptionGroup(key, value, options, swatches = false) {
   `;
 }
 
+function startTaskPointerDrag(event) {
+  if (event.button !== 0) return;
+  const handle = event.currentTarget;
+  const sourceItem = handle.closest(".task-item[data-task-id]");
+  if (!sourceItem) return;
+  event.preventDefault();
+  event.stopPropagation();
+  taskDragState = {
+    sourceId: sourceItem.dataset.taskId,
+    sourceItem,
+    targetId: "",
+  };
+  sourceItem.classList.add("dragging");
+  handle.setPointerCapture?.(event.pointerId);
+  document.addEventListener("pointermove", updateTaskPointerDrag);
+  document.addEventListener("pointerup", finishTaskPointerDrag, { once: true });
+}
+
+function updateTaskPointerDrag(event) {
+  if (!taskDragState) return;
+  const targetItem = document.elementFromPoint(event.clientX, event.clientY)?.closest?.("[data-task-drag-target]");
+  document.querySelectorAll(".task-item.drag-over").forEach((item) => {
+    if (item !== targetItem) item.classList.remove("drag-over");
+  });
+  if (!targetItem || targetItem.dataset.taskId === taskDragState.sourceId) {
+    taskDragState.targetId = "";
+    return;
+  }
+  taskDragState.targetId = targetItem.dataset.taskId;
+  targetItem.classList.add("drag-over");
+}
+
+function finishTaskPointerDrag() {
+  if (!taskDragState) return;
+  const { sourceId, targetId } = taskDragState;
+  taskDragState.sourceItem?.classList.remove("dragging");
+  document.removeEventListener("pointermove", updateTaskPointerDrag);
+  document.querySelectorAll(".task-item.drag-over").forEach((item) => item.classList.remove("drag-over"));
+  taskDragState = null;
+  if (targetId) {
+    reorderTasks(sourceId, targetId);
+    render();
+  }
+}
+
 function bind() {
   document.querySelectorAll(".task-item[data-task-id]").forEach((element) => {
     element.addEventListener("pointerdown", (event) => {
+      if (event.target.closest("[data-task-drag-handle]")) return;
       if (event.button !== 0 || state.activeTaskId === element.dataset.taskId) return;
       state.activeTaskId = element.dataset.taskId;
       state.selectedNodeId = "";
       window.requestAnimationFrame(() => render());
+    });
+  });
+
+  document.querySelectorAll("[data-task-drag-handle]").forEach((element) => {
+    element.addEventListener("click", (event) => event.stopPropagation());
+    element.addEventListener("pointerdown", startTaskPointerDrag);
+    element.addEventListener("dragstart", (event) => {
+      event.stopPropagation();
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", element.dataset.taskId);
+      element.closest(".task-item")?.classList.add("dragging");
+    });
+    element.addEventListener("dragend", () => {
+      document.querySelectorAll(".task-item.dragging, .task-item.drag-over").forEach((item) => item.classList.remove("dragging", "drag-over"));
+    });
+  });
+
+  document.querySelectorAll("[data-task-drag-target]").forEach((element) => {
+    element.addEventListener("dragover", (event) => {
+      const hasTaskDrag = Array.from(event.dataTransfer.types || []).includes("text/plain");
+      if (!hasTaskDrag) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "move";
+      element.classList.add("drag-over");
+    });
+    element.addEventListener("dragleave", () => element.classList.remove("drag-over"));
+    element.addEventListener("drop", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      element.classList.remove("drag-over");
+      reorderTasks(event.dataTransfer.getData("text/plain"), element.dataset.taskId);
+      render();
     });
   });
 
@@ -1434,6 +1574,16 @@ function bind() {
     element.addEventListener("click", (event) => event.stopPropagation());
     element.addEventListener("change", (event) => {
       state.reviewDateField = Object.hasOwn(reviewDateFieldLabels, event.target.value) ? event.target.value : "updated";
+      render();
+    });
+  });
+
+  document.querySelectorAll("[data-review-date-bound]").forEach((element) => {
+    element.addEventListener("click", (event) => event.stopPropagation());
+    element.addEventListener("change", (event) => {
+      if (event.target.dataset.reviewDateBound === "start") state.reviewStartDate = event.target.value;
+      if (event.target.dataset.reviewDateBound === "end") state.reviewEndDate = event.target.value;
+      state.reviewPreset = "custom";
       render();
     });
   });
@@ -1865,7 +2015,10 @@ function action(data) {
     if (state.reviewOpen) state.settingsOpen = false;
   }
   if (data.action === "close-review") state.reviewOpen = false;
-  if (data.action === "set-review-preset") state.reviewPreset = Object.hasOwn(reviewPresetLabels, data.preset) ? data.preset : "week";
+  if (data.action === "set-review-preset") {
+    state.reviewPreset = Object.hasOwn(reviewPresetLabels, data.preset) ? data.preset : "week";
+    if (state.reviewPreset === "custom") ensureReviewCustomDates();
+  }
   if (data.action === "open-review-task") openTaskFromGlobalList(data.taskId);
   if (data.action === "reload-app") window.location.reload();
   if (data.action === "select-group") selectGroup(data.groupId);
@@ -2028,6 +2181,26 @@ function reorderGroups(sourceId, targetId) {
   groups.splice(targetIndex, 0, source);
   reorder(groups);
   state.taskGroups = groups;
+  save();
+}
+
+function reorderTasks(sourceId, targetId) {
+  if (!sourceId || !targetId || sourceId === targetId) return;
+  const visibleTasks = filteredTasks();
+  const sourceIndex = visibleTasks.findIndex((task) => task.id === sourceId);
+  const targetIndex = visibleTasks.findIndex((task) => task.id === targetId);
+  if (sourceIndex < 0 || targetIndex < 0) return;
+
+  const orderedVisible = [...visibleTasks];
+  const [source] = orderedVisible.splice(sourceIndex, 1);
+  orderedVisible.splice(targetIndex, 0, source);
+
+  const visibleIds = new Set(visibleTasks.map((task) => task.id));
+  const orderedScope = sort(taskListScopeTasks());
+  const visibleQueue = [...orderedVisible];
+  const nextScope = orderedScope.map((task) => (visibleIds.has(task.id) ? visibleQueue.shift() : task));
+  reorder(nextScope);
+  state.activeTaskId = sourceId;
   save();
 }
 
