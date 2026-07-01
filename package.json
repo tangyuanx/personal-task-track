@@ -1,6 +1,6 @@
 {
   "name": "personal-task-track",
-  "version": "0.1.15",
+  "version": "0.1.16",
   "description": "A local-first personal task flow tracker for programmer daily work.",
   "private": true,
   "license": "UNLICENSED",
@@ -17,7 +17,8 @@
   "scripts": {
     "dev": "electron .",
     "start": "electron .",
-    "check": "node --check src/app.js && node --check electron/main.cjs && node --check electron/preload.cjs && node --check electron/storage.cjs",
+    "build:milkdown": "node scripts/build-milkdown.cjs",
+    "check": "npm run build:milkdown && node --check src/app.js && node --check electron/main.cjs && node --check electron/preload.cjs && node --check electron/storage.cjs && node --check scripts/build-milkdown.cjs",
     "dist": "node scripts/build.cjs",
     "dist:mac": "node scripts/build.cjs --mac",
     "dist:win": "node scripts/build.cjs --win"
@@ -67,6 +68,10 @@
   },
   "devDependencies": {
     "electron": "^42.5.0",
-    "electron-builder": "^26.15.3"
+    "electron-builder": "^26.15.3",
+    "esbuild": "^0.28.1"
+  },
+  "dependencies": {
+    "@milkdown/crepe": "^7.21.2"
   }
 }

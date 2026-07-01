@@ -166,6 +166,7 @@ let state = {
 let saveTimer = 0;
 let pendingPayload = null;
 let saveInFlight = false;
+const milkdownEditors = new Map();
 
 function id(prefix) {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
@@ -510,6 +511,7 @@ function workbenchStyle() {
 
 function render() {
   save();
+  destroyMilkdownEditors();
   document.documentElement.dataset.theme = state.theme;
   document.documentElement.dataset.zhFont = state.zhFont;
   document.documentElement.dataset.enFont = state.enFont;
@@ -528,6 +530,7 @@ function render() {
   bind();
   resizeTaskBriefTextareas();
   focusPendingElement();
+  mountMilkdownEditors();
 }
 
 function renderSidebar() {
@@ -690,7 +693,7 @@ function renderTaskPage(task) {
         ${renderBriefField("结论", textareaHtml("conclusion", task.conclusion, task.id), "", needsConclusion, "conclusion")}
       </section>
 
-      <section class="task-workbench ${selectedNode ? "with-detail" : ""}" style="${selectedNode ? workbenchStyle() : ""}">
+      <section class="task-workbench ${selectedNode ? "detail-open" : ""}">
         <section class="flow-section" data-context="flow-root" data-task-id="${task.id}">
           <div class="section-heading">
             <div>
@@ -706,7 +709,6 @@ function renderTaskPage(task) {
           }
         </section>
 
-        ${selectedNode ? `<div class="detail-resizer" data-detail-resizer title="拖拽调整节点详情高度"></div>` : ""}
         ${selectedNode ? renderNodeDetail(task.id, selectedNode) : ""}
       </section>
     </section>
@@ -782,10 +784,9 @@ function renderFlowHeadCell(key, label) {
 }
 
 function renderNodeDetail(taskId, node) {
-  const mode = state.markdownMode === "preview" ? "preview" : "edit";
   const stats = markdownStats(node.note);
   return `
-    <section class="node-detail">
+    <section class="node-detail" data-task-id="${taskId}" data-node-id="${node.id}">
       <div class="detail-head">
         <div>
           <h2>节点详情</h2>
@@ -798,33 +799,24 @@ function renderNodeDetail(taskId, node) {
           </label>
           <button class="detail-export" type="button" data-action="export-node-pdf" data-task-id="${taskId}" data-node-id="${node.id}">导出 PDF</button>
           <button class="detail-save" type="button" data-action="save-node-detail">保存</button>
+          <button class="detail-close" type="button" data-action="close-node-detail" title="关闭节点详情">×</button>
         </div>
       </div>
       <label class="detail-title-row">
         <span>标题</span>
         ${inputHtml("title", node.title, taskId, "node-detail-title", node.id)}
       </label>
-      <section class="markdown-panel codex-composer ${mode === "preview" ? "previewing" : "editing"}">
-        <div class="markdown-surface">
-        ${
-          mode === "preview"
-            ? `<article class="markdown-preview">${renderMarkdown(node.note)}</article>`
-            : `<textarea class="markdown-editor codex-editor" data-edit-key="note" data-task-id="${taskId}" data-node-id="${node.id}" placeholder="记录处理过程">${esc(node.note)}</textarea>${renderEditorImagePreview(node.note)}`
-        }
+      <section class="markdown-panel milkdown-panel">
+        <div
+          class="milkdown-editor-host"
+          data-task-id="${taskId}"
+          data-node-id="${node.id}"
+        >
+          <div class="milkdown-loading">正在加载 Milkdown 编辑器...</div>
         </div>
-        <div class="markdown-toolbar composer-toolbar">
-          <div class="markdown-tools" aria-label="Markdown tools">
-            ${markdownTools
-              .map((tool) => `<button type="button" data-action="markdown-tool" data-tool="${tool.action}" title="${tool.title}">${tool.label}</button>`)
-              .join("")}
-          </div>
-          <div class="composer-meta">
-            <span class="markdown-stats" data-markdown-stats>${stats.lines} 行 · ${stats.characters} 字</span>
-            <div class="markdown-tabs" role="tablist" aria-label="Markdown view">
-              <button class="${mode === "edit" ? "active" : ""}" type="button" role="tab" aria-selected="${mode === "edit"}" data-action="set-markdown-mode" data-mode="edit">编辑</button>
-              <button class="${mode === "preview" ? "active" : ""}" type="button" role="tab" aria-selected="${mode === "preview"}" data-action="set-markdown-mode" data-mode="preview">预览</button>
-            </div>
-          </div>
+        <div class="milkdown-status">
+          <span class="markdown-stats" data-markdown-stats>${stats.lines} 行 · ${stats.characters} 字</span>
+          <span>Milkdown</span>
         </div>
       </section>
     </section>
@@ -1776,6 +1768,78 @@ function restoreMarkdownSelection() {
   state.restoreMarkdownFocus = false;
 }
 
+function destroyMilkdownEditors() {
+  milkdownEditors.forEach((instance) => {
+    instance?.destroy?.().catch?.(() => {});
+  });
+  milkdownEditors.clear();
+}
+
+function mountMilkdownEditors() {
+  const hosts = Array.from(document.querySelectorAll(".milkdown-editor-host"));
+  if (!hosts.length) return;
+  if (!window.MilkdownTaskEditor?.create) {
+    hosts.forEach((host) => mountFallbackMarkdownEditor(host));
+    return;
+  }
+
+  hosts.forEach((host) => {
+    const taskId = host.dataset.taskId;
+    const nodeId = host.dataset.nodeId;
+    const task = state.tasks.find((item) => item.id === taskId);
+    const node = task ? findNode(task.nodes, nodeId) : null;
+    if (!task || !node) return;
+
+    window.MilkdownTaskEditor.create({
+      root: host,
+      markdown: node.note || "",
+      placeholder: "记录处理过程",
+      onChange: (markdown) => {
+        const currentTask = state.tasks.find((item) => item.id === taskId);
+        const currentNode = currentTask ? findNode(currentTask.nodes, nodeId) : null;
+        if (!currentTask || !currentNode || currentNode.note === markdown) return;
+        edit({ taskId, nodeId, editKey: "note" }, markdown);
+        updateMarkdownStatsForMarkdown(host, markdown);
+      },
+    })
+      .then((instance) => {
+        if (!document.body.contains(host)) {
+          instance.destroy?.();
+          return;
+        }
+        milkdownEditors.set(nodeId, instance);
+        updateMarkdownStatsForMarkdown(host, node.note || "");
+      })
+      .catch((error) => {
+        console.error("Milkdown failed to mount", error);
+        mountFallbackMarkdownEditor(host);
+      });
+  });
+}
+
+function mountFallbackMarkdownEditor(host) {
+  const taskId = host.dataset.taskId;
+  const nodeId = host.dataset.nodeId;
+  const task = state.tasks.find((item) => item.id === taskId);
+  const node = task ? findNode(task.nodes, nodeId) : null;
+  if (!task || !node) return;
+  host.innerHTML = `<textarea class="markdown-editor codex-editor milkdown-fallback" data-edit-key="note" data-task-id="${taskId}" data-node-id="${nodeId}" placeholder="记录处理过程">${esc(node.note)}</textarea>${renderEditorImagePreview(node.note)}`;
+  host.querySelectorAll(".markdown-editor").forEach((editor) => {
+    editor.addEventListener("input", (event) => {
+      edit(event.target.dataset, event.target.value);
+      updateMarkdownEditorState(event.target);
+    });
+    editor.addEventListener("paste", handleMarkdownPaste);
+    editor.addEventListener("drop", handleMarkdownDrop);
+  });
+}
+
+function updateMarkdownStatsForMarkdown(host, markdown) {
+  const stats = markdownStats(markdown);
+  const statsElement = host.closest(".markdown-panel")?.querySelector("[data-markdown-stats]");
+  if (statsElement) statsElement.textContent = `${stats.lines} 行 · ${stats.characters} 字`;
+}
+
 function action(data) {
   state.contextMenu = null;
   if (data.action === "markdown-tool") {
@@ -1825,6 +1889,7 @@ function action(data) {
   if (data.action === "toggle-node-done") toggleNodeDone(data.taskId, data.nodeId);
   if (data.action === "mark-node-status") markNodeStatus(data.taskId, data.nodeId, data.status);
   if (data.action === "delete-node") deleteNode(data.taskId, data.nodeId);
+  if (data.action === "close-node-detail") state.selectedNodeId = "";
   if (data.action === "save-node-detail") state.selectedNodeId = "";
   render();
 }

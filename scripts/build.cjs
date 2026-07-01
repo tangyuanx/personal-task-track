@@ -6,6 +6,13 @@ const args = process.argv.slice(2);
 
 process.env.COPYFILE_DISABLE = "1";
 
+const milkdownResult = spawnSync(process.execPath, ["scripts/build-milkdown.cjs"], {
+  env: process.env,
+  stdio: "inherit",
+});
+
+if (milkdownResult.status !== 0) process.exit(milkdownResult.status ?? 1);
+
 const result = spawnSync(process.execPath, [require.resolve("electron-builder/cli.js"), ...args], {
   env: process.env,
   stdio: "inherit",

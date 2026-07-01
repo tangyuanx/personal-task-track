@@ -2604,3 +2604,137 @@ body.resizing-detail {
     font-size: 30px;
   }
 }
+
+/* Revised node detail overlay + Milkdown editor */
+.task-workbench {
+  position: relative;
+}
+
+.task-workbench.detail-open .flow-section {
+  min-height: 0;
+}
+
+.task-workbench.detail-open::before {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  background: rgba(243, 240, 234, 0.58);
+  backdrop-filter: blur(3px);
+  content: "";
+}
+
+:root[data-theme="dark"] .task-workbench.detail-open::before {
+  background: rgba(21, 23, 19, 0.62);
+}
+
+.task-workbench.detail-open .node-detail {
+  position: absolute;
+  top: 16px;
+  right: 18px;
+  bottom: 18px;
+  z-index: 9;
+  display: grid;
+  width: min(780px, calc(100% - 64px));
+  min-width: min(560px, calc(100% - 64px));
+  margin: 0;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  border-radius: 10px;
+  box-shadow: 0 24px 64px rgba(23, 31, 38, 0.22);
+}
+
+.detail-close {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--muted);
+  background: var(--field);
+  font-size: 18px;
+  line-height: 1;
+}
+
+.detail-close:hover,
+.detail-close:focus-visible {
+  color: var(--heading);
+  box-shadow: 0 0 0 2px var(--focus-ring);
+}
+
+.milkdown-panel {
+  margin: 0 13px 13px;
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  background: var(--markdown-panel-bg);
+}
+
+.milkdown-editor-host {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+}
+
+.milkdown-loading {
+  display: grid;
+  min-height: 260px;
+  place-items: center;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.milkdown-status {
+  display: flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 12px;
+  border-top: 1px solid var(--line-soft);
+  color: var(--muted);
+  background: var(--markdown-toolbar-bg);
+  font-size: 12px;
+}
+
+.milkdown-editor-host .milkdown,
+.milkdown-editor-host [contenteditable="true"] {
+  min-height: 100%;
+}
+
+.milkdown-editor-host .ProseMirror {
+  min-height: 420px;
+  padding: 18px 22px 32px;
+  outline: 0;
+  color: var(--ink);
+  background: var(--markdown-panel-bg);
+  font-size: 15px;
+  line-height: 1.68;
+}
+
+.milkdown-editor-host .ProseMirror p {
+  margin: 0.55em 0;
+}
+
+.milkdown-editor-host .ProseMirror h1,
+.milkdown-editor-host .ProseMirror h2,
+.milkdown-editor-host .ProseMirror h3 {
+  color: var(--heading);
+}
+
+.milkdown-editor-host .milkdown-fallback {
+  min-height: 420px;
+}
+
+@media (max-width: 760px) {
+  .task-workbench.detail-open .node-detail {
+    top: 10px;
+    right: 10px;
+    bottom: 10px;
+    left: 10px;
+    width: auto;
+    min-width: 0;
+  }
+
+  .milkdown-editor-host .ProseMirror {
+    min-height: 300px;
+    padding: 16px;
+  }
+}
