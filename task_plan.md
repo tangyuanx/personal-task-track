@@ -4,7 +4,7 @@
 Maintain the personal task management app through scoped, low-risk improvements while preserving existing task flow behavior and release discipline.
 
 ## Current Phase
-Phase 8
+Phase 9
 
 ## Phases
 
@@ -64,6 +64,17 @@ Phase 8
 - [x] Run npm run check and git diff --check
 - **Status:** complete
 
+### Phase 9: Final Redesign Alignment + Node Detail Fixes
+- [x] Compare current production UI against the final approved static direction
+- [x] Expand node detail overlay to cover most of the app and add fullscreen support
+- [x] Fix Milkdown toolbar/icon sizing/order so it feels like a proper Milkdown editor
+- [x] Ensure adding a main node focuses the new node title without opening detail
+- [x] Open node detail only when clicking the record/note area
+- [x] Make missing-conclusion close prompt non-blocking for other node operations
+- [x] Browser-verify key interactions
+- [x] Run npm run check and git diff --check
+- **Status:** complete
+
 ## Key Questions
 1. Should this edit production frontend files? Answer: no, create static page first.
 2. What style should guide the mockup? Answer: efficiency tool first, with a touch of today-focus atmosphere.
@@ -72,6 +83,9 @@ Phase 8
 5. Which editor should node detail use? Answer: an embedded open-source Milkdown editor.
 6. Should task review support custom date ranges? Answer: yes, users should be able to choose ranges such as 6.13-6.20.
 7. Should sidebar tasks support manual ordering? Answer: yes, add a small left-side drag handle and enable drag reordering.
+8. Should the production frontend match the final static redesign? Answer: yes, the current production UI drifted and should be realigned.
+9. Should node detail dominate the workspace? Answer: yes, it should cover most of the page and support fullscreen.
+10. When should node detail open? Answer: only when clicking the record/note area, not when adding or editing node titles.
 
 ## Decisions Made
 | Decision | Rationale |
@@ -89,6 +103,9 @@ Phase 8
 | Bundle Milkdown locally with esbuild | The app currently loads plain scripts from index.html, so a local browser bundle avoids introducing a larger frontend framework/build migration. |
 | Keep the existing edit/save data flow for node notes | Minimizes functional risk by only changing the editor surface, not the storage contract. |
 | Provide a textarea fallback if Milkdown fails to mount | Preserves note editing in degraded environments. |
+| Treat the record/note cell as the only node-detail opener | Prevents accidental detail expansion when adding nodes, editing titles, or navigating from today's focus. |
+| Add a fullscreen mode to the large node-detail overlay | Gives long Markdown notes enough room without replacing the task flow permanently. |
+| Disable Crepe TopBar and constrain Milkdown toolbar icons through scoped CSS | Avoids oversized and visually chaotic editor controls while preserving the editor surface. |
 
 ## Errors Encountered
 | Error | Attempt | Resolution |
@@ -96,7 +113,8 @@ Phase 8
 | None | 1 | Not applicable |
 | Browser blocked file:// URL | 1 | Started a local 127.0.0.1 static server and verified through localhost |
 | Milkdown loading placeholder remained after editor mounted | 1 | Cleared the host element before creating the Crepe editor and rebuilt the vendor bundle |
+| Milkdown toolbar still rendered 32px icons after the first CSS pass | 1 | Added scoped overrides for `.milkdown-icon` SVGs and toolbar items, then browser-verified max SVG size at 16px |
 
 ## Notes
-- Production implementation is now in progress after user approval.
+- Phase 9 production implementation is complete and ready for release.
 - Avoid a marketing hero; the first screen should be the usable product surface.

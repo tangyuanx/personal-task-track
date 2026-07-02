@@ -1975,6 +1975,24 @@ body.resizing-detail {
   white-space: nowrap;
 }
 
+.flow-note {
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  color: var(--muted);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.flow-note:hover,
+.flow-note:focus-visible {
+  color: var(--heading);
+  background: var(--focus-field);
+  outline: 0;
+}
+
 .flow-updated {
   justify-self: start;
   font-family: var(--mono);
@@ -2040,7 +2058,8 @@ body.resizing-detail {
 }
 
 .detail-save,
-.detail-export {
+.detail-export,
+.detail-fullscreen {
   height: 30px;
   padding: 0 12px;
   border-radius: 7px;
@@ -2054,7 +2073,8 @@ body.resizing-detail {
   background: var(--focus-field);
 }
 
-.detail-export {
+.detail-export,
+.detail-fullscreen {
   border: 1px solid var(--line);
   color: var(--muted);
   background: var(--field);
@@ -2063,7 +2083,9 @@ body.resizing-detail {
 .detail-save:hover,
 .detail-save:focus-visible,
 .detail-export:hover,
-.detail-export:focus-visible {
+.detail-export:focus-visible,
+.detail-fullscreen:hover,
+.detail-fullscreen:focus-visible {
   box-shadow: 0 0 0 2px var(--focus-ring);
 }
 
@@ -2701,17 +2723,24 @@ body.resizing-detail {
 
 .task-workbench.detail-open .node-detail {
   position: absolute;
-  top: 16px;
-  right: 18px;
-  bottom: 18px;
+  top: 12px;
+  right: 14px;
+  bottom: 14px;
+  left: 84px;
   z-index: 9;
   display: grid;
-  width: min(780px, calc(100% - 64px));
-  min-width: min(560px, calc(100% - 64px));
+  width: auto;
+  min-width: 0;
   margin: 0;
   grid-template-rows: auto auto minmax(0, 1fr);
   border-radius: 10px;
   box-shadow: 0 24px 64px rgba(23, 31, 38, 0.22);
+}
+
+.task-workbench.detail-fullscreen .node-detail {
+  position: fixed;
+  inset: 14px;
+  z-index: 60;
 }
 
 .detail-close {
@@ -2745,6 +2774,53 @@ body.resizing-detail {
   overflow: auto;
 }
 
+.milkdown-editor-host .milkdown {
+  min-height: 100%;
+  background: var(--markdown-panel-bg);
+}
+
+.milkdown-editor-host button,
+.milkdown-editor-host [role="button"],
+.milkdown-editor-host .milkdown-icon.button {
+  display: inline-flex;
+  min-width: 28px;
+  min-height: 28px;
+  max-height: 34px;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border-radius: 7px;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.milkdown-editor-host button svg,
+.milkdown-editor-host [role="button"] svg,
+.milkdown-editor-host .milkdown-icon svg {
+  width: 16px !important;
+  height: 16px !important;
+  max-width: 16px !important;
+  max-height: 16px !important;
+}
+
+.milkdown-editor-host :is(.milkdown-toolbar, .milkdown-topbar, [class*="topbar"], [class*="toolbar"]) {
+  display: flex;
+  min-height: 38px;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 4px;
+  padding: 4px 8px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--line-soft);
+  background: var(--markdown-toolbar-bg);
+}
+
+.milkdown-editor-host .toolbar-item {
+  min-width: 32px;
+  min-height: 32px;
+  max-height: 34px;
+}
+
 .milkdown-loading {
   display: grid;
   min-height: 260px;
@@ -2766,7 +2842,6 @@ body.resizing-detail {
   font-size: 12px;
 }
 
-.milkdown-editor-host .milkdown,
 .milkdown-editor-host [contenteditable="true"] {
   min-height: 100%;
 }
@@ -2803,6 +2878,10 @@ body.resizing-detail {
     left: 10px;
     width: auto;
     min-width: 0;
+  }
+
+  .task-workbench.detail-fullscreen .node-detail {
+    inset: 8px;
   }
 
   .milkdown-editor-host .ProseMirror {

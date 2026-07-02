@@ -10,6 +10,7 @@
 - Latest feedback: return to the previous richer Product Design version, delete the left focus progress bar, delete the central recommendation/rhythm card, and replace the always-visible right node panel with a dynamic large Markdown overlay shown only after clicking a node.
 - Current implementation request: apply the current version to the real project while minimizing impact on previous functionality, and replace the original node-detail Markdown editor with an embedded full Milkdown editor.
 - Current feature request: task review should support custom date ranges such as 6.13-6.20, and sidebar tasks should support drag reordering with a small left-side handle.
+- Current correction request: align production with the final static direction, make node detail much larger with fullscreen support, fix Milkdown toolbar/icon sizing, focus new root-node title inputs instead of opening detail, and keep missing-conclusion prompts non-blocking.
 
 ## Research Findings
 - Existing app entry point is index.html, loading src/styles.css and src/app.js.
@@ -23,6 +24,8 @@
 - Task sidebar sorting already uses `task.order`, so manual drag ordering can preserve the existing storage shape by reassigning order values.
 - Group tab drag/drop code already exists and can guide the task drag/drop interaction pattern.
 - Existing design patterns are compact and operational; the redesign should improve hierarchy and atmosphere without turning the UI into a landing page.
+- Production no longer has the deleted mockup files available locally, but the persistent planning files preserve the final approved direction: richer today-focus styling, no focus progress bar, no recommendation/rhythm content, and a large dynamic Markdown overlay for node detail.
+- Node detail should open from the record/note cell only. Row clicks, title edits, new root nodes, new child/sibling nodes, and today's-focus navigation should not automatically open the detail layer.
 
 ## Technical Decisions
 | Decision | Rationale |
@@ -46,6 +49,9 @@
 | Store review custom range in UI state only | Review filters are session controls and do not need to alter task persistence. |
 | Reorder tasks by updating existing `order` fields | Uses the app's current sorting model and avoids a new persistence schema. |
 | Use pointer-based task dragging in addition to native drag affordance | Browser automation and some runtimes do not reliably trigger HTML5 drop; pointer dragging is more predictable for a compact sidebar list. |
+| Store node detail fullscreen state only in runtime UI state | Fullscreen is a transient editing mode and should reset when switching tasks/groups or closing/saving detail. |
+| Disable Crepe TopBar and constrain Milkdown icons through production CSS | The previous toolbar appeared too large and disorderly; a scoped CSS pass keeps Milkdown controls compact without affecting other app buttons. |
+| Keep missing-conclusion prompt attached to the task but avoid forced navigation | The user should see the prompt on the active task while still being able to operate other nodes. |
 
 ## Issues Encountered
 | Issue | Resolution |
@@ -54,6 +60,7 @@
 | Browser policy blocked file:// local mockup URL | Used a local 127.0.0.1 static HTTP preview for verification. |
 | Milkdown loading placeholder remained inside the host after mount | Cleared the host before creating the Crepe instance and rebuilt the bundle. |
 | Browser CUA drag did not trigger native HTML5 drop for task rows | Added pointer-based drag handling on the small task handle and verified reordering through local browser automation. |
+| Milkdown toolbar SVGs still measured up to 32px after the first styling pass | Added overrides for `.milkdown-icon svg` and toolbar item sizing; browser verification then measured max SVG size at 16px. |
 
 ## Resources
 - /Users/xuetangyuan/Documents/个人任务管理/index.html
@@ -79,3 +86,7 @@
 - Simple redesign mobile verification at 390x844 showed single-column layout, no horizontal overflow, steps and notes still visible, and no "推荐" or "节奏" content.
 - Revised Product Design verification at 1280x720 showed no progress bar, no recommendation/rhythm copy, node detail hidden by default, and a click on the active node opened a Markdown overlay covering about 76% of the main workspace.
 - Production browser verification at localhost showed the node-detail overlay opens on node click, Milkdown/ProseMirror mounts, the loading placeholder is removed after mount, no fallback textarea is used, and no browser warnings/errors were reported.
+- Phase 9 production browser verification at localhost showed adding a root node focuses the new `.flow-title-input`, does not open `.node-detail`, and clicking the title input still does not open detail.
+- Phase 9 node-detail verification showed the overlay opens from the record/note button, covers about 90.8% of workbench width and 94.2% of workbench height, and fullscreen mode expands to more than 95% of viewport width and more than 90% of viewport height.
+- Phase 9 Milkdown verification showed ProseMirror mounts, fallback textarea remains hidden, toolbar-like controls are compact, and SVG icons max at 16px after the scoped CSS fix.
+- Phase 9 conclusion-prompt verification showed `.conclusion-prompt` remains visible when completing a task without a conclusion, while adding another root node still works and focuses the new title input.

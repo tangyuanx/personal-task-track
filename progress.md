@@ -284,3 +284,47 @@
   - Browser verified task handles render at 10x20 and dragging reorders sidebar tasks.
 - Files created/modified:
   - progress.md
+
+## Session: 2026-07-02 Final Redesign Alignment and Node Detail Fixes
+
+### Phase 1: Discovery
+- **Status:** complete
+- Actions taken:
+  - Re-read the project maintenance and planning-with-files skills after context compaction.
+  - Inspected current node detail, task flow row, add-node, focus navigation, and missing-conclusion logic.
+  - Confirmed the approved direction from planning files: dynamic large Markdown overlay, no recommendation/rhythm content, and node detail opened intentionally from the record/note area.
+- Files created/modified:
+  - task_plan.md
+
+### Phase 2: Implementation
+- **Status:** complete
+- Actions taken:
+  - Expanded node detail from a compact overlay to a large workspace overlay and added a fullscreen toggle.
+  - Changed node rows so only the record/note button opens node detail; title edits and today's-focus navigation no longer open it.
+  - Changed root/child/sibling node creation to focus the new node title input without opening detail.
+  - Changed missing-conclusion completion handling so it shows the prompt without forcing task navigation or clearing node context.
+  - Disabled Milkdown Crepe TopBar and tightened Milkdown toolbar/icon CSS for compact, ordered controls.
+- Files created/modified:
+  - src/app.js
+  - src/styles.css
+  - src/milkdown-editor.entry.js
+  - src/vendor/milkdown-editor.js
+  - src/vendor/milkdown-editor.css
+
+### Phase 3: Verification
+- **Status:** complete
+- Actions taken:
+  - Ran npm run build:milkdown successfully.
+  - Ran node --check src/app.js successfully.
+  - Browser verified root-node creation focuses the new title and does not open detail.
+  - Browser verified clicking node title does not open detail and clicking record/note does.
+  - Browser verified node detail covers about 90.8% of workbench width and 94.2% of workbench height.
+  - Browser verified fullscreen detail covers almost the full viewport.
+  - Browser verified Milkdown/ProseMirror mounts, fallback textarea stays hidden, and SVG icons max at 16px.
+  - Browser verified missing-conclusion prompt remains visible but does not block adding another root node.
+  - Ran npm run check successfully.
+  - Ran git diff --check successfully.
+- Files created/modified:
+  - task_plan.md
+  - findings.md
+  - progress.md

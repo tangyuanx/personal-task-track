@@ -151,6 +151,7 @@ let state = {
   reviewDateField: "updated",
   reviewStartDate: "",
   reviewEndDate: "",
+  nodeDetailFullscreen: false,
   focusTaskTitleId: "",
   focusNodeTitleId: "",
   focusGroupTitleId: "",
@@ -700,7 +701,7 @@ function renderTaskPage(task) {
         ${renderBriefField("结论", textareaHtml("conclusion", task.conclusion, task.id), "", needsConclusion, "conclusion")}
       </section>
 
-      <section class="task-workbench ${selectedNode ? "detail-open" : ""}">
+      <section class="task-workbench ${selectedNode ? "detail-open" : ""} ${state.nodeDetailFullscreen ? "detail-fullscreen" : ""}">
         <section class="flow-section" data-context="flow-root" data-task-id="${task.id}">
           <div class="section-heading">
             <div>
@@ -753,14 +754,14 @@ function renderFlowNode(taskId, node, depth) {
   const branch = depth === 0 ? "main-flow" : "sub-flow";
   return `
     <article class="flow-item depth-${Math.min(depth, 6)}">
-      <div class="flow-row ${branch} ${node.status} ${isSelected ? "selected" : ""}" style="--indent:${indent}px" data-action="select-node" data-context="node" data-task-id="${taskId}" data-node-id="${node.id}">
+      <div class="flow-row ${branch} ${node.status} ${isSelected ? "selected" : ""}" style="--indent:${indent}px" data-context="node" data-task-id="${taskId}" data-node-id="${node.id}">
         <input class="flow-check" type="checkbox" title="完成" data-action="toggle-node-done" data-task-id="${taskId}" data-node-id="${node.id}" ${node.status === "done" ? "checked" : ""} />
         <span class="flow-title-cell">
           <span class="flow-indent"></span>
           <span class="flow-branch-mark"></span>
           ${nodeTitleInputHtml(node, taskId)}
         </span>
-        <span class="flow-note">${esc(node.note || "")}</span>
+        <button class="flow-note" type="button" data-action="select-node" data-task-id="${taskId}" data-node-id="${node.id}" title="打开节点记录">${esc(node.note || "记录")}</button>
         <span class="flow-status">${nodeStatusText(node.status)}</span>
         <span class="flow-updated">${formatShort(node.updatedAt)}</span>
       </div>
@@ -805,6 +806,7 @@ function renderNodeDetail(taskId, node) {
             完成
           </label>
           <button class="detail-export" type="button" data-action="export-node-pdf" data-task-id="${taskId}" data-node-id="${node.id}">导出 PDF</button>
+          <button class="detail-fullscreen" type="button" data-action="toggle-node-detail-fullscreen" title="${state.nodeDetailFullscreen ? "退出全屏" : "全屏展示"}">${state.nodeDetailFullscreen ? "退出全屏" : "全屏"}</button>
           <button class="detail-save" type="button" data-action="save-node-detail">保存</button>
           <button class="detail-close" type="button" data-action="close-node-detail" title="关闭节点详情">×</button>
         </div>
@@ -2024,11 +2026,12 @@ function action(data) {
   if (data.action === "select-group") selectGroup(data.groupId);
   if (data.action === "add-group") addGroup();
   if (data.action === "select-focus") {
-    openTaskFromGlobalList(data.taskId, data.nodeId || "");
+    openTaskFromGlobalList(data.taskId, "");
   }
   if (data.action === "select-task") {
     state.activeTaskId = data.taskId;
     state.selectedNodeId = "";
+    state.nodeDetailFullscreen = false;
   }
   if (data.action === "add-task") addBlankTask();
   if (data.action === "delete-task") deleteTask(data.taskId);
@@ -2042,8 +2045,15 @@ function action(data) {
   if (data.action === "toggle-node-done") toggleNodeDone(data.taskId, data.nodeId);
   if (data.action === "mark-node-status") markNodeStatus(data.taskId, data.nodeId, data.status);
   if (data.action === "delete-node") deleteNode(data.taskId, data.nodeId);
-  if (data.action === "close-node-detail") state.selectedNodeId = "";
-  if (data.action === "save-node-detail") state.selectedNodeId = "";
+  if (data.action === "toggle-node-detail-fullscreen") state.nodeDetailFullscreen = !state.nodeDetailFullscreen;
+  if (data.action === "close-node-detail") {
+    state.selectedNodeId = "";
+    state.nodeDetailFullscreen = false;
+  }
+  if (data.action === "save-node-detail") {
+    state.selectedNodeId = "";
+    state.nodeDetailFullscreen = false;
+  }
   render();
 }
 
@@ -2088,6 +2098,7 @@ function openTaskFromGlobalList(taskId, nodeId = "") {
   state.activeGroupId = task.groupId || defaultTaskGroup.id;
   state.activeTaskId = task.id;
   state.selectedNodeId = nodeId;
+  state.nodeDetailFullscreen = false;
   state.taskFilter = "all";
   state.priorityFilter = "all";
   state.query = "";
@@ -2137,6 +2148,7 @@ function selectGroup(groupId) {
   state.activeGroupId = normalizeActiveGroupId(groupId, state.taskGroups);
   state.activeTaskId = "";
   state.selectedNodeId = "";
+  state.nodeDetailFullscreen = false;
   state.contextMenu = null;
   state.query = "";
 }
@@ -2450,8 +2462,6 @@ function toggleTaskDone(taskId) {
   const task = state.tasks.find((item) => item.id === taskId);
   if (!task) return;
   if (task.status !== "done" && !task.conclusion.trim()) {
-    state.activeTaskId = taskId;
-    state.selectedNodeId = "";
     state.conclusionPromptTaskId = taskId;
     return;
   }
@@ -2477,7 +2487,8 @@ function addNode(taskId, parentId) {
     parent.children.push(created);
   }
   task.updatedAt = now();
-  state.selectedNodeId = created.id;
+  state.selectedNodeId = "";
+  state.nodeDetailFullscreen = false;
   state.focusNodeTitleId = created.id;
 }
 
@@ -2491,7 +2502,8 @@ function addSiblingNode(taskId, nodeId) {
   found.items.splice(found.index + 1, 0, created);
   reorder(found.items);
   task.updatedAt = now();
-  state.selectedNodeId = created.id;
+  state.selectedNodeId = "";
+  state.nodeDetailFullscreen = false;
   state.focusNodeTitleId = created.id;
 }
 
