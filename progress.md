@@ -328,3 +328,40 @@
   - task_plan.md
   - findings.md
   - progress.md
+
+## Session: 2026-07-02 Static Mockup Visual Alignment
+
+### Phase 1: Discovery
+- **Status:** complete
+- Actions taken:
+  - Re-read maintenance, planning, and visual design guidance.
+  - Confirmed from planning notes that the final static direction is richer but restrained: warm work surface, today-focus atmosphere, no rhythm/recommendation content, and dynamic large node detail.
+  - Inspected current production structure and confirmed visual alignment can be done with CSS-first changes.
+- Files created/modified:
+  - task_plan.md
+
+### Phase 2: Implementation
+- **Status:** complete
+- Actions taken:
+  - Shifted default focus tone from blue to moss green and warmed the paper/workbench palette.
+  - Changed the shell from edge-to-edge panes to a padded two-panel workspace with rounded surfaces and softer shadows.
+  - Refined sidebar header, stats, search, today focus, task rows, and footer controls to match the final mockup atmosphere.
+  - Changed task brief fields into three desktop cards that stack on smaller screens.
+  - Refined task page header, task flow surface, flow rows, and action buttons for more deliberate spacing and hierarchy.
+  - Expanded node detail upward so desktop overlay covers most of the task page, and made mobile node detail near-fullscreen.
+- Files created/modified:
+  - src/styles.css
+  - task_plan.md
+
+### Phase 3: Verification
+- **Status:** complete
+- Actions taken:
+  - Ran npm run check successfully.
+  - Ran git diff --check successfully.
+  - Browser verified desktop layout at 1280x720: no body overflow, two-panel shell visible, three brief cards side by side, and flow list in view.
+  - Browser verified desktop detail overlay: Milkdown/ProseMirror mounts, no horizontal overflow, and overlay covers about 93.8% width and 73.2% height of the task page.
+  - Browser verified mobile layout at 390x844: no horizontal overflow, brief cards stack, and node detail opens as a 359x828 near-fullscreen editor.
+- Files created/modified:
+  - task_plan.md
+  - findings.md
+  - progress.md

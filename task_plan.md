@@ -4,7 +4,7 @@
 Maintain the personal task management app through scoped, low-risk improvements while preserving existing task flow behavior and release discipline.
 
 ## Current Phase
-Phase 9
+Phase 10
 
 ## Phases
 
@@ -75,6 +75,16 @@ Phase 9
 - [x] Run npm run check and git diff --check
 - **Status:** complete
 
+### Phase 10: Static Mockup Visual Alignment
+- [x] Re-read the final approved static direction from planning notes
+- [x] Align production layout spacing with the richer final mockup
+- [x] Align production palette and surface atmosphere with the final mockup
+- [x] Refine sidebar, today focus, task header, brief fields, and flow table visuals
+- [x] Preserve the Phase 9 node-detail behavior and Milkdown fixes
+- [x] Browser-verify desktop and mobile layout
+- [x] Run npm run check and git diff --check
+- **Status:** complete
+
 ## Key Questions
 1. Should this edit production frontend files? Answer: no, create static page first.
 2. What style should guide the mockup? Answer: efficiency tool first, with a touch of today-focus atmosphere.
@@ -86,6 +96,7 @@ Phase 9
 8. Should the production frontend match the final static redesign? Answer: yes, the current production UI drifted and should be realigned.
 9. Should node detail dominate the workspace? Answer: yes, it should cover most of the page and support fullscreen.
 10. When should node detail open? Answer: only when clicking the record/note area, not when adding or editing node titles.
+11. Should the production visual layout also match the final static mockup? Answer: yes, update spacing, color atmosphere, and layout feel, not just behavior.
 
 ## Decisions Made
 | Decision | Rationale |
@@ -106,6 +117,8 @@ Phase 9
 | Treat the record/note cell as the only node-detail opener | Prevents accidental detail expansion when adding nodes, editing titles, or navigating from today's focus. |
 | Add a fullscreen mode to the large node-detail overlay | Gives long Markdown notes enough room without replacing the task flow permanently. |
 | Disable Crepe TopBar and constrain Milkdown toolbar icons through scoped CSS | Avoids oversized and visually chaotic editor controls while preserving the editor surface. |
+| Apply the final static direction through CSS-first visual refinement | The current production structure already matches the functional model, so CSS-first alignment reduces regression risk. |
+| Use a warmer paper workspace with moss focus accents for the default focus tone | This matches the final static mockup mood better than the previous blue focus tone while staying task-tool appropriate. |
 
 ## Errors Encountered
 | Error | Attempt | Resolution |
@@ -114,7 +127,9 @@ Phase 9
 | Browser blocked file:// URL | 1 | Started a local 127.0.0.1 static server and verified through localhost |
 | Milkdown loading placeholder remained after editor mounted | 1 | Cleared the host element before creating the Crepe editor and rebuilt the vendor bundle |
 | Milkdown toolbar still rendered 32px icons after the first CSS pass | 1 | Added scoped overrides for `.milkdown-icon` SVGs and toolbar items, then browser-verified max SVG size at 16px |
+| Mobile node detail became too short after the larger desktop visual layout | 1 | Changed mobile node detail to a fixed near-fullscreen overlay and verified 359x828 at 390x844 |
 
 ## Notes
 - Phase 9 production implementation is complete and ready for release.
+- Phase 10 visual alignment is complete and ready for release.
 - Avoid a marketing hero; the first screen should be the usable product surface.

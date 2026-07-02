@@ -11,6 +11,7 @@
 - Current implementation request: apply the current version to the real project while minimizing impact on previous functionality, and replace the original node-detail Markdown editor with an embedded full Milkdown editor.
 - Current feature request: task review should support custom date ranges such as 6.13-6.20, and sidebar tasks should support drag reordering with a small left-side handle.
 - Current correction request: align production with the final static direction, make node detail much larger with fullscreen support, fix Milkdown toolbar/icon sizing, focus new root-node title inputs instead of opening detail, and keep missing-conclusion prompts non-blocking.
+- Current visual correction request: production should also match the final static mockup in overall layout, spacing, and color atmosphere, not only in functional behavior.
 
 ## Research Findings
 - Existing app entry point is index.html, loading src/styles.css and src/app.js.
@@ -26,6 +27,7 @@
 - Existing design patterns are compact and operational; the redesign should improve hierarchy and atmosphere without turning the UI into a landing page.
 - Production no longer has the deleted mockup files available locally, but the persistent planning files preserve the final approved direction: richer today-focus styling, no focus progress bar, no recommendation/rhythm content, and a large dynamic Markdown overlay for node detail.
 - Node detail should open from the record/note cell only. Row clicks, title edits, new root nodes, new child/sibling nodes, and today's-focus navigation should not automatically open the detail layer.
+- Production structure is already close enough to the final static direction to use CSS-first visual alignment: sidebar, today focus, task header, brief fields, task flow, and dynamic node detail all exist in stable markup.
 
 ## Technical Decisions
 | Decision | Rationale |
@@ -52,6 +54,8 @@
 | Store node detail fullscreen state only in runtime UI state | Fullscreen is a transient editing mode and should reset when switching tasks/groups or closing/saving detail. |
 | Disable Crepe TopBar and constrain Milkdown icons through production CSS | The previous toolbar appeared too large and disorderly; a scoped CSS pass keeps Milkdown controls compact without affecting other app buttons. |
 | Keep missing-conclusion prompt attached to the task but avoid forced navigation | The user should see the prompt on the active task while still being able to operate other nodes. |
+| Use CSS-first visual alignment for Phase 10 | It lets the production UI inherit the final mockup's spacing, paper surface, focus atmosphere, and large overlay behavior without touching storage or task logic. |
+| Make the default focus tone moss/green instead of blue | The final static direction emphasized calm daily focus and warm work surfaces; the previous blue tone felt less aligned. |
 
 ## Issues Encountered
 | Issue | Resolution |
@@ -61,6 +65,7 @@
 | Milkdown loading placeholder remained inside the host after mount | Cleared the host before creating the Crepe instance and rebuilt the bundle. |
 | Browser CUA drag did not trigger native HTML5 drop for task rows | Added pointer-based drag handling on the small task handle and verified reordering through local browser automation. |
 | Milkdown toolbar SVGs still measured up to 32px after the first styling pass | Added overrides for `.milkdown-icon svg` and toolbar item sizing; browser verification then measured max SVG size at 16px. |
+| Mobile node-detail overlay measured only 188px tall after the visual layout pass | Changed the mobile detail overlay to fixed near-fullscreen; re-verification measured 359x828 at a 390x844 viewport. |
 
 ## Resources
 - /Users/xuetangyuan/Documents/个人任务管理/index.html
@@ -90,3 +95,6 @@
 - Phase 9 node-detail verification showed the overlay opens from the record/note button, covers about 90.8% of workbench width and 94.2% of workbench height, and fullscreen mode expands to more than 95% of viewport width and more than 90% of viewport height.
 - Phase 9 Milkdown verification showed ProseMirror mounts, fallback textarea remains hidden, toolbar-like controls are compact, and SVG icons max at 16px after the scoped CSS fix.
 - Phase 9 conclusion-prompt verification showed `.conclusion-prompt` remains visible when completing a task without a conclusion, while adding another root node still works and focuses the new title input.
+- Phase 10 desktop verification at 1280x720 showed no body-level overflow, a padded two-panel shell, three side-by-side task brief cards, and a flow list inside the visible workbench.
+- Phase 10 desktop node-detail verification showed the note overlay covers about 93.8% of the task-page width and 73.2% of task-page height while Milkdown/ProseMirror still mounts.
+- Phase 10 mobile verification at 390x844 showed no horizontal overflow, stacked brief cards, and a fixed near-fullscreen node-detail overlay measuring 359x828.

@@ -4,11 +4,11 @@
   --heading: #0c0f14;
   --muted: #656d7b;
   --faint: #9aa1ad;
-  --paper: #f3f0ea;
+  --paper: #f1ede4;
   --panel: #ffffff;
-  --field: #f7f6f2;
-  --line: #ded8cc;
-  --line-soft: #eee9df;
+  --field: #f8f6ef;
+  --line: #ddd4c4;
+  --line-soft: #eee6d8;
   --hover: rgba(69, 92, 79, 0.08);
   --selected: rgba(69, 92, 79, 0.14);
   --focus: #2f7d68;
@@ -33,18 +33,18 @@
   --next-done-bg: #eff7f2;
   --next-blocked-bg: #fbebe8;
   --next-later-bg: #f4f1eb;
-  --brief-bg: #fcfbf8;
-  --brief-strong-bg: #f7f3ea;
+  --brief-bg: #fffdf8;
+  --brief-strong-bg: #f7f1e5;
   --attention-bg: rgba(180, 73, 61, 0.08);
-  --flow-header-bg: rgba(243, 240, 234, 0.92);
-  --flow-done-bg: #f6f4ef;
-  --markdown-panel-bg: #fbfcfe;
-  --markdown-toolbar-bg: rgba(247, 246, 242, 0.88);
+  --flow-header-bg: rgba(248, 246, 239, 0.94);
+  --flow-done-bg: #f7f3ea;
+  --markdown-panel-bg: #fffefa;
+  --markdown-toolbar-bg: rgba(248, 246, 239, 0.9);
   --markdown-code: #80502c;
   --markdown-code-bg: #f8efe3;
   --markdown-pre-bg: #f4f1eb;
   --markdown-pre-code: #24272f;
-  --shadow: rgba(46, 42, 35, 0.14);
+  --shadow: rgba(70, 59, 43, 0.13);
   --en-font: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
   --zh-font: "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
   --app-font: var(--en-font), var(--zh-font), sans-serif;
@@ -111,13 +111,13 @@
 }
 
 :root[data-tone="focus"] {
-  --focus: #0ea5e9;
-  --focus-field: #eaf6ff;
-  --focus-ring: rgba(14, 165, 233, 0.16);
-  --todo: #0369a1;
-  --todo-bg: #e0f2fe;
-  --selected: rgba(14, 116, 144, 0.12);
-  --hover: rgba(14, 116, 144, 0.06);
+  --focus: #2f7d68;
+  --focus-field: #edf6f2;
+  --focus-ring: rgba(47, 125, 104, 0.18);
+  --todo: #2f7d68;
+  --todo-bg: #e1f2eb;
+  --selected: rgba(47, 125, 104, 0.13);
+  --hover: rgba(47, 125, 104, 0.07);
 }
 
 :root[data-tone="indigo"] {
@@ -388,7 +388,10 @@ body {
   margin: 0;
   overflow: hidden;
   color: var(--ink);
-  background: var(--panel);
+  background:
+    radial-gradient(circle at 12% 6%, color-mix(in srgb, var(--focus) 10%, transparent), transparent 28%),
+    radial-gradient(circle at 92% 0%, rgba(185, 122, 36, 0.12), transparent 26%),
+    linear-gradient(135deg, #f5f1e8 0%, var(--paper) 48%, #ece6d9 100%);
 }
 
 button,
@@ -413,11 +416,13 @@ p {
 .ops-app {
   display: grid;
   grid-template-columns: var(--sidebar-width, 272px) minmax(760px, 1fr);
+  gap: 18px;
   height: 100vh;
+  padding: 18px;
   overflow: hidden;
   background:
-    linear-gradient(90deg, var(--paper) 0, var(--paper) var(--sidebar-width, 272px), transparent var(--sidebar-width, 272px)),
-    var(--panel);
+    linear-gradient(115deg, rgba(255, 255, 255, 0.42), transparent 34%),
+    transparent;
 }
 
 .sidebar {
@@ -426,8 +431,12 @@ p {
   min-height: 0;
   flex-direction: column;
   overflow: hidden;
-  border-right: 1px solid var(--line);
-  background: var(--paper);
+  border: 1px solid rgba(221, 212, 196, 0.88);
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(255, 253, 248, 0.86), rgba(241, 237, 228, 0.92)),
+    var(--paper);
+  box-shadow: 0 20px 54px rgba(70, 59, 43, 0.12);
 }
 
 .sidebar-resizer {
@@ -446,11 +455,11 @@ p {
 
 .sidebar-head {
   display: flex;
-  min-height: 58px;
+  min-height: 72px;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 12px 14px 7px;
+  padding: 18px 18px 9px;
 }
 
 .sidebar-head div {
@@ -462,8 +471,8 @@ p {
 .sidebar-head strong {
   overflow: hidden;
   color: var(--heading);
-  font-size: 16px;
-  font-weight: 760;
+  font-size: 19px;
+  font-weight: 780;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -473,6 +482,7 @@ p {
   color: var(--muted);
   font-family: var(--mono);
   font-size: 10px;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -486,9 +496,9 @@ p {
   justify-content: center;
   padding: 0 9px;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 999px;
   color: var(--heading);
-  background: var(--panel);
+  background: rgba(255, 255, 255, 0.68);
   font-family: var(--mono);
   font-size: 12px;
 }
@@ -496,8 +506,8 @@ p {
 .sidebar-stats {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 1px;
-  padding: 0 14px 9px;
+  gap: 8px;
+  padding: 0 18px 12px;
 }
 
 .sidebar-stats span {
@@ -505,20 +515,21 @@ p {
   min-width: 0;
   align-items: baseline;
   gap: 6px;
-  padding: 6px 8px;
+  padding: 8px 9px;
   border: 1px solid var(--line-soft);
   color: var(--muted);
-  background: rgba(255, 255, 255, 0.46);
+  background: rgba(255, 255, 255, 0.54);
   font-size: 12px;
+  border-radius: 10px;
 }
 
 .sidebar-stats span:first-child {
-  border-radius: 7px 0 0 7px;
+  border-radius: 10px;
 }
 
 .sidebar-stats span:last-child {
-  border-left: 0;
-  border-radius: 0 7px 7px 0;
+  border-left: 1px solid var(--line-soft);
+  border-radius: 10px;
 }
 
 .sidebar-stats b {
@@ -529,18 +540,22 @@ p {
 }
 
 .today-focus {
-  margin: 0 10px 10px;
-  border-top: 1px solid var(--line-soft);
-  border-bottom: 1px solid var(--line);
-  background: linear-gradient(90deg, color-mix(in srgb, var(--focus) 10%, transparent), transparent);
+  margin: 0 14px 14px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--focus) 18%, var(--line));
+  border-radius: 14px;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--focus) 16%, transparent), transparent 54%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.68), rgba(255, 253, 248, 0.36));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.52);
 }
 
 .today-head {
   display: flex;
-  min-height: 34px;
+  min-height: 42px;
   align-items: center;
   justify-content: space-between;
-  padding: 7px 5px 5px;
+  padding: 10px 12px 6px;
 }
 
 .today-title {
@@ -553,10 +568,11 @@ p {
 }
 
 .today-title::before {
-  width: 7px;
-  height: 20px;
+  width: 8px;
+  height: 8px;
   border-radius: 999px;
   background: var(--focus);
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--focus) 14%, transparent);
   content: "";
 }
 
@@ -568,30 +584,34 @@ p {
 
 .focus-list {
   display: grid;
-  gap: 3px;
-  padding: 0 0 7px;
+  gap: 6px;
+  padding: 0 8px 10px;
 }
 
 .focus-item {
   display: grid;
-  grid-template-columns: 7px minmax(0, 1fr);
-  gap: 8px;
-  min-height: 50px;
-  padding: 8px 8px 8px 0;
-  border: 1px solid transparent;
-  border-radius: 7px;
-  background: rgba(255, 255, 255, 0.44);
+  grid-template-columns: 4px minmax(0, 1fr);
+  gap: 10px;
+  min-height: 56px;
+  padding: 9px 10px 9px 0;
+  border: 1px solid rgba(255, 255, 255, 0.48);
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.52);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.48);
   cursor: pointer;
 }
 
 .focus-item:hover {
-  background: var(--hover);
+  border-color: color-mix(in srgb, var(--focus) 20%, var(--line));
+  background: rgba(255, 255, 255, 0.74);
 }
 
 .focus-item.selected {
   border-color: color-mix(in srgb, var(--focus) 38%, transparent);
   background: var(--focus-field);
-  box-shadow: inset 3px 0 0 var(--focus);
+  box-shadow:
+    inset 3px 0 0 var(--focus),
+    0 8px 18px rgba(47, 125, 104, 0.08);
 }
 
 .focus-item.high .focus-rail {
@@ -607,7 +627,7 @@ p {
 }
 
 .focus-rail {
-  width: 3px;
+  width: 4px;
   min-height: 100%;
   justify-self: center;
   border-radius: 999px;
@@ -761,13 +781,14 @@ p {
   display: flex;
   align-items: center;
   gap: 7px;
-  height: 34px;
-  margin: 0 14px 8px;
-  padding: 0 10px;
+  height: 38px;
+  margin: 0 18px 12px;
+  padding: 0 12px;
   border: 1px solid var(--line);
-  border-radius: 7px;
+  border-radius: 12px;
   color: var(--faint);
-  background: var(--panel);
+  background: rgba(255, 255, 255, 0.62);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.52);
 }
 
 .search-box input {
@@ -784,7 +805,7 @@ p {
   min-height: 0;
   flex: 1;
   flex-direction: column;
-  padding: 0 8px 10px;
+  padding: 0 12px 12px;
   overflow: auto;
 }
 
@@ -793,8 +814,9 @@ p {
   align-items: center;
   justify-content: flex-start;
   gap: 8px;
-  padding: 7px 8px 9px 12px;
+  padding: 10px 12px 12px;
   border-top: 1px solid var(--line-soft);
+  background: rgba(255, 253, 248, 0.45);
 }
 
 .settings-trigger,
@@ -803,9 +825,9 @@ p {
   width: 30px;
   height: 30px;
   border: 1px solid var(--line);
-  border-radius: 7px;
+  border-radius: 10px;
   color: var(--muted);
-  background: var(--field);
+  background: rgba(255, 255, 255, 0.58);
   font-size: 17px;
   line-height: 1;
 }
@@ -1231,12 +1253,12 @@ p {
 .task-list-head {
   display: grid;
   grid-template-columns: 10px 18px minmax(0, 1fr) 54px;
-  min-height: 31px;
+  min-height: 34px;
   align-items: center;
   gap: 5px;
-  padding: 1px 6px 5px;
-  border-top: 1px solid var(--line-soft);
-  border-bottom: 1px solid var(--line-soft);
+  padding: 3px 6px 6px;
+  border-top: 1px solid color-mix(in srgb, var(--line-soft) 72%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--line-soft) 72%, transparent);
   color: var(--faint);
   font-size: 13px;
 }
@@ -1246,7 +1268,7 @@ p {
   min-width: 0;
   height: 25px;
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-radius: 8px;
   color: var(--muted);
   background: var(--field);
   outline: 0;
@@ -1262,24 +1284,28 @@ p {
 .task-item {
   display: grid;
   grid-template-columns: 10px 18px minmax(0, 1fr) 54px;
-  min-height: 36px;
+  min-height: 42px;
   align-items: center;
   gap: 4px;
-  margin: 1px 0;
-  padding: 2px 6px;
+  margin: 2px 0;
+  padding: 4px 7px;
   border: 1px solid transparent;
-  border-radius: 7px;
+  border-radius: 10px;
 }
 
 .task-item:hover {
-  border-color: var(--line-soft);
-  background: var(--hover);
+  border-color: color-mix(in srgb, var(--focus) 16%, var(--line-soft));
+  background: rgba(255, 255, 255, 0.42);
 }
 
 .task-item.selected {
-  border-color: var(--line);
-  background: var(--selected);
-  box-shadow: inset 3px 0 0 var(--focus);
+  border-color: color-mix(in srgb, var(--focus) 28%, var(--line));
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--focus) 12%, transparent), rgba(255, 255, 255, 0.34)),
+    var(--selected);
+  box-shadow:
+    inset 3px 0 0 var(--focus),
+    0 7px 18px rgba(47, 125, 104, 0.07);
 }
 
 .task-item.dragging {
@@ -1349,7 +1375,7 @@ p {
 .task-title {
   padding: 0 2px;
   font-size: 14px;
-  font-weight: 620;
+  font-weight: 650;
 }
 
 .task-title-wrap {
@@ -1372,7 +1398,7 @@ p {
   align-items: center;
   padding: 0 4px;
   overflow: hidden;
-  border-radius: 4px;
+  border-radius: 999px;
   color: var(--todo);
   background: var(--todo-bg);
   font-size: 10px;
@@ -1390,7 +1416,8 @@ p {
   width: 52px;
   padding-left: 4px;
   color: var(--muted);
-  background: var(--panel);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.5);
   font-size: 12px;
 }
 
@@ -1415,17 +1442,24 @@ p {
   min-height: 0;
   flex-direction: column;
   overflow: hidden;
+  border: 1px solid rgba(221, 212, 196, 0.88);
+  border-radius: 18px;
   background:
-    radial-gradient(circle at top right, color-mix(in srgb, var(--focus) 12%, transparent), transparent 32%),
+    radial-gradient(circle at 88% 6%, color-mix(in srgb, var(--focus) 14%, transparent), transparent 30%),
+    radial-gradient(circle at 10% 0%, rgba(185, 122, 36, 0.12), transparent 26%),
     var(--panel);
+  box-shadow: 0 20px 54px rgba(70, 59, 43, 0.11);
 }
 
 .page-header {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 18px;
-  padding: 22px 42px 14px;
+  padding: 28px 42px 18px;
   border-bottom: 1px solid var(--line-soft);
+  background:
+    linear-gradient(180deg, rgba(255, 253, 248, 0.72), rgba(255, 255, 255, 0.18)),
+    transparent;
 }
 
 .page-title-block {
@@ -1433,22 +1467,23 @@ p {
 }
 
 .page-kicker {
-  margin-bottom: 4px;
+  margin-bottom: 6px;
   color: var(--faint);
   font-family: var(--mono);
   font-size: 11px;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
 .page-title {
   width: min(880px, 100%);
-  min-height: 36px;
+  min-height: 42px;
   border: 0;
   color: var(--ink);
   background: transparent;
   outline: 0;
-  font-size: 30px;
-  font-weight: 760;
+  font-size: 34px;
+  font-weight: 780;
   letter-spacing: 0;
 }
 
@@ -1462,8 +1497,8 @@ p {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
-  margin-top: 7px;
+  gap: 8px;
+  margin-top: 10px;
   color: var(--muted);
   font-size: 13px;
 }
@@ -1472,14 +1507,14 @@ p {
 .property-select,
 .flow-status {
   display: inline-flex;
-  min-height: 22px;
+  min-height: 24px;
   align-items: center;
   justify-content: center;
-  padding: 0 7px;
+  padding: 0 9px;
   border: 1px solid transparent;
   border-radius: 999px;
   color: var(--muted);
-  background: var(--slate-bg);
+  background: rgba(239, 237, 232, 0.86);
   font-size: 13px;
 }
 
@@ -1501,17 +1536,17 @@ p {
 .task-tag-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 8px;
+  gap: 7px;
+  margin-top: 12px;
 }
 
 .task-tag-toggle {
-  height: 25px;
-  padding: 0 9px;
+  height: 27px;
+  padding: 0 10px;
   border: 1px solid var(--line);
   border-radius: 999px;
   color: var(--muted);
-  background: var(--field);
+  background: rgba(255, 255, 255, 0.54);
   font-size: 12px;
 }
 
@@ -1545,11 +1580,9 @@ p {
 
 .task-brief {
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 0;
-  margin: 8px 42px 0;
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 18px 42px 0;
 }
 
 .conclusion-prompt {
@@ -1577,22 +1610,27 @@ p {
 
 .brief-field {
   display: grid;
-  grid-template-columns: 92px minmax(0, 1fr) auto;
-  min-height: 34px;
-  align-items: center;
-  border-bottom: 1px solid var(--line-soft);
-  background: transparent;
+  grid-template-columns: 1fr;
+  min-height: 128px;
+  align-items: stretch;
+  padding: 12px;
+  overflow: hidden;
+  border: 1px solid var(--line-soft);
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.68), rgba(255, 253, 248, 0.86)),
+    var(--brief-bg);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.54);
 }
 
 .brief-field.background {
-  border-right: 0;
+  border-right: 1px solid var(--line-soft);
 }
 
 .brief-field.conclusion {
   grid-column: auto;
-  min-height: 34px;
-  border-bottom: 0;
-  background: transparent;
+  min-height: 128px;
+  border-bottom: 1px solid var(--line-soft);
 }
 
 .brief-field.needs-attention {
@@ -1613,7 +1651,7 @@ p {
   align-items: flex-start;
   justify-content: center;
   gap: 2px;
-  padding: 6px 12px 6px 0;
+  padding: 0 0 7px;
 }
 
 .brief-label b {
@@ -1624,8 +1662,8 @@ p {
 
 .brief-stamp {
   overflow: hidden;
-  justify-self: end;
-  padding-left: 12px;
+  justify-self: start;
+  padding: 2px 0 0;
   color: var(--faint);
   font-family: var(--mono);
   font-size: 12px;
@@ -1636,10 +1674,10 @@ p {
 
 .task-brief textarea {
   width: 100%;
-  min-height: 34px;
-  height: 34px;
+  min-height: 72px;
+  height: 72px;
   max-height: 180px;
-  padding: 7px 0 6px;
+  padding: 7px 0 0;
   border: 0;
   border-radius: 0;
   color: var(--ink);
@@ -1651,7 +1689,7 @@ p {
 }
 
 .brief-field.conclusion textarea {
-  min-height: 34px;
+  min-height: 72px;
 }
 
 .task-brief textarea:focus,
@@ -1663,8 +1701,9 @@ p {
 }
 
 .task-brief textarea:focus {
-  background: transparent;
-  box-shadow: inset 0 -2px 0 var(--focus);
+  border-radius: 8px;
+  background: rgba(237, 246, 242, 0.58);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--focus) 28%, transparent);
 }
 
 .flow-section {
@@ -1680,6 +1719,7 @@ p {
   grid-template-columns: minmax(0, 1fr);
   min-height: 0;
   flex: 1;
+  padding-top: 4px;
 }
 
 .task-workbench.with-detail {
@@ -1714,13 +1754,13 @@ p {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  padding: 16px 42px 0;
+  padding: 18px 42px 0;
 }
 
 .section-heading h2 {
   color: var(--heading);
-  font-size: 17px;
-  font-weight: 740;
+  font-size: 18px;
+  font-weight: 760;
 }
 
 .section-heading p {
@@ -1730,12 +1770,14 @@ p {
 }
 
 .flow-add-button {
-  height: 30px;
-  padding: 0 10px;
-  border: 1px solid var(--line);
-  border-radius: 7px;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid color-mix(in srgb, var(--focus) 30%, var(--line));
+  border-radius: 10px;
   color: var(--heading);
-  background: var(--field);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(237, 246, 242, 0.84)),
+    var(--focus-field);
   font-size: 13px;
   font-weight: 650;
 }
@@ -1750,11 +1792,16 @@ p {
 .flow-list {
   min-height: 0;
   flex: 1;
-  margin: 10px 42px 18px;
+  margin: 12px 42px 22px;
   overflow: auto;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--panel);
+  border: 1px solid var(--line-soft);
+  border-radius: 16px;
+  background:
+    linear-gradient(180deg, rgba(255, 253, 248, 0.92), rgba(255, 255, 255, 0.96)),
+    var(--panel);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.62),
+    0 12px 30px rgba(70, 59, 43, 0.06);
 }
 
 .flow-item {
@@ -1771,19 +1818,22 @@ p {
     minmax(var(--flow-note-width, 330px), 1fr)
     86px
     104px;
-  min-height: 44px;
+  min-height: 48px;
   align-items: center;
-  padding: 0 10px;
-  border-bottom: 1px solid var(--line-soft);
+  padding: 0 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--line-soft) 82%, transparent);
   color: var(--ink);
 }
 
 .flow-row:not(.flow-header):hover {
-  background: var(--hover);
+  background: color-mix(in srgb, var(--focus-field) 56%, transparent);
 }
 
 .flow-row.selected {
-  background: var(--selected);
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--focus) 12%, transparent), transparent 60%),
+    var(--selected);
+  box-shadow: inset 3px 0 0 var(--focus);
 }
 
 .flow-row.done {
@@ -1803,12 +1853,13 @@ p {
   position: sticky;
   top: 0;
   z-index: 1;
-  min-height: 36px;
+  min-height: 40px;
   color: var(--faint);
   background: var(--flow-header-bg);
   backdrop-filter: blur(14px);
-  font-size: 13px;
-  font-weight: 520;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
 }
 
 .flow-head-cell {
@@ -1880,7 +1931,7 @@ body.resizing-detail {
   border-radius: 999px;
   background: var(--focus);
   content: "";
-  opacity: 0.52;
+  opacity: 0.42;
 }
 
 .main-flow .flow-branch-mark::after {
@@ -1890,7 +1941,7 @@ body.resizing-detail {
   width: 11px;
   height: 11px;
   margin-top: -6px;
-  border: 2px solid var(--panel);
+  border: 2px solid #fffefa;
   border-radius: 50%;
   background: var(--focus);
   content: "";
@@ -1926,14 +1977,14 @@ body.resizing-detail {
 .flow-title-input {
   width: 100%;
   min-width: 0;
-  height: 30px;
+  height: 32px;
   border: 0;
   border-radius: 6px;
   color: inherit;
   background: transparent;
   outline: 0;
   font-size: 15px;
-  font-weight: 620;
+  font-weight: 650;
 }
 
 .flow-title-cell {
@@ -1984,6 +2035,8 @@ body.resizing-detail {
   background: transparent;
   text-align: left;
   cursor: pointer;
+  border-radius: 8px;
+  padding: 0 8px;
 }
 
 .flow-note:hover,
@@ -2008,26 +2061,30 @@ body.resizing-detail {
   margin: 0 42px 18px;
   overflow: hidden;
   border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--panel);
+  border-radius: 16px;
+  background:
+    linear-gradient(180deg, rgba(255, 253, 248, 0.98), rgba(255, 255, 255, 0.98)),
+    var(--panel);
   box-shadow: 0 -8px 24px rgba(46, 42, 35, 0.05);
 }
 
 .detail-head {
   display: flex;
-  min-height: 58px;
+  min-height: 64px;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 11px 13px;
+  padding: 13px 16px;
   border-bottom: 1px solid var(--line-soft);
-  background: var(--brief-bg);
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--focus) 9%, transparent), transparent 62%),
+    var(--brief-bg);
 }
 
 .detail-head h2 {
   color: var(--heading);
-  font-size: 18px;
-  font-weight: 740;
+  font-size: 20px;
+  font-weight: 760;
 }
 
 .detail-head p {
@@ -2060,9 +2117,9 @@ body.resizing-detail {
 .detail-save,
 .detail-export,
 .detail-fullscreen {
-  height: 30px;
+  height: 32px;
   padding: 0 12px;
-  border-radius: 7px;
+  border-radius: 9px;
   font-size: 13px;
   font-weight: 650;
 }
@@ -2094,7 +2151,7 @@ body.resizing-detail {
   grid-template-columns: 42px minmax(0, 1fr);
   align-items: center;
   gap: 10px;
-  padding: 12px 13px 10px;
+  padding: 14px 16px 12px;
 }
 
 .detail-title-row span {
@@ -2107,7 +2164,7 @@ body.resizing-detail {
   height: 38px;
   padding: 0 12px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 10px;
   color: var(--ink);
   background: var(--field);
   font-size: 15px;
@@ -2121,8 +2178,8 @@ body.resizing-detail {
   flex-direction: column;
   overflow: hidden;
   border: 1px solid var(--line-soft);
-  border-radius: 12px;
-  margin: 0 13px 13px;
+  border-radius: 14px;
+  margin: 0 16px 16px;
   background: var(--markdown-panel-bg);
 }
 
@@ -2516,10 +2573,10 @@ body.resizing-detail {
 }
 
 .empty-flow {
-  margin: 10px 42px 18px;
-  padding: 18px 20px;
+  margin: 12px 42px 22px;
+  padding: 22px;
   border: 1px dashed var(--line);
-  border-radius: 10px;
+  border-radius: 16px;
   color: var(--muted);
   background: var(--brief-bg);
 }
@@ -2534,6 +2591,8 @@ body.resizing-detail {
     height: auto;
     min-height: 100vh;
     overflow: visible;
+    padding: 12px;
+    gap: 12px;
   }
 
   .page-header {
@@ -2549,6 +2608,10 @@ body.resizing-detail {
       minmax(50%, var(--detail-pane-height, 58%));
   }
 
+  .task-brief {
+    grid-template-columns: 1fr;
+  }
+
   .node-detail {
     margin: 0 42px 18px;
   }
@@ -2558,7 +2621,9 @@ body.resizing-detail {
 @media (max-width: 760px) {
   .ops-app {
     grid-template-columns: 1fr;
-    background: var(--panel);
+    gap: 12px;
+    padding: 10px;
+    background: transparent;
   }
 
   .settings-overlay {
@@ -2606,8 +2671,9 @@ body.resizing-detail {
 
   .sidebar {
     max-height: 52vh;
-    border-right: 0;
+    border-right: 1px solid var(--line);
     border-bottom: 1px solid var(--line);
+    border-radius: 14px;
   }
 
   .sidebar-head {
@@ -2651,7 +2717,7 @@ body.resizing-detail {
   }
 
   .brief-field.background {
-    border-right: 0;
+    border-right: 1px solid var(--line-soft);
     border-bottom: 1px solid var(--line-soft);
   }
 
@@ -2668,8 +2734,8 @@ body.resizing-detail {
   .flow-list,
   .empty-flow,
   .node-detail {
-    margin-left: 20px;
-    margin-right: 20px;
+    margin-left: 14px;
+    margin-right: 14px;
   }
 
   .task-workbench.with-detail {
@@ -2681,8 +2747,8 @@ body.resizing-detail {
   }
 
   .section-heading {
-    padding-left: 20px;
-    padding-right: 20px;
+    padding-left: 14px;
+    padding-right: 14px;
   }
 
   .flow-row {
@@ -2697,6 +2763,10 @@ body.resizing-detail {
   .page-title {
     font-size: 30px;
   }
+
+  .task-page {
+    border-radius: 14px;
+  }
 }
 
 /* Revised node detail overlay + Milkdown editor */
@@ -2710,10 +2780,13 @@ body.resizing-detail {
 
 .task-workbench.detail-open::before {
   position: absolute;
-  inset: 0;
+  top: clamp(-190px, -24vh, -118px);
+  right: 0;
+  bottom: 0;
+  left: 0;
   z-index: 8;
-  background: rgba(243, 240, 234, 0.58);
-  backdrop-filter: blur(3px);
+  background: rgba(241, 237, 228, 0.6);
+  backdrop-filter: blur(6px);
   content: "";
 }
 
@@ -2723,23 +2796,25 @@ body.resizing-detail {
 
 .task-workbench.detail-open .node-detail {
   position: absolute;
-  top: 12px;
-  right: 14px;
-  bottom: 14px;
-  left: 84px;
+  top: clamp(-178px, -23vh, -112px);
+  right: 18px;
+  bottom: 18px;
+  left: 42px;
   z-index: 9;
   display: grid;
   width: auto;
   min-width: 0;
   margin: 0;
   grid-template-rows: auto auto minmax(0, 1fr);
-  border-radius: 10px;
-  box-shadow: 0 24px 64px rgba(23, 31, 38, 0.22);
+  border-radius: 18px;
+  box-shadow:
+    0 28px 72px rgba(23, 31, 38, 0.22),
+    0 0 0 1px rgba(255, 255, 255, 0.48);
 }
 
 .task-workbench.detail-fullscreen .node-detail {
   position: fixed;
-  inset: 14px;
+  inset: 18px;
   z-index: 60;
 }
 
@@ -2748,7 +2823,7 @@ body.resizing-detail {
   height: 30px;
   padding: 0;
   border: 1px solid var(--line);
-  border-radius: 7px;
+  border-radius: 9px;
   color: var(--muted);
   background: var(--field);
   font-size: 18px;
@@ -2762,9 +2837,9 @@ body.resizing-detail {
 }
 
 .milkdown-panel {
-  margin: 0 13px 13px;
+  margin: 0 16px 16px;
   border: 1px solid var(--line-soft);
-  border-radius: 12px;
+  border-radius: 14px;
   background: var(--markdown-panel-bg);
 }
 
@@ -2872,10 +2947,9 @@ body.resizing-detail {
 
 @media (max-width: 760px) {
   .task-workbench.detail-open .node-detail {
-    top: 10px;
-    right: 10px;
-    bottom: 10px;
-    left: 10px;
+    position: fixed;
+    inset: 8px;
+    z-index: 60;
     width: auto;
     min-width: 0;
   }
