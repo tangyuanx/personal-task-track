@@ -152,6 +152,7 @@ let state = {
   attachments: { images: {} },
   conclusionPromptTaskId: "",
   contextMenu: null,
+  nodeDetailPosition: null,
 };
 
 let saveTimer = 0;
@@ -539,12 +540,7 @@ function renderSidebar() {
           <strong>Task Track</strong>
           <small>Personal operations</small>
         </div>
-        <span>${visibleCount}/${scopedTasks.length}</span>
-      </div>
-
-      <div class="sidebar-stats" aria-label="任务统计">
-        <span><b>${openCount}</b> 进行中</span>
-        <span><b>${blockedCount}</b> 卡住</span>
+        <span>v${esc(APP_VERSION || "dev")}</span>
       </div>
 
       <label class="search-box">
@@ -556,10 +552,8 @@ function renderSidebar() {
 
       <div class="task-list" data-context="task-list">
         <div class="task-list-head">
-          <span></span>
-          <span></span>
-          ${filterSelectHtml("task-filter", state.taskFilter, taskFilterLabels, "任务筛选")}
-          ${filterSelectHtml("priority-filter", state.priorityFilter, priorityFilterLabels, "优先级筛选")}
+          <span>Tasks</span>
+          <span>${visibleCount}/${scopedTasks.length}</span>
         </div>
         ${filteredTasks()
           .map((task) => renderTaskItem(task))
@@ -572,7 +566,6 @@ function renderSidebar() {
         </div>
       </div>
       <div class="sidebar-foot">
-        <button class="review-trigger ${state.reviewOpen ? "active" : ""}" type="button" data-action="toggle-review" title="任务回顾">日</button>
         <button class="settings-trigger ${state.settingsOpen ? "active" : ""}" type="button" data-action="toggle-settings" title="设置">⚙</button>
         ${renderGroupTabs()}
       </div>
@@ -678,6 +671,9 @@ function renderTaskPage(task) {
             ${Object.entries(taskTagLabels).map(([tag, label]) => renderTaskTagButton(task, tag, label)).join("")}
           </div>
         </div>
+        <button class="share-trigger" type="button" data-action="share-task" data-task-id="${task.id}" title="分享任务概要" aria-label="分享任务概要">
+          <span class="share-glyph" aria-hidden="true"><span class="share-arrow"></span></span>
+        </button>
       </header>
 
       ${needsConclusion ? renderConclusionPrompt() : ""}
@@ -699,7 +695,7 @@ function renderTaskPage(task) {
           </div>
           ${
             topNodes.length
-              ? `<div class="flow-list" style="${flowWidthStyle()}" data-context="flow-root" data-task-id="${task.id}">${renderFlowHeader()}${topNodes.map((node) => renderFlowNode(task.id, node, 0)).join("")}</div>`
+              ? `<div class="flow-list" style="${flowWidthStyle()}" data-context="flow-root" data-task-id="${task.id}">${renderFlowHeader()}${topNodes.map((node) => renderFlowNode(task.id, node, 0)).join("")}${renderFlowHint()}</div>`
               : `<div class="empty-flow" data-context="flow-root" data-task-id="${task.id}">右键添加第一个节点。</div>`
           }
         </section>
@@ -707,6 +703,15 @@ function renderTaskPage(task) {
         ${selectedNode ? renderNodeDetail(task.id, selectedNode) : ""}
       </section>
     </section>
+  `;
+}
+
+function renderFlowHint() {
+  return `
+    <div class="flow-hint">
+      <kbd>右键</kbd>
+      <span>在处理流空白处新增主节点，或在已有节点上新增子节点</span>
+    </div>
   `;
 }
 
@@ -780,12 +785,13 @@ function renderFlowHeadCell(key, label) {
 
 function renderNodeDetail(taskId, node) {
   const stats = markdownStats(node.note);
+  const fullscreen = state.nodeDetailFullscreen;
   return `
-    <section class="node-detail" data-task-id="${taskId}" data-node-id="${node.id}">
+    <section class="node-detail ${fullscreen ? "fullscreen-editor" : ""}" ${nodeDetailPositionStyle()} data-task-id="${taskId}" data-node-id="${node.id}">
       <div class="detail-head">
         <div>
-          <h2>节点详情</h2>
-          <p>${node.status === "done" ? "已完成" : "未完成"}</p>
+          <span>${fullscreen ? "Markdown Editor" : "节点记录 · Milkdown"}</span>
+          <h2>${esc(node.title || "未命名节点")}</h2>
         </div>
         <div class="detail-actions">
           <label class="detail-check">
@@ -812,11 +818,18 @@ function renderNodeDetail(taskId, node) {
         </div>
         <div class="milkdown-status">
           <span class="markdown-stats" data-markdown-stats>${stats.lines} 行 · ${stats.characters} 字</span>
-          <span>Milkdown</span>
+          <span>${fullscreen ? "右键或 / 插入表格、图片、代码块" : "点击空白处自动保存并关闭"}</span>
         </div>
       </section>
     </section>
   `;
+}
+
+function nodeDetailPositionStyle() {
+  if (state.nodeDetailFullscreen || !state.nodeDetailPosition) return "";
+  const x = Math.max(12, Math.min(window.innerWidth - 440, Number(state.nodeDetailPosition.x) || 0));
+  const y = Math.max(72, Math.min(window.innerHeight - 420, Number(state.nodeDetailPosition.y) || 0));
+  return `style="--detail-x:${x}px;--detail-y:${y}px"`;
 }
 
 function markdownStats(value) {
@@ -1110,6 +1123,15 @@ function renderSettingsPanel() {
                   <span>新任务优先级</span>
                   ${settingsSelectHtml("new-task-priority", state.newTaskPriority, priorityLabels)}
                 </label>
+              </div>
+            </section>
+            <section class="settings-group">
+              <div class="settings-group-head">
+                <h3>时间回顾</h3>
+                <p>按更新时间、创建日期或解决日期筛选任务。</p>
+              </div>
+              <div class="settings-stack">
+                <button class="settings-inline-action" type="button" data-action="toggle-review">打开任务回顾</button>
               </div>
             </section>
             <div class="settings-preview">
@@ -1418,7 +1440,7 @@ function bind() {
   document.querySelectorAll("[data-action]").forEach((element) => {
     element.addEventListener("click", (event) => {
       event.stopPropagation();
-      action(element.dataset);
+      action(element.dataset, event);
     });
   });
 
@@ -1840,6 +1862,8 @@ function startDetailResize(event) {
 function exitNodeDetail() {
   if (!state.selectedNodeId) return false;
   state.selectedNodeId = "";
+  state.nodeDetailFullscreen = false;
+  state.nodeDetailPosition = null;
   document.querySelector(".node-detail")?.remove();
   document.querySelectorAll(".flow-row.selected").forEach((row) => row.classList.remove("selected"));
   return true;
@@ -1983,7 +2007,7 @@ function updateMarkdownStatsForMarkdown(host, markdown) {
   if (statsElement) statsElement.textContent = `${stats.lines} 行 · ${stats.characters} 字`;
 }
 
-function action(data) {
+function action(data, event = null) {
   state.contextMenu = null;
   if (data.action === "markdown-tool") {
     applyMarkdownTool(data.tool);
@@ -1991,6 +2015,10 @@ function action(data) {
   }
   if (data.action === "export-node-pdf") {
     exportNodePdf(data.taskId, data.nodeId);
+    return;
+  }
+  if (data.action === "share-task") {
+    shareTask(data.taskId);
     return;
   }
   if (data.action === "scroll-sheets") {
@@ -2023,10 +2051,15 @@ function action(data) {
     state.activeTaskId = data.taskId;
     state.selectedNodeId = "";
     state.nodeDetailFullscreen = false;
+    state.nodeDetailPosition = null;
   }
   if (data.action === "add-task") addBlankTask();
   if (data.action === "delete-task") deleteTask(data.taskId);
-  if (data.action === "select-node") state.selectedNodeId = data.nodeId;
+  if (data.action === "select-node") {
+    state.selectedNodeId = data.nodeId;
+    state.nodeDetailFullscreen = false;
+    state.nodeDetailPosition = event ? { x: event.clientX + 12, y: event.clientY - 24 } : null;
+  }
   if (data.action === "toggle-task-done") toggleTaskDone(data.taskId);
   if (data.action === "toggle-task-tag") toggleTaskTag(data.taskId, data.tag);
   if (data.action === "add-node") addNode(data.taskId, data.parentId || null);
@@ -2040,12 +2073,39 @@ function action(data) {
   if (data.action === "close-node-detail") {
     state.selectedNodeId = "";
     state.nodeDetailFullscreen = false;
+    state.nodeDetailPosition = null;
   }
   if (data.action === "save-node-detail") {
     state.selectedNodeId = "";
     state.nodeDetailFullscreen = false;
+    state.nodeDetailPosition = null;
   }
   render();
+}
+
+async function shareTask(taskId) {
+  const task = state.tasks.find((item) => item.id === taskId);
+  if (!task) return;
+  const summary = taskSummary(task);
+  const text = [
+    `# ${task.title || "未命名任务"}`,
+    "",
+    `优先级：${priorityLabels[task.priority] || "中"}`,
+    `状态：${task.status === "done" ? "已完成" : "处理中"}`,
+    `节点：${summary.done}/${summary.total || 0}`,
+    task.description.trim() ? `\n背景：${task.description.trim()}` : "",
+    task.hypothesis.trim() ? `\n当前判断：${task.hypothesis.trim()}` : "",
+    task.conclusion.trim() ? `\n结论：${task.conclusion.trim()}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  try {
+    await navigator.clipboard?.writeText(text);
+    alert("任务概要已复制，可以粘贴分享。");
+  } catch {
+    window.prompt("复制任务概要", text);
+  }
 }
 
 function edit(data, value) {
@@ -2090,6 +2150,7 @@ function openTaskFromGlobalList(taskId, nodeId = "") {
   state.activeTaskId = task.id;
   state.selectedNodeId = nodeId;
   state.nodeDetailFullscreen = false;
+  state.nodeDetailPosition = null;
   state.taskFilter = "all";
   state.priorityFilter = "all";
   state.query = "";
@@ -2140,6 +2201,7 @@ function selectGroup(groupId) {
   state.activeTaskId = "";
   state.selectedNodeId = "";
   state.nodeDetailFullscreen = false;
+  state.nodeDetailPosition = null;
   state.contextMenu = null;
   state.query = "";
 }
@@ -2480,6 +2542,7 @@ function addNode(taskId, parentId) {
   task.updatedAt = now();
   state.selectedNodeId = "";
   state.nodeDetailFullscreen = false;
+  state.nodeDetailPosition = null;
   state.focusNodeTitleId = created.id;
 }
 
@@ -2495,6 +2558,7 @@ function addSiblingNode(taskId, nodeId) {
   task.updatedAt = now();
   state.selectedNodeId = "";
   state.nodeDetailFullscreen = false;
+  state.nodeDetailPosition = null;
   state.focusNodeTitleId = created.id;
 }
 
@@ -2522,7 +2586,10 @@ function deleteNode(taskId, nodeId) {
   if (!task) return;
   task.nodes = removeNode(task.nodes, nodeId);
   task.updatedAt = now();
-  if (state.selectedNodeId === nodeId) state.selectedNodeId = "";
+  if (state.selectedNodeId === nodeId) {
+    state.selectedNodeId = "";
+    state.nodeDetailPosition = null;
+  }
 }
 
 function activeTask() {
