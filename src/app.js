@@ -15,6 +15,7 @@ const ATTACHMENTS_KEY = "task-track-attachments";
 const DATA_VERSION = 1;
 const desktopStorage = window.personalTaskTrack?.storage;
 const desktopExport = window.personalTaskTrack?.export;
+const APP_VERSION = window.personalTaskTrack?.appVersion || "";
 
 const priorityLabels = {
   high: "高",
@@ -114,20 +115,6 @@ const reviewDateFieldLabels = {
   created: "创建日期",
   resolved: "解决日期",
 };
-
-const markdownTools = [
-  { action: "heading", label: "H1", title: "标题" },
-  { action: "bold", label: "B", title: "加粗" },
-  { action: "italic", label: "I", title: "斜体" },
-  { action: "quote", label: ">", title: "引用" },
-  { action: "code", label: "{}", title: "代码" },
-  { action: "list", label: "-", title: "无序列表" },
-  { action: "ordered", label: "1.", title: "有序列表" },
-  { action: "todo", label: "[ ]", title: "任务清单" },
-  { action: "link", label: "lnk", title: "链接" },
-  { action: "image", label: "img", title: "图片" },
-  { action: "divider", label: "hr", title: "分割线" },
-];
 
 let state = {
   tasks: [],
@@ -1130,6 +1117,10 @@ function renderSettingsPanel() {
               <strong class="settings-preview-zh">任务流中文字体预览</strong>
               <strong class="settings-preview-en">Task flow English 123</strong>
               <p>背景、当前判断、结论保持轻量，处理流保持主视线。</p>
+            </div>
+            <div class="settings-version">
+              <span>当前版本</span>
+              <strong>${APP_VERSION ? `v${esc(APP_VERSION)}` : "开发预览"}</strong>
             </div>
           </div>
         </div>

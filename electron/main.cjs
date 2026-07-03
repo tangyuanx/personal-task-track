@@ -44,6 +44,9 @@ function openExternalUrl(url) {
 }
 
 function registerStorageHandlers() {
+  ipcMain.on("app:version", (event) => {
+    event.returnValue = app.getVersion();
+  });
   ipcMain.handle("task-data:read", () => readTaskData(app.getPath("userData")));
   ipcMain.handle("task-data:write", (_event, data) => writeTaskData(app.getPath("userData"), data));
   ipcMain.handle("clipboard:read-image-data-url", () => {

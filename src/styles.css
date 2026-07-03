@@ -44,6 +44,10 @@
   --markdown-code-bg: #f8efe3;
   --markdown-pre-bg: #f4f1eb;
   --markdown-pre-code: #24272f;
+  --glass: rgba(255, 255, 255, 0.62);
+  --glass-strong: rgba(255, 255, 255, 0.78);
+  --glass-soft: rgba(255, 255, 255, 0.44);
+  --inset-highlight: rgba(255, 255, 255, 0.52);
   --shadow: rgba(70, 59, 43, 0.13);
   --en-font: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
   --zh-font: "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
@@ -103,6 +107,10 @@
   --markdown-code-bg: rgba(20, 18, 13, 0.72);
   --markdown-pre-bg: #141610;
   --markdown-pre-code: #d9ddd7;
+  --glass: rgba(255, 255, 255, 0.04);
+  --glass-strong: rgba(255, 255, 255, 0.08);
+  --glass-soft: rgba(255, 255, 255, 0.025);
+  --inset-highlight: rgba(255, 255, 255, 0.06);
   --shadow: rgba(0, 0, 0, 0.22);
 }
 
@@ -390,8 +398,8 @@ body {
   color: var(--ink);
   background:
     radial-gradient(circle at 12% 6%, color-mix(in srgb, var(--focus) 10%, transparent), transparent 28%),
-    radial-gradient(circle at 92% 0%, rgba(185, 122, 36, 0.12), transparent 26%),
-    linear-gradient(135deg, #f5f1e8 0%, var(--paper) 48%, #ece6d9 100%);
+    radial-gradient(circle at 92% 0%, color-mix(in srgb, var(--amber) 12%, transparent), transparent 26%),
+    linear-gradient(135deg, color-mix(in srgb, var(--panel) 54%, var(--paper)) 0%, var(--paper) 48%, color-mix(in srgb, var(--line) 34%, var(--paper)) 100%);
 }
 
 button,
@@ -421,7 +429,7 @@ p {
   padding: 18px;
   overflow: hidden;
   background:
-    linear-gradient(115deg, rgba(255, 255, 255, 0.42), transparent 34%),
+    linear-gradient(115deg, var(--glass-soft), transparent 34%),
     transparent;
 }
 
@@ -431,12 +439,12 @@ p {
   min-height: 0;
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid rgba(221, 212, 196, 0.88);
+  border: 1px solid var(--line);
   border-radius: 18px;
   background:
-    linear-gradient(180deg, rgba(255, 253, 248, 0.86), rgba(241, 237, 228, 0.92)),
+    linear-gradient(180deg, color-mix(in srgb, var(--panel) 72%, transparent), color-mix(in srgb, var(--paper) 88%, transparent)),
     var(--paper);
-  box-shadow: 0 20px 54px rgba(70, 59, 43, 0.12);
+  box-shadow: 0 20px 54px var(--shadow);
 }
 
 .sidebar-resizer {
@@ -498,7 +506,7 @@ p {
   border: 1px solid var(--line);
   border-radius: 999px;
   color: var(--heading);
-  background: rgba(255, 255, 255, 0.68);
+  background: var(--glass);
   font-family: var(--mono);
   font-size: 12px;
 }
@@ -518,7 +526,7 @@ p {
   padding: 8px 9px;
   border: 1px solid var(--line-soft);
   color: var(--muted);
-  background: rgba(255, 255, 255, 0.54);
+  background: var(--glass-soft);
   font-size: 12px;
   border-radius: 10px;
 }
@@ -546,8 +554,8 @@ p {
   border-radius: 14px;
   background:
     linear-gradient(135deg, color-mix(in srgb, var(--focus) 16%, transparent), transparent 54%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.68), rgba(255, 253, 248, 0.36));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.52);
+    linear-gradient(180deg, var(--glass), var(--glass-soft));
+  box-shadow: inset 0 1px 0 var(--inset-highlight);
 }
 
 .today-head {
@@ -594,16 +602,16 @@ p {
   gap: 10px;
   min-height: 56px;
   padding: 9px 10px 9px 0;
-  border: 1px solid rgba(255, 255, 255, 0.48);
+  border: 1px solid var(--line-soft);
   border-radius: 11px;
-  background: rgba(255, 255, 255, 0.52);
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.48);
+  background: var(--glass-soft);
+  box-shadow: 0 1px 0 var(--inset-highlight);
   cursor: pointer;
 }
 
 .focus-item:hover {
   border-color: color-mix(in srgb, var(--focus) 20%, var(--line));
-  background: rgba(255, 255, 255, 0.74);
+  background: var(--glass-strong);
 }
 
 .focus-item.selected {
@@ -702,7 +710,7 @@ p {
 }
 
 :root[data-theme="dark"] .focus-item {
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--glass);
 }
 
 .sheet-bar {
@@ -787,8 +795,8 @@ p {
   border: 1px solid var(--line);
   border-radius: 12px;
   color: var(--faint);
-  background: rgba(255, 255, 255, 0.62);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.52);
+  background: var(--glass);
+  box-shadow: inset 0 1px 0 var(--inset-highlight);
 }
 
 .search-box input {
@@ -816,7 +824,7 @@ p {
   gap: 8px;
   padding: 10px 12px 12px;
   border-top: 1px solid var(--line-soft);
-  background: rgba(255, 253, 248, 0.45);
+  background: var(--glass-soft);
 }
 
 .settings-trigger,
@@ -827,7 +835,7 @@ p {
   border: 1px solid var(--line);
   border-radius: 10px;
   color: var(--muted);
-  background: rgba(255, 255, 255, 0.58);
+  background: var(--glass);
   font-size: 17px;
   line-height: 1;
 }
@@ -1081,6 +1089,23 @@ p {
 .settings-preview p {
   color: var(--muted);
   font-size: 13px;
+}
+
+.settings-version {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding-top: 2px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.settings-version strong {
+  color: var(--heading);
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .review-panel {
@@ -2850,50 +2875,28 @@ body.resizing-detail {
 }
 
 .milkdown-editor-host .milkdown {
+  --crepe-color-background: var(--markdown-panel-bg);
+  --crepe-color-on-background: var(--ink);
+  --crepe-color-surface: var(--field);
+  --crepe-color-surface-low: var(--paper);
+  --crepe-color-on-surface: var(--heading);
+  --crepe-color-on-surface-variant: var(--muted);
+  --crepe-color-outline: var(--line);
+  --crepe-color-primary: var(--focus);
+  --crepe-color-secondary: var(--focus-field);
+  --crepe-color-on-secondary: var(--heading);
+  --crepe-color-inverse: var(--heading);
+  --crepe-color-on-inverse: var(--panel);
+  --crepe-color-inline-code: var(--markdown-code);
+  --crepe-color-error: var(--red);
+  --crepe-color-hover: var(--hover);
+  --crepe-color-selected: var(--selected);
+  --crepe-color-inline-area: var(--markdown-code-bg);
+  --crepe-font-title: var(--app-font);
+  --crepe-font-default: var(--app-font);
+  --crepe-font-code: var(--mono);
   min-height: 100%;
   background: var(--markdown-panel-bg);
-}
-
-.milkdown-editor-host button,
-.milkdown-editor-host [role="button"],
-.milkdown-editor-host .milkdown-icon.button {
-  display: inline-flex;
-  min-width: 28px;
-  min-height: 28px;
-  max-height: 34px;
-  align-items: center;
-  justify-content: center;
-  padding: 4px;
-  border-radius: 7px;
-  font-size: 13px;
-  line-height: 1;
-}
-
-.milkdown-editor-host button svg,
-.milkdown-editor-host [role="button"] svg,
-.milkdown-editor-host .milkdown-icon svg {
-  width: 16px !important;
-  height: 16px !important;
-  max-width: 16px !important;
-  max-height: 16px !important;
-}
-
-.milkdown-editor-host :is(.milkdown-toolbar, .milkdown-topbar, [class*="topbar"], [class*="toolbar"]) {
-  display: flex;
-  min-height: 38px;
-  align-items: center;
-  flex-wrap: nowrap;
-  gap: 4px;
-  padding: 4px 8px;
-  overflow-x: auto;
-  border-bottom: 1px solid var(--line-soft);
-  background: var(--markdown-toolbar-bg);
-}
-
-.milkdown-editor-host .toolbar-item {
-  min-width: 32px;
-  min-height: 32px;
-  max-height: 34px;
 }
 
 .milkdown-loading {
