@@ -2124,6 +2124,9 @@ body.resizing-detail {
 
 .detail-actions {
   gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  min-width: 0;
 }
 
 .detail-check {
@@ -2143,10 +2146,13 @@ body.resizing-detail {
 .detail-export,
 .detail-fullscreen {
   height: 32px;
+  min-width: 54px;
   padding: 0 12px;
   border-radius: 9px;
   font-size: 13px;
   font-weight: 650;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .detail-save {
@@ -3705,8 +3711,23 @@ body {
 .detail-save,
 .detail-close {
   height: 30px;
+  min-width: 46px;
+  padding: 0 10px;
   border-radius: 8px;
   font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.detail-export {
+  min-width: 70px;
+}
+
+.detail-close {
+  min-width: 30px;
+  width: 30px;
+  padding: 0;
+  font-size: 18px;
 }
 
 .task-workbench.detail-fullscreen .node-detail {

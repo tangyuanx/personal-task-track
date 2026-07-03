@@ -160,6 +160,8 @@ let pendingPayload = null;
 let saveInFlight = false;
 let taskDragState = null;
 const milkdownEditors = new Map();
+const nodeNoteDrafts = new Map();
+const nodeNoteSaveTimers = new Map();
 
 function id(prefix) {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
@@ -503,6 +505,8 @@ function workbenchStyle() {
 }
 
 function render() {
+  captureMountedMilkdownDrafts();
+  flushNodeNoteDrafts({ persist: false });
   save();
   destroyMilkdownEditors();
   document.documentElement.dataset.theme = state.theme;
@@ -523,7 +527,7 @@ function render() {
   bind();
   resizeTaskBriefTextareas();
   focusPendingElement();
-  mountMilkdownEditors();
+  window.requestAnimationFrame(() => mountMilkdownEditors());
 }
 
 function renderSidebar() {
@@ -1948,6 +1952,68 @@ function destroyMilkdownEditors() {
   milkdownEditors.clear();
 }
 
+function captureMountedMilkdownDrafts() {
+  milkdownEditors.forEach((instance, nodeId) => {
+    const host = document.querySelector(`.milkdown-editor-host[data-node-id="${nodeId}"]`);
+    const taskId = host?.dataset.taskId;
+    if (!taskId || !instance?.getMarkdown) return;
+    try {
+      updateNodeNoteDraft(taskId, nodeId, instance.getMarkdown(), host);
+    } catch {
+      // Ignore transient editor teardown states; the last onChange draft is still used.
+    }
+  });
+}
+
+function noteDraftKey(taskId, nodeId) {
+  return `${taskId}:${nodeId}`;
+}
+
+function updateNodeNoteDraft(taskId, nodeId, markdown, host = null) {
+  nodeNoteDrafts.set(noteDraftKey(taskId, nodeId), { taskId, nodeId, markdown });
+  if (host) updateMarkdownStatsForMarkdown(host, markdown);
+  scheduleNodeNoteSave(taskId, nodeId);
+}
+
+function scheduleNodeNoteSave(taskId, nodeId) {
+  const key = noteDraftKey(taskId, nodeId);
+  window.clearTimeout(nodeNoteSaveTimers.get(key));
+  nodeNoteSaveTimers.set(
+    key,
+    window.setTimeout(() => {
+      nodeNoteSaveTimers.delete(key);
+      flushNodeNoteDraft(key, { persist: true });
+    }, 500),
+  );
+}
+
+function flushNodeNoteDraft(key, { persist = true } = {}) {
+  const draft = nodeNoteDrafts.get(key);
+  if (!draft) return false;
+  window.clearTimeout(nodeNoteSaveTimers.get(key));
+  nodeNoteSaveTimers.delete(key);
+
+  const task = state.tasks.find((item) => item.id === draft.taskId);
+  const node = task ? findNode(task.nodes, draft.nodeId) : null;
+  nodeNoteDrafts.delete(key);
+  if (!task || !node || node.note === draft.markdown) return false;
+
+  node.note = draft.markdown;
+  node.updatedAt = now();
+  task.updatedAt = now();
+  if (persist) save();
+  return true;
+}
+
+function flushNodeNoteDrafts({ persist = true } = {}) {
+  let changed = false;
+  Array.from(nodeNoteDrafts.keys()).forEach((key) => {
+    changed = flushNodeNoteDraft(key, { persist: false }) || changed;
+  });
+  if (changed && persist) save();
+  return changed;
+}
+
 function mountMilkdownEditors() {
   const hosts = Array.from(document.querySelectorAll(".milkdown-editor-host"));
   if (!hosts.length) return;
@@ -1965,14 +2031,10 @@ function mountMilkdownEditors() {
 
     window.MilkdownTaskEditor.create({
       root: host,
-      markdown: node.note || "",
+      markdown: nodeNoteDrafts.get(noteDraftKey(taskId, nodeId))?.markdown ?? node.note ?? "",
       placeholder: "记录处理过程",
       onChange: (markdown) => {
-        const currentTask = state.tasks.find((item) => item.id === taskId);
-        const currentNode = currentTask ? findNode(currentTask.nodes, nodeId) : null;
-        if (!currentTask || !currentNode || currentNode.note === markdown) return;
-        edit({ taskId, nodeId, editKey: "note" }, markdown);
-        updateMarkdownStatsForMarkdown(host, markdown);
+        updateNodeNoteDraft(taskId, nodeId, markdown, host);
       },
     })
       .then((instance) => {
@@ -1981,7 +2043,10 @@ function mountMilkdownEditors() {
           return;
         }
         milkdownEditors.set(nodeId, instance);
-        updateMarkdownStatsForMarkdown(host, node.note || "");
+        updateMarkdownStatsForMarkdown(host, nodeNoteDrafts.get(noteDraftKey(taskId, nodeId))?.markdown ?? node.note ?? "");
+        if (state.nodeDetailFullscreen && state.selectedNodeId === nodeId) {
+          window.requestAnimationFrame(() => host.querySelector(".ProseMirror")?.focus());
+        }
       })
       .catch((error) => {
         console.error("Milkdown failed to mount", error);
@@ -1996,10 +2061,11 @@ function mountFallbackMarkdownEditor(host) {
   const task = state.tasks.find((item) => item.id === taskId);
   const node = task ? findNode(task.nodes, nodeId) : null;
   if (!task || !node) return;
-  host.innerHTML = `<textarea class="markdown-editor codex-editor milkdown-fallback" data-edit-key="note" data-task-id="${taskId}" data-node-id="${nodeId}" placeholder="记录处理过程">${esc(node.note)}</textarea>${renderEditorImagePreview(node.note)}`;
+  const markdown = nodeNoteDrafts.get(noteDraftKey(taskId, nodeId))?.markdown ?? node.note ?? "";
+  host.innerHTML = `<textarea class="markdown-editor codex-editor milkdown-fallback" data-task-id="${taskId}" data-node-id="${nodeId}" placeholder="记录处理过程">${esc(markdown)}</textarea>${renderEditorImagePreview(markdown)}`;
   host.querySelectorAll(".markdown-editor").forEach((editor) => {
     editor.addEventListener("input", (event) => {
-      edit(event.target.dataset, event.target.value);
+      updateNodeNoteDraft(taskId, nodeId, event.target.value, host);
       updateMarkdownEditorState(event.target);
     });
     editor.addEventListener("paste", handleMarkdownPaste);
@@ -2020,6 +2086,8 @@ function action(data, event = null) {
     return;
   }
   if (data.action === "export-node-pdf") {
+    captureMountedMilkdownDrafts();
+    flushNodeNoteDraft(noteDraftKey(data.taskId, data.nodeId), { persist: true });
     exportNodePdf(data.taskId, data.nodeId);
     return;
   }
@@ -2377,7 +2445,11 @@ function replaceEditorSelection(editor, value, cursorStart, cursorEnd = cursorSt
   editor.value = `${editor.value.slice(0, start)}${value}${editor.value.slice(end)}`;
   editor.selectionStart = cursorStart;
   editor.selectionEnd = cursorEnd;
-  edit(editor.dataset, editor.value);
+  if (editor.classList.contains("markdown-editor")) {
+    updateNodeNoteDraft(editor.dataset.taskId, editor.dataset.nodeId, editor.value, editor.closest(".milkdown-editor-host"));
+  } else {
+    edit(editor.dataset, editor.value);
+  }
   if (editor.classList.contains("markdown-editor")) updateMarkdownEditorState(editor);
 }
 
