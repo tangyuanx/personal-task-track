@@ -544,7 +544,7 @@ function renderSidebar() {
       </div>
 
       <label class="search-box">
-        <span>⌕</span>
+        <span>Search</span>
         <input id="search" value="${escAttr(state.query)}" placeholder="搜索" />
       </label>
 
@@ -576,12 +576,13 @@ function renderSidebar() {
 function renderTodayFocus(items) {
   const today = new Intl.DateTimeFormat("zh-CN", { month: "2-digit", day: "2-digit" }).format(new Date());
   return `
-    <section class="today-focus" aria-label="今日焦点">
-      <div class="today-head">
-        <div class="today-title">今日焦点</div>
-        <div class="today-date">${today}</div>
+    <section class="today-focus today-panel" aria-label="今日待办">
+      <div class="section-label"><span>Today</span><span>${today}</span></div>
+      <div class="today-headline">
+        <strong>今日待办</strong>
+        <span>优先处理 ${items.length} 项</span>
       </div>
-      <div class="focus-list">
+      <div class="focus-list focus-stack">
         ${
           items.length
             ? items.map((item) => renderTodayFocusItem(item)).join("")
@@ -596,8 +597,8 @@ function renderTodayFocusItem(item) {
   const { task, node, kind, badge, nextText } = item;
   const selected = task.id === state.activeTaskId && (!node?.id || node.id === state.selectedNodeId);
   return `
-    <article class="focus-item ${kind} ${selected ? "selected" : ""}" data-action="select-focus" data-task-id="${task.id}" data-node-id="${node?.id || ""}">
-      <span class="focus-rail"></span>
+    <article class="focus-item focus-row ${kind} ${selected ? "selected" : ""}" data-action="select-focus" data-task-id="${task.id}" data-node-id="${node?.id || ""}">
+      <span class="focus-rail rail-mark"></span>
       <div class="focus-content">
         <div class="focus-title-row">
           <span class="focus-title">${esc(task.title || "未命名任务")}</span>
@@ -636,17 +637,25 @@ function renderGroupTabs() {
 
 function renderTaskItem(task) {
   const activeTags = Object.entries(normalizeTaskTags(task.tags)).filter(([, active]) => active);
+  const subtitle = activeTags.length ? activeTags.map(([tag]) => taskTagLabels[tag]).join(" · ") : taskSubtitle(task);
   return `
     <div class="task-item ${task.id === state.activeTaskId ? "selected" : ""}" data-action="select-task" data-context="task" data-task-id="${task.id}" data-task-drag-target="${task.id}">
       <span class="task-drag-handle" draggable="true" data-task-drag-handle data-task-id="${task.id}" title="拖拽排序" aria-label="拖拽排序"></span>
-      <input class="task-check" type="checkbox" title="完成" data-action="toggle-task-done" data-task-id="${task.id}" ${task.status === "done" ? "checked" : ""} />
-      <span class="task-title-wrap">
+      <input class="task-check rail-mark" type="checkbox" title="完成" data-action="toggle-task-done" data-task-id="${task.id}" ${task.status === "done" ? "checked" : ""} />
+      <span class="task-title-wrap row-title">
         <input class="task-title" placeholder="任务标题" data-edit-key="title" data-task-id="${task.id}" value="${escAttr(task.title)}" />
-        ${activeTags.length ? `<span class="task-mini-tags">${activeTags.map(([tag]) => `<i>${taskTagLabels[tag]}</i>`).join("")}</span>` : ""}
+        <span>${esc(subtitle)}</span>
       </span>
-      ${selectHtml("priority", task.priority, priorityLabels, task.id)}
+      <span class="task-priority-pill ${task.priority}">${selectHtml("priority", task.priority, priorityLabels, task.id)}</span>
     </div>
   `;
+}
+
+function taskSubtitle(task) {
+  const summary = taskSummary(task);
+  if (summary.total) return `处理流 ${summary.done}/${summary.total}`;
+  const text = (task.description || task.hypothesis || task.conclusion || "").trim();
+  return text || "等待补充处理流";
 }
 
 function renderTaskPage(task) {
@@ -666,9 +675,6 @@ function renderTaskPage(task) {
             <span>${summary.done}/${summary.total || 0} 节点</span>
             <span>${formatShort(task.updatedAt)}</span>
             <label class="property-select">分组 ${selectHtml("groupId", task.groupId, taskGroupOptions(), task.id)}</label>
-          </div>
-          <div class="task-tag-row" aria-label="任务标签">
-            ${Object.entries(taskTagLabels).map(([tag, label]) => renderTaskTagButton(task, tag, label)).join("")}
           </div>
         </div>
         <button class="share-trigger" type="button" data-action="share-task" data-task-id="${task.id}" title="分享任务概要" aria-label="分享任务概要">
