@@ -24,7 +24,9 @@ class MilkdownTaskEditor {
       root,
       defaultValue: markdown,
       features: {
+        [Crepe.Feature.BlockEdit]: false,
         [Crepe.Feature.TopBar]: false,
+        [Crepe.Feature.Toolbar]: false,
       },
       featureConfigs: {
         [Crepe.Feature.Placeholder]: {

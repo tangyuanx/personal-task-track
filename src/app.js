@@ -558,6 +558,8 @@ function renderSidebar() {
         <div class="task-list-head">
           <span>Tasks</span>
           <span>${visibleCount}/${scopedTasks.length}</span>
+          ${filterSelectHtml("task-filter", state.taskFilter, taskFilterLabels, "任务范围")}
+          ${filterSelectHtml("priority-filter", state.priorityFilter, priorityFilterLabels, "优先级范围")}
         </div>
         ${filteredTasks()
           .map((task) => renderTaskItem(task))
