@@ -47,7 +47,6 @@ function normalizeTaskData(data) {
     font: ["songti", "heiti", "system", "mono"].includes(safeData.font) ? safeData.font : "songti",
     zhFont: typeof safeData.zhFont === "string" ? safeData.zhFont : "songti",
     enFont: typeof safeData.enFont === "string" ? safeData.enFont : "inter",
-    tone: typeof safeData.tone === "string" ? safeData.tone : "focus",
     taskFilter: typeof safeData.taskFilter === "string" ? safeData.taskFilter : "",
     priorityFilter: typeof safeData.priorityFilter === "string" ? safeData.priorityFilter : "",
     newTaskPriority: typeof safeData.newTaskPriority === "string" ? safeData.newTaskPriority : "",

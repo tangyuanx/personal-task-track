@@ -1,6 +1,5 @@
 import { Crepe } from "@milkdown/crepe";
 import "@milkdown/crepe/theme/frame.css";
-import "@milkdown/crepe/theme/common/block-edit.css";
 import "@milkdown/crepe/theme/common/code-mirror.css";
 import "@milkdown/crepe/theme/common/cursor.css";
 import "@milkdown/crepe/theme/common/image-block.css";

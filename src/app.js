@@ -3,7 +3,6 @@ const FLOW_WIDTH_KEY = "task-flow-column-widths-v1";
 const THEME_KEY = "task-track-theme";
 const ZH_FONT_KEY = "task-track-zh-font";
 const EN_FONT_KEY = "task-track-en-font";
-const TONE_KEY = "task-track-tone";
 const TASK_FILTER_KEY = "task-track-task-filter";
 const PRIORITY_FILTER_KEY = "task-track-priority-filter";
 const NEW_TASK_PRIORITY_KEY = "task-track-new-task-priority";
@@ -42,21 +41,6 @@ const priorityFilterLabels = {
 const themeLabels = {
   light: "浅色",
   dark: "深色",
-};
-
-const toneLabels = {
-  focus: "今日焦点",
-  moss: "松石绿",
-  indigo: "Linear 靛蓝",
-  azure: "Apple 蓝",
-  sky: "飞书天蓝",
-  mint: "Notion 薄荷",
-  emerald: "Slack 绿",
-  violet: "烟紫色",
-  rose: "Instagram 玫瑰",
-  coral: "Airbnb 珊瑚",
-  amber: "琥珀棕",
-  graphite: "石墨灰",
 };
 
 const zhFontLabels = {
@@ -131,7 +115,6 @@ let state = {
   theme: "light",
   zhFont: "songti",
   enFont: "inter",
-  tone: "focus",
   settingsOpen: false,
   reviewOpen: false,
   reviewPreset: "week",
@@ -291,10 +274,6 @@ function normalizeTheme(value) {
   return value === "dark" ? "dark" : "light";
 }
 
-function normalizeTone(value) {
-  return Object.hasOwn(toneLabels, value) ? value : "focus";
-}
-
 function normalizeTaskFilter(value) {
   return Object.hasOwn(taskFilterLabels, value) ? value : "all";
 }
@@ -331,7 +310,6 @@ function loadBrowserTypography() {
   return {
     zhFont: normalizeZhFont(localStorage.getItem(ZH_FONT_KEY) || legacy.zhFont),
     enFont: normalizeEnFont(localStorage.getItem(EN_FONT_KEY) || legacy.enFont),
-    tone: normalizeTone(localStorage.getItem(TONE_KEY)),
   };
 }
 
@@ -381,14 +359,13 @@ async function loadAppData() {
       const legacy = migrateLegacyFont(stored?.font);
       const zhFont = normalizeZhFont(stored?.zhFont || legacy.zhFont);
       const enFont = normalizeEnFont(stored?.enFont || legacy.enFont);
-      const tone = normalizeTone(stored?.tone);
       const taskFilter = normalizeTaskFilter(stored?.taskFilter);
       const priorityFilter = normalizePriorityFilter(stored?.priorityFilter);
       const newTaskPriority = normalizePriority(stored?.newTaskPriority);
       const sidebarWidth = normalizeSidebarWidth(stored?.sidebarWidth);
       const detailHeight = normalizeDetailHeight(stored?.detailHeight);
       const attachments = normalizeAttachments(stored?.attachments);
-      return { tasks, taskGroups, activeGroupId, flowWidths, sidebarWidth, detailHeight, attachments, theme, zhFont, enFont, tone, taskFilter, priorityFilter, newTaskPriority };
+      return { tasks, taskGroups, activeGroupId, flowWidths, sidebarWidth, detailHeight, attachments, theme, zhFont, enFont, taskFilter, priorityFilter, newTaskPriority };
     } catch (error) {
       console.error("Failed to read local task data.", error);
     }
@@ -425,7 +402,6 @@ function save() {
     theme: state.theme,
     zhFont: state.zhFont,
     enFont: state.enFont,
-    tone: state.tone,
     taskFilter: state.taskFilter,
     priorityFilter: state.priorityFilter,
     newTaskPriority: state.newTaskPriority,
@@ -443,7 +419,6 @@ function save() {
     localStorage.setItem(THEME_KEY, state.theme);
     localStorage.setItem(ZH_FONT_KEY, state.zhFont);
     localStorage.setItem(EN_FONT_KEY, state.enFont);
-    localStorage.setItem(TONE_KEY, state.tone);
     localStorage.setItem(TASK_FILTER_KEY, state.taskFilter);
     localStorage.setItem(PRIORITY_FILTER_KEY, state.priorityFilter);
     localStorage.setItem(NEW_TASK_PRIORITY_KEY, state.newTaskPriority);
@@ -512,7 +487,6 @@ function render() {
   document.documentElement.dataset.theme = state.theme;
   document.documentElement.dataset.zhFont = state.zhFont;
   document.documentElement.dataset.enFont = state.enFont;
-  document.documentElement.dataset.tone = state.tone;
   const task = activeTask();
   if (task) state.activeTaskId = task.id;
   document.querySelector("#root").innerHTML = `
@@ -682,8 +656,9 @@ function renderTaskPage(task) {
             <span>${formatShort(task.updatedAt)}</span>
             <label class="property-select">分组 ${selectHtml("groupId", task.groupId, taskGroupOptions(), task.id)}</label>
           </div>
+          ${renderTaskTagRow(task)}
         </div>
-        <button class="share-trigger" type="button" data-action="share-task" data-task-id="${task.id}" title="分享任务概要" aria-label="分享任务概要">
+        <button class="share-trigger" type="button" data-action="share-task" data-task-id="${task.id}" title="导出任务文档" aria-label="导出任务文档">
           <span class="share-glyph" aria-hidden="true"><span class="share-arrow"></span></span>
         </button>
       </header>
@@ -707,8 +682,8 @@ function renderTaskPage(task) {
           </div>
           ${
             topNodes.length
-              ? `<div class="flow-list" style="${flowWidthStyle()}" data-context="flow-root" data-task-id="${task.id}">${renderFlowHeader()}${topNodes.map((node) => renderFlowNode(task.id, node, 0)).join("")}${renderFlowHint()}</div>`
-              : `<div class="empty-flow" data-context="flow-root" data-task-id="${task.id}">右键添加第一个节点。</div>`
+              ? `<div class="flow-list" style="${flowWidthStyle()}" data-context="flow-root" data-task-id="${task.id}">${renderFlowHeader()}${topNodes.map((node) => renderFlowNode(task.id, node, 0)).join("")}</div>${renderFlowHint()}`
+              : `<div class="empty-flow" data-context="flow-root" data-task-id="${task.id}">还没有处理节点。</div>${renderFlowHint()}`
           }
         </section>
 
@@ -721,8 +696,7 @@ function renderTaskPage(task) {
 function renderFlowHint() {
   return `
     <div class="flow-hint">
-      <kbd>右键</kbd>
-      <span>在处理流空白处新增主节点，或在已有节点上新增子节点</span>
+      <span>右键空白处新增主节点，或在已有节点上新增子节点</span>
     </div>
   `;
 }
@@ -739,6 +713,14 @@ function renderConclusionPrompt() {
 function renderTaskTagButton(task, tag, label) {
   const active = normalizeTaskTags(task.tags)[tag];
   return `<button class="task-tag-toggle ${active ? "active" : ""}" type="button" data-action="toggle-task-tag" data-task-id="${task.id}" data-tag="${tag}">${label}</button>`;
+}
+
+function renderTaskTagRow(task) {
+  return `
+    <div class="task-tag-row">
+      ${Object.entries(taskTagLabels).map(([tag, label]) => renderTaskTagButton(task, tag, label)).join("")}
+    </div>
+  `;
 }
 
 function renderBriefField(label, control, timestamp = "", attention = false, variant = "") {
@@ -1103,13 +1085,6 @@ function renderSettingsPanel() {
             </section>
             <section class="settings-group">
               <div class="settings-group-head">
-                <h3>色调</h3>
-                <p>用于高亮、选中状态和流程标记，参考常见生产力应用色系。</p>
-              </div>
-              ${settingsOptionGroup("tone", state.tone, toneLabels, true)}
-            </section>
-            <section class="settings-group">
-              <div class="settings-group-head">
                 <h3>中文字体</h3>
                 <p>适配 macOS 与 Windows 的常用中文字体。</p>
               </div>
@@ -1349,14 +1324,13 @@ function settingsSelectHtml(key, value, options) {
   `;
 }
 
-function settingsOptionGroup(key, value, options, swatches = false) {
+function settingsOptionGroup(key, value, options) {
   return `
     <div class="settings-options">
       ${Object.entries(options)
         .map(
           ([optionValue, label]) => `
             <button class="${optionValue === value ? "active" : ""}" type="button" data-setting-button="${key}" data-value="${optionValue}">
-              ${swatches ? `<span class="tone-swatch tone-${optionValue}"></span>` : ""}
               <span>${label}</span>
             </button>
           `,
@@ -1415,6 +1389,7 @@ function bind() {
   document.querySelectorAll(".task-item[data-task-id]").forEach((element) => {
     element.addEventListener("pointerdown", (event) => {
       if (event.target.closest("[data-task-drag-handle]")) return;
+      if (event.target.closest(".task-check")) return;
       if (event.button !== 0 || state.activeTaskId === element.dataset.taskId) return;
       state.activeTaskId = element.dataset.taskId;
       state.selectedNodeId = "";
@@ -1582,7 +1557,6 @@ function bind() {
     element.addEventListener("click", (event) => event.stopPropagation());
     element.addEventListener("change", (event) => {
       if (event.target.dataset.setting === "theme") state.theme = normalizeTheme(event.target.value);
-      if (event.target.dataset.setting === "tone") state.tone = normalizeTone(event.target.value);
       if (event.target.dataset.setting === "zh-font") state.zhFont = normalizeZhFont(event.target.value);
       if (event.target.dataset.setting === "en-font") state.enFont = normalizeEnFont(event.target.value);
       if (event.target.dataset.setting === "task-filter") state.taskFilter = normalizeTaskFilter(event.target.value);
@@ -1784,7 +1758,6 @@ function resizeTaskBriefTextarea(element) {
 
 function applySetting(key, value) {
   if (key === "theme") state.theme = normalizeTheme(value);
-  if (key === "tone") state.tone = normalizeTone(value);
   if (key === "zh-font") state.zhFont = normalizeZhFont(value);
   if (key === "en-font") state.enFont = normalizeEnFont(value);
   if (key === "task-filter") state.taskFilter = normalizeTaskFilter(value);
@@ -2099,7 +2072,7 @@ function action(data, event = null) {
     return;
   }
   if (data.action === "share-task") {
-    shareTask(data.taskId);
+    void shareTask(data.taskId);
     return;
   }
   if (data.action === "scroll-sheets") {
@@ -2167,26 +2140,84 @@ function action(data, event = null) {
 async function shareTask(taskId) {
   const task = state.tasks.find((item) => item.id === taskId);
   if (!task) return;
-  const summary = taskSummary(task);
-  const text = [
-    `# ${task.title || "未命名任务"}`,
-    "",
-    `优先级：${priorityLabels[task.priority] || "中"}`,
-    `状态：${task.status === "done" ? "已完成" : "处理中"}`,
-    `节点：${summary.done}/${summary.total || 0}`,
-    task.description.trim() ? `\n背景：${task.description.trim()}` : "",
-    task.hypothesis.trim() ? `\n当前判断：${task.hypothesis.trim()}` : "",
-    task.conclusion.trim() ? `\n结论：${task.conclusion.trim()}` : "",
-  ]
-    .filter(Boolean)
-    .join("\n");
+  const markdown = taskMarkdown(task);
 
   try {
-    await navigator.clipboard?.writeText(text);
-    alert("任务概要已复制，可以粘贴分享。");
-  } catch {
-    window.prompt("复制任务概要", text);
+    if (desktopExport?.taskDocument) {
+      await desktopExport.taskDocument({
+        taskTitle: task.title || "未命名任务",
+        markdown,
+        html: renderMarkdown(markdown),
+      });
+      return;
+    }
+    const blob = new Blob([markdown], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${safeDownloadName(task.title || "未命名任务")}.md`;
+    link.click();
+    URL.revokeObjectURL(url);
+  } catch (error) {
+    console.error("Failed to export task document.", error);
+    alert("导出失败，请稍后重试。");
   }
+}
+
+function taskMarkdown(task) {
+  const summary = taskSummary(task);
+  const tags = Object.entries(normalizeTaskTags(task.tags))
+    .filter(([, active]) => active)
+    .map(([tag]) => taskTagLabels[tag]);
+  const groupTitle = taskGroups().find((group) => group.id === task.groupId)?.title || "默认";
+  const lines = [
+    `# ${task.title || "未命名任务"}`,
+    "",
+    `- 分组：${groupTitle}`,
+    `- 优先级：${priorityLabels[task.priority] || "中"}`,
+    `- 状态：${task.status === "done" ? "已完成" : "处理中"}`,
+    `- 节点：${summary.done}/${summary.total || 0}`,
+    `- 创建时间：${formatShort(task.createdAt)}`,
+    `- 更新时间：${formatShort(task.updatedAt)}`,
+    ...(tags.length ? [`- 标记：${tags.join("、")}`] : []),
+    "",
+    "## 背景",
+    task.description.trim() || "暂无",
+    "",
+    "## 当前判断",
+    task.hypothesis.trim() || "暂无",
+    "",
+    "## 结论",
+    task.conclusion.trim() || "暂无",
+    "",
+    "## 处理流",
+    "",
+  ];
+  const nodeLines = task.nodes.length ? sort(task.nodes).flatMap((node) => nodeMarkdownLines(node, 0)) : ["暂无节点"];
+  return [...lines, ...nodeLines].join("\n");
+}
+
+function nodeMarkdownLines(node, depth) {
+  const prefix = `${"  ".repeat(depth)}-`;
+  const status = node.status === "done" ? "已完成" : nodeStatusText(node.status);
+  const lines = [`${prefix} ${node.title || "未命名节点"}（${status}）`];
+  if ((node.note || "").trim()) {
+    lines.push("", `${"  ".repeat(depth + 1)}记录：`, indentMarkdown(node.note.trim(), depth + 1), "");
+  }
+  sort(node.children).forEach((child) => lines.push(...nodeMarkdownLines(child, depth + 1)));
+  return lines;
+}
+
+function indentMarkdown(value, depth) {
+  const prefix = "  ".repeat(depth);
+  return String(value || "")
+    .split("\n")
+    .map((line) => `${prefix}${line}`)
+    .join("\n");
+}
+
+function safeDownloadName(value) {
+  return String(value || "task").replace(/[<>:"/\\|?*\u0000-\u001f]/g, "-").replace(/\s+/g, " ").trim().slice(0, 80) || "task";
 }
 
 function edit(data, value) {
@@ -3029,7 +3060,6 @@ async function bootstrap() {
   state.theme = data.theme;
   state.zhFont = data.zhFont;
   state.enFont = data.enFont;
-  state.tone = data.tone;
   state.taskFilter = data.taskFilter;
   state.priorityFilter = data.priorityFilter;
   state.newTaskPriority = data.newTaskPriority;

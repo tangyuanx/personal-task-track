@@ -58,6 +58,55 @@ function registerStorageHandlers() {
     event.returnValue = image.isEmpty() ? "" : image.toDataURL();
   });
   ipcMain.handle("node-detail:export-pdf", async (_event, payload) => exportNodeDetailPdf(payload));
+  ipcMain.handle("task:export-document", async (_event, payload) => exportTaskDocument(payload));
+}
+
+async function exportTaskDocument(payload) {
+  const safePayload = payload && typeof payload === "object" ? payload : {};
+  const taskTitle = String(safePayload.taskTitle || "未命名任务").trim() || "未命名任务";
+  const { canceled, filePath } = await dialog.showSaveDialog({
+    title: "导出任务",
+    defaultPath: `${sanitizeFileName(taskTitle)}.md`,
+    filters: [
+      { name: "Markdown", extensions: ["md"] },
+      { name: "PDF", extensions: ["pdf"] },
+    ],
+  });
+  if (canceled || !filePath) return { canceled: true };
+
+  if (filePath.toLowerCase().endsWith(".pdf")) {
+    const window = new BrowserWindow({
+      width: 900,
+      height: 1200,
+      show: false,
+      webPreferences: {
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true,
+      },
+    });
+
+    try {
+      const html = taskDocumentPdfHtml({
+        taskTitle,
+        bodyHtml: String(safePayload.html || ""),
+      });
+      await window.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+      const pdf = await window.webContents.printToPDF({
+        printBackground: true,
+        pageSize: "A4",
+        margins: { marginType: "custom", top: 0.48, bottom: 0.48, left: 0.52, right: 0.52 },
+      });
+      await fs.writeFile(filePath, pdf);
+      return { canceled: false, filePath };
+    } finally {
+      window.destroy();
+    }
+  }
+
+  const markdownPath = filePath.toLowerCase().endsWith(".md") ? filePath : `${filePath}.md`;
+  await fs.writeFile(markdownPath, String(safePayload.markdown || ""), "utf8");
+  return { canceled: false, filePath: markdownPath };
 }
 
 async function exportNodeDetailPdf(payload) {
@@ -139,6 +188,43 @@ function nodeDetailPdfHtml({ taskTitle, nodeTitle, status, updatedAt, bodyHtml }
     <p class="kicker">${escapeHtml(taskTitle)}</p>
     <h1>${escapeHtml(nodeTitle)}</h1>
     <div class="meta"><span>${escapeHtml(status)}</span><span>${escapeHtml(updatedAt)}</span></div>
+  </header>
+  <main>${bodyHtml}</main>
+</body>
+</html>`;
+}
+
+function taskDocumentPdfHtml({ taskTitle, bodyHtml }) {
+  return `<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <style>
+    :root { color: #17211c; font-family: Inter, "Microsoft YaHei", "PingFang SC", Arial, sans-serif; }
+    body { margin: 0; padding: 36px 42px; background: #ffffff; }
+    header { margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid #d9e2dc; }
+    .kicker { margin: 0 0 7px; color: #5f756b; font-size: 12px; letter-spacing: 0; }
+    h1 { margin: 0; color: #10251d; font-size: 26px; line-height: 1.25; }
+    main { font-size: 14.5px; line-height: 1.72; }
+    h1, h2, h3, h4, h5, h6 { color: #10251d; page-break-after: avoid; }
+    h2 { margin-top: 24px; font-size: 20px; border-bottom: 1px solid #edf2ef; padding-bottom: 5px; }
+    h3 { margin-top: 18px; font-size: 17px; }
+    p, ul, ol, blockquote, pre, table, img { margin: 0 0 13px; }
+    a { color: #2f7d68; text-decoration: none; }
+    blockquote { padding: 10px 13px; border-left: 3px solid #2f7d68; color: #52665d; background: #f5faf7; }
+    code { padding: 1px 5px; border: 1px solid #dfe9e4; border-radius: 5px; background: #f6faf8; font-family: "SFMono-Regular", Consolas, monospace; font-size: 0.92em; }
+    pre { overflow-wrap: anywhere; padding: 12px; border: 1px solid #dfe9e4; border-radius: 8px; background: #f6faf8; white-space: pre-wrap; }
+    pre code { padding: 0; border: 0; background: transparent; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { padding: 7px 8px; border: 1px solid #dfe9e4; text-align: left; vertical-align: top; }
+    th { background: #f3f8f5; }
+    .markdown-empty { color: #7d8e86; }
+  </style>
+</head>
+<body>
+  <header>
+    <p class="kicker">Personal Task Track</p>
+    <h1>${escapeHtml(taskTitle)}</h1>
   </header>
   <main>${bodyHtml}</main>
 </body>

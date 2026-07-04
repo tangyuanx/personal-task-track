@@ -13,5 +13,6 @@ contextBridge.exposeInMainWorld("personalTaskTrack", {
   },
   export: {
     nodeDetailPdf: (payload) => ipcRenderer.invoke("node-detail:export-pdf", payload),
+    taskDocument: (payload) => ipcRenderer.invoke("task:export-document", payload),
   },
 });
