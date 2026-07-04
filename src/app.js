@@ -802,17 +802,11 @@ function renderNodeDetail(taskId, node) {
     <section class="node-detail ${fullscreen ? "fullscreen-editor" : ""}" ${nodeDetailPositionStyle()} data-task-id="${taskId}" data-node-id="${node.id}">
       <div class="detail-head">
         <div>
-          <span>${fullscreen ? "Markdown Editor" : "节点记录 · Milkdown"}</span>
+          <span>${fullscreen ? "Markdown Editor" : "点击位置浮层 · Milkdown"}</span>
           <h2>${esc(node.title || "未命名节点")}</h2>
         </div>
-        <div class="detail-actions">
-          <label class="detail-check">
-            <input type="checkbox" data-action="toggle-node-done" data-task-id="${taskId}" data-node-id="${node.id}" ${node.status === "done" ? "checked" : ""} />
-            完成
-          </label>
-          <button class="detail-export" type="button" data-action="export-node-pdf" data-task-id="${taskId}" data-node-id="${node.id}">导出 PDF</button>
-          <button class="detail-fullscreen" type="button" data-action="toggle-node-detail-fullscreen" title="${state.nodeDetailFullscreen ? "退出全屏" : "全屏展示"}">${state.nodeDetailFullscreen ? "退出全屏" : "全屏"}</button>
-          <button class="detail-save" type="button" data-action="save-node-detail">保存</button>
+        <div class="detail-head-meta">
+          <span>${formatShort(node.updatedAt)}</span>
           <button class="detail-close" type="button" data-action="close-node-detail" title="关闭节点详情">×</button>
         </div>
       </div>
@@ -833,6 +827,17 @@ function renderNodeDetail(taskId, node) {
           <span>${fullscreen ? "右键或 / 插入表格、图片、代码块" : "点击空白处自动保存并关闭"}</span>
         </div>
       </section>
+      <div class="dismiss-note">点击工作区任意空白处关闭</div>
+      <div class="node-actions detail-actions">
+        <label class="detail-check">
+          <input type="checkbox" data-action="toggle-node-done" data-task-id="${taskId}" data-node-id="${node.id}" ${node.status === "done" ? "checked" : ""} />
+          完成
+        </label>
+        <span class="node-actions-spacer"></span>
+        <button class="detail-export" type="button" data-action="export-node-pdf" data-task-id="${taskId}" data-node-id="${node.id}">导出 PDF</button>
+        <button class="detail-fullscreen" type="button" data-action="toggle-node-detail-fullscreen" title="${state.nodeDetailFullscreen ? "退出全屏" : "全屏展示"}">${state.nodeDetailFullscreen ? "退出全屏" : "全屏"}</button>
+        <button class="detail-save" type="button" data-action="save-node-detail">保存</button>
+      </div>
     </section>
   `;
 }

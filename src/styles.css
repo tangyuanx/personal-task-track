@@ -2096,14 +2096,12 @@ body.resizing-detail {
 .detail-head {
   display: flex;
   min-height: 64px;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
-  padding: 13px 16px;
-  border-bottom: 1px solid var(--line-soft);
-  background:
-    linear-gradient(90deg, color-mix(in srgb, var(--focus) 9%, transparent), transparent 62%),
-    var(--brief-bg);
+  gap: 16px;
+  padding: 18px 20px 8px;
+  border-bottom: 0;
+  background: transparent;
 }
 
 .detail-head h2 {
@@ -2114,6 +2112,13 @@ body.resizing-detail {
 
 .detail-head p {
   margin-top: 3px;
+}
+
+.detail-head-meta {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
 }
 
 .detail-actions,
@@ -2140,6 +2145,26 @@ body.resizing-detail {
   height: 13px;
   margin: 0;
   accent-color: var(--focus);
+}
+
+.dismiss-note {
+  margin: 2px 20px 0;
+  color: var(--faint);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.node-actions {
+  display: flex;
+  gap: 6px;
+  margin: 12px 20px 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.node-actions-spacer {
+  flex: 1 1 auto;
+  min-width: 8px;
 }
 
 .detail-save,
@@ -3735,7 +3760,7 @@ body {
   bottom: auto;
   left: var(--detail-x, 620px);
   z-index: 40;
-  width: min(430px, calc(100vw - 24px));
+  width: min(390px, calc(100vw - 24px));
   height: min(560px, calc(100vh - 96px));
   margin: 0;
   border-color: color-mix(in srgb, var(--focus) 18%, var(--line));
@@ -3758,8 +3783,8 @@ body {
 }
 
 .detail-head {
-  min-height: 58px;
-  padding: 14px 16px;
+  min-height: auto;
+  padding: 18px 20px 8px;
   background: transparent;
 }
 
@@ -3775,7 +3800,7 @@ body {
 }
 
 .detail-title-row {
-  padding: 0 16px 12px;
+  padding: 0 20px 12px;
 }
 
 .detail-export,
@@ -3800,6 +3825,32 @@ body {
   width: 30px;
   padding: 0;
   font-size: 18px;
+}
+
+.task-workbench.detail-open .milkdown-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0 20px;
+  border-radius: 12px;
+  box-shadow: none;
+}
+
+.task-workbench.detail-open .milkdown-editor-host .ProseMirror {
+  min-height: 260px;
+  padding: 16px 18px 26px;
+}
+
+.task-workbench.detail-open .node-actions {
+  flex: 0 0 auto;
+}
+
+:root[data-theme="dark"] .task-workbench.detail-open .node-detail {
+  background: color-mix(in srgb, var(--panel) 96%, #101812);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.42);
+}
+
+:root[data-theme="dark"] .task-workbench.detail-open .node-detail::before {
+  background: color-mix(in srgb, var(--panel) 96%, #101812);
 }
 
 .task-workbench.detail-fullscreen .node-detail {
@@ -3829,6 +3880,17 @@ body {
 .task-workbench.detail-fullscreen .milkdown-panel {
   margin: 0 24px 24px;
   border-radius: 12px;
+}
+
+.task-workbench.detail-fullscreen .dismiss-note {
+  margin-right: 24px;
+  margin-left: 24px;
+}
+
+.task-workbench.detail-fullscreen .node-actions {
+  margin-right: 24px;
+  margin-left: 24px;
+  margin-bottom: 24px;
 }
 
 .milkdown-panel {
