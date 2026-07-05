@@ -2920,6 +2920,7 @@ body {
 }
 
 .today-focus {
+  container-type: inline-size;
   margin: 0 18px 14px;
   border: 0;
   border-radius: 14px;
@@ -2942,17 +2943,21 @@ body {
 }
 
 .today-headline {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
   gap: 16px;
   padding: 8px 14px 2px;
 }
 
 .today-headline strong {
   color: #ffffff;
-  font-size: 22px;
-  line-height: 1.1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: clamp(28px, 11cqi, 52px);
+  line-height: 1.02;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .today-headline span,
@@ -2961,6 +2966,13 @@ body {
 .focus-empty,
 .focus-next b {
   color: rgba(255, 255, 255, 0.78);
+}
+
+.today-headline span {
+  max-width: clamp(88px, 28cqi, 144px);
+  font-size: clamp(13px, 4cqi, 18px);
+  line-height: 1.32;
+  text-align: right;
 }
 
 .focus-item {
