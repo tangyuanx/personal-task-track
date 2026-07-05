@@ -821,7 +821,6 @@ function renderNodeDetail(taskId, node) {
             <div class="milkdown-loading">正在加载 Milkdown 编辑器...</div>
           </div>
         </section>
-        <div class="dismiss-note">点击工作区任意空白处关闭</div>
         <div class="node-actions detail-actions">
           <button class="detail-export" type="button" data-action="export-node-pdf" data-task-id="${taskId}" data-node-id="${node.id}">导出 PDF</button>
           <button class="detail-fullscreen" type="button" data-action="toggle-node-detail-fullscreen" title="全屏展示">全屏</button>
@@ -877,10 +876,10 @@ function renderNodeDetail(taskId, node) {
 function nodeDetailPositionStyle() {
   if (state.nodeDetailFullscreen || !state.nodeDetailPosition) return "";
   const viewportPadding = 22;
-  const popoverWidth = Math.min(390, Math.max(300, window.innerWidth * 0.31), window.innerWidth - viewportPadding * 2);
-  const popoverHeight = Math.min(330, Math.max(260, window.innerHeight * 0.46), window.innerHeight - viewportPadding * 2);
-  const x = Math.max(22, Math.min(window.innerWidth - popoverWidth - 22, Number(state.nodeDetailPosition.x) || 0));
-  const y = Math.max(22, Math.min(window.innerHeight - popoverHeight - 22, Number(state.nodeDetailPosition.y) || 0));
+  const popoverWidth = Math.min(620, Math.max(420, window.innerWidth * 0.42), window.innerWidth - viewportPadding * 2);
+  const popoverHeight = Math.min(260, Math.max(210, window.innerHeight * 0.34), window.innerHeight - viewportPadding * 2);
+  const x = Math.max(viewportPadding, Math.min(window.innerWidth - popoverWidth - viewportPadding, Number(state.nodeDetailPosition.x) || 0));
+  const y = Math.max(viewportPadding, Math.min(window.innerHeight - popoverHeight - viewportPadding, Number(state.nodeDetailPosition.y) || 0));
   return `style="--detail-x:${x}px;--detail-y:${y}px"`;
 }
 
