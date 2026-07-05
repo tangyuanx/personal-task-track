@@ -3825,7 +3825,7 @@ body {
 }
 
 .ops-app.app {
-  --rail-width: clamp(252px, 22vw, 336px);
+  --rail-width: clamp(260px, 18vw, 300px);
   display: grid;
   grid-template-columns: var(--rail-width) minmax(0, 1fr);
   gap: 0;
@@ -3937,6 +3937,8 @@ body {
 .task-stack,
 .task-list {
   display: grid;
+  align-content: start;
+  grid-auto-rows: max-content;
   gap: 6px;
 }
 
@@ -4411,7 +4413,9 @@ body {
 .flow-table.flow-list {
   position: relative;
   display: grid;
+  align-content: start;
   counter-reset: main-flow-step;
+  grid-auto-rows: max-content;
   min-height: 0;
   margin: 0;
   overflow: auto;
