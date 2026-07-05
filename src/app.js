@@ -806,15 +806,25 @@ function renderNodeDetail(taskId, node) {
     return `
       <aside class="node-detail record-popover" ${nodeDetailPositionStyle()} data-task-id="${taskId}" data-node-id="${node.id}" aria-label="记录点击悬浮框">
         <header class="detail-head">
-          <div>
+          <div class="record-title-block">
             <span>点击位置浮层 · Milkdown</span>
-            <h2>${esc(node.title || "未命名节点")}</h2>
+            ${inputHtml("title", node.title, taskId, "node-detail-title record-title-input", node.id)}
           </div>
           <span>${formatShort(node.updatedAt)}</span>
         </header>
-        <div class="record-body markdown-preview">
-          ${renderMarkdown(node.note)}
-        </div>
+        <section class="record-body markdown-panel milkdown-panel">
+          <div
+            class="milkdown-editor-host"
+            data-task-id="${taskId}"
+            data-node-id="${node.id}"
+          >
+            <div class="milkdown-loading">正在加载 Milkdown 编辑器...</div>
+          </div>
+          <div class="milkdown-status">
+            <span class="markdown-stats" data-markdown-stats>${stats.lines} 行 · ${stats.characters} 字</span>
+            <span>右键或 / 插入内容</span>
+          </div>
+        </section>
         <div class="dismiss-note">点击工作区任意空白处关闭</div>
         <div class="node-actions detail-actions">
           <button class="detail-export" type="button" data-action="export-node-pdf" data-task-id="${taskId}" data-node-id="${node.id}">导出 PDF</button>
@@ -2070,7 +2080,9 @@ function mountMilkdownEditors() {
         milkdownEditors.set(nodeId, instance);
         updateMarkdownStatsForMarkdown(host, nodeNoteDrafts.get(noteDraftKey(taskId, nodeId))?.markdown ?? node.note ?? "");
         if (state.nodeDetailFullscreen && state.selectedNodeId === nodeId) {
-          window.requestAnimationFrame(() => host.querySelector(".ProseMirror")?.focus());
+          window.requestAnimationFrame(() => {
+            window.requestAnimationFrame(() => host.querySelector(".ProseMirror")?.focus({ preventScroll: true }));
+          });
         }
       })
       .catch((error) => {

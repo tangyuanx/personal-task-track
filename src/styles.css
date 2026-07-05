@@ -2715,6 +2715,7 @@ body.resizing-detail {
 }
 
 .milkdown-editor-host .ProseMirror {
+  position: relative;
   min-height: 420px;
   padding: 18px 22px 32px;
   outline: 0;
@@ -3648,6 +3649,8 @@ body {
 .task-workbench.detail-fullscreen .detail-head {
   min-height: 68px;
   padding: 18px 24px;
+  caret-color: transparent;
+  user-select: none;
 }
 
 .task-workbench.detail-fullscreen .detail-title-row {
@@ -4731,9 +4734,28 @@ body {
   padding: 0;
 }
 
+.record-popover .record-title-block {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 4px;
+}
+
 .record-popover .detail-head h2 {
   color: var(--heading);
   font-size: 18px;
+}
+
+.record-popover .record-title-input {
+  width: 100%;
+  height: 28px;
+  border: 0;
+  padding: 0;
+  color: var(--heading);
+  background: transparent;
+  font-size: 18px;
+  font-weight: 760;
+  line-height: 1.2;
 }
 
 .record-popover .detail-head span {
@@ -4742,21 +4764,31 @@ body {
   font-size: 11px;
 }
 
-.record-body.markdown-preview {
-  max-height: none;
-  overflow: visible;
-  padding: 0;
-  color: var(--muted);
+.record-body.markdown-panel {
+  display: flex;
+  min-height: 408px;
+  max-height: min(54vh, 520px);
+  flex-direction: column;
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--focus) 18%, transparent);
+  border-radius: 0;
+  background: transparent;
+}
+
+.record-popover .milkdown-editor-host .ProseMirror {
+  min-height: 360px;
+  padding: 12px 0 24px;
   background: transparent;
   font-size: 14px;
   line-height: 1.62;
 }
 
-.record-body.markdown-preview p,
-.record-body.markdown-preview li {
-  color: var(--muted);
-  font-size: 14px;
-  line-height: 1.62;
+.record-popover .milkdown-status {
+  min-height: 28px;
+  padding: 0 2px;
+  border-top: 0;
+  font-size: 11px;
 }
 
 .record-popover .dismiss-note {
@@ -4772,6 +4804,7 @@ body {
   margin: 14px 0 0;
   padding-top: 12px;
   border-top: 1px solid var(--line-soft);
+  justify-content: flex-start;
 }
 
 .record-popover .node-actions button,
