@@ -820,10 +820,6 @@ function renderNodeDetail(taskId, node) {
           >
             <div class="milkdown-loading">正在加载 Milkdown 编辑器...</div>
           </div>
-          <div class="milkdown-status">
-            <span class="markdown-stats" data-markdown-stats>${stats.lines} 行 · ${stats.characters} 字</span>
-            <span>右键或 / 插入内容</span>
-          </div>
         </section>
         <div class="dismiss-note">点击工作区任意空白处关闭</div>
         <div class="node-actions detail-actions">
@@ -880,9 +876,11 @@ function renderNodeDetail(taskId, node) {
 
 function nodeDetailPositionStyle() {
   if (state.nodeDetailFullscreen || !state.nodeDetailPosition) return "";
-  const popoverWidth = Math.min(390, Math.max(0, window.innerWidth * 0.34));
+  const viewportPadding = 22;
+  const popoverWidth = Math.min(390, Math.max(300, window.innerWidth * 0.31), window.innerWidth - viewportPadding * 2);
+  const popoverHeight = Math.min(330, Math.max(260, window.innerHeight * 0.46), window.innerHeight - viewportPadding * 2);
   const x = Math.max(22, Math.min(window.innerWidth - popoverWidth - 22, Number(state.nodeDetailPosition.x) || 0));
-  const y = Math.max(72, Math.min(window.innerHeight - 300, Number(state.nodeDetailPosition.y) || 0));
+  const y = Math.max(22, Math.min(window.innerHeight - popoverHeight - 22, Number(state.nodeDetailPosition.y) || 0));
   return `style="--detail-x:${x}px;--detail-y:${y}px"`;
 }
 
@@ -2067,7 +2065,7 @@ function mountMilkdownEditors() {
     window.MilkdownTaskEditor.create({
       root: host,
       markdown: nodeNoteDrafts.get(noteDraftKey(taskId, nodeId))?.markdown ?? node.note ?? "",
-      placeholder: "记录处理过程",
+      placeholder: host.closest(".record-popover") ? "点击此处开始输入" : "记录处理过程",
       onChange: (markdown) => {
         updateNodeNoteDraft(taskId, nodeId, markdown, host);
       },

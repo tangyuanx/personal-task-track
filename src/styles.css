@@ -4693,15 +4693,18 @@ body {
   left: var(--detail-x, min(820px, calc(var(--rail-width, 300px) + 50vw)));
   z-index: 5;
   display: block;
-  width: min(390px, 34vw);
+  width: clamp(300px, 31vw, 390px);
+  max-width: calc(100vw - 44px);
+  max-height: calc(100vh - 44px);
   height: auto;
   margin: 0;
-  overflow: visible;
-  padding: 18px 20px 16px;
-  border: 1px solid rgba(13, 91, 73, 0.18);
+  overflow: auto;
+  padding: clamp(14px, 1.55vw, 18px) clamp(18px, 1.75vw, 20px) 14px;
+  border: 1px solid rgba(13, 91, 73, 0.16);
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 20px 60px rgba(8, 42, 34, 0.2);
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 22px 62px rgba(8, 42, 34, 0.2);
+  backdrop-filter: blur(18px);
 }
 
 :root[data-theme="dark"] .record-popover.node-detail {
@@ -4729,8 +4732,8 @@ body {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 14px;
+  gap: 14px;
+  margin-bottom: 12px;
   padding: 0;
 }
 
@@ -4748,14 +4751,15 @@ body {
 
 .record-popover .record-title-input {
   width: 100%;
-  height: 28px;
+  height: 26px;
   border: 0;
   padding: 0;
   color: var(--heading);
   background: transparent;
-  font-size: 18px;
+  font-size: clamp(16px, 1.45vw, 18px);
   font-weight: 760;
   line-height: 1.2;
+  outline: none;
 }
 
 .record-popover .detail-head span {
@@ -4766,33 +4770,35 @@ body {
 
 .record-body.markdown-panel {
   display: flex;
-  min-height: 408px;
-  max-height: min(54vh, 520px);
+  min-height: 86px;
+  max-height: min(30vh, 190px);
   flex-direction: column;
   margin: 0;
-  overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--focus) 18%, transparent);
+  overflow: auto;
+  border: 0;
   border-radius: 0;
   background: transparent;
 }
 
 .record-popover .milkdown-editor-host .ProseMirror {
-  min-height: 360px;
-  padding: 12px 0 24px;
+  min-height: 86px;
+  padding: 0;
   background: transparent;
-  font-size: 14px;
-  line-height: 1.62;
+  color: var(--ink);
+  font-size: clamp(13px, 1.08vw, 15px);
+  line-height: 1.65;
+  outline: none;
 }
 
-.record-popover .milkdown-status {
-  min-height: 28px;
-  padding: 0 2px;
-  border-top: 0;
+.record-popover .milkdown-editor-host .ProseMirror .crepe-placeholder::before {
+  content: attr(data-placeholder);
+  color: color-mix(in srgb, var(--muted) 62%, transparent);
+  font-family: var(--mono);
   font-size: 11px;
 }
 
 .record-popover .dismiss-note {
-  margin: 12px 0 0;
+  margin: 10px 0 0;
   color: var(--faint);
   font-family: var(--mono);
   font-size: 11px;
