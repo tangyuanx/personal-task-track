@@ -1,6 +1,6 @@
 {
   "name": "personal-task-track",
-  "version": "0.1.36",
+  "version": "0.1.37",
   "description": "A local-first personal task flow tracker for programmer daily work.",
   "private": true,
   "license": "UNLICENSED",

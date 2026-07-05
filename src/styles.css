@@ -4783,11 +4783,11 @@ body {
 
 .record-body.markdown-panel {
   display: flex;
-  min-height: 72px;
-  max-height: min(124px, calc(100vh - var(--detail-y, 0px) - 150px));
+  min-height: 88px;
+  max-height: min(132px, calc(100vh - var(--detail-y, 0px) - 146px));
   flex-direction: column;
   margin: 0;
-  overflow: auto;
+  overflow: hidden;
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -4800,20 +4800,53 @@ body {
 
 .record-popover .milkdown-editor-host {
   flex: 1 1 auto;
+  width: 100%;
+  overflow: hidden;
+}
+
+.record-popover .milkdown-editor-host .milkdown {
+  min-height: 100%;
+  background: transparent;
 }
 
 .record-popover .milkdown-editor-host .ProseMirror {
-  min-height: 72px;
-  padding: 0 0 2px;
+  width: 100%;
+  min-height: 88px;
+  padding: 0;
+  margin: 0;
+  overflow: hidden;
   background: transparent;
   color: var(--ink);
   font-size: clamp(13px, 1.08vw, 15px);
-  line-height: 1.65;
+  line-height: 1.62;
+  text-align: left;
   outline: none;
 }
 
 .record-popover .milkdown-editor-host .ProseMirror-focused {
   box-shadow: none;
+}
+
+.record-popover .milkdown-editor-host .ProseMirror > * {
+  max-width: none;
+  margin-left: 0;
+  margin-right: 0;
+}
+
+.record-popover .milkdown-editor-host .ProseMirror p,
+.record-popover .milkdown-editor-host .ProseMirror ul,
+.record-popover .milkdown-editor-host .ProseMirror ol,
+.record-popover .milkdown-editor-host .ProseMirror blockquote {
+  margin-left: 0;
+}
+
+.record-popover .milkdown-editor-host .ProseMirror ul,
+.record-popover .milkdown-editor-host .ProseMirror ol {
+  padding-left: 1.45em;
+}
+
+.record-popover .milkdown-editor-host .milkdown-list-item-block > .list-item > .children {
+  min-width: 0;
 }
 
 .record-popover .milkdown-editor-host .ProseMirror p:first-child,
