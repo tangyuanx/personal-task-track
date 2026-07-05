@@ -821,6 +821,7 @@ function renderNodeDetail(taskId, node) {
             <div class="milkdown-loading">正在加载 Milkdown 编辑器...</div>
           </div>
         </section>
+        <div class="dismiss-note">点击工作区任意空白处关闭</div>
         <div class="node-actions detail-actions">
           <button class="detail-export" type="button" data-action="export-node-pdf" data-task-id="${taskId}" data-node-id="${node.id}">导出 PDF</button>
           <button class="detail-fullscreen" type="button" data-action="toggle-node-detail-fullscreen" title="全屏展示">全屏</button>
