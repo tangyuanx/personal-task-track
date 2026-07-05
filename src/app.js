@@ -490,9 +490,11 @@ function render() {
   const task = activeTask();
   if (task) state.activeTaskId = task.id;
   document.querySelector("#root").innerHTML = `
-    <main class="ops-app" style="--sidebar-width:${normalizeSidebarWidth(state.sidebarWidth)}px">
+    <main class="ops-app app" style="--sidebar-width:${normalizeSidebarWidth(state.sidebarWidth)}px">
       ${renderSidebar()}
-      ${task ? renderTaskPage(task) : renderEmptyPage()}
+      <section class="workspace">
+        ${task ? renderTaskPage(task) : renderEmptyPage()}
+      </section>
       ${renderContextMenu()}
       ${state.settingsOpen ? renderSettingsPanel() : ""}
       ${state.reviewOpen ? renderReviewPanel() : ""}
@@ -511,17 +513,17 @@ function renderSidebar() {
   const blockedCount = scopedTasks.filter((task) => task.tags.blocked || flatten(task.nodes).some((node) => node.status === "blocked")).length;
   const focusItems = todayFocusItems();
   return `
-    <aside class="sidebar">
+    <aside class="sidebar rail">
       <span class="sidebar-resizer" data-sidebar-resizer title="调整侧栏宽度"></span>
-      <div class="sidebar-head">
+      <div class="sidebar-head brand">
         <div>
           <strong>Task Track</strong>
-          <small>Personal operations</small>
+          <small>Local operations</small>
         </div>
         <span>v${esc(APP_VERSION || "dev")}</span>
       </div>
 
-      <label class="search-box">
+      <label class="search-box search">
         <span>Search</span>
         <input id="search" value="${escAttr(state.query)}" placeholder="搜索" />
       </label>
@@ -529,11 +531,9 @@ function renderSidebar() {
       ${renderTodayFocus(focusItems)}
 
       <div class="task-list" data-context="task-list">
-        <div class="task-list-head">
+        <div class="task-list-head section-label">
           <span>Tasks</span>
-          <span>${visibleCount}/${scopedTasks.length}</span>
-          ${filterSelectHtml("task-filter", state.taskFilter, taskFilterLabels, "任务范围")}
-          ${filterSelectHtml("priority-filter", state.priorityFilter, priorityFilterLabels, "优先级范围")}
+          <span>${visibleCount}/${scopedTasks.length} total</span>
         </div>
         ${filteredTasks()
           .map((task) => renderTaskItem(task))
@@ -545,8 +545,8 @@ function renderSidebar() {
           ${newTaskPrioritySelect()}
         </div>
       </div>
-      <div class="sidebar-foot">
-        <button class="settings-trigger ${state.settingsOpen ? "active" : ""}" type="button" data-action="toggle-settings" title="设置">⚙</button>
+      <div class="sidebar-foot task-footer">
+        <button class="settings-trigger settings-button ${state.settingsOpen ? "active" : ""}" type="button" data-action="toggle-settings" title="设置">⚙</button>
         ${renderGroupTabs()}
       </div>
     </aside>
@@ -576,25 +576,21 @@ function renderTodayFocus(items) {
 function renderTodayFocusItem(item) {
   const { task, node, kind, badge, nextText } = item;
   const selected = task.id === state.activeTaskId && (!node?.id || node.id === state.selectedNodeId);
+  const pillClass = kind === "high" || kind === "blocked" ? "hot" : "";
   return `
     <article class="focus-item focus-row ${kind} ${selected ? "selected" : ""}" data-action="select-focus" data-task-id="${task.id}" data-node-id="${node?.id || ""}">
       <span class="focus-rail rail-mark"></span>
-      <div class="focus-content">
-        <div class="focus-title-row">
-          <span class="focus-title">${esc(task.title || "未命名任务")}</span>
-          <span class="focus-badge ${kind}">${badge}</span>
-        </div>
-        <p class="focus-next"><b>下一步</b> ${esc(nextText)}</p>
-      </div>
+      <span class="row-title"><strong>${esc(task.title || "未命名任务")}</strong><span>下一步：${esc(nextText)}</span></span>
+      <span class="pill ${pillClass}">${badge}</span>
     </article>
   `;
 }
 
 function renderGroupTabs() {
   return `
-    <div class="sheet-bar" aria-label="任务分组">
-      <button class="sheet-nav" type="button" data-action="scroll-sheets" data-direction="-1" title="查看前面的分组">‹</button>
-      <div class="sheet-tabs" data-sheet-tabs>
+    <div class="sheet-bar group-nav" aria-label="任务分组">
+      <button class="sheet-nav scroll-button" type="button" data-action="scroll-sheets" data-direction="-1" title="查看前面的分组">‹</button>
+      <div class="sheet-tabs task-tabs" data-sheet-tabs>
         ${sort(state.taskGroups)
           .map(
             (group) => `
@@ -609,8 +605,8 @@ function renderGroupTabs() {
           )
           .join("")}
       </div>
-      <button class="sheet-nav" type="button" data-action="scroll-sheets" data-direction="1" title="查看后面的分组">›</button>
-      <button class="sheet-add" type="button" data-action="add-group" title="新增分组">+</button>
+      <button class="sheet-nav scroll-button" type="button" data-action="scroll-sheets" data-direction="1" title="查看后面的分组">›</button>
+      <button class="sheet-add add-group-button" type="button" data-action="add-group" title="新增分组">+</button>
     </div>
   `;
 }
@@ -619,14 +615,14 @@ function renderTaskItem(task) {
   const activeTags = Object.entries(normalizeTaskTags(task.tags)).filter(([, active]) => active);
   const subtitle = activeTags.length ? activeTags.map(([tag]) => taskTagLabels[tag]).join(" · ") : taskSubtitle(task);
   return `
-    <div class="task-item ${task.id === state.activeTaskId ? "selected" : ""}" data-action="select-task" data-context="task" data-task-id="${task.id}" data-task-drag-target="${task.id}">
+    <div class="task-item task-row ${task.id === state.activeTaskId ? "selected active" : ""} ${task.status === "done" ? "done" : ""}" data-action="select-task" data-context="task" data-task-id="${task.id}" data-task-drag-target="${task.id}">
       <span class="task-drag-handle" draggable="true" data-task-drag-handle data-task-id="${task.id}" title="拖拽排序" aria-label="拖拽排序"></span>
       <input class="task-check rail-mark" type="checkbox" title="完成" data-action="toggle-task-done" data-task-id="${task.id}" ${task.status === "done" ? "checked" : ""} />
       <span class="task-title-wrap row-title">
         <input class="task-title" placeholder="任务标题" data-edit-key="title" data-task-id="${task.id}" value="${escAttr(task.title)}" />
         <span>${esc(subtitle)}</span>
       </span>
-      <span class="task-priority-pill ${task.priority}">${selectHtml("priority", task.priority, priorityLabels, task.id)}</span>
+      <span class="task-priority-pill pill ${task.priority === "high" ? "hot" : task.priority === "low" ? "good" : ""} ${task.priority}">${selectHtml("priority", task.priority, priorityLabels, task.id)}</span>
     </div>
   `;
 }
@@ -644,59 +640,62 @@ function renderTaskPage(task) {
   const summary = taskSummary(task);
   const needsConclusion = state.conclusionPromptTaskId === task.id && !task.conclusion.trim();
   return `
-    <section class="task-page">
-      <header class="page-header">
-        <div class="page-title-block">
-          <div class="page-kicker">任务档案</div>
+    <div class="task-page work-surface">
+      <header class="page-header topbar">
+        <div class="page-title-block title-block">
+          <div class="page-kicker kicker">任务档案</div>
           <input class="page-title" data-edit-key="title" data-task-id="${task.id}" value="${escAttr(task.title)}" />
-          <div class="page-properties">
-            <span class="priority ${task.priority}">${priorityLabels[task.priority]}优先</span>
-            <span class="status ${task.status === "done" ? "resolved" : "attention"}">${task.status === "done" ? "已完成" : "处理中"}</span>
-            <span>${summary.done}/${summary.total || 0} 节点</span>
-            <span>${formatShort(task.updatedAt)}</span>
+          <div class="page-properties meta-line">
+            <span class="pill priority ${task.priority} ${task.priority === "high" ? "hot" : task.priority === "low" ? "good" : ""}">${priorityLabels[task.priority]}优先</span>
+            <span class="pill status ${task.status === "done" ? "resolved good" : "attention good"}">${task.status === "done" ? "已完成" : "处理中"}</span>
+            <span class="pill">${summary.done}/${summary.total || 0} 节点</span>
+            <span class="pill">更新 ${formatShort(task.updatedAt)}</span>
             <label class="property-select">分组 ${selectHtml("groupId", task.groupId, taskGroupOptions(), task.id)}</label>
+            ${renderTaskActiveTagPills(task)}
           </div>
-          ${renderTaskTagRow(task)}
         </div>
-        <button class="share-trigger" type="button" data-action="share-task" data-task-id="${task.id}" title="导出任务文档" aria-label="导出任务文档">
-          <span class="share-glyph" aria-hidden="true"><span class="share-arrow"></span></span>
-        </button>
+        <div class="actions">
+          <button class="share-trigger icon-button" type="button" data-action="share-task" data-task-id="${task.id}" title="导出任务文档" aria-label="导出任务文档">
+            <span class="share-glyph" aria-hidden="true"><span class="share-arrow"></span></span>
+          </button>
+        </div>
       </header>
 
       ${needsConclusion ? renderConclusionPrompt() : ""}
 
-      <section class="task-brief">
+      <section class="task-brief brief-strip" aria-label="任务简报">
         ${renderBriefField("背景", textareaHtml("description", task.description, task.id), "", false, "background")}
         ${renderBriefField("当前判断", textareaHtml("hypothesis", task.hypothesis, task.id), task.hypothesisUpdatedAt, false, "hypothesis")}
         ${renderBriefField("结论", textareaHtml("conclusion", task.conclusion, task.id), "", needsConclusion, "conclusion")}
       </section>
 
-      <section class="task-workbench ${selectedNode ? "detail-open" : ""} ${state.nodeDetailFullscreen ? "detail-fullscreen" : ""}">
-        <section class="flow-section" data-context="flow-root" data-task-id="${task.id}">
-          <div class="section-heading">
+      <section class="task-workbench lower ${selectedNode ? "detail-open" : ""} ${state.nodeDetailFullscreen ? "detail-fullscreen" : ""}">
+        <section class="flow-section flow" data-context="flow-root" data-task-id="${task.id}">
+          <div class="section-heading flow-head">
             <div>
               <h2>处理流</h2>
-              <p>${summary.open ? `${summary.open} 个节点未完成` : "所有节点已完成"}</p>
+              <span>用弱线条表达层级，选中状态才有明确色块</span>
             </div>
-            <button class="flow-add-button" type="button" data-action="add-root-node" data-task-id="${task.id}" title="新增主节点">+ 主节点</button>
+            <span>${summary.open ? `${summary.open} 个未完成` : "所有节点已完成"}</span>
           </div>
           ${
             topNodes.length
-              ? `<div class="flow-list" style="${flowWidthStyle()}" data-context="flow-root" data-task-id="${task.id}">${renderFlowHeader()}${topNodes.map((node) => renderFlowNode(task.id, node, 0)).join("")}</div>${renderFlowHint()}`
-              : `<div class="empty-flow" data-context="flow-root" data-task-id="${task.id}">还没有处理节点。</div>${renderFlowHint()}`
+              ? `<div class="flow-list flow-table" style="${flowWidthStyle()}" data-context="flow-root" data-task-id="${task.id}">${renderFlowHeader()}${topNodes.map((node) => renderFlowNode(task.id, node, 0)).join("")}${renderFlowHint()}</div>`
+              : `<div class="flow-list flow-table empty-flow" data-context="flow-root" data-task-id="${task.id}">还没有处理节点。${renderFlowHint()}</div>`
           }
         </section>
 
         ${selectedNode ? renderNodeDetail(task.id, selectedNode) : ""}
       </section>
-    </section>
+    </div>
   `;
 }
 
 function renderFlowHint() {
   return `
     <div class="flow-hint">
-      <span>右键空白处新增主节点，或在已有节点上新增子节点</span>
+      <kbd>右键</kbd>
+      <span>在处理流空白处新增主节点，或在已有节点上新增子节点</span>
     </div>
   `;
 }
@@ -723,9 +722,16 @@ function renderTaskTagRow(task) {
   `;
 }
 
+function renderTaskActiveTagPills(task) {
+  return Object.entries(normalizeTaskTags(task.tags))
+    .filter(([, active]) => active)
+    .map(([tag]) => `<span class="pill task-tag-pill">${taskTagLabels[tag]}</span>`)
+    .join("");
+}
+
 function renderBriefField(label, control, timestamp = "", attention = false, variant = "") {
   return `
-    <label class="brief-field ${variant} ${attention ? "needs-attention" : ""}">
+    <label class="brief-field brief-cell ${variant} ${attention ? "needs-attention" : ""}">
       <span class="brief-label"><b>${label}</b></span>
       ${control}
       ${timestamp ? `<small class="brief-stamp">${formatShort(timestamp)}</small>` : ""}
@@ -738,18 +744,23 @@ function renderFlowNode(taskId, node, depth) {
   const isSelected = state.selectedNodeId === node.id;
   const indent = Math.min(depth, 4) * 16;
   const branch = depth === 0 ? "main-flow" : "sub-flow";
+  const noteSummary = nodeNoteSummary(node.note);
+  const statusClass = node.status === "done" ? "good" : node.status === "blocked" ? "hot" : "";
   return `
     <article class="flow-item depth-${Math.min(depth, 6)}">
-      <div class="flow-row ${branch} ${node.status} ${isSelected ? "selected" : ""}" style="--indent:${indent}px" data-context="node" data-task-id="${taskId}" data-node-id="${node.id}">
-        <input class="flow-check" type="checkbox" title="完成" data-action="toggle-node-done" data-task-id="${taskId}" data-node-id="${node.id}" ${node.status === "done" ? "checked" : ""} />
-        <span class="flow-title-cell">
+      <div class="flow-row flow-line ${branch} ${branch === "sub-flow" ? "sub" : ""} ${node.status} ${isSelected ? "selected" : ""}" style="--indent:${indent}px" data-context="node" data-task-id="${taskId}" data-node-id="${node.id}">
+        <input class="flow-check dot" type="checkbox" title="完成" data-action="toggle-node-done" data-task-id="${taskId}" data-node-id="${node.id}" ${node.status === "done" ? "checked" : ""} />
+        <span class="flow-title-cell flow-title process-cell">
           <span class="flow-indent"></span>
           <span class="flow-branch-mark"></span>
           ${nodeTitleInputHtml(node, taskId)}
         </span>
-        <button class="flow-note" type="button" data-action="select-node" data-task-id="${taskId}" data-node-id="${node.id}" title="打开节点记录">${esc(node.note || "记录")}</button>
-        <span class="flow-status">${nodeStatusText(node.status)}</span>
-        <span class="flow-updated">${formatShort(node.updatedAt)}</span>
+        <button class="flow-note note-link process-cell ${isSelected ? "record-trigger" : ""}" type="button" data-action="select-node" data-task-id="${taskId}" data-node-id="${node.id}" title="打开节点记录">
+          <strong>${esc(noteSummary.title)}</strong>
+          <span>${esc(noteSummary.detail)}</span>
+        </button>
+        <span class="flow-status pill ${statusClass}">${nodeStatusText(node.status)}</span>
+        <span class="flow-updated note-link">${formatShort(node.updatedAt)}</span>
       </div>
       ${children.length ? children.map((child) => renderFlowNode(taskId, child, depth + 1)).join("") : ""}
     </article>
@@ -758,7 +769,7 @@ function renderFlowNode(taskId, node, depth) {
 
 function renderFlowHeader() {
   return `
-    <div class="flow-row flow-header">
+    <div class="flow-row flow-line flow-header header">
       <span></span>
       ${renderFlowHeadCell("title", "处理")}
       ${renderFlowHeadCell("note", "记录")}
@@ -766,6 +777,17 @@ function renderFlowHeader() {
       ${renderFlowHeadCell("", "更新")}
     </div>
   `;
+}
+
+function nodeNoteSummary(value) {
+  const lines = String(value || "")
+    .split(/\r\n|\r|\n/)
+    .map((line) => line.replace(/^[#>*\-\s\d.]+/, "").trim())
+    .filter(Boolean);
+  return {
+    title: lines[0] || "记录待补充",
+    detail: lines.slice(1).join(" ") || "点击记录后就地展开",
+  };
 }
 
 function renderFlowHeadCell(key, label) {
@@ -780,11 +802,33 @@ function renderFlowHeadCell(key, label) {
 function renderNodeDetail(taskId, node) {
   const stats = markdownStats(node.note);
   const fullscreen = state.nodeDetailFullscreen;
+  if (!fullscreen) {
+    return `
+      <aside class="node-detail record-popover" ${nodeDetailPositionStyle()} data-task-id="${taskId}" data-node-id="${node.id}" aria-label="记录点击悬浮框">
+        <header class="detail-head">
+          <div>
+            <span>点击位置浮层 · Milkdown</span>
+            <h2>${esc(node.title || "未命名节点")}</h2>
+          </div>
+          <span>${formatShort(node.updatedAt)}</span>
+        </header>
+        <div class="record-body markdown-preview">
+          ${renderMarkdown(node.note)}
+        </div>
+        <div class="dismiss-note">点击工作区任意空白处关闭</div>
+        <div class="node-actions detail-actions">
+          <button class="detail-export" type="button" data-action="export-node-pdf" data-task-id="${taskId}" data-node-id="${node.id}">导出 PDF</button>
+          <button class="detail-fullscreen" type="button" data-action="toggle-node-detail-fullscreen" title="全屏展示">全屏</button>
+          <button class="detail-save" type="button" data-action="save-node-detail">保存</button>
+        </div>
+      </aside>
+    `;
+  }
   return `
-    <section class="node-detail ${fullscreen ? "fullscreen-editor" : ""}" ${nodeDetailPositionStyle()} data-task-id="${taskId}" data-node-id="${node.id}">
+    <section class="node-detail fullscreen-editor" ${nodeDetailPositionStyle()} data-task-id="${taskId}" data-node-id="${node.id}">
       <div class="detail-head">
         <div>
-          <span>${fullscreen ? "Markdown Editor" : "点击位置浮层 · Milkdown"}</span>
+          <span>Markdown Editor</span>
           <h2>${esc(node.title || "未命名节点")}</h2>
         </div>
         <div class="detail-head-meta">
@@ -806,7 +850,7 @@ function renderNodeDetail(taskId, node) {
         </div>
         <div class="milkdown-status">
           <span class="markdown-stats" data-markdown-stats>${stats.lines} 行 · ${stats.characters} 字</span>
-          <span>${fullscreen ? "右键或 / 插入表格、图片、代码块" : "点击空白处自动保存并关闭"}</span>
+          <span>右键或 / 插入表格、图片、代码块</span>
         </div>
       </section>
       <div class="dismiss-note">点击工作区任意空白处关闭</div>
