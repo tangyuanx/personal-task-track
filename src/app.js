@@ -870,8 +870,9 @@ function renderNodeDetail(taskId, node) {
 
 function nodeDetailPositionStyle() {
   if (state.nodeDetailFullscreen || !state.nodeDetailPosition) return "";
-  const x = Math.max(12, Math.min(window.innerWidth - 440, Number(state.nodeDetailPosition.x) || 0));
-  const y = Math.max(72, Math.min(window.innerHeight - 420, Number(state.nodeDetailPosition.y) || 0));
+  const popoverWidth = Math.min(390, Math.max(0, window.innerWidth * 0.34));
+  const x = Math.max(22, Math.min(window.innerWidth - popoverWidth - 22, Number(state.nodeDetailPosition.x) || 0));
+  const y = Math.max(72, Math.min(window.innerHeight - 300, Number(state.nodeDetailPosition.y) || 0));
   return `style="--detail-x:${x}px;--detail-y:${y}px"`;
 }
 

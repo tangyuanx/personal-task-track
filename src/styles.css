@@ -3825,8 +3825,9 @@ body {
 }
 
 .ops-app.app {
+  --rail-width: clamp(252px, 22vw, 336px);
   display: grid;
-  grid-template-columns: var(--sidebar-width, 300px) minmax(720px, 1fr);
+  grid-template-columns: var(--rail-width) minmax(0, 1fr);
   gap: 0;
   min-height: 100vh;
   height: 100vh;
@@ -3841,7 +3842,7 @@ body {
   display: flex;
   min-height: 0;
   flex-direction: column;
-  padding: 22px 18px;
+  padding: clamp(16px, 1.6vw, 22px) clamp(12px, 1.3vw, 18px);
   overflow: hidden;
   border: 0;
   border-right: 1px solid rgba(30, 34, 39, 0.08);
@@ -4221,6 +4222,7 @@ body {
   grid-template-rows: auto auto minmax(0, 1fr);
   min-height: 100vh;
   height: 100vh;
+  min-width: 0;
   overflow: hidden;
   border: 0;
   border-radius: 0;
@@ -4241,7 +4243,7 @@ body {
   align-items: flex-start;
   justify-content: space-between;
   gap: 22px;
-  padding: 26px 30px 16px;
+  padding: clamp(18px, 2vw, 26px) clamp(18px, 2.4vw, 30px) clamp(12px, 1.5vw, 16px);
   border-bottom: 1px solid rgba(205, 219, 211, 0.58);
   background: transparent;
 }
@@ -4309,11 +4311,11 @@ body {
 
 .brief-strip.task-brief {
   display: grid;
-  grid-template-columns: minmax(260px, 1.35fr) minmax(230px, 1fr) minmax(180px, 0.78fr);
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr) minmax(0, 0.78fr);
   align-items: stretch;
   gap: 0;
   margin: 0;
-  padding: 12px 30px 14px;
+  padding: 12px clamp(18px, 2.4vw, 30px) 14px;
   overflow: hidden;
   border-bottom: 1px solid var(--line-soft);
   background: rgba(255, 255, 255, 0.34);
@@ -4321,12 +4323,12 @@ body {
 
 .brief-cell.brief-field {
   display: grid;
-  grid-template-columns: 72px minmax(0, 1fr);
-  gap: 14px;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: clamp(10px, 1.2vw, 14px);
   min-width: 0;
   min-height: 64px;
   align-items: start;
-  padding: 4px 20px;
+  padding: 4px clamp(12px, 1.6vw, 20px);
   border: 0;
   border-left: 1px solid rgba(205, 219, 211, 0.78);
   border-radius: 0;
@@ -4340,7 +4342,7 @@ body {
 }
 
 .brief-cell.brief-field.conclusion {
-  grid-template-columns: 52px minmax(0, 1fr);
+  grid-template-columns: max-content minmax(0, 1fr);
   padding-right: 0;
 }
 
@@ -4377,7 +4379,7 @@ body {
   grid-template-columns: minmax(0, 1fr);
   gap: 0;
   min-height: 0;
-  padding: 22px 30px 30px;
+  padding: 22px clamp(18px, 2.4vw, 30px) 30px;
 }
 
 .flow.flow-section {
@@ -4425,11 +4427,11 @@ body {
   display: grid;
   grid-template-columns:
     44px
-    minmax(0, 1fr)
-    minmax(0, 1fr)
-    82px
-    84px;
-  gap: 12px;
+    minmax(140px, 1fr)
+    minmax(140px, 1fr)
+    clamp(64px, 7vw, 82px)
+    clamp(66px, 7vw, 84px);
+  gap: clamp(8px, 1vw, 12px);
   align-items: center;
   min-height: 54px;
   padding: 0;
@@ -4471,10 +4473,10 @@ body {
 .flow-line.flow-row.sub {
   grid-template-columns:
     64px
-    minmax(0, 1fr)
-    minmax(0, 1fr)
-    82px
-    84px;
+    minmax(120px, 1fr)
+    minmax(120px, 1fr)
+    clamp(64px, 7vw, 82px)
+    clamp(66px, 7vw, 84px);
   min-height: 50px;
 }
 
@@ -4660,13 +4662,12 @@ body {
 
 .record-popover.node-detail {
   position: fixed;
-  top: var(--detail-y, 220px);
-  left: var(--detail-x, 620px);
-  z-index: 40;
+  top: var(--detail-y, 370px);
+  left: var(--detail-x, min(820px, calc(var(--rail-width, 300px) + 50vw)));
+  z-index: 5;
   display: block;
   width: min(390px, 34vw);
   height: auto;
-  max-height: min(560px, calc(100vh - 96px));
   margin: 0;
   overflow: visible;
   padding: 18px 20px 16px;
@@ -4688,9 +4689,13 @@ body {
   height: 12px;
   border-left: 1px solid rgba(13, 91, 73, 0.18);
   border-bottom: 1px solid rgba(13, 91, 73, 0.18);
-  background: inherit;
+  background: rgba(255, 255, 255, 0.96);
   content: "";
   transform: rotate(45deg);
+}
+
+:root[data-theme="dark"] .record-popover.node-detail::before {
+  background: rgba(29, 43, 38, 0.96);
 }
 
 .record-popover .detail-head {
@@ -4714,8 +4719,8 @@ body {
 }
 
 .record-body.markdown-preview {
-  max-height: min(300px, calc(100vh - 310px));
-  overflow: auto;
+  max-height: none;
+  overflow: visible;
   padding: 0;
   color: var(--muted);
   background: transparent;
@@ -4778,10 +4783,12 @@ body {
 @media (max-width: 980px) {
   .ops-app.app {
     grid-template-columns: 1fr;
+    overflow: auto;
   }
 
   .rail.sidebar {
     min-height: auto;
+    max-height: 44vh;
     border-right: 0;
     border-bottom: 1px solid var(--line);
   }
