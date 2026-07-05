@@ -3999,16 +3999,14 @@ body {
 }
 
 .task-row.task-item {
-  min-height: 44px;
-  padding: 8px 9px 8px 0;
+  min-height: 48px;
+  padding: 6px 8px 6px 0;
   background: transparent;
 }
 
 .task-row.task-item.active,
 .task-row.task-item.selected {
-  background:
-    linear-gradient(90deg, rgba(52, 122, 105, 0.12), transparent),
-    rgba(255, 255, 255, 0.48);
+  background: rgba(13, 91, 73, 0.065);
 }
 
 .task-row.done:not(.selected) {
@@ -4070,8 +4068,9 @@ body {
 .task-title {
   overflow: hidden;
   color: var(--heading);
-  font-size: 13px;
-  font-weight: 680;
+  font-size: 14px;
+  font-weight: 740;
+  line-height: 1.2;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -4080,8 +4079,29 @@ body {
   overflow: hidden;
   color: var(--muted);
   font-size: 12px;
+  line-height: 1.25;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.task-row.task-item .task-drag-handle {
+  display: none;
+}
+
+.task-title-wrap.row-title {
+  min-width: 0;
+}
+
+.task-row.task-item .task-title {
+  height: 18px;
+  padding: 0;
+}
+
+.task-row.task-item .task-priority-pill.pill {
+  min-width: 28px;
+  min-height: 24px;
+  justify-content: center;
+  padding: 0 8px;
 }
 
 .pill {
