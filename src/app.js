@@ -76,8 +76,8 @@ const flowWidthLimits = {
 };
 
 const defaultTaskGroup = { id: "group_inbox", title: "默认", order: 1 };
-const defaultSidebarWidth = 272;
-const sidebarWidthLimits = [220, 420];
+const defaultSidebarWidth = 296;
+const sidebarWidthLimits = [220, 560];
 const defaultDetailHeight = 58;
 const detailHeightLimits = [50, 82];
 const taskTagLabels = {
@@ -846,7 +846,7 @@ function renderNodeDetail(taskId, node) {
         <span>标题</span>
         ${inputHtml("title", node.title, taskId, "node-detail-title", node.id)}
       </label>
-      <section class="markdown-panel milkdown-panel">
+      <section class="markdown-panel milkdown-panel fullscreen-editor-panel" data-context="editor" data-task-id="${taskId}" data-node-id="${node.id}" data-editor-focus-target="true">
         <div
           class="milkdown-editor-host"
           data-task-id="${taskId}"
@@ -923,6 +923,19 @@ function renderEmptyPage() {
 function renderContextMenu() {
   if (!state.contextMenu) return "";
   const menu = state.contextMenu;
+  if (menu.kind === "editor") {
+    return `
+      <div class="context-menu" style="left:${menu.x}px; top:${menu.y}px">
+        <button data-action="insert-editor-snippet" data-kind="h2">插入标题</button>
+        <button data-action="insert-editor-snippet" data-kind="bullet">插入无序列表</button>
+        <button data-action="insert-editor-snippet" data-kind="ordered">插入有序列表</button>
+        <button data-action="insert-editor-snippet" data-kind="quote">插入引用</button>
+        <button data-action="insert-editor-snippet" data-kind="code">插入代码块</button>
+        <button data-action="insert-editor-snippet" data-kind="table">插入表格</button>
+        <button data-action="insert-editor-snippet" data-kind="image">插入图片</button>
+      </div>
+    `;
+  }
   if (menu.kind === "task-list") {
     return `
       <div class="context-menu" style="left:${menu.x}px; top:${menu.y}px">
@@ -1769,6 +1782,16 @@ function bind() {
     });
   });
 
+  document.querySelectorAll("[data-editor-focus-target]").forEach((panel) => {
+    panel.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0) return;
+      if (event.target.closest("button, input, select, textarea, a, .context-menu, .detail-actions")) return;
+      const nodeId = panel.dataset.nodeId;
+      if (!nodeId) return;
+      window.requestAnimationFrame(() => focusNodeDetailEditor(nodeId));
+    });
+  });
+
   const app = document.querySelector(".ops-app");
   if (app) {
     app.addEventListener("pointerdown", (event) => {
@@ -2079,7 +2102,7 @@ function mountMilkdownEditors() {
         updateMarkdownStatsForMarkdown(host, nodeNoteDrafts.get(noteDraftKey(taskId, nodeId))?.markdown ?? node.note ?? "");
         if (state.nodeDetailFullscreen && state.selectedNodeId === nodeId) {
           window.requestAnimationFrame(() => {
-            window.requestAnimationFrame(() => host.querySelector(".ProseMirror")?.focus({ preventScroll: true }));
+            window.requestAnimationFrame(() => focusNodeDetailEditor(nodeId));
           });
         }
       })
@@ -2114,10 +2137,82 @@ function updateMarkdownStatsForMarkdown(host, markdown) {
   if (statsElement) statsElement.textContent = `${stats.lines} 行 · ${stats.characters} 字`;
 }
 
+function focusNodeDetailEditor(nodeId) {
+  if (!nodeId) return false;
+  const scope = document.querySelector(`.node-detail.fullscreen-editor[data-node-id="${nodeId}"]`) || document.querySelector(`.node-detail[data-node-id="${nodeId}"]`);
+  const editor = scope?.querySelector(".ProseMirror, .markdown-editor");
+  if (!editor) return false;
+  editor.focus({ preventScroll: true });
+  if (editor.classList.contains("markdown-editor")) {
+    const end = editor.value?.length ?? 0;
+    editor.setSelectionRange?.(end, end);
+  }
+  return true;
+}
+
+function editorSnippet(kind) {
+  switch (kind) {
+    case "h2":
+      return "## 标题\n";
+    case "bullet":
+      return "- 列表项 1\n- 列表项 2\n";
+    case "ordered":
+      return "1. 列表项 1\n2. 列表项 2\n";
+    case "quote":
+      return "> 引用内容\n";
+    case "code":
+      return "```text\n在这里输入代码\n```\n";
+    case "table":
+      return "| 列 1 | 列 2 |\n| --- | --- |\n| 内容 | 内容 |\n";
+    case "image":
+      return "![图片描述](https://)\n";
+    default:
+      return "";
+  }
+}
+
+function insertIntoActiveEditor(text) {
+  const active = document.activeElement;
+  if (active?.classList?.contains("markdown-editor")) {
+    const start = active.selectionStart ?? active.value.length;
+    const end = active.selectionEnd ?? start;
+    active.setRangeText(text, start, end, "end");
+    active.dispatchEvent(new Event("input", { bubbles: true }));
+    return true;
+  }
+
+  const proseMirror = document.activeElement?.closest?.(".ProseMirror") || document.querySelector(".node-detail.fullscreen-editor .ProseMirror:focus, .node-detail.fullscreen-editor .ProseMirror");
+  if (!proseMirror) return false;
+  proseMirror.focus({ preventScroll: true });
+
+  if (document.queryCommandSupported?.("insertText")) {
+    const inserted = document.execCommand("insertText", false, text);
+    if (inserted) return true;
+  }
+
+  const selection = window.getSelection();
+  if (!selection?.rangeCount) return false;
+  const range = selection.getRangeAt(0);
+  range.deleteContents();
+  const node = document.createTextNode(text);
+  range.insertNode(node);
+  range.setStartAfter(node);
+  range.collapse(true);
+  selection.removeAllRanges();
+  selection.addRange(range);
+  proseMirror.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: text }));
+  return true;
+}
+
 function action(data, event = null) {
   state.contextMenu = null;
   if (data.action === "markdown-tool") {
     applyMarkdownTool(data.tool);
+    return;
+  }
+  if (data.action === "insert-editor-snippet") {
+    focusNodeDetailEditor(state.selectedNodeId);
+    insertIntoActiveEditor(editorSnippet(data.kind));
     return;
   }
   if (data.action === "export-node-pdf") {

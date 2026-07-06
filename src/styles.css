@@ -2873,7 +2873,7 @@ body {
 }
 
 .ops-app {
-  grid-template-columns: var(--sidebar-width, 300px) minmax(720px, 1fr);
+  grid-template-columns: minmax(220px, var(--sidebar-width, 296px)) minmax(0, 1fr);
   gap: 0;
   padding: 0;
   background: linear-gradient(90deg, rgba(255, 255, 255, 0.48), rgba(255, 255, 255, 0.12) 36%, transparent);
@@ -3001,7 +3001,8 @@ body {
 }
 
 .task-list {
-  padding: 0 14px 12px;
+  min-width: 0;
+  padding: 0 clamp(10px, 1.1vw, 14px) 12px;
 }
 
 .task-list-head {
@@ -3042,6 +3043,8 @@ body {
   gap: 8px;
   align-items: center;
   min-height: 38px;
+  width: 100%;
+  min-width: 0;
   padding: 6px 7px;
   border: 0;
   border-radius: 8px;
@@ -4452,6 +4455,7 @@ body {
   counter-reset: main-flow-step;
   grid-auto-rows: max-content;
   min-height: 0;
+  min-width: 0;
   margin: 0;
   overflow: auto;
   border: 0;
@@ -4466,13 +4470,14 @@ body {
   display: grid;
   grid-template-columns:
     44px
-    minmax(140px, 1fr)
-    minmax(140px, 1fr)
-    clamp(64px, 7vw, 82px)
-    clamp(66px, 7vw, 84px);
+    minmax(0, var(--flow-title-width, 360px))
+    minmax(0, var(--flow-note-width, 330px))
+    82px
+    84px;
   gap: clamp(8px, 1vw, 12px);
   align-items: center;
   min-height: 54px;
+  min-width: calc(44px + var(--flow-title-width, 360px) + var(--flow-note-width, 330px) + 82px + 84px + 48px);
   padding: 0;
   border-bottom: 1px solid var(--line-soft);
   color: var(--ink);
@@ -4512,11 +4517,12 @@ body {
 .flow-line.flow-row.sub {
   grid-template-columns:
     64px
-    minmax(120px, 1fr)
-    minmax(120px, 1fr)
-    clamp(64px, 7vw, 82px)
-    clamp(66px, 7vw, 84px);
+    minmax(0, var(--flow-title-width, 360px))
+    minmax(0, var(--flow-note-width, 330px))
+    82px
+    84px;
   min-height: 50px;
+  min-width: calc(64px + var(--flow-title-width, 360px) + var(--flow-note-width, 330px) + 82px + 84px + 48px);
 }
 
 .flow-line.flow-row.sub::after {
@@ -4906,8 +4912,11 @@ body {
   inset: 18px;
   z-index: 70;
   display: flex;
+  min-width: 0;
+  min-height: 0;
   width: auto;
   height: auto;
+  flex-direction: column;
   border-radius: 16px;
   background: var(--markdown-panel-bg);
   box-shadow: 0 28px 90px rgba(8, 42, 34, 0.28);
@@ -4915,6 +4924,54 @@ body {
 
 .fullscreen-editor.node-detail::before {
   display: none;
+}
+
+.fullscreen-editor .detail-title-row {
+  flex: 0 0 auto;
+}
+
+.fullscreen-editor .fullscreen-editor-panel {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  cursor: text;
+}
+
+.fullscreen-editor .fullscreen-editor-panel .milkdown-editor-host {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  width: 100%;
+}
+
+.fullscreen-editor .fullscreen-editor-panel .milkdown-editor-host .milkdown,
+.fullscreen-editor .fullscreen-editor-panel .milkdown-editor-host .milkdown > div {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  width: 100%;
+}
+
+.fullscreen-editor .fullscreen-editor-panel .milkdown-editor-host .ProseMirror,
+.fullscreen-editor .fullscreen-editor-panel .milkdown-editor-host .markdown-editor {
+  width: 100%;
+  min-height: 0;
+  height: 100%;
+  flex: 1 1 auto;
+  padding: 0;
+  margin: 0;
+  overflow: auto;
+  background: transparent;
+}
+
+.fullscreen-editor .fullscreen-editor-panel .milkdown-editor-host .ProseMirror > *:first-child {
+  margin-top: 0;
+}
+
+.fullscreen-editor .fullscreen-editor-panel .milkdown-status {
+  flex: 0 0 auto;
 }
 
 @media (max-width: 980px) {
