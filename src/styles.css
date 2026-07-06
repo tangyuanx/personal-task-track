@@ -4707,12 +4707,12 @@ body {
   display: flex;
   width: clamp(420px, 42vw, 620px);
   max-width: calc(100vw - 44px);
-  max-height: min(260px, calc(100vh - 44px));
+  max-height: min(286px, calc(100vh - 44px));
   height: auto;
   flex-direction: column;
   margin: 0;
   overflow: hidden;
-  padding: clamp(14px, 1.2vw, 18px) clamp(18px, 1.5vw, 22px) 14px;
+  padding: 12px 14px 12px;
   border: 1px solid rgba(13, 91, 73, 0.16);
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.94);
@@ -4746,7 +4746,7 @@ body {
   align-items: flex-start;
   justify-content: space-between;
   gap: 14px;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
   padding: 0;
 }
 
@@ -4754,7 +4754,7 @@ body {
   display: grid;
   min-width: 0;
   flex: 1;
-  gap: 4px;
+  gap: 3px;
 }
 
 .record-popover .detail-head h2 {
@@ -4783,8 +4783,8 @@ body {
 
 .record-body.markdown-panel {
   display: flex;
-  min-height: 88px;
-  max-height: min(132px, calc(100vh - var(--detail-y, 0px) - 146px));
+  min-height: 124px;
+  max-height: min(176px, calc(100vh - var(--detail-y, 0px) - 126px));
   flex-direction: column;
   margin: 0;
   overflow: hidden;
@@ -4811,7 +4811,7 @@ body {
 
 .record-popover .milkdown-editor-host .ProseMirror {
   width: 100%;
-  min-height: 88px;
+  min-height: 124px;
   padding: 0;
   margin: 0;
   overflow: hidden;
@@ -4871,7 +4871,7 @@ body {
 }
 
 .record-popover .dismiss-note {
-  margin: 8px 0 0;
+  margin: 6px 0 0;
   color: var(--faint);
   font-family: var(--mono);
   font-size: 11px;
@@ -4881,8 +4881,8 @@ body {
   display: flex;
   flex: 0 0 auto;
   gap: 6px;
-  margin: 12px 0 0;
-  padding-top: 10px;
+  margin: 8px 0 0;
+  padding-top: 8px;
   border-top: 1px solid var(--line-soft);
   justify-content: flex-start;
 }

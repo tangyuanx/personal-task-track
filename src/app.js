@@ -878,7 +878,7 @@ function nodeDetailPositionStyle() {
   if (state.nodeDetailFullscreen || !state.nodeDetailPosition) return "";
   const viewportPadding = 22;
   const popoverWidth = Math.min(620, Math.max(420, window.innerWidth * 0.42), window.innerWidth - viewportPadding * 2);
-  const popoverHeight = Math.min(260, Math.max(210, window.innerHeight * 0.34), window.innerHeight - viewportPadding * 2);
+  const popoverHeight = Math.min(286, Math.max(236, window.innerHeight * 0.37), window.innerHeight - viewportPadding * 2);
   const x = Math.max(viewportPadding, Math.min(window.innerWidth - popoverWidth - viewportPadding, Number(state.nodeDetailPosition.x) || 0));
   const y = Math.max(viewportPadding, Math.min(window.innerHeight - popoverHeight - viewportPadding, Number(state.nodeDetailPosition.y) || 0));
   return `style="--detail-x:${x}px;--detail-y:${y}px"`;
