@@ -260,16 +260,17 @@ p {
 
 .sidebar-resizer {
   position: absolute;
-  z-index: 5;
+  z-index: 10;
   top: 0;
-  right: -5px;
+  right: -8px;
   bottom: 0;
-  width: 10px;
+  width: 22px;
   cursor: col-resize;
 }
 
 .sidebar-resizer:hover {
-  background: color-mix(in srgb, var(--focus) 16%, transparent);
+  background: color-mix(in srgb, var(--focus) 14%, transparent);
+  border-left: 1px solid color-mix(in srgb, var(--focus) 24%, transparent);
 }
 
 .sidebar-head {
@@ -2327,7 +2328,7 @@ body.resizing-detail {
 
 .context-menu {
   position: fixed;
-  z-index: 20;
+  z-index: 120;
   width: 198px;
   padding: 7px;
   border: 1px solid var(--line);
