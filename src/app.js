@@ -495,7 +495,7 @@ function render() {
       <section class="workspace">
         ${task ? renderTaskPage(task) : renderEmptyPage()}
       </section>
-      ${renderContextMenu()}
+      <div id="context-menu-root">${renderContextMenu()}</div>
       ${state.settingsOpen ? renderSettingsPanel() : ""}
       ${state.reviewOpen ? renderReviewPanel() : ""}
     </main>
@@ -985,6 +985,18 @@ function renderContextMenu() {
       <button class="danger" data-action="delete-node" data-task-id="${menu.taskId}" data-node-id="${menu.nodeId}">删除节点</button>
     </div>
   `;
+}
+
+function syncContextMenuRoot() {
+  const root = document.querySelector("#context-menu-root");
+  if (!root) return;
+  root.innerHTML = renderContextMenu();
+  root.querySelectorAll("[data-action]").forEach((element) => {
+    element.addEventListener("click", (event) => {
+      event.stopPropagation();
+      action(element.dataset, event);
+    });
+  });
 }
 
 function filteredTasks() {
@@ -1803,7 +1815,7 @@ function bind() {
         x,
         y,
       };
-      render();
+      syncContextMenuRoot();
     });
   });
 
@@ -1818,7 +1830,7 @@ function bind() {
 
       if (state.contextMenu && !keepContextMenu) {
         state.contextMenu = null;
-        needsRender = true;
+        syncContextMenuRoot();
       }
 
       if (state.settingsOpen && !keepSettings) {
@@ -2114,6 +2126,7 @@ function mountMilkdownEditors() {
           return;
         }
         milkdownEditors.set(nodeId, instance);
+        bindMilkdownSurfaceEvents(host);
         updateMarkdownStatsForMarkdown(host, nodeNoteDrafts.get(noteDraftKey(taskId, nodeId))?.markdown ?? node.note ?? "");
         if (state.nodeDetailFullscreen && state.selectedNodeId === nodeId) {
           window.requestAnimationFrame(() => {
@@ -2143,6 +2156,28 @@ function mountFallbackMarkdownEditor(host) {
     });
     editor.addEventListener("paste", handleMarkdownPaste);
     editor.addEventListener("drop", handleMarkdownDrop);
+  });
+}
+
+function bindMilkdownSurfaceEvents(host) {
+  const editor = host.querySelector(".ProseMirror");
+  if (!editor || editor.dataset.enhanced === "true") return;
+  editor.dataset.enhanced = "true";
+  editor.addEventListener("paste", handleMarkdownPaste);
+  editor.addEventListener("drop", handleMarkdownDrop);
+  editor.addEventListener("dragover", (event) => {
+    if (hasDraggedImage(event)) {
+      event.preventDefault();
+      host.closest(".markdown-panel")?.classList.add("dragging-image");
+    }
+  });
+  editor.addEventListener("dragleave", () => {
+    host.closest(".markdown-panel")?.classList.remove("dragging-image");
+  });
+  editor.addEventListener("keydown", (event) => {
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "v") {
+      handleMarkdownPasteShortcut(event);
+    }
   });
 }
 
@@ -2219,14 +2254,89 @@ function insertIntoActiveEditor(text) {
   return true;
 }
 
+function createMarkdownImageSnippet(dataUrl) {
+  if (typeof dataUrl !== "string" || !dataUrl.startsWith("data:image/")) return "";
+  const imageId = id("image");
+  state.attachments = normalizeAttachments(state.attachments);
+  state.attachments.images[imageId] = dataUrl;
+  const alt = `粘贴图片 ${formatImageStamp(new Date())}`;
+  save();
+  return `\n![${alt}](task-image:${imageId})\n`;
+}
+
+function insertTextIntoEditor(editor, text) {
+  if (!editor || !text) return false;
+  if (editor.classList?.contains("markdown-editor")) {
+    const start = editor.selectionStart ?? editor.value.length;
+    const end = editor.selectionEnd ?? start;
+    editor.setRangeText(text, start, end, "end");
+    editor.dispatchEvent(new Event("input", { bubbles: true }));
+    return true;
+  }
+  if (editor.classList?.contains("ProseMirror")) {
+    editor.focus({ preventScroll: true });
+    return insertIntoActiveEditor(text);
+  }
+  return false;
+}
+
+function insertMarkdownImage(editor, dataUrl) {
+  const markdown = createMarkdownImageSnippet(dataUrl);
+  if (!markdown) return false;
+  return insertTextIntoEditor(editor, markdown);
+}
+
+function activeRichEditor() {
+  const active = document.activeElement;
+  if (active?.classList?.contains("markdown-editor") || active?.classList?.contains("ProseMirror")) return active;
+  return document.querySelector(".node-detail.fullscreen-editor .ProseMirror:focus, .node-detail.fullscreen-editor .ProseMirror, .node-detail.fullscreen-editor .markdown-editor:focus, .node-detail.fullscreen-editor .markdown-editor");
+}
+
+async function pickEditorImageFile() {
+  return new Promise((resolve) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.style.display = "none";
+    document.body.appendChild(input);
+    input.addEventListener(
+      "change",
+      () => {
+        const file = input.files?.[0] || null;
+        input.remove();
+        resolve(file);
+      },
+      { once: true },
+    );
+    input.addEventListener(
+      "cancel",
+      () => {
+        input.remove();
+        resolve(null);
+      },
+      { once: true },
+    );
+    input.click();
+  });
+}
+
 function action(data, event = null) {
   state.contextMenu = null;
+  syncContextMenuRoot();
   if (data.action === "markdown-tool") {
     applyMarkdownTool(data.tool);
     return;
   }
   if (data.action === "insert-editor-snippet") {
     focusNodeDetailEditor(state.selectedNodeId);
+    if (data.kind === "image") {
+      void pickEditorImageFile().then((file) => {
+        const editor = activeRichEditor();
+        if (!file || !editor) return;
+        insertImageFile(editor, file);
+      });
+      return;
+    }
     insertIntoActiveEditor(editorSnippet(data.kind));
     return;
   }
@@ -2669,7 +2779,7 @@ async function handleMarkdownPaste(event) {
     event.preventDefault();
     const dataUrl = await window.personalTaskTrack?.clipboard?.readImageDataUrl?.();
     if (!dataUrl) {
-      if (text) insertEditorText(event.currentTarget, text);
+      if (text) insertTextIntoEditor(event.currentTarget, text);
       return;
     }
     insertMarkdownImage(event.currentTarget, dataUrl);
@@ -2709,18 +2819,6 @@ function insertImageFile(editor, file) {
   const reader = new FileReader();
   reader.addEventListener("load", () => insertMarkdownImage(editor, reader.result));
   reader.readAsDataURL(file);
-}
-
-function insertMarkdownImage(editor, dataUrl) {
-  if (typeof dataUrl !== "string" || !dataUrl.startsWith("data:image/")) return;
-  const imageId = id("image");
-  state.attachments = normalizeAttachments(state.attachments);
-  state.attachments.images[imageId] = dataUrl;
-  const alt = `粘贴图片 ${formatImageStamp(new Date())}`;
-  const markdown = `\n![${alt}](task-image:${imageId})\n`;
-  const start = editor.selectionStart || editor.value.length;
-  replaceEditorSelection(editor, markdown, start + markdown.length);
-  save();
 }
 
 function hasDraggedImage(event) {
