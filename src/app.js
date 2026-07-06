@@ -846,7 +846,7 @@ function renderNodeDetail(taskId, node) {
         <span>标题</span>
         ${inputHtml("title", node.title, taskId, "node-detail-title", node.id)}
       </label>
-      <section class="markdown-panel milkdown-panel fullscreen-editor-panel" data-context="editor" data-task-id="${taskId}" data-node-id="${node.id}" data-editor-focus-target="true">
+      <section class="markdown-panel milkdown-panel fullscreen-editor-panel" data-task-id="${taskId}" data-node-id="${node.id}" data-editor-focus-target="true">
         <div
           class="milkdown-editor-host"
           data-task-id="${taskId}"
@@ -1785,10 +1785,25 @@ function bind() {
   document.querySelectorAll("[data-editor-focus-target]").forEach((panel) => {
     panel.addEventListener("pointerdown", (event) => {
       if (event.button !== 0) return;
-      if (event.target.closest("button, input, select, textarea, a, .context-menu, .detail-actions")) return;
+      if (event.target.closest("button, input, select, textarea, a, .context-menu, .detail-actions, .ProseMirror, .markdown-editor")) return;
       const nodeId = panel.dataset.nodeId;
       if (!nodeId) return;
       window.requestAnimationFrame(() => focusNodeDetailEditor(nodeId));
+    });
+    panel.addEventListener("contextmenu", (event) => {
+      if (!panel.closest(".fullscreen-editor")) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const x = Math.min(event.clientX, window.innerWidth - 210);
+      const y = Math.min(event.clientY, window.innerHeight - 245);
+      state.contextMenu = {
+        kind: "editor",
+        taskId: panel.dataset.taskId,
+        nodeId: panel.dataset.nodeId || "",
+        x,
+        y,
+      };
+      render();
     });
   });
 

@@ -2873,7 +2873,7 @@ body {
 }
 
 .ops-app {
-  grid-template-columns: minmax(220px, var(--sidebar-width, 296px)) minmax(0, 1fr);
+  grid-template-columns: clamp(220px, var(--sidebar-width, 296px), 560px) minmax(0, 1fr);
   gap: 0;
   padding: 0;
   background: linear-gradient(90deg, rgba(255, 255, 255, 0.48), rgba(255, 255, 255, 0.12) 36%, transparent);
@@ -2883,6 +2883,8 @@ body {
   border: 0;
   border-right: 1px solid rgba(30, 34, 39, 0.08);
   border-radius: 0;
+  min-width: 0;
+  width: 100%;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.64), rgba(246, 244, 238, 0.72)),
     var(--paper);
@@ -4931,43 +4933,23 @@ body {
 }
 
 .fullscreen-editor .fullscreen-editor-panel {
-  display: flex;
   min-height: 0;
   flex: 1 1 auto;
-  flex-direction: column;
   cursor: text;
 }
 
 .fullscreen-editor .fullscreen-editor-panel .milkdown-editor-host {
-  display: flex;
   min-height: 0;
   flex: 1 1 auto;
-  width: 100%;
-}
-
-.fullscreen-editor .fullscreen-editor-panel .milkdown-editor-host .milkdown,
-.fullscreen-editor .fullscreen-editor-panel .milkdown-editor-host .milkdown > div {
-  display: flex;
-  min-height: 0;
-  flex: 1 1 auto;
-  flex-direction: column;
   width: 100%;
 }
 
 .fullscreen-editor .fullscreen-editor-panel .milkdown-editor-host .ProseMirror,
 .fullscreen-editor .fullscreen-editor-panel .milkdown-editor-host .markdown-editor {
   width: 100%;
-  min-height: 0;
-  height: 100%;
-  flex: 1 1 auto;
-  padding: 0;
-  margin: 0;
+  min-height: 420px;
   overflow: auto;
-  background: transparent;
-}
-
-.fullscreen-editor .fullscreen-editor-panel .milkdown-editor-host .ProseMirror > *:first-child {
-  margin-top: 0;
+  background: var(--markdown-panel-bg);
 }
 
 .fullscreen-editor .fullscreen-editor-panel .milkdown-status {
