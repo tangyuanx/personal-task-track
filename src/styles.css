@@ -4716,7 +4716,7 @@ body {
   display: flex;
   width: clamp(420px, 42vw, 620px);
   max-width: calc(100vw - 44px);
-  max-height: min(286px, calc(100vh - 44px));
+  max-height: min(340px, calc(100vh - 44px));
   height: auto;
   flex-direction: column;
   margin: 0;
@@ -4793,28 +4793,25 @@ body {
 .record-body.markdown-panel {
   display: flex;
   min-height: 124px;
-  max-height: min(176px, calc(100vh - var(--detail-y, 0px) - 126px));
+  max-height: min(176px, calc(100vh - var(--detail-y, 0px) - 155px));
   flex-direction: column;
   margin: 0;
-  overflow: hidden;
+  overflow-y: auto; overflow-x: hidden;
   border: 0;
   border-radius: 0;
   background: transparent;
-  scrollbar-width: none;
 }
 
-.record-body.markdown-panel::-webkit-scrollbar {
-  display: none;
-}
 
 .record-popover .milkdown-editor-host {
   flex: 1 1 auto;
   width: 100%;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .record-popover .milkdown-editor-host .milkdown {
   min-height: 100%;
+  padding: 0;
   background: transparent;
 }
 
@@ -4823,7 +4820,7 @@ body {
   min-height: 124px;
   padding: 0;
   margin: 0;
-  overflow: hidden;
+  overflow: visible;
   background: transparent;
   color: var(--ink);
   font-size: clamp(13px, 1.08vw, 15px);
@@ -4880,7 +4877,7 @@ body {
 }
 
 .record-popover .dismiss-note {
-  margin: 6px 0 0;
+  margin: 4px 0 0;
   color: var(--faint);
   font-family: var(--mono);
   font-size: 11px;
@@ -4890,8 +4887,8 @@ body {
   display: flex;
   flex: 0 0 auto;
   gap: 6px;
-  margin: 8px 0 0;
-  padding-top: 8px;
+  margin: 4px 0 0;
+  padding-top: 4px;
   border-top: 1px solid var(--line-soft);
   justify-content: flex-start;
 }
@@ -4909,6 +4906,16 @@ body {
   color: var(--muted);
   font-size: 12px;
 }
+
+.record-popover .milkdown-editor-host .ProseMirror img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+}
+.record-popover .milkdown-editor-host .ProseMirror .image-block {
+  max-width: 100%;
+}
+
 
 .fullscreen-editor.node-detail {
   position: fixed;
