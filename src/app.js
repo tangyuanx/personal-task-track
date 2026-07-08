@@ -1,3 +1,8 @@
+// ============================================================
+// Personal Task Track -- frontend application logic
+// All state management, DOM rendering, event handling,
+// Markdown processing, and Milkdown editor integration.
+// ============================================================
 const STORAGE_KEY = "task-flow-sheet-prototype-v2";
 const FLOW_WIDTH_KEY = "task-flow-column-widths-v1";
 const THEME_KEY = "task-track-theme";
@@ -17,6 +22,10 @@ const desktopExport = window.personalTaskTrack?.export;
 const APP_VERSION = window.personalTaskTrack?.appVersion || "";
 
 const priorityLabels = {
+
+// ============================================================
+// LABELS & CONFIGURATIONS
+// ============================================================
   high: "高",
   medium: "中",
   low: "低",
@@ -101,6 +110,10 @@ const reviewDateFieldLabels = {
 };
 
 let state = {
+
+// ============================================================
+// STATE -- single source of truth
+// ============================================================
   tasks: [],
   taskGroups: [{ ...defaultTaskGroup }],
   activeGroupId: defaultTaskGroup.id,
@@ -117,6 +130,10 @@ let state = {
   enFont: "inter",
   settingsOpen: false,
   reviewOpen: false,
+
+// ============================================================
+// RUNTIME VARIABLES
+// ============================================================
   reviewPreset: "week",
   reviewDateField: "updated",
   reviewStartDate: "",
@@ -146,6 +163,10 @@ const milkdownEditors = new Map();
 const nodeNoteDrafts = new Map();
 const nodeNoteSaveTimers = new Map();
 
+
+// ============================================================
+// UTILITY FUNCTIONS
+// ============================================================
 function id(prefix) {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
 }
@@ -154,6 +175,13 @@ function now() {
   return new Date().toISOString();
 }
 
+/**
+ * Create a new task node (step or subtask).
+ * @param {string} taskId - Parent task ID
+ * @param {string|null} parentId - null for root-level steps, node ID for subtasks
+ * @param {number} order - Display order within parent
+ * @returns {object} New node object with default fields
+ */
 function makeNode(taskId, parentId, order) {
   return {
     id: id("node"),
@@ -172,6 +200,14 @@ function makeNode(taskId, parentId, order) {
   };
 }
 
+
+// ============================================================
+// DATA LOADING (localStorage / Electron IPC)
+// ============================================================
+/**
+ * Load tasks from localStorage (browser-only fallback).
+ * @returns {Array} Parsed task array or empty array
+ */
 function loadBrowserTasks() {
   const raw = localStorage.getItem(STORAGE_KEY);
   if (!raw) return [];
@@ -347,6 +383,15 @@ function loadBrowserAttachments() {
   }
 }
 
+
+// ============================================================
+// DATA PERSISTENCE (save / flush / normalize)
+// ============================================================
+/**
+ * Load all app data from Electron IPC storage, falling back to localStorage.
+ * Normalizes all fields and returns a complete data object.
+ * @returns {Promise<object>} { tasks, taskGroups, activeGroupId, flowWidths, ... }
+ */
 async function loadAppData() {
   if (desktopStorage?.read) {
     try {
@@ -389,6 +434,10 @@ async function loadAppData() {
   };
 }
 
+/**
+ * Save current state. In Electron environment, queues an async write.
+ * In browser environment, writes directly to individual localStorage keys.
+ */
 function save() {
   const payload = {
     version: DATA_VERSION,
@@ -434,6 +483,10 @@ function saveFlowWidths() {
   save();
 }
 
+/**
+ * Flush pending save payload to Electron IPC storage.
+ * Uses a save-in-flight flag to prevent concurrent writes.
+ */
 async function flushSave() {
   if (!desktopStorage?.write || saveInFlight || !pendingPayload) return;
   const payload = pendingPayload;
@@ -479,6 +532,16 @@ function workbenchStyle() {
   return `--detail-pane-height:${detailHeight}%;--flow-pane-height:${100 - detailHeight}%`;
 }
 
+
+// ============================================================
+// RENDERING -- main render() and all DOM builders
+// ============================================================
+/**
+ * Main render entry: reconstruct the entire DOM from state.
+ * Sequence: capture drafts -> flush drafts -> save -> destroy editors
+ *   -> set theme/font -> rebuild innerHTML -> bind -> mount editors
+ * This is called after every state change.
+ */
 function render() {
   captureMountedMilkdownDrafts();
   flushNodeNoteDrafts({ persist: false });
@@ -999,6 +1062,14 @@ function syncContextMenuRoot() {
   });
 }
 
+
+// ============================================================
+// DATA QUERY HELPERS (filter, search, sort)
+// ============================================================
+/**
+ * Get tasks matching current filters (search query + task filter + priority filter).
+ * @returns {Array} Filtered task list
+ */
 function filteredTasks() {
   const q = state.query.trim().toLowerCase();
   return taskListScopeTasks()
@@ -1099,6 +1170,10 @@ function nextOpenNode(nodes) {
   return null;
 }
 
+
+// ============================================================
+// HTML HELPER FUNCTIONS (input, select, textarea builders)
+// ============================================================
 function inputHtml(key, value, taskId, className = "", nodeId = "") {
   return `<input class="${className}" data-edit-key="${key}" data-task-id="${taskId}" data-node-id="${nodeId}" value="${escAttr(value)}" />`;
 }
@@ -1141,6 +1216,10 @@ function filterSelectHtml(kind, value, options, title = "") {
   `;
 }
 
+
+// ============================================================
+// SETTINGS PANEL
+// ============================================================
 function renderSettingsPanel() {
   return `
     <div class="settings-overlay" role="presentation">
@@ -1221,6 +1300,10 @@ function renderSettingsPanel() {
   `;
 }
 
+
+// ============================================================
+// REVIEW PANEL
+// ============================================================
 function renderReviewPanel() {
   const range = reviewRange();
   const items = reviewTasks(range);
@@ -1418,6 +1501,10 @@ function settingsOptionGroup(key, value, options) {
   `;
 }
 
+
+// ============================================================
+// DRAG & DROP (tasks, groups)
+// ============================================================
 function startTaskPointerDrag(event) {
   if (event.button !== 0) return;
   const handle = event.currentTarget;
@@ -1463,6 +1550,17 @@ function finishTaskPointerDrag() {
   }
 }
 
+
+// ============================================================
+// EVENT BINDING -- bind() called after every render
+// ============================================================
+/**
+ * Bind all DOM events after render.
+ * Called once after every innerHTML rebuild.
+ * Uses data-* attributes for event delegation:
+ *   [data-action] for commands, [data-edit-key] for edits,
+ *   [data-setting] for preferences, [data-context] for right-click.
+ */
 function bind() {
   document.querySelectorAll(".task-item[data-task-id]").forEach((element) => {
     element.addEventListener("pointerdown", (event) => {
@@ -1952,6 +2050,10 @@ function startDetailResize(event) {
   window.addEventListener("pointerup", end);
 }
 
+
+// ============================================================
+// NODE DETAIL LIFECYCLE
+// ============================================================
 function exitNodeDetail() {
   if (!state.selectedNodeId) return false;
   state.selectedNodeId = "";
@@ -2005,6 +2107,10 @@ function focusPendingElement() {
   restoreMarkdownSelection();
 }
 
+
+// ============================================================
+// MARKDOWN EDITOR (Milkdown integration)
+// ============================================================
 function storeMarkdownSelection(editor = activeMarkdownEditor(), shouldRestore = false) {
   if (!editor) return;
   state.markdownSelection = {
@@ -2097,6 +2203,10 @@ function flushNodeNoteDrafts({ persist = true } = {}) {
   return changed;
 }
 
+/**
+ * Mount Milkdown editors on all .milkdown-editor-host elements.
+ * Creates or reuses editor instances based on node content.
+ */
 function mountMilkdownEditors() {
   const hosts = Array.from(document.querySelectorAll(".milkdown-editor-host"));
   if (!hosts.length) return;
@@ -2320,6 +2430,16 @@ async function pickEditorImageFile() {
   });
 }
 
+
+// ============================================================
+// ACTION HANDLER -- central action() dispatcher
+// ============================================================
+/**
+ * Central action dispatcher. Called when [data-action] elements are clicked.
+ * Modifies state (never render() directly), then calls render().
+ * @param {object} data - DOM dataset, includes { action, taskId, nodeId, ... }
+ * @param {Event|null} event - Original DOM event, used for position calculations
+ */
 function action(data, event = null) {
   state.contextMenu = null;
   syncContextMenuRoot();
@@ -2412,6 +2532,10 @@ function action(data, event = null) {
   render();
 }
 
+/**
+ * Share a task: copy its Markdown representation to clipboard.
+ * @param {string} taskId - Task ID to share
+ */
 async function shareTask(taskId) {
   const task = state.tasks.find((item) => item.id === taskId);
   if (!task) return;
@@ -2495,6 +2619,12 @@ function safeDownloadName(value) {
   return String(value || "task").replace(/[<>:"/\\|?*\u0000-\u001f]/g, "-").replace(/\s+/g, " ").trim().slice(0, 80) || "task";
 }
 
+/**
+ * Handle inline edits from [data-edit-key] elements.
+ * Updates a specific state field and triggers save.
+ * @param {object} data - DOM dataset with { editKey, taskId, nodeId }
+ * @param {string} value - New value from the input element
+ */
 function edit(data, value) {
   const task = state.tasks.find((item) => item.id === data.taskId);
   if (!task) return;
@@ -2555,6 +2685,16 @@ function addBlankTask() {
   createTask("", false);
 }
 
+
+// ============================================================
+// TASK & NODE CRUD (create, delete, reorder, etc.)
+// ============================================================
+/**
+ * Create a new task with the given title.
+ * @param {string} title - Task title
+ * @param {boolean} shouldRender - Whether to re-render after creation
+ * @returns {object} The newly created task
+ */
 function createTask(title, shouldRender = true) {
   const task = {
     id: id("task"),
@@ -2583,6 +2723,10 @@ function createTask(title, shouldRender = true) {
   if (shouldRender) render();
 }
 
+/**
+ * Select a task group by ID, switching the active view.
+ * @param {string} groupId - Target group ID
+ */
 function selectGroup(groupId) {
   state.activeGroupId = normalizeActiveGroupId(groupId, state.taskGroups);
   state.activeTaskId = "";
@@ -2623,6 +2767,11 @@ function renameGroup(groupId, value, commit = false) {
   save();
 }
 
+/**
+ * Reorder groups via drag-and-drop.
+ * @param {string} sourceId - Dragged group ID
+ * @param {string} targetId - Drop target group ID
+ */
 function reorderGroups(sourceId, targetId) {
   if (!sourceId || !targetId || sourceId === targetId) return;
   const groups = sort(state.taskGroups);
@@ -2636,6 +2785,11 @@ function reorderGroups(sourceId, targetId) {
   save();
 }
 
+/**
+ * Reorder tasks via drag-and-drop within a group.
+ * @param {string} sourceId - Dragged task ID
+ * @param {string} targetId - Drop target task ID
+ */
 function reorderTasks(sourceId, targetId) {
   if (!sourceId || !targetId || sourceId === targetId) return;
   const visibleTasks = filteredTasks();
@@ -2844,6 +2998,12 @@ function updateMarkdownEditorState(editor) {
     .join("");
 }
 
+/**
+ * Export a node detail view as PDF via Electron IPC.
+ * Captures current Milkdown draft content before export.
+ * @param {string} taskId - Task ID
+ * @param {string} nodeId - Node ID to export
+ */
 async function exportNodePdf(taskId, nodeId) {
   const task = state.tasks.find((item) => item.id === taskId);
   const node = task ? findNode(task.nodes, nodeId) : null;
@@ -2876,6 +3036,10 @@ function toggleTaskTag(taskId, tag) {
   task.updatedAt = now();
 }
 
+/**
+ * Delete a task and all its nodes.
+ * @param {string} taskId - Task ID to delete
+ */
 function deleteTask(taskId) {
   const task = state.tasks.find((item) => item.id === taskId);
   if (!task || !confirm(`确定删除任务「${task.title || "未命名任务"}」及其所有节点？`)) return;
@@ -2890,6 +3054,10 @@ function deleteTask(taskId) {
   save();
 }
 
+/**
+ * Toggle task done/undone status, updating all nodes accordingly.
+ * @param {string} taskId - Task ID to toggle
+ */
 function toggleTaskDone(taskId) {
   const task = state.tasks.find((item) => item.id === taskId);
   if (!task) return;
@@ -2905,6 +3073,11 @@ function toggleTaskDone(taskId) {
   task.updatedAt = now();
 }
 
+/**
+ * Add a new node (step or subtask) to a task.
+ * @param {string} taskId - Parent task ID
+ * @param {string|null} parentId - null for root step, node ID for child
+ */
 function addNode(taskId, parentId) {
   const task = state.tasks.find((item) => item.id === taskId);
   if (!task) return;
@@ -2941,6 +3114,10 @@ function addSiblingNode(taskId, nodeId) {
   state.focusNodeTitleId = created.id;
 }
 
+
+// ============================================================
+// NODE UTILITY FUNCTIONS (find, flatten, sort)
+// ============================================================
 function toggleNodeDone(taskId, nodeId) {
   const task = state.tasks.find((item) => item.id === taskId);
   const node = task ? findNode(task.nodes, nodeId) : null;
@@ -2959,6 +3136,11 @@ function markNodeStatus(taskId, nodeId, status) {
   task.updatedAt = now();
 }
 
+/**
+ * Delete a node and its descendants from a task's node tree.
+ * @param {string} taskId - Task containing the node
+ * @param {string} nodeId - Node ID to delete
+ */
 function deleteNode(taskId, nodeId) {
   if (!confirm("确定删除这个节点及其子节点？")) return;
   const task = state.tasks.find((item) => item.id === taskId);
@@ -2980,6 +3162,12 @@ function activeTask() {
   return visibleTasks.find((task) => task.id === state.activeTaskId) || visibleTasks[0] || null;
 }
 
+/**
+ * Recursively find a node by ID in a node tree.
+ * @param {Array} nodes - Node array to search
+ * @param {string} nodeId - Target node ID
+ * @returns {object|null} Found node or null
+ */
 function findNode(nodes, nodeId) {
   for (const node of nodes) {
     if (node.id === nodeId) return node;
@@ -3003,6 +3191,11 @@ function removeNode(nodes, nodeId) {
   return nodes.filter((node) => node.id !== nodeId).map((node) => ({ ...node, children: removeNode(node.children, nodeId) }));
 }
 
+/**
+ * Flatten a nested node tree into a single array (pre-order traversal).
+ * @param {Array} nodes - Nested node array
+ * @returns {Array} Flat node array
+ */
 function flatten(nodes) {
   return nodes.flatMap((node) => [node, ...flatten(node.children)]);
 }
@@ -3024,6 +3217,17 @@ function nodeStatusText(status) {
   return "未完成";
 }
 
+
+// ============================================================
+// MARKDOWN RENDERING (plain text -> HTML)
+// ============================================================
+/**
+ * Render Markdown text to HTML.
+ * Supports: headings, paragraphs, lists (ul/ol), code blocks,
+ * blockquotes, task lists, tables, horizontal rules, inline formatting.
+ * @param {string} value - Raw Markdown text
+ * @returns {string} HTML string
+ */
 function renderMarkdown(value) {
   const lines = String(value || "").replace(/\r\n/g, "\n").split("\n");
   const html = [];
@@ -3151,6 +3355,11 @@ function renderMarkdown(value) {
   return html.length ? html.join("") : `<p class="markdown-empty">还没有注释。</p>`;
 }
 
+/**
+ * Render inline Markdown formatting (bold, italic, code, links, images, strikethrough).
+ * @param {string} value - Inline text with Markdown syntax
+ * @returns {string} HTML string
+ */
 function renderInlineMarkdown(value) {
   const codeSpans = [];
   const richTokens = [];
@@ -3266,6 +3475,10 @@ function renderMarkdownTable(headers, rows) {
   `;
 }
 
+
+// ============================================================
+// FORMAT HELPERS (date, text escaping)
+// ============================================================
 function formatShort(value) {
   return new Intl.DateTimeFormat("zh-CN", {
     month: "2-digit",
@@ -3311,6 +3524,14 @@ function escAttr(value) {
   return esc(value).replaceAll("\n", " ");
 }
 
+
+// ============================================================
+// APP BOOTSTRAP
+// ============================================================
+/**
+ * Application entry point. Loads persisted data and starts the first render.
+ * Called immediately at the end of the script.
+ */
 async function bootstrap() {
   const data = await loadAppData();
   state.tasks = data.tasks;

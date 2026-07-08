@@ -1,7 +1,21 @@
+/**
+ * Personal Task Track -- Electron main process
+ *
+ * Responsibilities:
+ *   - Create and manage the BrowserWindow
+ *   - Register IPC handlers (storage, clipboard, PDF export)
+ *   - Handle external URL navigation
+ *   - Manage application menu
+ */
+
 const { app, BrowserWindow, Menu, clipboard, dialog, ipcMain, shell } = require("electron");
 const fs = require("node:fs/promises");
 const path = require("node:path");
 const { readTaskData, writeTaskData } = require("./storage.cjs");
+/**
+ * Create the main application window.
+ * Sets up preload, CSP, and external link handling.
+ */
 
 const isMac = process.platform === "darwin";
 
@@ -22,9 +36,16 @@ function createWindow() {
       sandbox: true,
     },
   });
+/**
+ * Open external URLs (http/https/mailto) in the system browser.
+ * @param {string} url - URL to open
+ */
 
   window.loadFile(path.join(__dirname, "..", "index.html"));
   window.once("ready-to-show", () => window.show());
+/**
+ * Register all IPC handlers for storage, clipboard, and export.
+ */
 
   window.webContents.setWindowOpenHandler(({ url }) => {
     openExternalUrl(url);
@@ -48,6 +69,12 @@ function registerStorageHandlers() {
     event.returnValue = app.getVersion();
   });
   ipcMain.handle("task-data:read", () => readTaskData(app.getPath("userData")));
+/**
+ * Export a task document as Markdown or PDF.
+ * Shows a save dialog, renders PDF with a hidden BrowserWindow if needed.
+ * @param {object} payload - { taskTitle, markdown?, html? }
+ * @returns {Promise<{ canceled: boolean, filePath?: string }>}
+ */
   ipcMain.handle("task-data:write", (_event, data) => writeTaskData(app.getPath("userData"), data));
   ipcMain.handle("clipboard:read-image-data-url", () => {
     const image = clipboard.readImage();
@@ -74,6 +101,12 @@ async function exportTaskDocument(payload) {
   });
   if (canceled || !filePath) return { canceled: true };
 
+/**
+ * Export a single node detail as PDF.
+ * Opens a hidden BrowserWindow, renders HTML, prints to PDF.
+ * @param {object} payload - { nodeTitle, taskTitle, status, updatedAt, html }
+ * @returns {Promise<{ canceled: boolean, filePath?: string }>}
+ */
   if (filePath.toLowerCase().endsWith(".pdf")) {
     const window = new BrowserWindow({
       width: 900,
@@ -109,6 +142,11 @@ async function exportTaskDocument(payload) {
   return { canceled: false, filePath: markdownPath };
 }
 
+/**
+ * Generate HTML template for node detail PDF.
+ * @param {object} params - { taskTitle, nodeTitle, status, updatedAt, bodyHtml }
+ * @returns {string} Complete HTML document
+ */
 async function exportNodeDetailPdf(payload) {
   const safePayload = payload && typeof payload === "object" ? payload : {};
   const nodeTitle = String(safePayload.nodeTitle || "未命名节点").trim() || "未命名节点";
@@ -152,6 +190,11 @@ async function exportNodeDetailPdf(payload) {
   }
 }
 
+/**
+ * Generate HTML template for task document PDF.
+ * @param {object} params - { taskTitle, bodyHtml }
+ * @returns {string} Complete HTML document
+ */
 function nodeDetailPdfHtml({ taskTitle, nodeTitle, status, updatedAt, bodyHtml }) {
   return `<!doctype html>
 <html lang="zh-CN">
@@ -194,12 +237,22 @@ function nodeDetailPdfHtml({ taskTitle, nodeTitle, status, updatedAt, bodyHtml }
 </html>`;
 }
 
+/**
+ * Sanitize a filename by removing invalid characters.
+ * @param {string} value - Raw filename
+ * @returns {string} Safe filename (max 90 chars)
+ */
 function taskDocumentPdfHtml({ taskTitle, bodyHtml }) {
   return `<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8" />
   <style>
+/**
+ * Escape HTML special characters for safe rendering in PDF templates.
+ * @param {string} value - Raw text
+ * @returns {string} HTML-escaped text
+ */
     :root { color: #17211c; font-family: Inter, "Microsoft YaHei", "PingFang SC", Arial, sans-serif; }
     body { margin: 0; padding: 36px 42px; background: #ffffff; }
     header { margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid #d9e2dc; }
@@ -208,10 +261,16 @@ function taskDocumentPdfHtml({ taskTitle, bodyHtml }) {
     main { font-size: 14.5px; line-height: 1.72; }
     h1, h2, h3, h4, h5, h6 { color: #10251d; page-break-after: avoid; }
     h2 { margin-top: 24px; font-size: 20px; border-bottom: 1px solid #edf2ef; padding-bottom: 5px; }
+/**
+ * Create the application menu (currently set to null, hiding the default menu bar).
+ */
     h3 { margin-top: 18px; font-size: 17px; }
     p, ul, ol, blockquote, pre, table, img { margin: 0 0 13px; }
     a { color: #2f7d68; text-decoration: none; }
     blockquote { padding: 10px 13px; border-left: 3px solid #2f7d68; color: #52665d; background: #f5faf7; }
+/**
+ * Application ready handler: registers IPC, sets up menu, creates window.
+ */
     code { padding: 1px 5px; border: 1px solid #dfe9e4; border-radius: 5px; background: #f6faf8; font-family: "SFMono-Regular", Consolas, monospace; font-size: 0.92em; }
     pre { overflow-wrap: anywhere; padding: 12px; border: 1px solid #dfe9e4; border-radius: 8px; background: #f6faf8; white-space: pre-wrap; }
     pre code { padding: 0; border: 0; background: transparent; }

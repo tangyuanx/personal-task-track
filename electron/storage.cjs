@@ -1,3 +1,16 @@
+/**
+ * Personal Task Track -- Data persistence layer
+ *
+ * Responsibilities:
+ *   - Read/write task data as JSON to disk
+ *   - Normalize data structure (with safe defaults)
+ *   - Atomic writes via temp file + rename
+ *   - Automatic backup of corrupt data
+ *
+ * The data file is stored in Electron's userData directory.
+ * Data format versioning is handled via the version field.
+ */
+
 const fs = require("node:fs/promises");
 const path = require("node:path");
 
@@ -6,6 +19,11 @@ const DATA_VERSION = 1;
 
 function dataFilePath(userDataPath) {
   return path.join(userDataPath, DATA_FILE);
+/**
+ * Read and parse the task data JSON file.
+ * @param {string} userDataPath - Electron userData directory
+ * @returns {Promise<object|null>} Parsed data object, or null if missing/corrupt
+ */
 }
 
 async function readTaskData(userDataPath) {
@@ -18,6 +36,13 @@ async function readTaskData(userDataPath) {
       await backupCorruptData(userDataPath);
       return null;
     }
+/**
+ * Write task data to disk using atomic write pattern.
+ * Writes to a .tmp file first, then renames to the target path.
+ * @param {string} userDataPath - Electron userData directory
+ * @param {object} data - Task data to persist
+ * @returns {Promise<object>} The normalized data that was written
+ */
     throw error;
   }
 }
@@ -28,6 +53,12 @@ async function writeTaskData(userDataPath, data) {
   const filePath = dataFilePath(userDataPath);
   const tempPath = `${filePath}.tmp`;
   await fs.writeFile(tempPath, `${JSON.stringify(normalized, null, 2)}\n`, "utf8");
+/**
+ * Normalize task data structure with safe defaults for all fields.
+ * Ensures backward compatibility when new fields are added.
+ * @param {object|null} data - Raw parsed data
+ * @returns {object} Normalized data with all required fields
+ */
   await fs.rename(tempPath, filePath);
   return normalized;
 }
@@ -58,6 +89,11 @@ async function backupCorruptData(userDataPath) {
   const filePath = dataFilePath(userDataPath);
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
   const backupPath = path.join(userDataPath, `task-data.corrupt-${timestamp}.json`);
+/**
+ * Back up corrupt data file before it gets overwritten.
+ * Appends a timestamp to the filename for traceability.
+ * @param {string} userDataPath - Electron userData directory
+ */
   try {
     await fs.rename(filePath, backupPath);
   } catch (error) {

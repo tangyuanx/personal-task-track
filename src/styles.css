@@ -1,3 +1,4 @@
+/* ===== CSS VARIABLES (Light Theme) ===== */
 :root {
   color-scheme: light;
   --ink: #24272f;
@@ -61,6 +62,8 @@
   -webkit-font-smoothing: antialiased;
 }
 
+
+/* ===== DARK THEME OVERRIDES ===== */
 :root[data-theme="dark"] {
   color-scheme: dark;
   --ink: #d9ddd7;
@@ -118,6 +121,8 @@
   background: rgba(255, 255, 255, 0.03);
 }
 
+
+/* ===== FONT DEFINITIONS ===== */
 :root[data-zh-font="system"] {
   --zh-font: "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
 }
@@ -215,6 +220,8 @@ select {
   font-family: inherit;
 }
 
+
+/* ===== APP LAYOUT ===== */
 .ops-app,
 .milkdown-editor-host .milkdown,
 .milkdown-editor-host .ProseMirror {
@@ -244,6 +251,8 @@ p {
     transparent;
 }
 
+
+/* ===== SIDEBAR ===== */
 .sidebar {
   position: relative;
   display: flex;
@@ -258,6 +267,8 @@ p {
   box-shadow: 0 20px 54px var(--shadow);
 }
 
+
+/* ===== SIDEBAR RESIZER ===== */
 .sidebar-resizer {
   position: absolute;
   z-index: 10;
@@ -273,6 +284,8 @@ p {
   border-left: 1px solid color-mix(in srgb, var(--focus) 24%, transparent);
 }
 
+
+/* ===== SIDEBAR HEADER ===== */
 .sidebar-head {
   display: flex;
   min-height: 72px;
@@ -323,6 +336,8 @@ p {
   font-size: 12px;
 }
 
+
+/* ===== SIDEBAR STATS ===== */
 .sidebar-stats {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -402,6 +417,8 @@ p {
   font-size: 11px;
 }
 
+
+/* ===== FOCUS LIST (Today Focus) ===== */
 .focus-list {
   display: grid;
   gap: 6px;
@@ -533,6 +550,8 @@ p {
   gap: 3px;
 }
 
+
+/* ===== SHEET TABS (Task Groups) ===== */
 .sheet-tabs {
   display: flex;
   min-width: 0;
@@ -629,6 +648,8 @@ p {
   overflow: auto;
 }
 
+
+/* ===== SIDEBAR FOOTER ===== */
 .sidebar-foot {
   display: flex;
   align-items: center;
@@ -678,6 +699,8 @@ p {
   backdrop-filter: blur(10px);
 }
 
+
+/* ===== SETTINGS PANEL ===== */
 .settings-panel,
 .review-panel {
   display: flex;
@@ -868,6 +891,8 @@ p {
   font-weight: 700;
 }
 
+
+/* ===== REVIEW PANEL ===== */
 .review-panel {
   width: min(920px, calc(100vw - 48px));
 }
@@ -1066,6 +1091,8 @@ p {
   background: var(--focus-field);
 }
 
+
+/* ===== TASK ITEMS ===== */
 .task-item {
   display: grid;
   grid-template-columns: 10px 18px minmax(0, 1fr) 54px;
@@ -1318,6 +1345,8 @@ p {
   font-size: 12px;
 }
 
+
+/* ===== TASK TAGS & PRIORITIES ===== */
 .task-tag-row {
   display: flex;
   flex-wrap: wrap;
@@ -1393,6 +1422,8 @@ p {
   font-size: 13px;
 }
 
+
+/* ===== BRIEF FIELDS (Background / Conclusion) ===== */
 .brief-field {
   display: grid;
   grid-template-columns: 1fr;
@@ -1614,6 +1645,8 @@ p {
   background: color-mix(in srgb, var(--focus-field) 56%, transparent);
 }
 
+
+/* ===== FLOW TABLE (Steps / Subtasks) ===== */
 .flow-row.selected {
   background:
     linear-gradient(90deg, color-mix(in srgb, var(--focus) 12%, transparent), transparent 60%),
@@ -2096,6 +2129,8 @@ body.resizing-detail {
   font-size: 12px;
 }
 
+
+/* ===== MARKDOWN TABS & EDITOR PANELS ===== */
 .markdown-tabs button.active {
   color: var(--heading);
   background: var(--panel);
@@ -2354,6 +2389,8 @@ body.resizing-detail {
   background: var(--hover);
 }
 
+
+/* ===== CONTEXT MENU ===== */
 .context-menu button.danger {
   color: var(--red);
 }
@@ -2485,6 +2522,8 @@ body.resizing-detail {
     justify-items: start;
   }
 
+
+/* ===== DARK THEME OVERRIDES (Media Query) ===== */
   .sidebar {
     max-height: 52vh;
     border-right: 1px solid var(--line);
@@ -2585,6 +2624,8 @@ body.resizing-detail {
   }
 }
 
+
+/* ===== NODE DETAIL OVERLAY ===== */
 /* Revised node detail overlay + Milkdown editor */
 .task-workbench {
   position: relative;
@@ -2665,6 +2706,8 @@ body.resizing-detail {
   overflow: auto;
 }
 
+
+/* ===== MILKDOWN EDITOR STYLES ===== */
 .milkdown-editor-host .milkdown {
   --crepe-color-background: var(--markdown-panel-bg);
   --crepe-color-on-background: var(--ink);
