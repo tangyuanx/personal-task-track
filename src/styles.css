@@ -2698,6 +2698,9 @@ body.resizing-detail {
   border: 1px solid var(--line-soft);
   border-radius: 14px;
   background: var(--markdown-panel-bg);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.72),
+    0 10px 26px rgba(95, 82, 56, 0.05);
 }
 
 .milkdown-editor-host {
@@ -2711,13 +2714,13 @@ body.resizing-detail {
 .milkdown-editor-host .milkdown {
   --crepe-color-background: var(--markdown-panel-bg);
   --crepe-color-on-background: var(--ink);
-  --crepe-color-surface: var(--field);
-  --crepe-color-surface-low: var(--paper);
+  --crepe-color-surface: #fff7ed;
+  --crepe-color-surface-low: #f9f1e5;
   --crepe-color-on-surface: var(--heading);
   --crepe-color-on-surface-variant: var(--muted);
   --crepe-color-outline: var(--line);
   --crepe-color-primary: var(--focus);
-  --crepe-color-secondary: var(--focus-field);
+  --crepe-color-secondary: #f5ede3;
   --crepe-color-on-secondary: var(--heading);
   --crepe-color-inverse: var(--heading);
   --crepe-color-on-inverse: var(--panel);
@@ -2765,15 +2768,17 @@ body.resizing-detail {
   outline: 0;
   caret-color: var(--focus);
   color: var(--ink);
-  background: var(--markdown-panel-bg);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0) 18%),
+    var(--markdown-panel-bg);
   font-size: 15.8px;
   line-height: 1.68;
 }
 
 .milkdown-editor-host .ProseMirror-focused {
   box-shadow:
-    inset 4px 0 0 color-mix(in srgb, var(--focus) 78%, transparent),
-    inset 0 0 0 1px color-mix(in srgb, var(--focus) 18%, transparent);
+    inset 0 0 0 1px color-mix(in srgb, var(--focus) 12%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.36);
 }
 
 .milkdown-editor-host .ProseMirror ::selection {
@@ -2800,8 +2805,10 @@ body.resizing-detail {
 .milkdown-editor-host .cm-editor {
   border: 1px solid color-mix(in srgb, var(--line-soft) 74%, transparent);
   border-radius: 10px;
-  background: color-mix(in srgb, var(--markdown-pre-bg) 70%, var(--panel));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.26);
+  background: color-mix(in srgb, var(--markdown-pre-bg) 82%, var(--panel));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.36),
+    0 6px 14px rgba(95, 82, 56, 0.04);
 }
 
 .milkdown-editor-host .ProseMirror pre code,
@@ -2877,8 +2884,12 @@ body.resizing-detail {
   --brief-strong-bg: transparent;
   --flow-header-bg: rgba(251, 253, 249, 0.74);
   --flow-done-bg: rgba(255, 255, 255, 0.26);
-  --markdown-panel-bg: #fbfdf9;
-  --markdown-toolbar-bg: rgba(247, 250, 246, 0.94);
+  --markdown-panel-bg: #fffbf4;
+  --markdown-toolbar-bg: rgba(255, 249, 241, 0.96);
+  --markdown-code: #7b5a35;
+  --markdown-code-bg: #f5ece0;
+  --markdown-pre-bg: #f7f1e8;
+  --markdown-pre-code: #23312d;
   --glass: rgba(255, 255, 255, 0.52);
   --glass-strong: rgba(255, 255, 255, 0.7);
   --glass-soft: rgba(255, 255, 255, 0.34);
@@ -2904,6 +2915,10 @@ body.resizing-detail {
   --flow-done-bg: rgba(255, 255, 255, 0.03);
   --markdown-panel-bg: #121a16;
   --markdown-toolbar-bg: rgba(16, 23, 19, 0.88);
+  --markdown-code: #f0c987;
+  --markdown-code-bg: rgba(20, 18, 13, 0.72);
+  --markdown-pre-bg: #141610;
+  --markdown-pre-code: #dbe4de;
   --glass: rgba(255, 255, 255, 0.05);
   --glass-strong: rgba(255, 255, 255, 0.08);
   --glass-soft: rgba(255, 255, 255, 0.035);
