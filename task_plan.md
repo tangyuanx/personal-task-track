@@ -4,7 +4,7 @@
 Maintain the personal task management app through scoped, low-risk improvements while preserving existing task flow behavior and release discipline.
 
 ## Current Phase
-Phase 10
+Phase 12
 
 ## Phases
 
@@ -85,6 +85,24 @@ Phase 10
 - [x] Run npm run check and git diff --check
 - **Status:** complete
 
+### Phase 11: Handoff HTML Production Implementation
+- [x] Preserve and read the new handoff Markdown and design HTML in full
+- [x] Compare the HTML target with the current production app and feature map
+- [x] Resolve any requirement ambiguity that materially changes behavior
+- [x] Safely sync local main with the latest origin/main without touching user artifacts
+- [x] Implement the approved HTML-led design and interactions in production
+- [x] Run project checks, build both desktop packages, and complete design QA
+- [x] Release the user-facing update through the standard version/tag/push flow
+- **Status:** complete
+
+### Phase 12: Record Modal and Knowledge Milkdown Refinement
+- [x] Replace the expanded node Milkdown surface with the compact HTML-style record modal
+- [x] Move the Milkdown editor to the task Knowledge Notes pane
+- [x] Preserve node record and task knowledge-note persistence across browser and Electron storage
+- [x] Browser-verify record save/close shortcuts and Knowledge Notes Milkdown persistence
+- [x] Re-run design QA, checks, desktop builds, and release flow
+- **Status:** complete
+
 ## Key Questions
 1. Should this edit production frontend files? Answer: no, create static page first.
 2. What style should guide the mockup? Answer: efficiency tool first, with a touch of today-focus atmosphere.
@@ -97,6 +115,7 @@ Phase 10
 9. Should node detail dominate the workspace? Answer: yes, it should cover most of the page and support fullscreen.
 10. When should node detail open? Answer: only when clicking the record/note area, not when adding or editing node titles.
 11. Should the production visual layout also match the final static mockup? Answer: yes, update spacing, color atmosphere, and layout feel, not just behavior.
+12. Where should Milkdown live? Answer: in task-level Knowledge Notes; node records use a compact simple modal matching `task-track.html`.
 
 ## Decisions Made
 | Decision | Rationale |
@@ -128,6 +147,10 @@ Phase 10
 | Milkdown loading placeholder remained after editor mounted | 1 | Cleared the host element before creating the Crepe editor and rebuilt the vendor bundle |
 | Milkdown toolbar still rendered 32px icons after the first CSS pass | 1 | Added scoped overrides for `.milkdown-icon` SVGs and toolbar items, then browser-verified max SVG size at 16px |
 | Mobile node detail became too short after the larger desktop visual layout | 1 | Changed mobile node detail to a fixed near-fullscreen overlay and verified 359x828 at 390x844 |
+| External-drive AppleDouble files in `.git/objects/pack` trigger `non-monotonic index` warnings | 1 | Moved the three metadata files to `/tmp/personal-task-track-appledouble-backup/` before repository sync |
+| Browser tab verification timed out during an immediate post-render note readback | 1 | Took a fresh DOM snapshot, reloaded, reopened Knowledge Notes, and confirmed the saved content through the rendered textbox |
+| Git staging was rejected because the Codex action usage limit was reached | 1 | Stop without workarounds; keep all verified local changes and resume staging/commit/tag/push after the limit resets |
+| Knowledge-note browser typing inserted the new heading before existing content | 1 | Verified persistence rather than ordering as the functional requirement; the editor remained fully editable and stored the Milkdown document correctly |
 
 ## Notes
 - Phase 9 production implementation is complete and ready for release.

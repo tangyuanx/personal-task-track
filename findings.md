@@ -1,6 +1,8 @@
 # Findings & Decisions
 
 ## Requirements
+- 2026-07-12 correction: node records should be short text edited in the compact `task-track.html` modal; the full Milkdown editor belongs in task-level Knowledge Notes instead of node detail.
+- 2026-07-12 request: use `task-track.html` as the primary visual/interaction target, use `Task_Track_前端项目交接说明.md` as implementation guidance, and integrate the result into the existing app while preserving useful completed work.
 - User wants to use planning-with-files for the redesign process.
 - Create a static page first for review.
 - Do not actually modify the frontend until the user approves the direction.
@@ -14,6 +16,14 @@
 - Current visual correction request: production should also match the final static mockup in overall layout, spacing, and color atmosphere, not only in functional behavior.
 
 ## Research Findings
+- The v1.3.1 target uses a 370–410px left rail at desktop, a compact two-column shell, and a 3-field neutral task context strip above a table-like workflow.
+- Visual hierarchy is intentionally asymmetric: only the Today panel uses a dark green gradient and prominent shadow; the repository, groups, task metadata, flow states, and controls stay neutral and low saturation.
+- The current v0.1.44 browser state is visually close in palette but its left rail is substantially narrower and its empty-state view cannot exercise the dense target layout without test content.
+- The target flow uses a numbered neutral sequence rail for top-level nodes plus separate indentation/tree connectors for descendants; this is stronger and clearer than the current row/checkmark-first hierarchy.
+- The existing production architecture already contains stronger capabilities than the standalone target (Electron persistence, task and group ordering, task review, PDF export, Milkdown node records, node detail fullscreen, theme/font settings), so the implementation should restyle and reshape the stable production DOM instead of replacing it with the single-file data model.
+- The new handoff Markdown and HTML are untracked user artifacts and must be preserved unchanged unless the user explicitly asks to edit them.
+- Product Design saved-context preflight found no saved context; the repository, handoff document, and HTML are the authoritative context for this task.
+- External-drive AppleDouble files exist inside `.git/objects/pack` and cause Git index warnings; they are metadata rather than intended project content.
 - Existing app entry point is index.html, loading src/styles.css and src/app.js.
 - Existing app state includes task groups, active task, task filters, priority filters, theme, tone, task tags, markdown editing, sidebar width, and detail height.
 - Existing CSS already supports light/dark themes and many accent tones, including focus blue and productivity-oriented color tokens.
@@ -30,6 +40,10 @@
 - Production structure is already close enough to the final static direction to use CSS-first visual alignment: sidebar, today focus, task header, brief fields, task flow, and dynamic node detail all exist in stable markup.
 
 ## Technical Decisions
+| Reuse `node.note` for the lightweight record modal and `task.notes` for Milkdown knowledge notes | Preserves the established persisted fields while changing only which editor surface owns each kind of content. |
+| Use a production DOM/CSS alignment instead of replacing the app with `task-track.html` | Preserves desktop storage and all completed capabilities while allowing the source HTML to remain the visual and interaction baseline. |
+| Keep current English-only data model and existing label behavior unless the integration can add bilingual storage without migration risk | The current Electron app has a materially different persisted schema; silently replacing text fields with `{zh,en}` would be a breaking data migration. |
+| Treat the HTML's visual system and core interaction principles as required, while keeping current advanced record/editor behavior | This follows the user's “HTML 为主，略微结合之前已经完成的项目” direction without regressing production features. |
 | Decision | Rationale |
 |----------|-----------|
 | Create mockups/efficiency-focus-redesign.html | The task asks for a static page first, and mockups/ already contains static HTML. |
@@ -84,6 +98,12 @@
 - http://127.0.0.1:4173/product-design-revised-redesign.html
 
 ## Visual/Browser Findings
+- 2026-07-12 final desktop verification at 1280×720 showed a 370px target-aligned rail, no document or flow horizontal overflow, matching task tabs, a neutral three-field context strip, and an expanded two-level workflow.
+- Final mobile verification at 390×844 showed `document.scrollWidth` equal to the visible document width, stacked sidebar/workspace layout, three task panes, and no console warnings/errors.
+- Knowledge notes persisted after a page reload; history derived the updated node trail; Milkdown mounted with one `.ProseMirror`, no fallback textarea, and no loading residue.
+- The corrected interaction separates content scope cleanly: `node.note` is a short record edited in the HTML-style modal, while `task.notes` is the long-form Milkdown knowledge document.
+- Record-modal browser verification confirmed Ctrl/Cmd+Enter saves, Cancel/Esc discard the draft, the flow shows only a summary afterward, and the mobile breakpoint uses a bottom drawer without horizontal overflow.
+- Parent/child creation, individual collapse controls, and collapse/expand all were browser-verified; the child row disappeared on collapse and returned on expand.
 - Static redesign should preserve the product signal: task groups, today's focus, active task details, progress/flow rows, and notes/markdown workspace.
 - Desktop verification at 1280x720 showed left rail, main work area, and context panel all present, with no body-level horizontal or vertical overflow.
 - Mobile verification at 390x844 showed single-column app display, context panel hidden, today's focus and task flow still visible, and no horizontal overflow.

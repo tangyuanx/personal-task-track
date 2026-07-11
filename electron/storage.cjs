@@ -67,22 +67,38 @@ function normalizeTaskData(data) {
   const safeData = data && typeof data === "object" ? data : {};
   return {
     version: DATA_VERSION,
-    tasks: Array.isArray(safeData.tasks) ? safeData.tasks : [],
+    tasks: Array.isArray(safeData.tasks)
+      ? safeData.tasks.map((task) => ({
+          ...task,
+          notes: typeof task?.notes === "string" ? task.notes : "",
+          nodes: normalizeTaskNodes(task?.nodes),
+        }))
+      : [],
     taskGroups: Array.isArray(safeData.taskGroups) ? safeData.taskGroups : [],
     activeGroupId: typeof safeData.activeGroupId === "string" ? safeData.activeGroupId : "",
     flowWidths: safeData.flowWidths && typeof safeData.flowWidths === "object" ? safeData.flowWidths : {},
-    sidebarWidth: Number.isFinite(Number(safeData.sidebarWidth)) ? Number(safeData.sidebarWidth) : 272,
+    sidebarWidth: Number.isFinite(Number(safeData.sidebarWidth)) ? Number(safeData.sidebarWidth) : 390,
     detailHeight: Number.isFinite(Number(safeData.detailHeight)) ? Number(safeData.detailHeight) : 58,
     attachments: safeData.attachments && typeof safeData.attachments === "object" ? safeData.attachments : { images: {} },
     theme: safeData.theme === "dark" ? "dark" : "light",
     font: ["songti", "heiti", "system", "mono"].includes(safeData.font) ? safeData.font : "songti",
-    zhFont: typeof safeData.zhFont === "string" ? safeData.zhFont : "songti",
+    zhFont: typeof safeData.zhFont === "string" ? safeData.zhFont : "system",
     enFont: typeof safeData.enFont === "string" ? safeData.enFont : "inter",
     taskFilter: typeof safeData.taskFilter === "string" ? safeData.taskFilter : "",
     priorityFilter: typeof safeData.priorityFilter === "string" ? safeData.priorityFilter : "",
     newTaskPriority: typeof safeData.newTaskPriority === "string" ? safeData.newTaskPriority : "",
     updatedAt: typeof safeData.updatedAt === "string" ? safeData.updatedAt : new Date().toISOString(),
   };
+}
+
+function normalizeTaskNodes(nodes) {
+  return Array.isArray(nodes)
+    ? nodes.map((node) => ({
+        ...node,
+        collapsed: Boolean(node?.collapsed),
+        children: normalizeTaskNodes(node?.children),
+      }))
+    : [];
 }
 
 async function backupCorruptData(userDataPath) {

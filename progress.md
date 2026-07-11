@@ -1,5 +1,41 @@
 # Progress Log
 
+## Session: 2026-07-12 HTML-led Production Implementation
+
+### Phase 11: Discovery and repository preparation
+- **Status:** in progress
+- Actions taken:
+  - Loaded Product Design routing, saved-context, image-to-code, design-QA, project maintenance, and file-based planning instructions.
+  - Ran Product Design saved-context preflight; no saved user context exists.
+  - Confirmed `task-track.html` and `Task_Track_前端项目交接说明.md` are untracked user artifacts and will be preserved.
+  - Confirmed prior production implementation and its persistent planning history are present.
+  - Found AppleDouble metadata in `.git/objects/pack` causing Git index warnings; reversible isolation is pending.
+  - Reversibly moved the three AppleDouble pack metadata files into `/tmp/personal-task-track-appledouble-backup/` and eliminated the Git warnings.
+  - Fetched remote main/tags and fast-forwarded local main to v0.1.44.
+  - Read the handoff document, target HTML, feature map, and current render structure.
+  - Captured the v1.3.1 target and current v0.1.44 at the same 1280×720 viewport for visual comparison.
+  - Reworked the production rail, Today focus, repository, horizontal group panel, task header, brief strip, tabs, and workflow to follow the v1.3.1 target.
+  - Added persisted task-level knowledge notes and a derived node-history pane.
+  - Added persisted node collapse state plus individual and collapse/expand-all controls.
+  - Preserved Electron storage, Milkdown, task/group dragging, review, theme/font preferences, export, and existing CRUD behavior.
+  - Browser-verified desktop, mobile, task tabs, note persistence, history, parent/child hierarchy, collapse/expand, and Milkdown mounting with no console warnings/errors.
+  - Completed iterative design QA; `design-qa.md` reports `final result: passed`.
+  - Bumped package version to 0.1.45 after confirming v0.1.44 is the latest remote tag.
+  - Ran `npm run check` and `git diff --check` successfully.
+  - Built macOS DMG/ZIP and Windows NSIS packages successfully.
+  - Confirmed the release directory contains no AppleDouble `._*` files.
+  - Git staging was blocked by the Codex action usage limit after all implementation, QA, versioning, and packaging completed; no commit, tag, or push was attempted afterward.
+
+### Phase 12: Record modal and Knowledge Milkdown refinement
+- **Status:** in progress
+- Actions taken:
+  - Confirmed the correction: node records are compact simple text; task Knowledge Notes owns Milkdown.
+  - Preserved all existing uncommitted v0.1.45 work and confirmed origin/main has not moved.
+- Files created/modified:
+  - task_plan.md
+  - findings.md
+  - progress.md
+
 ## Session: 2026-07-01
 
 ### Phase 1: Requirements & Discovery
@@ -365,3 +401,22 @@
   - task_plan.md
   - findings.md
   - progress.md
+
+## Session: 2026-07-12 Record Modal and Knowledge Milkdown Refinement
+
+### Implementation
+- **Status:** complete
+- Actions taken:
+  - Replaced the expanded per-node editor with the compact HTML-style record modal while retaining `node.note` persistence.
+  - Moved Milkdown to task-level Knowledge Notes and retained `task.notes` persistence through the existing browser/Electron storage path.
+  - Added save/cancel/backdrop/Esc behavior plus Ctrl/Cmd+Enter saving for node records.
+  - Added task knowledge notes to exported Markdown and cleared transient record drafts when task context changes.
+
+### Verification
+- **Status:** complete
+- Actions taken:
+  - Verified record save, cancel, Esc close, collapsed summary display, and persisted re-open content.
+  - Verified Milkdown mounts in Knowledge Notes and its content survives pane switching and reload.
+  - Verified desktop at 1280×720 and mobile at 390×844; mobile has no horizontal overflow and renders the record modal as a bottom drawer.
+  - Verified the browser reported no warnings or errors.
+  - Ran `npm run check` and `git diff --check` successfully before release packaging.

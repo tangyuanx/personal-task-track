@@ -85,8 +85,8 @@ const flowWidthLimits = {
 };
 
 const defaultTaskGroup = { id: "group_inbox", title: "默认", order: 1 };
-const defaultSidebarWidth = 296;
-const sidebarWidthLimits = [220, 560];
+const defaultSidebarWidth = 390;
+const sidebarWidthLimits = [370, 560];
 const defaultDetailHeight = 58;
 const detailHeightLimits = [50, 82];
 const taskTagLabels = {
@@ -120,13 +120,14 @@ let state = {
   editingGroupId: "",
   activeTaskId: "",
   selectedNodeId: "",
+  recordDraft: "",
   query: "",
   taskFilter: "all",
   priorityFilter: "all",
   newTaskPriority: "medium",
   markdownMode: "edit",
   theme: "light",
-  zhFont: "songti",
+  zhFont: "system",
   enFont: "inter",
   settingsOpen: false,
   reviewOpen: false,
@@ -138,6 +139,7 @@ let state = {
   reviewDateField: "updated",
   reviewStartDate: "",
   reviewEndDate: "",
+  taskPane: "flow",
   nodeDetailFullscreen: false,
   focusTaskTitleId: "",
   focusNodeTitleId: "",
@@ -196,6 +198,7 @@ function makeNode(taskId, parentId, order) {
     conclusion: "",
     createdAt: now(),
     updatedAt: now(),
+    collapsed: false,
     children: [],
   };
 }
@@ -224,8 +227,20 @@ function normalizeTasks(tasks) {
     ...task,
     groupId: task.groupId || defaultTaskGroup.id,
     tags: normalizeTaskTags(task.tags),
+    notes: typeof task.notes === "string" ? task.notes : "",
+    nodes: normalizeNodes(task.nodes),
     hypothesisUpdatedAt: task.hypothesisUpdatedAt || (task.hypothesis ? task.updatedAt || task.createdAt || now() : ""),
   }));
+}
+
+function normalizeNodes(nodes) {
+  return Array.isArray(nodes)
+    ? nodes.map((node) => ({
+        ...node,
+        collapsed: Boolean(node.collapsed),
+        children: normalizeNodes(node.children),
+      }))
+    : [];
 }
 
 function normalizeTaskTags(tags) {
@@ -334,7 +349,7 @@ function migrateLegacyFont(value) {
   if (value === "songti") return { zhFont: "songti", enFont: "inter" };
   if (value === "heiti") return { zhFont: "heiti", enFont: "inter" };
   if (value === "mono") return { zhFont: "yahei", enFont: "mono" };
-  return { zhFont: "songti", enFont: "inter" };
+  return { zhFont: "system", enFont: "inter" };
 }
 
 function loadBrowserTheme() {
@@ -581,22 +596,22 @@ function renderSidebar() {
       <div class="sidebar-head brand">
         <div>
           <strong>Task Track</strong>
-          <small>Local operations</small>
+          <small>个人任务工作台</small>
         </div>
         <span>v${esc(APP_VERSION || "dev")}</span>
       </div>
 
       <label class="search-box search">
-        <span>Search</span>
-        <input id="search" value="${escAttr(state.query)}" placeholder="搜索" />
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 21-4.35-4.35"></path><circle cx="10.8" cy="10.8" r="7.2"></circle></svg>
+        <input id="search" value="${escAttr(state.query)}" placeholder="搜索任务、节点或内容" />
       </label>
 
       ${renderTodayFocus(focusItems)}
 
       <div class="task-list" data-context="task-list">
         <div class="task-list-head section-label">
-          <span>Tasks</span>
-          <span>${visibleCount}/${scopedTasks.length} total</span>
+          <span>任务仓库</span>
+          <span>${visibleCount}/${scopedTasks.length} 项</span>
         </div>
         ${filteredTasks()
           .map((task) => renderTaskItem(task))
@@ -608,9 +623,17 @@ function renderSidebar() {
           ${newTaskPrioritySelect()}
         </div>
       </div>
+      <section class="group-panel" aria-label="任务分组">
+        <div class="group-panel-head">
+          <strong>任务分组</strong>
+          <span>横向滚动 · 双击重命名</span>
+        </div>
+        ${renderGroupTabs()}
+      </section>
       <div class="sidebar-foot task-footer">
         <button class="settings-trigger settings-button ${state.settingsOpen ? "active" : ""}" type="button" data-action="toggle-settings" title="设置">⚙</button>
-        ${renderGroupTabs()}
+        <span class="autosave-status">自动保存已开启</span>
+        <button class="review-shortcut" type="button" data-action="toggle-review">任务回顾</button>
       </div>
     </aside>
   `;
@@ -620,16 +643,16 @@ function renderTodayFocus(items) {
   const today = new Intl.DateTimeFormat("zh-CN", { month: "2-digit", day: "2-digit" }).format(new Date());
   return `
     <section class="today-focus today-panel" aria-label="今日待办">
-      <div class="section-label"><span>Today</span><span>${today}</span></div>
+      <div class="section-label"><span>今日聚焦</span><span>${today}</span></div>
       <div class="today-headline">
-        <strong>今日待办</strong>
-        <span>优先处理 ${items.length} 项</span>
+        <strong>今日任务</strong>
+        <span>${items.length} 项重点任务需要推进</span>
       </div>
       <div class="focus-list focus-stack">
         ${
           items.length
             ? items.map((item) => renderTodayFocusItem(item)).join("")
-            : `<div class="focus-empty">今天没有焦点任务</div>`
+            : `<div class="focus-empty">今日暂无重点任务</div>`
         }
       </div>
     </section>
@@ -706,7 +729,7 @@ function renderTaskPage(task) {
     <div class="task-page work-surface">
       <header class="page-header topbar">
         <div class="page-title-block title-block">
-          <div class="page-kicker kicker">任务档案</div>
+          <div class="page-kicker kicker">工作台 / ${esc(task.title || "未命名任务")}</div>
           <input class="page-title" data-edit-key="title" data-task-id="${task.id}" value="${escAttr(task.title)}" />
           <div class="page-properties meta-line">
             <span class="pill priority ${task.priority} ${task.priority === "high" ? "hot" : task.priority === "low" ? "good" : ""}">${priorityLabels[task.priority]}优先</span>
@@ -727,30 +750,94 @@ function renderTaskPage(task) {
       ${needsConclusion ? renderConclusionPrompt() : ""}
 
       <section class="task-brief brief-strip" aria-label="任务简报">
-        ${renderBriefField("背景", textareaHtml("description", task.description, task.id), "", false, "background")}
-        ${renderBriefField("当前判断", textareaHtml("hypothesis", task.hypothesis, task.id), task.hypothesisUpdatedAt, false, "hypothesis")}
-        ${renderBriefField("结论", textareaHtml("conclusion", task.conclusion, task.id), "", needsConclusion, "conclusion")}
+        ${renderBriefField("背景 / 目标", textareaHtml("description", task.description, task.id), "", false, "background")}
+        ${renderBriefField("当前判断 / 进展", textareaHtml("hypothesis", task.hypothesis, task.id), task.hypothesisUpdatedAt, false, "hypothesis")}
+        ${renderBriefField("结果 / 总结", textareaHtml("conclusion", task.conclusion, task.id), "", needsConclusion, "conclusion")}
       </section>
 
-      <section class="task-workbench lower ${selectedNode ? "detail-open" : ""} ${state.nodeDetailFullscreen ? "detail-fullscreen" : ""}">
-        <section class="flow-section flow" data-context="flow-root" data-task-id="${task.id}">
+      ${renderTaskPaneTabs(task)}
+
+      <section class="task-workbench lower">
+        ${state.taskPane === "flow" ? `<section class="flow-section flow" data-context="flow-root" data-task-id="${task.id}">
           <div class="section-heading flow-head">
             <div>
               <h2>处理流</h2>
-              <span>用弱线条表达层级，选中状态才有明确色块</span>
+              <span>主轴表示顺序，缩进表示父子关系，状态通过形态差异区分</span>
             </div>
             <span>${summary.open ? `${summary.open} 个未完成` : "所有节点已完成"}</span>
           </div>
           ${
             topNodes.length
-              ? `<div class="flow-list flow-table" style="${flowWidthStyle()}" data-context="flow-root" data-task-id="${task.id}">${renderFlowHeader()}${topNodes.map((node) => renderFlowNode(task.id, node, 0)).join("")}${renderFlowHint()}</div>`
+              ? `<div class="flow-list flow-table" style="${flowWidthStyle()}" data-context="flow-root" data-task-id="${task.id}">${renderFlowHeader()}${topNodes.map((node, index) => renderFlowNode(task.id, node, 0, index, "")).join("")}${renderFlowHint()}</div>`
               : `<div class="flow-list flow-table empty-flow" data-context="flow-root" data-task-id="${task.id}">还没有处理节点。${renderFlowHint()}</div>`
           }
-        </section>
+        </section>` : state.taskPane === "notes" ? renderTaskKnowledge(task) : renderTaskHistory(task)}
 
-        ${selectedNode ? renderNodeDetail(task.id, selectedNode) : ""}
+        ${selectedNode && state.taskPane === "flow" ? renderNodeDetail(task.id, selectedNode) : ""}
       </section>
     </div>
+  `;
+}
+
+function renderTaskPaneTabs(task) {
+  const tabs = [
+    ["flow", "处理流"],
+    ["notes", "知识笔记"],
+    ["history", "历史处理"],
+  ];
+  return `
+    <nav class="task-pane-tabs" aria-label="任务内容">
+      ${tabs
+        .map(
+          ([pane, label]) => `<button class="task-pane-tab ${state.taskPane === pane ? "active" : ""}" type="button" data-action="switch-task-pane" data-pane="${pane}">${label}</button>`,
+        )
+        .join("")}
+      ${state.taskPane === "flow" && flatten(task.nodes).some((node) => node.children.length) ? `<button class="task-pane-collapse" type="button" data-action="toggle-all-nodes" data-task-id="${task.id}">${flatten(task.nodes).some((node) => node.collapsed) ? "展开全部" : "收起全部"}</button>` : ""}
+    </nav>
+  `;
+}
+
+function renderTaskKnowledge(task) {
+  const stats = markdownStats(task.notes);
+  return `
+    <section class="task-knowledge-pane">
+      <div class="section-heading flow-head">
+        <div><h2>知识笔记</h2><span>沉淀与当前任务相关的知识、分析和可复用结论</span></div>
+      </div>
+      <section class="markdown-panel milkdown-panel task-knowledge-editor-panel" data-task-id="${task.id}" data-editor-focus-target="task">
+        <div class="milkdown-editor-host" data-editor-kind="task" data-task-id="${task.id}">
+          <div class="milkdown-loading">正在加载 Milkdown 编辑器...</div>
+        </div>
+        <div class="milkdown-status">
+          <span class="markdown-stats" data-markdown-stats>${stats.lines} 行 · ${stats.characters} 字</span>
+          <span>支持 Markdown、表格、代码块与图片</span>
+        </div>
+      </section>
+    </section>
+  `;
+}
+
+function renderTaskHistory(task) {
+  const events = flatten(task.nodes)
+    .filter((node) => node.updatedAt)
+    .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
+  return `
+    <section class="task-history-pane">
+      <div class="section-heading flow-head">
+        <div><h2>历史处理</h2><span>按更新时间查看任务节点的推进轨迹</span></div>
+      </div>
+      <div class="task-history-list">
+        ${
+          events.length
+            ? events
+                .map(
+                  (node) => `<article class="task-history-item"><time>${formatShort(node.updatedAt)}</time><span>${esc(node.title || "未命名节点")}</span><b>${nodeStatusText(node.status)}</b></article>`,
+                )
+                .join("")
+            : `<div class="task-history-empty">暂无历史记录</div>`
+        }
+      </div>
+    </section>
   `;
 }
 
@@ -758,7 +845,7 @@ function renderFlowHint() {
   return `
     <div class="flow-hint">
       <kbd>右键</kbd>
-      <span>在处理流空白处新增主节点，或在已有节点上新增子节点</span>
+      <span>主轴表示顺序，缩进表示父子关系；右键空白处新增主节点，右键节点可继续拆分</span>
     </div>
   `;
 }
@@ -802,21 +889,29 @@ function renderBriefField(label, control, timestamp = "", attention = false, var
   `;
 }
 
-function renderFlowNode(taskId, node, depth) {
+function renderFlowNode(taskId, node, depth, rootIndex = 0, parentTitle = "") {
   const children = sort(node.children);
   const isSelected = state.selectedNodeId === node.id;
   const indent = Math.min(depth, 4) * 16;
   const branch = depth === 0 ? "main-flow" : "sub-flow";
   const noteSummary = nodeNoteSummary(node.note);
   const statusClass = node.status === "done" ? "good" : node.status === "blocked" ? "hot" : "";
+  const relationship = depth === 0 ? `主流程第 ${rootIndex + 1} 步` : `属于 ${parentTitle || "上级节点"}`;
   return `
     <article class="flow-item depth-${Math.min(depth, 6)}">
       <div class="flow-row flow-line ${branch} ${branch === "sub-flow" ? "sub" : ""} ${node.status} ${isSelected ? "selected" : ""}" style="--indent:${indent}px" data-context="node" data-task-id="${taskId}" data-node-id="${node.id}">
-        <input class="flow-check dot" type="checkbox" title="完成" data-action="toggle-node-done" data-task-id="${taskId}" data-node-id="${node.id}" ${node.status === "done" ? "checked" : ""} />
+        <span class="flow-sequence-cell">
+          ${depth === 0 ? `<span class="sequence-index">${String(rootIndex + 1).padStart(2, "0")}</span>` : `<span class="sequence-child-mark" aria-hidden="true"></span>`}
+          <input class="flow-check dot" type="checkbox" title="完成" data-action="toggle-node-done" data-task-id="${taskId}" data-node-id="${node.id}" ${node.status === "done" ? "checked" : ""} />
+        </span>
         <span class="flow-title-cell flow-title process-cell">
           <span class="flow-indent"></span>
           <span class="flow-branch-mark"></span>
-          ${nodeTitleInputHtml(node, taskId)}
+          <span class="flow-title-line">
+            ${children.length ? `<button class="node-collapse-toggle" type="button" data-action="toggle-node-collapse" data-task-id="${taskId}" data-node-id="${node.id}" title="${node.collapsed ? "展开子节点" : "收起子节点"}">${node.collapsed ? "+" : "−"}</button>` : `<span class="node-collapse-spacer"></span>`}
+            ${nodeTitleInputHtml(node, taskId)}
+          </span>
+          <span class="flow-relation">${esc(relationship)}</span>
         </span>
         <button class="flow-note note-link process-cell ${isSelected ? "record-trigger" : ""}" type="button" data-action="select-node" data-task-id="${taskId}" data-node-id="${node.id}" title="打开节点记录">
           <strong>${esc(noteSummary.title)}</strong>
@@ -825,7 +920,7 @@ function renderFlowNode(taskId, node, depth) {
         <span class="flow-status pill ${statusClass}">${nodeStatusText(node.status)}</span>
         <span class="flow-updated note-link">${formatShort(node.updatedAt)}</span>
       </div>
-      ${children.length ? children.map((child) => renderFlowNode(taskId, child, depth + 1)).join("") : ""}
+      ${children.length && !node.collapsed ? children.map((child) => renderFlowNode(taskId, child, depth + 1, rootIndex, node.title)).join("") : ""}
     </article>
   `;
 }
@@ -833,11 +928,11 @@ function renderFlowNode(taskId, node, depth) {
 function renderFlowHeader() {
   return `
     <div class="flow-row flow-line flow-header header">
-      <span></span>
+      <span>顺序</span>
       ${renderFlowHeadCell("title", "处理")}
       ${renderFlowHeadCell("note", "记录")}
       ${renderFlowHeadCell("", "状态")}
-      ${renderFlowHeadCell("", "更新")}
+      ${renderFlowHeadCell("", "更新时间")}
     </div>
   `;
 }
@@ -849,7 +944,7 @@ function nodeNoteSummary(value) {
     .filter(Boolean);
   return {
     title: lines[0] || "记录待补充",
-    detail: lines.slice(1).join(" ") || "点击记录后就地展开",
+    detail: lines.slice(1).join(" ") || "点击打开记录浮窗",
   };
 }
 
@@ -863,77 +958,32 @@ function renderFlowHeadCell(key, label) {
 }
 
 function renderNodeDetail(taskId, node) {
-  const stats = markdownStats(node.note);
-  const fullscreen = state.nodeDetailFullscreen;
-  if (!fullscreen) {
-    return `
-      <aside class="node-detail record-popover" ${nodeDetailPositionStyle()} data-task-id="${taskId}" data-node-id="${node.id}" aria-label="记录点击悬浮框">
-        <header class="detail-head">
-          <div class="record-title-block">
-            <span>点击位置浮层 · Milkdown</span>
-            ${inputHtml("title", node.title, taskId, "node-detail-title record-title-input", node.id)}
-          </div>
-          <span>${formatShort(node.updatedAt)}</span>
-        </header>
-        <section class="record-body markdown-panel milkdown-panel">
-          <div
-            class="milkdown-editor-host"
-            data-task-id="${taskId}"
-            data-node-id="${node.id}"
-          >
-            <div class="milkdown-loading">正在加载 Milkdown 编辑器...</div>
-          </div>
-        </section>
-        <div class="dismiss-note">点击工作区任意空白处关闭</div>
-        <div class="node-actions detail-actions">
-          <button class="detail-export" type="button" data-action="export-node-pdf" data-task-id="${taskId}" data-node-id="${node.id}">导出 PDF</button>
-          <button class="detail-fullscreen" type="button" data-action="toggle-node-detail-fullscreen" title="全屏展示">全屏</button>
-          <button class="detail-save" type="button" data-action="save-node-detail">保存</button>
-        </div>
-      </aside>
-    `;
-  }
   return `
-    <section class="node-detail fullscreen-editor" ${nodeDetailPositionStyle()} data-task-id="${taskId}" data-node-id="${node.id}">
-      <div class="detail-head">
-        <div>
-          <span>Markdown Editor</span>
-          <h2>${esc(node.title || "未命名节点")}</h2>
+    <div class="record-modal-backdrop" data-record-modal-backdrop>
+      <section class="node-detail record-modal" data-task-id="${taskId}" data-node-id="${node.id}" role="dialog" aria-modal="true" aria-labelledby="record-modal-title">
+        <header class="record-modal-header">
+          <div class="record-modal-heading">
+            <h2 class="record-modal-title" id="record-modal-title">节点记录</h2>
+            <p class="record-modal-description">补充简短的处理过程、信息或结论，处理流中只显示摘要。</p>
+          </div>
+          <button class="record-modal-close" type="button" data-action="close-node-detail" title="关闭节点记录" aria-label="关闭节点记录">×</button>
+        </header>
+        <div class="record-modal-context">
+          <strong>${esc(node.title || "未命名节点")}</strong>
+          <span>${nodeStatusText(node.status)} · ${formatShort(node.updatedAt)}</span>
         </div>
-        <div class="detail-head-meta">
-          <span>${formatShort(node.updatedAt)}</span>
-          <button class="detail-close" type="button" data-action="close-node-detail" title="关闭节点详情">×</button>
+        <div class="record-modal-body">
+          <textarea class="record-modal-textarea" data-record-input placeholder="记录该节点的处理过程、关键数据、判断依据、结果或后续事项……">${esc(state.recordDraft)}</textarea>
         </div>
-      </div>
-      <label class="detail-title-row">
-        <span>标题</span>
-        ${inputHtml("title", node.title, taskId, "node-detail-title", node.id)}
-      </label>
-      <section class="markdown-panel milkdown-panel fullscreen-editor-panel" data-task-id="${taskId}" data-node-id="${node.id}" data-editor-focus-target="true">
-        <div
-          class="milkdown-editor-host"
-          data-task-id="${taskId}"
-          data-node-id="${node.id}"
-        >
-          <div class="milkdown-loading">正在加载 Milkdown 编辑器...</div>
-        </div>
-        <div class="milkdown-status">
-          <span class="markdown-stats" data-markdown-stats>${stats.lines} 行 · ${stats.characters} 字</span>
-          <span>右键或 / 插入表格、图片、代码块</span>
-        </div>
+        <footer class="record-modal-footer">
+          <span>Ctrl / ⌘ + Enter 保存 · Esc 关闭</span>
+          <div class="record-modal-actions">
+            <button type="button" data-action="close-node-detail">取消</button>
+            <button class="primary" type="button" data-action="save-node-detail">保存记录</button>
+          </div>
+        </footer>
       </section>
-      <div class="dismiss-note">点击工作区任意空白处关闭</div>
-      <div class="node-actions detail-actions">
-        <label class="detail-check">
-          <input type="checkbox" data-action="toggle-node-done" data-task-id="${taskId}" data-node-id="${node.id}" ${node.status === "done" ? "checked" : ""} />
-          完成
-        </label>
-        <span class="node-actions-spacer"></span>
-        <button class="detail-export" type="button" data-action="export-node-pdf" data-task-id="${taskId}" data-node-id="${node.id}">导出 PDF</button>
-        <button class="detail-fullscreen" type="button" data-action="toggle-node-detail-fullscreen" title="${state.nodeDetailFullscreen ? "退出全屏" : "全屏展示"}">${state.nodeDetailFullscreen ? "退出全屏" : "全屏"}</button>
-        <button class="detail-save" type="button" data-action="save-node-detail">保存</button>
-      </div>
-    </section>
+    </div>
   `;
 }
 
@@ -1660,6 +1710,19 @@ function bind() {
     });
   });
 
+  const groupScroller = document.querySelector("[data-sheet-tabs]");
+  groupScroller?.addEventListener(
+    "wheel",
+    (event) => {
+      if (groupScroller.scrollWidth <= groupScroller.clientWidth) return;
+      const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+      if (!delta) return;
+      event.preventDefault();
+      groupScroller.scrollLeft += delta;
+    },
+    { passive: false },
+  );
+
   document.querySelectorAll("[data-edit-key]").forEach((element) => {
     element.addEventListener("input", (event) => {
       edit(event.target.dataset, event.target.value);
@@ -1882,23 +1945,37 @@ function bind() {
     });
   });
 
-  document.querySelectorAll(".node-detail").forEach((element) => {
-    element.addEventListener("keydown", (event) => {
+  const recordInput = document.querySelector("[data-record-input]");
+  if (recordInput) {
+    recordInput.addEventListener("input", (event) => {
+      state.recordDraft = event.target.value;
+    });
+    recordInput.addEventListener("keydown", (event) => {
       if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
         event.preventDefault();
-        state.selectedNodeId = "";
+        saveSelectedNodeRecord();
+        render();
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        exitNodeDetail();
         render();
       }
     });
+  }
+
+  const recordBackdrop = document.querySelector("[data-record-modal-backdrop]");
+  recordBackdrop?.addEventListener("pointerdown", (event) => {
+    if (event.target !== recordBackdrop) return;
+    exitNodeDetail();
+    render();
   });
 
   document.querySelectorAll("[data-editor-focus-target]").forEach((panel) => {
     panel.addEventListener("pointerdown", (event) => {
       if (event.button !== 0) return;
       if (event.target.closest("button, input, select, textarea, a, .context-menu, .detail-actions, .ProseMirror, .markdown-editor")) return;
-      const nodeId = panel.dataset.nodeId;
-      if (!nodeId) return;
-      window.requestAnimationFrame(() => focusNodeDetailEditor(nodeId));
+      window.requestAnimationFrame(() => focusKnowledgeEditor());
     });
     panel.addEventListener("contextmenu", (event) => {
       if (!panel.closest(".fullscreen-editor")) return;
@@ -2057,11 +2134,26 @@ function startDetailResize(event) {
 function exitNodeDetail() {
   if (!state.selectedNodeId) return false;
   state.selectedNodeId = "";
+  state.recordDraft = "";
   state.nodeDetailFullscreen = false;
   state.nodeDetailPosition = null;
   document.querySelector(".node-detail")?.remove();
   document.querySelectorAll(".flow-row.selected").forEach((row) => row.classList.remove("selected"));
   return true;
+}
+
+function saveSelectedNodeRecord() {
+  const task = state.tasks.find((item) => item.id === state.activeTaskId);
+  const node = task && state.selectedNodeId ? findNode(task.nodes, state.selectedNodeId) : null;
+  if (task && node && node.note !== state.recordDraft) {
+    node.note = state.recordDraft;
+    node.updatedAt = now();
+    task.updatedAt = now();
+  }
+  state.selectedNodeId = "";
+  state.recordDraft = "";
+  state.nodeDetailFullscreen = false;
+  state.nodeDetailPosition = null;
 }
 
 function focusPendingElement() {
@@ -2104,6 +2196,14 @@ function focusPendingElement() {
     }
   }
 
+  const recordInput = document.querySelector("[data-record-input]");
+  if (recordInput) {
+    recordInput.focus();
+    const end = recordInput.value.length;
+    recordInput.setSelectionRange(end, end);
+    return;
+  }
+
   restoreMarkdownSelection();
 }
 
@@ -2135,17 +2235,16 @@ function restoreMarkdownSelection() {
 }
 
 function destroyMilkdownEditors() {
-  milkdownEditors.forEach((instance) => {
-    instance?.destroy?.().catch?.(() => {});
+  milkdownEditors.forEach((entry) => {
+    entry?.instance?.destroy?.().catch?.(() => {});
   });
   milkdownEditors.clear();
 }
 
 function captureMountedMilkdownDrafts() {
-  milkdownEditors.forEach((instance, nodeId) => {
-    const host = document.querySelector(`.milkdown-editor-host[data-node-id="${nodeId}"]`);
-    const taskId = host?.dataset.taskId;
-    if (!taskId || !instance?.getMarkdown) return;
+  milkdownEditors.forEach((entry) => {
+    const { host, instance, taskId, nodeId } = entry || {};
+    if (!host || !taskId || !instance?.getMarkdown) return;
     try {
       updateNodeNoteDraft(taskId, nodeId, instance.getMarkdown(), host);
     } catch {
@@ -2155,7 +2254,7 @@ function captureMountedMilkdownDrafts() {
 }
 
 function noteDraftKey(taskId, nodeId) {
-  return `${taskId}:${nodeId}`;
+  return `${taskId}:${nodeId || "task-notes"}`;
 }
 
 function updateNodeNoteDraft(taskId, nodeId, markdown, host = null) {
@@ -2183,12 +2282,18 @@ function flushNodeNoteDraft(key, { persist = true } = {}) {
   nodeNoteSaveTimers.delete(key);
 
   const task = state.tasks.find((item) => item.id === draft.taskId);
-  const node = task ? findNode(task.nodes, draft.nodeId) : null;
+  const node = task && draft.nodeId ? findNode(task.nodes, draft.nodeId) : null;
   nodeNoteDrafts.delete(key);
-  if (!task || !node || node.note === draft.markdown) return false;
+  if (!task) return false;
+  const currentMarkdown = node ? node.note : task.notes;
+  if (currentMarkdown === draft.markdown) return false;
 
-  node.note = draft.markdown;
-  node.updatedAt = now();
+  if (node) {
+    node.note = draft.markdown;
+    node.updatedAt = now();
+  } else {
+    task.notes = draft.markdown;
+  }
   task.updatedAt = now();
   if (persist) save();
   return true;
@@ -2217,15 +2322,17 @@ function mountMilkdownEditors() {
 
   hosts.forEach((host) => {
     const taskId = host.dataset.taskId;
-    const nodeId = host.dataset.nodeId;
+    const nodeId = host.dataset.nodeId || "";
     const task = state.tasks.find((item) => item.id === taskId);
-    const node = task ? findNode(task.nodes, nodeId) : null;
-    if (!task || !node) return;
+    const node = task && nodeId ? findNode(task.nodes, nodeId) : null;
+    if (!task || (nodeId && !node)) return;
+    const editorKey = noteDraftKey(taskId, nodeId);
+    const markdown = nodeNoteDrafts.get(editorKey)?.markdown ?? (node ? node.note : task.notes) ?? "";
 
     window.MilkdownTaskEditor.create({
       root: host,
-      markdown: nodeNoteDrafts.get(noteDraftKey(taskId, nodeId))?.markdown ?? node.note ?? "",
-      placeholder: host.closest(".record-popover") ? "点击此处开始输入" : "记录处理过程",
+      markdown,
+      placeholder: node ? "记录处理过程" : "记录分析过程、知识点和可复用结论……",
       onChange: (markdown) => {
         updateNodeNoteDraft(taskId, nodeId, markdown, host);
       },
@@ -2235,14 +2342,9 @@ function mountMilkdownEditors() {
           instance.destroy?.();
           return;
         }
-        milkdownEditors.set(nodeId, instance);
+        milkdownEditors.set(editorKey, { host, instance, taskId, nodeId });
         bindMilkdownSurfaceEvents(host);
-        updateMarkdownStatsForMarkdown(host, nodeNoteDrafts.get(noteDraftKey(taskId, nodeId))?.markdown ?? node.note ?? "");
-        if (state.nodeDetailFullscreen && state.selectedNodeId === nodeId) {
-          window.requestAnimationFrame(() => {
-            window.requestAnimationFrame(() => focusNodeDetailEditor(nodeId));
-          });
-        }
+        updateMarkdownStatsForMarkdown(host, nodeNoteDrafts.get(editorKey)?.markdown ?? (node ? node.note : task.notes) ?? "");
       })
       .catch((error) => {
         console.error("Milkdown failed to mount", error);
@@ -2253,12 +2355,13 @@ function mountMilkdownEditors() {
 
 function mountFallbackMarkdownEditor(host) {
   const taskId = host.dataset.taskId;
-  const nodeId = host.dataset.nodeId;
+  const nodeId = host.dataset.nodeId || "";
   const task = state.tasks.find((item) => item.id === taskId);
-  const node = task ? findNode(task.nodes, nodeId) : null;
-  if (!task || !node) return;
-  const markdown = nodeNoteDrafts.get(noteDraftKey(taskId, nodeId))?.markdown ?? node.note ?? "";
-  host.innerHTML = `<textarea class="markdown-editor codex-editor milkdown-fallback" data-task-id="${taskId}" data-node-id="${nodeId}" placeholder="记录处理过程">${esc(markdown)}</textarea>${renderEditorImagePreview(markdown)}`;
+  const node = task && nodeId ? findNode(task.nodes, nodeId) : null;
+  if (!task || (nodeId && !node)) return;
+  const markdown = nodeNoteDrafts.get(noteDraftKey(taskId, nodeId))?.markdown ?? (node ? node.note : task.notes) ?? "";
+  const placeholder = node ? "记录处理过程" : "记录分析过程、知识点和可复用结论……";
+  host.innerHTML = `<textarea class="markdown-editor codex-editor milkdown-fallback" data-task-id="${taskId}" data-node-id="${nodeId}" placeholder="${placeholder}">${esc(markdown)}</textarea>${renderEditorImagePreview(markdown)}`;
   host.querySelectorAll(".markdown-editor").forEach((editor) => {
     editor.addEventListener("input", (event) => {
       updateNodeNoteDraft(taskId, nodeId, event.target.value, host);
@@ -2399,7 +2502,18 @@ function insertMarkdownImage(editor, dataUrl) {
 function activeRichEditor() {
   const active = document.activeElement;
   if (active?.classList?.contains("markdown-editor") || active?.classList?.contains("ProseMirror")) return active;
-  return document.querySelector(".node-detail.fullscreen-editor .ProseMirror:focus, .node-detail.fullscreen-editor .ProseMirror, .node-detail.fullscreen-editor .markdown-editor:focus, .node-detail.fullscreen-editor .markdown-editor");
+  return document.querySelector(".task-knowledge-pane .ProseMirror:focus, .task-knowledge-pane .ProseMirror, .task-knowledge-pane .markdown-editor:focus, .task-knowledge-pane .markdown-editor");
+}
+
+function focusKnowledgeEditor() {
+  const editor = document.querySelector(".task-knowledge-pane .ProseMirror, .task-knowledge-pane .markdown-editor");
+  if (!editor) return false;
+  editor.focus({ preventScroll: true });
+  if (editor.classList.contains("markdown-editor")) {
+    const end = editor.value?.length ?? 0;
+    editor.setSelectionRange?.(end, end);
+  }
+  return true;
 }
 
 async function pickEditorImageFile() {
@@ -2448,7 +2562,7 @@ function action(data, event = null) {
     return;
   }
   if (data.action === "insert-editor-snippet") {
-    focusNodeDetailEditor(state.selectedNodeId);
+    focusKnowledgeEditor();
     if (data.kind === "image") {
       void pickEditorImageFile().then((file) => {
         const editor = activeRichEditor();
@@ -2475,6 +2589,15 @@ function action(data, event = null) {
     return;
   }
   if (data.action === "set-markdown-mode") state.markdownMode = data.mode === "preview" ? "preview" : "edit";
+  if (data.action === "switch-task-pane") {
+    state.taskPane = ["flow", "notes", "history"].includes(data.pane) ? data.pane : "flow";
+    if (state.taskPane !== "flow") {
+      state.selectedNodeId = "";
+      state.recordDraft = "";
+      state.nodeDetailFullscreen = false;
+      state.nodeDetailPosition = null;
+    }
+  }
   if (data.action === "toggle-settings") {
     state.settingsOpen = !state.settingsOpen;
     if (state.settingsOpen) state.reviewOpen = false;
@@ -2499,6 +2622,7 @@ function action(data, event = null) {
   if (data.action === "select-task") {
     state.activeTaskId = data.taskId;
     state.selectedNodeId = "";
+    state.recordDraft = "";
     state.nodeDetailFullscreen = false;
     state.nodeDetailPosition = null;
   }
@@ -2506,6 +2630,9 @@ function action(data, event = null) {
   if (data.action === "delete-task") deleteTask(data.taskId);
   if (data.action === "select-node") {
     state.selectedNodeId = data.nodeId;
+    const task = state.tasks.find((item) => item.id === data.taskId);
+    const node = task ? findNode(task.nodes, data.nodeId) : null;
+    state.recordDraft = node?.note || "";
     state.nodeDetailFullscreen = false;
     state.nodeDetailPosition = event ? { x: event.clientX + 12, y: event.clientY - 24 } : null;
   }
@@ -2516,18 +2643,19 @@ function action(data, event = null) {
   if (data.action === "add-child-node") addNode(data.taskId, data.nodeId);
   if (data.action === "add-sibling-node") addSiblingNode(data.taskId, data.nodeId);
   if (data.action === "toggle-node-done") toggleNodeDone(data.taskId, data.nodeId);
+  if (data.action === "toggle-node-collapse") toggleNodeCollapse(data.taskId, data.nodeId);
+  if (data.action === "toggle-all-nodes") toggleAllNodes(data.taskId);
   if (data.action === "mark-node-status") markNodeStatus(data.taskId, data.nodeId, data.status);
   if (data.action === "delete-node") deleteNode(data.taskId, data.nodeId);
   if (data.action === "toggle-node-detail-fullscreen") state.nodeDetailFullscreen = !state.nodeDetailFullscreen;
   if (data.action === "close-node-detail") {
     state.selectedNodeId = "";
+    state.recordDraft = "";
     state.nodeDetailFullscreen = false;
     state.nodeDetailPosition = null;
   }
   if (data.action === "save-node-detail") {
-    state.selectedNodeId = "";
-    state.nodeDetailFullscreen = false;
-    state.nodeDetailPosition = null;
+    saveSelectedNodeRecord();
   }
   render();
 }
@@ -2588,6 +2716,9 @@ function taskMarkdown(task) {
     "",
     "## 结论",
     task.conclusion.trim() || "暂无",
+    "",
+    "## 知识笔记",
+    (task.notes || "").trim() || "暂无",
     "",
     "## 处理流",
     "",
@@ -2666,6 +2797,7 @@ function openTaskFromGlobalList(taskId, nodeId = "") {
   state.activeGroupId = task.groupId || defaultTaskGroup.id;
   state.activeTaskId = task.id;
   state.selectedNodeId = nodeId;
+  state.recordDraft = nodeId ? findNode(task.nodes, nodeId)?.note || "" : "";
   state.nodeDetailFullscreen = false;
   state.nodeDetailPosition = null;
   state.taskFilter = "all";
@@ -3124,6 +3256,25 @@ function toggleNodeDone(taskId, nodeId) {
   if (!task || !node) return;
   node.status = node.status === "done" ? "todo" : "done";
   node.updatedAt = now();
+  task.updatedAt = now();
+}
+
+function toggleNodeCollapse(taskId, nodeId) {
+  const task = state.tasks.find((item) => item.id === taskId);
+  const node = task ? findNode(task.nodes, nodeId) : null;
+  if (!task || !node || !node.children.length) return;
+  node.collapsed = !node.collapsed;
+  task.updatedAt = now();
+}
+
+function toggleAllNodes(taskId) {
+  const task = state.tasks.find((item) => item.id === taskId);
+  if (!task) return;
+  const nodes = flatten(task.nodes).filter((node) => node.children.length);
+  const shouldCollapse = !nodes.every((node) => node.collapsed);
+  nodes.forEach((node) => {
+    node.collapsed = shouldCollapse;
+  });
   task.updatedAt = now();
 }
 
