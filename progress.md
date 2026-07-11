@@ -420,3 +420,29 @@
   - Verified desktop at 1280×720 and mobile at 390×844; mobile has no horizontal overflow and renders the record modal as a bottom drawer.
   - Verified the browser reported no warnings or errors.
   - Ran `npm run check` and `git diff --check` successfully before release packaging.
+
+## Session: 2026-07-12 Living Handoff Document
+
+### Discovery
+- **Status:** complete
+- Actions taken:
+  - Recovered the latest session context and confirmed v0.1.45 is published at commit `2aa78f4`.
+  - Read the existing handoff document in full.
+  - Identified that the document accurately preserves the original HTML prototype but incorrectly presents it as the current production architecture.
+  - Chose to add a production-authoritative entry section while retaining the prototype specification as historical design reference.
+
+### Documentation and Remote Persistence
+- **Status:** complete
+- Actions taken:
+  - Reframed the document as a Living Handoff with a precedence rule that separates current Electron production facts from the historical v1.3.1 prototype.
+  - Added a five-minute takeover procedure, current release/task state, current product and interaction contracts, repository map, technology stack, persistence/data model, completed capabilities, technical debt, validation/release discipline, and document maintenance checklist.
+  - Preserved all original prototype material under a clearly labeled historical appendix.
+- Completion target:
+  - Track, commit, and push the handoff and planning updates to remote main in this documentation-only change.
+
+### Verification
+- **Status:** complete
+- Actions taken:
+  - Cross-checked version, dependencies, file responsibilities, persistence flow, and data fields against current source.
+  - Ran `npm run check` successfully.
+  - Ran `git diff --check` successfully.

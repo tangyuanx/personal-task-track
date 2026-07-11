@@ -118,3 +118,13 @@
 - Phase 10 desktop verification at 1280x720 showed no body-level overflow, a padded two-panel shell, three side-by-side task brief cards, and a flow list inside the visible workbench.
 - Phase 10 desktop node-detail verification showed the note overlay covers about 93.8% of the task-page width and 73.2% of task-page height while Milkdown/ProseMirror still mounts.
 - Phase 10 mobile verification at 390x844 showed no horizontal overflow, stacked brief cards, and a fixed near-fullscreen node-detail overlay measuring 359x828.
+
+## Living Handoff Findings (2026-07-12)
+- The existing 1784-line handoff is a valuable specification for the original `task-track.html` v1.3.1 prototype, but its opening metadata and many “current” statements predate the Electron production app.
+- A new session could currently be misled into treating the project as a single-file, dependency-free localStorage app even though production is Electron v0.1.45 with npm scripts, desktop storage normalization, packaged releases, and bundled Milkdown.
+- The safest migration is to keep the prototype specification as historical design reference while adding an authoritative production-state section at the top with explicit precedence.
+- The living handoff must be tracked in Git and updated as a normal completion criterion whenever release state, architecture, data fields, key interaction contracts, validation, known issues, or next work changes.
+- Current production facts verified from source: package version `0.1.45`; Electron 42.5; electron-builder 26.15; local Milkdown Crepe bundle; `index.html` + `src/app.js` + `src/styles.css` renderer; Electron IPC bridge and atomic `task-data.json` persistence with browser localStorage fallback.
+- Current storage normalization explicitly preserves task-level `notes`, recursive node `collapsed` state, task groups, active group, layout widths, attachments, theme/fonts, filters, and updated timestamp.
+- `FEATURE_MAP.md` remains useful for concepts and call chains, but its line numbers and some editor descriptions are stale after the v0.1.45 redesign; new sessions should locate symbols with `rg` rather than trust line numbers blindly.
+- The production interaction contract differs from the old prototype: task-level `task.notes` is the Milkdown knowledge document; per-node `node.note` is a compact record edited in the HTML-style modal and summarized in the flow.

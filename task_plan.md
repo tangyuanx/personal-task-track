@@ -4,7 +4,7 @@
 Maintain the personal task management app through scoped, low-risk improvements while preserving existing task flow behavior and release discipline.
 
 ## Current Phase
-Phase 12
+Phase 13
 
 ## Phases
 
@@ -103,6 +103,14 @@ Phase 12
 - [x] Re-run design QA, checks, desktop builds, and release flow
 - **Status:** complete
 
+### Phase 13: Living Handoff Document
+- [x] Recover the latest release and planning context
+- [x] Read the existing handoff document in full and identify stale prototype assumptions
+- [x] Add an authoritative current-production handoff section and maintenance protocol
+- [x] Verify the document against the repository and checks
+- [x] Commit and push the handoff document to remote main
+- **Status:** complete
+
 ## Key Questions
 1. Should this edit production frontend files? Answer: no, create static page first.
 2. What style should guide the mockup? Answer: efficiency tool first, with a touch of today-focus atmosphere.
@@ -116,6 +124,7 @@ Phase 12
 10. When should node detail open? Answer: only when clicking the record/note area, not when adding or editing node titles.
 11. Should the production visual layout also match the final static mockup? Answer: yes, update spacing, color atmosphere, and layout feel, not just behavior.
 12. Where should Milkdown live? Answer: in task-level Knowledge Notes; node records use a compact simple modal matching `task-track.html`.
+13. How should future sessions recover project context? Answer: read the tracked living handoff first, then planning files and repository status; update the handoff whenever architecture, behavior, validation, release, or pending work changes.
 
 ## Decisions Made
 | Decision | Rationale |
@@ -138,6 +147,8 @@ Phase 12
 | Disable Crepe TopBar and constrain Milkdown toolbar icons through scoped CSS | Avoids oversized and visually chaotic editor controls while preserving the editor surface. |
 | Apply the final static direction through CSS-first visual refinement | The current production structure already matches the functional model, so CSS-first alignment reduces regression risk. |
 | Use a warmer paper workspace with moss focus accents for the default focus tone | This matches the final static mockup mood better than the previous blue focus tone while staying task-tool appropriate. |
+| Keep the original v1.3.1 handoff as a clearly labeled historical appendix | It preserves the user's detailed design rationale while preventing stale prototype facts from overriding current Electron production state. |
+| Treat the handoff as a completion artifact for future sessions | The user explicitly wants new sessions to continue without relying on chat history, so architecture, current work, validation, release, and pending decisions must stay Git-tracked and current. |
 
 ## Errors Encountered
 | Error | Attempt | Resolution |
@@ -151,6 +162,7 @@ Phase 12
 | Browser tab verification timed out during an immediate post-render note readback | 1 | Took a fresh DOM snapshot, reloaded, reopened Knowledge Notes, and confirmed the saved content through the rendered textbox |
 | Git staging was rejected because the Codex action usage limit was reached | 1 | Stop without workarounds; keep all verified local changes and resume staging/commit/tag/push after the limit resets |
 | Knowledge-note browser typing inserted the new heading before existing content | 1 | Verified persistence rather than ordering as the functional requirement; the editor remained fully editable and stored the Milkdown document correctly |
+| Staged handoff failed `git diff --cached --check` because eight newly added Markdown lines used trailing spaces for hard breaks | 1 | Removed the trailing spaces and kept the blockquote readable as consecutive lines |
 
 ## Notes
 - Phase 9 production implementation is complete and ready for release.
