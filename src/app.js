@@ -616,12 +616,7 @@ function renderSidebar() {
         ${filteredTasks()
           .map((task) => renderTaskItem(task))
           .join("")}
-        <div class="task-item new-task-row">
-          <span class="task-drag-spacer"></span>
-          <span class="task-check-spacer"></span>
-          <input class="task-title" data-new-task-title placeholder="输入任务标题，回车创建" />
-          ${newTaskPrioritySelect()}
-        </div>
+        <div class="task-create-hint" data-task-create-hint tabindex="0">双击空白新建任务 · 右键更多操作</div>
       </div>
       <section class="group-panel" aria-label="任务分组">
         <div class="group-panel-head">
@@ -768,7 +763,7 @@ function renderTaskPage(task) {
           </div>
           ${
             topNodes.length
-              ? `<div class="flow-list flow-table" style="${flowWidthStyle()}" data-context="flow-root" data-task-id="${task.id}">${renderFlowHeader()}${topNodes.map((node, index) => renderFlowNode(task.id, node, 0, index, "")).join("")}${renderFlowHint()}</div>`
+              ? `<div class="flow-list flow-table" style="${flowWidthStyle()};--flow-visible-row-count:${visibleFlowRowCount(topNodes)}" data-context="flow-root" data-task-id="${task.id}">${renderFlowHeader()}${topNodes.map((node, index) => renderFlowNode(task.id, node, 0, index, "")).join("")}${renderFlowHint()}</div>`
               : `<div class="flow-list flow-table empty-flow" data-context="flow-root" data-task-id="${task.id}">还没有处理节点。${renderFlowHint()}</div>`
           }
         </section>` : state.taskPane === "notes" ? renderTaskKnowledge(task) : renderTaskHistory(task)}
@@ -844,10 +839,16 @@ function renderTaskHistory(task) {
 function renderFlowHint() {
   return `
     <div class="flow-hint">
-      <kbd>右键</kbd>
-      <span>主轴表示顺序，缩进表示父子关系；右键空白处新增主节点，右键节点可继续拆分</span>
+      拖动表头分隔线可调整列宽；主轴表示顺序，缩进表示父子关系，节点状态通过删除线、字重、虚线与空心状态轴区分。
     </div>
   `;
+}
+
+function visibleFlowRowCount(nodes) {
+  return nodes.reduce(
+    (count, node) => count + 1 + (node.collapsed ? 0 : visibleFlowRowCount(node.children || [])),
+    0,
+  );
 }
 
 function renderConclusionPrompt() {
@@ -1792,6 +1793,22 @@ function bind() {
     });
   }
 
+  const taskList = document.querySelector('.task-list[data-context="task-list"]');
+  taskList?.addEventListener("dblclick", (event) => {
+    if (event.target.closest(".task-row, .task-list-head, button, input, select")) return;
+    event.preventDefault();
+    addBlankTask();
+    render();
+  });
+
+  const taskCreateHint = document.querySelector("[data-task-create-hint]");
+  taskCreateHint?.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    addBlankTask();
+    render();
+  });
+
   document.querySelectorAll("[data-setting]").forEach((element) => {
     element.addEventListener("click", (event) => event.stopPropagation());
     element.addEventListener("change", (event) => {
@@ -2494,6 +2511,21 @@ function insertTextIntoEditor(editor, text) {
 }
 
 function insertMarkdownImage(editor, dataUrl) {
+  if (editor?.classList?.contains("ProseMirror")) {
+    const host = editor.closest(".milkdown-editor-host");
+    const taskId = host?.dataset.taskId || "";
+    const nodeId = host?.dataset.nodeId || "";
+    const instance = milkdownEditors.get(noteDraftKey(taskId, nodeId))?.instance;
+    if (instance?.insertImage) {
+      editor.focus({ preventScroll: true });
+      return Boolean(
+        instance.insertImage({
+          src: dataUrl,
+          alt: `粘贴图片 ${formatImageStamp(new Date())}`,
+        }),
+      );
+    }
+  }
   const markdown = createMarkdownImageSnippet(dataUrl);
   if (!markdown) return false;
   return insertTextIntoEditor(editor, markdown);

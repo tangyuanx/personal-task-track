@@ -446,3 +446,32 @@
   - Cross-checked version, dependencies, file responsibilities, persistence flow, and data fields against current source.
   - Ran `npm run check` successfully.
   - Ran `git diff --check` successfully.
+
+## Session: 2026-07-12 Milkdown, Flow Guidance, and Sidebar Fidelity Fixes
+
+### Discovery
+- **Status:** complete
+- Actions taken:
+  - Inspected all three supplied screenshots at original resolution.
+  - Confirmed four scoped regressions: loose Milkdown list rhythm, pasted image shown as unresolved Markdown, orphan flow sequence rail after collapse-all, and oversized sidebar new-task card.
+  - Confirmed the bottom flow guidance and new-task affordance must be matched directly to `task-track.html` rather than redesigned.
+  - Traced pasted-image failure to plain-text insertion into ProseMirror and identified Milkdown's official `insertImageCommand` integration path.
+  - Traced the orphan rail to a container-height pseudo-element and the sidebar card to production-only `.new-task-row` markup.
+
+### Implementation
+- **Status:** complete
+- Actions taken:
+  - Exposed Milkdown's official `insertImageCommand` through the local Crepe wrapper and routed ProseMirror image paste through it.
+  - Added scoped Knowledge Notes list overrides for indentation, marker/content gap, marker height, and paragraph rhythm.
+  - Made the flow sequence rail height derive from visible rows, replaced the helper with the exact HTML footer copy/treatment, and removed the boxed `右键` badge.
+  - Replaced the large sidebar new-task form card with a compact hint; double-clicking blank repository space and Enter/Space on the hint create a task, while right-click creation remains available.
+
+### Browser and Design QA
+- **Status:** complete
+- Actions taken:
+  - Verified the official Milkdown list DOM remains active and measured the corrected item/marker/paragraph spacing.
+  - Pasted a real supplied PNG, confirmed a valid 966×700 rendered image, reloaded the page, and confirmed it remained valid.
+  - Verified collapse-all changes the rail endpoint to exactly the last visible root-node center and the helper text exactly matches `task-track.html`.
+  - Verified the new-task form card is absent, the compact creation hint is visible, and mobile 390×844 has no horizontal overflow.
+  - Captured desktop/mobile implementation evidence and a combined source/implementation comparison under `.design-qa/`; updated `design-qa.md` with `final result: passed`.
+  - Browser console checks returned no warnings or errors.

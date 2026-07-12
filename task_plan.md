@@ -4,7 +4,7 @@
 Maintain the personal task management app through scoped, low-risk improvements while preserving existing task flow behavior and release discipline.
 
 ## Current Phase
-Phase 13
+Phase 14
 
 ## Phases
 
@@ -111,6 +111,17 @@ Phase 13
 - [x] Commit and push the handoff document to remote main
 - **Status:** complete
 
+### Phase 14: Milkdown, Flow Guidance, and Sidebar Fidelity Fixes
+- [x] Recover current repository and inspect all three user screenshots
+- [x] Compare production selectors/behavior with `task-track.html`
+- [x] Tighten Milkdown ordered/unordered list indentation and vertical rhythm
+- [x] Make pasted images render and persist in task Knowledge Notes
+- [x] Remove collapsed-flow orphan rail and match the HTML guidance copy/layout
+- [x] Replace the oversized sidebar new-task card with the HTML-style hint row
+- [x] Browser-verify the affected desktop/mobile states and update design QA
+- [ ] Validate, build, update the living handoff, and release the next patch version
+- **Status:** in_progress
+
 ## Key Questions
 1. Should this edit production frontend files? Answer: no, create static page first.
 2. What style should guide the mockup? Answer: efficiency tool first, with a touch of today-focus atmosphere.
@@ -163,6 +174,12 @@ Phase 13
 | Git staging was rejected because the Codex action usage limit was reached | 1 | Stop without workarounds; keep all verified local changes and resume staging/commit/tag/push after the limit resets |
 | Knowledge-note browser typing inserted the new heading before existing content | 1 | Verified persistence rather than ordering as the functional requirement; the editor remained fully editable and stored the Milkdown document correctly |
 | Staged handoff failed `git diff --cached --check` because eight newly added Markdown lines used trailing spaces for hard breaks | 1 | Removed the trailing spaces and kept the blockquote readable as consecutive lines |
+| Product Design user-context preflight was initially called from the plugin root | 1 | Located and used the actual script under `skills/user-context/scripts/`; no saved context exists, so current screenshots, HTML, and repository remain authoritative |
+| The first combined patch missed the final `.flow-hint` CSS block because the expected context differed | 1 | Split the patch by file/selector and applied each scoped change against freshly inspected source |
+| Browser rail measurement used unavailable `parseFloat` inside the restricted read-only page scope | 1 | Took a fresh snapshot and re-measured with `Number(String(value).replace("px", ""))` |
+| Crepe's default pasted-image upload returned temporary blob URLs that broke after editor recreation | 1 | Overrode ImageBlock `onUpload` to persist data URLs, then verified a real 966×700 PNG before and after full reload |
+| Reloading the local QA comparison tab was rejected by browser security policy | 1 | Stopped further browser actions on that tab; retained the already saved combined comparison and the separately captured same-state desktop/mobile evidence |
+| Pre-release remote tag sync was rejected because the Codex action usage limit was reached | 1 | Did not retry or work around the limit; used the already synced v0.1.45 tag state to prepare the local 0.1.46 candidate and left packaging/push pending |
 
 ## Notes
 - Phase 9 production implementation is complete and ready for release.

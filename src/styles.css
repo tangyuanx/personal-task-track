@@ -4742,28 +4742,14 @@ body {
 }
 
 .flow-hint {
-  display: flex;
-  min-height: 38px;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 8px;
-  margin: 0;
-  padding: 0 8px 0 44px;
-  border-top: 0;
-  border-bottom: 1px solid var(--line-soft);
+  margin-top: auto;
+  padding: 18px 8px 4px;
+  border-top: 1px dashed var(--handoff-line-strong);
+  border-bottom: 0;
   color: var(--muted);
-  font-size: 12px;
-}
-
-.flow-hint kbd {
-  min-width: 42px;
-  border: 1px solid rgba(13, 91, 73, 0.18);
-  border-radius: 6px;
-  padding: 3px 7px;
-  background: rgba(255, 255, 255, 0.58);
-  color: var(--focus-strong);
-  font-family: var(--mono);
   font-size: 11px;
+  line-height: 1.5;
+  text-align: center;
 }
 
 .record-popover.node-detail {
@@ -5247,6 +5233,21 @@ body {
   background: rgba(255, 255, 255, 0.34);
 }
 
+.task-create-hint {
+  min-height: 28px;
+  padding: 6px 8px 4px 23px;
+  color: var(--handoff-soft);
+  font-size: 10px;
+  line-height: 1.35;
+  outline: 0;
+  user-select: none;
+}
+
+.task-create-hint:hover,
+.task-create-hint:focus-visible {
+  color: var(--handoff-muted);
+}
+
 .group-panel {
   min-height: 72px;
   flex: 0 0 auto;
@@ -5572,11 +5573,12 @@ body {
 
 .flow-table.flow-list::before {
   position: absolute;
-  top: 54px;
-  bottom: 39px;
+  top: 69px;
+  bottom: auto;
   left: 46px;
   z-index: 0;
   width: 1px;
+  height: max(0px, calc((var(--flow-visible-row-count, 1) - 1) * 58px));
   background: #d4d9d6;
   content: "";
   pointer-events: none;
@@ -5982,6 +5984,45 @@ body {
   color: var(--handoff-ink);
   font-size: 14px;
   line-height: 1.78;
+}
+
+.task-knowledge-editor-panel .ProseMirror ul,
+.task-knowledge-editor-panel .ProseMirror ol {
+  margin: 0.38em 0;
+  padding-left: 1.35em;
+}
+
+.task-knowledge-editor-panel .milkdown-list-item-block {
+  margin: 0.12em 0;
+}
+
+.task-knowledge-editor-panel .milkdown-list-item-block > .list-item,
+.task-knowledge-editor-panel .milkdown-list-item-block li {
+  gap: 4px;
+}
+
+.task-knowledge-editor-panel .milkdown-list-item-block li .label-wrapper,
+.task-knowledge-editor-panel .milkdown-list-item-block li .label-wrapper .label {
+  width: 20px !important;
+  height: 24px !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  line-height: 24px !important;
+}
+
+.task-knowledge-editor-panel .milkdown-list-item-block > .list-item > .children .content-dom > p {
+  margin: 0.08em 0;
+}
+
+.task-knowledge-editor-panel .ProseMirror img,
+.task-knowledge-editor-panel .ProseMirror .image-block {
+  max-width: 100%;
+}
+
+.task-knowledge-editor-panel .ProseMirror img {
+  display: block;
+  height: auto;
+  border-radius: 8px;
 }
 
 .task-knowledge-editor-panel .milkdown-status {
