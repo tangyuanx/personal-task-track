@@ -20,8 +20,8 @@ Phase 14
 - [x] Remove the visible group scrollbar while preserving group navigation
 - [x] Replace the wrapped Today summary with a compact single-line count
 - [x] Browser-verify a newly created empty group and inspect console output
-- [ ] Validate, package, and publish v0.1.49
-- **Status:** in_progress
+- [x] Validate, package, and publish v0.1.49
+- **Status:** complete
 
 ### Phase 16: Sidebar Bottom-Anchor Regression
 - [x] Identify the v0.1.47 task-list flex override as the regression source
