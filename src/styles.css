@@ -5824,6 +5824,60 @@ body {
   font: 11px var(--mono);
 }
 
+/* Phase 15: quieter green status language and compact empty-group layout */
+.flow-status {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  justify-self: start;
+  border: 0;
+  border-radius: 0;
+  padding: 0 0 0 8px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--handoff-muted);
+  font-size: 11px;
+  font-weight: 680;
+  font-style: normal;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.flow-status::before {
+  width: 3px;
+  height: 15px;
+  margin-right: 6px;
+  border-radius: 99px;
+  background: currentColor;
+  content: "";
+  opacity: 0.55;
+}
+
+.flow-status.status-todo {
+  color: var(--handoff-focus-800);
+  font-weight: 760;
+}
+
+.flow-status.status-done {
+  color: var(--handoff-done);
+  text-decoration: line-through;
+  opacity: 0.7;
+}
+
+.flow-status.status-blocked {
+  color: #70866f;
+}
+
+.flow-status.status-later {
+  color: #80958b;
+}
+
+.rail.sidebar .task-list {
+  min-height: 0;
+  max-height: min(42vh, 420px);
+  flex: 0 1 auto;
+}
+
 @media (min-width: 871px) and (max-width: 980px) {
   .ops-app.app {
     grid-template-columns: var(--rail-width) minmax(0, 1fr);

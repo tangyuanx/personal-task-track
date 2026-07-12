@@ -14,6 +14,15 @@ Phase 14
 - [x] Document findings in findings.md
 - **Status:** complete
 
+### Phase 15: Pane Performance, Node Status, and Empty Group Fixes
+- [x] Cache the mounted Knowledge Notes editor during pane switches
+- [x] Keep status and updated time as the final flow columns
+- [x] Replace prominent node-state pills with restrained green status text
+- [x] Make node context-menu status actions mutually exclusive
+- [x] Stop empty task groups from stretching the sidebar task list
+- [ ] Run release validation, package both desktop targets, and publish v0.1.47
+- **Status:** in_progress
+
 ### Phase 2: Design Structure
 - [x] Define the redesigned static page layout
 - [x] Decide visual language, information hierarchy, and responsive constraints

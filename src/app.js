@@ -164,6 +164,7 @@ let taskDragState = null;
 const milkdownEditors = new Map();
 const nodeNoteDrafts = new Map();
 const nodeNoteSaveTimers = new Map();
+let cachedKnowledgePane = null;
 
 
 // ============================================================
@@ -561,7 +562,8 @@ function render() {
   captureMountedMilkdownDrafts();
   flushNodeNoteDrafts({ persist: false });
   save();
-  destroyMilkdownEditors();
+  stashKnowledgePane();
+  destroyMilkdownEditors(cachedKnowledgePane ? new Set([noteDraftKey(cachedKnowledgePane.taskId, "")]) : new Set());
   document.documentElement.dataset.theme = state.theme;
   document.documentElement.dataset.zhFont = state.zhFont;
   document.documentElement.dataset.enFont = state.enFont;
@@ -578,6 +580,7 @@ function render() {
       ${state.reviewOpen ? renderReviewPanel() : ""}
     </main>
   `;
+  restoreCachedKnowledgePane(task);
   bind();
   resizeTaskBriefTextareas();
   focusPendingElement();
@@ -757,7 +760,7 @@ function renderTaskPage(task) {
           <div class="section-heading flow-head">
             <div>
               <h2>处理流</h2>
-              <span>主轴表示顺序，缩进表示父子关系，状态通过形态差异区分</span>
+              <span>主轴表示顺序，缩进表示父子关系，状态通过绿色层级区分</span>
             </div>
             <span>${summary.open ? `${summary.open} 个未完成` : "所有节点已完成"}</span>
           </div>
@@ -795,7 +798,7 @@ function renderTaskPaneTabs(task) {
 function renderTaskKnowledge(task) {
   const stats = markdownStats(task.notes);
   return `
-    <section class="task-knowledge-pane">
+    <section class="task-knowledge-pane" data-task-id="${task.id}">
       <div class="section-heading flow-head">
         <div><h2>知识笔记</h2><span>沉淀与当前任务相关的知识、分析和可复用结论</span></div>
       </div>
@@ -839,7 +842,7 @@ function renderTaskHistory(task) {
 function renderFlowHint() {
   return `
     <div class="flow-hint">
-      拖动表头分隔线可调整列宽；主轴表示顺序，缩进表示父子关系，节点状态通过删除线、字重、虚线与空心状态轴区分。
+      拖动表头分隔线可调整列宽；主轴表示顺序，缩进表示父子关系，节点状态通过绿色层级、字重与删除线区分。
     </div>
   `;
 }
@@ -896,7 +899,6 @@ function renderFlowNode(taskId, node, depth, rootIndex = 0, parentTitle = "") {
   const indent = Math.min(depth, 4) * 16;
   const branch = depth === 0 ? "main-flow" : "sub-flow";
   const noteSummary = nodeNoteSummary(node.note);
-  const statusClass = node.status === "done" ? "good" : node.status === "blocked" ? "hot" : "";
   const relationship = depth === 0 ? `主流程第 ${rootIndex + 1} 步` : `属于 ${parentTitle || "上级节点"}`;
   return `
     <article class="flow-item depth-${Math.min(depth, 6)}">
@@ -918,7 +920,7 @@ function renderFlowNode(taskId, node, depth, rootIndex = 0, parentTitle = "") {
           <strong>${esc(noteSummary.title)}</strong>
           <span>${esc(noteSummary.detail)}</span>
         </button>
-        <span class="flow-status pill ${statusClass}">${nodeStatusText(node.status)}</span>
+        <span class="flow-status status-${node.status}">${nodeStatusText(node.status)}</span>
         <span class="flow-updated note-link">${formatShort(node.updatedAt)}</span>
       </div>
       ${children.length && !node.collapsed ? children.map((child) => renderFlowNode(taskId, child, depth + 1, rootIndex, node.title)).join("") : ""}
@@ -1085,16 +1087,24 @@ function renderContextMenu() {
   const task = state.tasks.find((item) => item.id === menu.taskId);
   const node = task ? findNode(task.nodes, menu.nodeId) : null;
   const doneLabel = node?.status === "done" ? "标记为未完成" : "标记为完成";
-  const todoAction = node?.status !== "todo" ? `<button data-action="mark-node-status" data-task-id="${menu.taskId}" data-node-id="${menu.nodeId}" data-status="todo">标记为未完成</button>` : "";
+  const secondaryStatuses = [
+    ["todo", "标记为未完成"],
+    ["blocked", "标记为卡住"],
+    ["later", "标记为稍后"],
+  ]
+    .filter(([status]) => status !== node?.status && !(node?.status === "done" && status === "todo"))
+    .map(
+      ([status, label]) =>
+        `<button data-action="mark-node-status" data-task-id="${menu.taskId}" data-node-id="${menu.nodeId}" data-status="${status}">${label}</button>`,
+    )
+    .join("");
   return `
     <div class="context-menu" style="left:${menu.x}px; top:${menu.y}px">
       <button data-action="add-child-node" data-task-id="${menu.taskId}" data-node-id="${menu.nodeId}">新增下级节点</button>
       <button data-action="add-sibling-node" data-task-id="${menu.taskId}" data-node-id="${menu.nodeId}">在下方新增同级</button>
       <hr />
       <button data-action="toggle-node-done" data-task-id="${menu.taskId}" data-node-id="${menu.nodeId}">${doneLabel}</button>
-      ${todoAction}
-      <button data-action="mark-node-status" data-task-id="${menu.taskId}" data-node-id="${menu.nodeId}" data-status="blocked">标记为卡住</button>
-      <button data-action="mark-node-status" data-task-id="${menu.taskId}" data-node-id="${menu.nodeId}" data-status="later">标记为稍后</button>
+      ${secondaryStatuses}
       <hr />
       <button class="danger" data-action="delete-node" data-task-id="${menu.taskId}" data-node-id="${menu.nodeId}">删除节点</button>
     </div>
@@ -2251,11 +2261,40 @@ function restoreMarkdownSelection() {
   state.restoreMarkdownFocus = false;
 }
 
-function destroyMilkdownEditors() {
-  milkdownEditors.forEach((entry) => {
+function destroyMilkdownEditors(preservedKeys = new Set()) {
+  milkdownEditors.forEach((entry, key) => {
+    if (preservedKeys.has(key)) return;
     entry?.instance?.destroy?.().catch?.(() => {});
+    milkdownEditors.delete(key);
   });
-  milkdownEditors.clear();
+}
+
+function stashKnowledgePane() {
+  const pane = document.querySelector(".task-knowledge-pane[data-task-id]");
+  if (!pane) return;
+  const taskId = pane.dataset.taskId;
+  if (!taskId) return;
+  if (cachedKnowledgePane && cachedKnowledgePane.taskId !== taskId) discardCachedKnowledgePane();
+  cachedKnowledgePane = { taskId, pane };
+  pane.remove();
+}
+
+function discardCachedKnowledgePane() {
+  if (!cachedKnowledgePane) return;
+  const key = noteDraftKey(cachedKnowledgePane.taskId, "");
+  milkdownEditors.get(key)?.instance?.destroy?.().catch?.(() => {});
+  milkdownEditors.delete(key);
+  cachedKnowledgePane.pane?.remove();
+  cachedKnowledgePane = null;
+}
+
+function restoreCachedKnowledgePane(task) {
+  if (!cachedKnowledgePane || !task || state.taskPane !== "notes") return;
+  if (cachedKnowledgePane.taskId !== task.id) return;
+  const replacement = document.querySelector(".task-knowledge-pane[data-task-id]");
+  if (!replacement) return;
+  replacement.replaceWith(cachedKnowledgePane.pane);
+  cachedKnowledgePane = null;
 }
 
 function captureMountedMilkdownDrafts() {
@@ -2344,6 +2383,7 @@ function mountMilkdownEditors() {
     const node = task && nodeId ? findNode(task.nodes, nodeId) : null;
     if (!task || (nodeId && !node)) return;
     const editorKey = noteDraftKey(taskId, nodeId);
+    if (milkdownEditors.has(editorKey)) return;
     const markdown = nodeNoteDrafts.get(editorKey)?.markdown ?? (node ? node.note : task.notes) ?? "";
 
     window.MilkdownTaskEditor.create({
