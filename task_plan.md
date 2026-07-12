@@ -18,8 +18,8 @@ Phase 14
 - [x] Identify the v0.1.47 task-list flex override as the regression source
 - [x] Restore the task repository as the flexible sidebar region
 - [x] Restore task groups and the footer to the bottom edge for populated and empty groups
-- [ ] Validate, package, and publish v0.1.48
-- **Status:** in_progress
+- [x] Validate, package, and publish v0.1.48
+- **Status:** complete
 
 ### Phase 15: Pane Performance, Node Status, and Empty Group Fixes
 - [x] Cache the mounted Knowledge Notes editor during pane switches
