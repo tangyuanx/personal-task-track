@@ -119,8 +119,8 @@ Phase 14
 - [x] Remove collapsed-flow orphan rail and match the HTML guidance copy/layout
 - [x] Replace the oversized sidebar new-task card with the HTML-style hint row
 - [x] Browser-verify the affected desktop/mobile states and update design QA
-- [ ] Validate, build, update the living handoff, and release the next patch version
-- **Status:** in_progress
+- [x] Validate, build, update the living handoff, and release the next patch version
+- **Status:** complete
 
 ## Key Questions
 1. Should this edit production frontend files? Answer: no, create static page first.
