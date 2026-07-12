@@ -5157,6 +5157,20 @@ body {
   font-size: 11px;
 }
 
+.today-headline span {
+  max-width: none;
+  align-self: center;
+  font-size: 10.5px;
+  font-weight: 620;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.today-headline span b {
+  color: #ffffff;
+  font: 760 12px var(--mono);
+}
+
 .focus-stack {
   min-height: 0;
   gap: 4px;
@@ -5249,13 +5263,14 @@ body {
 }
 
 .group-panel {
-  min-height: 72px;
+  min-height: 0;
   flex: 0 0 auto;
-  padding: 9px 9px 8px;
+  padding: 7px 3px 0;
   overflow: hidden;
-  border: 1px solid var(--handoff-line-strong);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.34);
+  border: 0;
+  border-top: 1px solid var(--handoff-line-strong);
+  border-radius: 0;
+  background: transparent;
 }
 
 .group-panel-head {
@@ -5263,7 +5278,7 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  margin-bottom: 7px;
+  margin: 0 4px 6px;
 }
 
 .group-panel-head strong {
@@ -5289,18 +5304,12 @@ body {
   gap: 6px;
   overflow-x: auto;
   overflow-y: hidden;
-  padding: 1px 1px 5px;
-  scrollbar-width: thin;
-  scrollbar-color: var(--handoff-line-strong) transparent;
+  padding: 1px;
+  scrollbar-width: none;
 }
 
 .task-tabs.sheet-tabs::-webkit-scrollbar {
-  height: 4px;
-}
-
-.task-tabs.sheet-tabs::-webkit-scrollbar-thumb {
-  border-radius: 999px;
-  background: var(--handoff-line-strong);
+  display: none;
 }
 
 .task-tabs .sheet-tab,
@@ -5328,7 +5337,7 @@ body {
 .task-footer.sidebar-foot {
   gap: 8px;
   margin: 0;
-  padding: 9px 3px 0;
+  padding: 10px 3px 0;
   border-top: 1px solid var(--handoff-line-strong);
 }
 

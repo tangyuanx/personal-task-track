@@ -14,6 +14,15 @@ Phase 14
 - [x] Document findings in findings.md
 - **Status:** complete
 
+### Phase 17: Empty Group and Today Panel Polish
+- [x] Audit the supplied empty-group screenshot with Product Design
+- [x] Flatten the bottom group controls without changing their bottom anchor
+- [x] Remove the visible group scrollbar while preserving group navigation
+- [x] Replace the wrapped Today summary with a compact single-line count
+- [x] Browser-verify a newly created empty group and inspect console output
+- [ ] Validate, package, and publish v0.1.49
+- **Status:** in_progress
+
 ### Phase 16: Sidebar Bottom-Anchor Regression
 - [x] Identify the v0.1.47 task-list flex override as the regression source
 - [x] Restore the task repository as the flexible sidebar region

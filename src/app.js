@@ -644,7 +644,7 @@ function renderTodayFocus(items) {
       <div class="section-label"><span>今日聚焦</span><span>${today}</span></div>
       <div class="today-headline">
         <strong>今日任务</strong>
-        <span>${items.length} 项重点任务需要推进</span>
+        <span><b>${items.length}</b> 项待推进</span>
       </div>
       <div class="focus-list focus-stack">
         ${

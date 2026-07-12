@@ -24,6 +24,8 @@
 - Phase 14 typography/spacing: Knowledge Notes still uses the official Milkdown/Crepe list structure, with marker boxes reduced to 20×24px, list-item height reduced to about 27px, and paragraph vertical margins reduced to about 1px. This resolves the screenshot's excessive indentation and row gaps without replacing Milkdown behavior.
 - Phase 14 image fidelity: a real supplied PNG was pasted into Milkdown, rendered at its natural 966×700 dimensions, and remained valid after a full page reload. Image Markdown no longer appears as literal text.
 - Phase 14 flow/sidebar fidelity: the collapsed sequence rail ends exactly at the last root-node center; helper copy/treatment matches `task-track.html`; the persistent dashed new-task card is absent and replaced by a low-emphasis hint while double-click/right-click creation remains available.
+- Phase 17 empty-group/sidebar polish: at the 370px desktop rail, an empty newly created group keeps a 199px flexible task repository region while the 62px group controls and 42px footer remain bottom-aligned. The group area is transparent with zero radius and no visible scrollbar, so it reads as integrated navigation rather than a floating card.
+- Phase 17 Today typography: the count now renders as a single-line `1 项待推进` label (`white-space: nowrap`) beside the 20px headline. Browser measurement confirmed a 52px-wide label with no wrapping, and the console returned no warnings or errors.
 
 ## Comparison History
 
@@ -34,6 +36,7 @@
 5. Knowledge Notes was rechecked with a mounted Milkdown `.ProseMirror`; edits survived pane switching and page reload, with no page-level horizontal overflow or console warnings/errors.
 6. Phase 14 first implementation rendered image nodes but revealed that Crepe's default blob URLs did not survive editor recreation. The uploader was changed to persistent data URLs and CSP image policy was aligned with Crepe previews.
 7. Phase 14 post-fix evidence confirmed a valid 966×700 pasted image before and after reload, 27px list-item rhythm, no collapsed orphan rail, exact HTML helper copy, no oversized task-creation card, no horizontal overflow at 390×844, and no browser warnings/errors.
+8. Phase 17 compared the supplied empty-group screenshot with a fresh in-app browser capture of the same empty-group state. The final layout removes the boxed group panel and visible horizontal scrollbar while preserving bottom anchoring, keyboard inputs, arrow navigation, and add-group behavior.
 
 ## Follow-up Polish
 
