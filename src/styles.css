@@ -5824,7 +5824,7 @@ body {
   font: 11px var(--mono);
 }
 
-/* Phase 15: quieter green status language and compact empty-group layout */
+/* Phase 15: quieter green status language */
 .flow-status {
   display: inline-flex;
   min-width: 0;
@@ -5870,12 +5870,6 @@ body {
 
 .flow-status.status-later {
   color: #80958b;
-}
-
-.rail.sidebar .task-list {
-  min-height: 0;
-  max-height: min(42vh, 420px);
-  flex: 0 1 auto;
 }
 
 @media (min-width: 871px) and (max-width: 980px) {

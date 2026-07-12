@@ -14,6 +14,13 @@ Phase 14
 - [x] Document findings in findings.md
 - **Status:** complete
 
+### Phase 16: Sidebar Bottom-Anchor Regression
+- [x] Identify the v0.1.47 task-list flex override as the regression source
+- [x] Restore the task repository as the flexible sidebar region
+- [x] Restore task groups and the footer to the bottom edge for populated and empty groups
+- [ ] Validate, package, and publish v0.1.48
+- **Status:** in_progress
+
 ### Phase 15: Pane Performance, Node Status, and Empty Group Fixes
 - [x] Cache the mounted Knowledge Notes editor during pane switches
 - [x] Keep status and updated time as the final flow columns
