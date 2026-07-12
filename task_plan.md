@@ -20,8 +20,8 @@ Phase 14
 - [x] Replace prominent node-state pills with restrained green status text
 - [x] Make node context-menu status actions mutually exclusive
 - [x] Stop empty task groups from stretching the sidebar task list
-- [ ] Run release validation, package both desktop targets, and publish v0.1.47
-- **Status:** in_progress
+- [x] Run release validation, package both desktop targets, and publish v0.1.47
+- **Status:** complete
 
 ### Phase 2: Design Structure
 - [x] Define the redesigned static page layout
