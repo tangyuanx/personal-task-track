@@ -21,8 +21,8 @@ Phase 14
 - [x] Run syntax and diff validation
 - [x] Record browser verification as blocked by the local-file URL security policy
 - [x] Build v0.1.50 for macOS ARM64 and Windows x64
-- [ ] Commit, tag, and publish v0.1.50
-- **Status:** in_progress
+- [x] Commit, tag, and publish v0.1.50
+- **Status:** complete
 
 ### Phase 17: Empty Group and Today Panel Polish
 - [x] Audit the supplied empty-group screenshot with Product Design
