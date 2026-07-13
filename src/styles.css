@@ -2407,19 +2407,6 @@ body.resizing-detail {
   padding: 44px 52px;
 }
 
-.empty-mark {
-  width: max-content;
-  margin-bottom: 14px;
-  padding: 7px 10px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  color: var(--muted);
-  background: var(--field);
-  font-family: var(--mono);
-  font-size: 12px;
-  font-weight: 650;
-}
-
 .empty-page p {
   margin-top: 6px;
   color: var(--muted);
@@ -5994,6 +5981,261 @@ body {
 
   .flow-updated {
     display: block;
+  }
+}
+
+/* ============================================================
+   Phase 19 — compact empty state and direct theme switching
+   ============================================================ */
+.theme-toggle {
+  display: grid;
+  width: 31px;
+  height: 31px;
+  flex: 0 0 31px;
+  place-items: center;
+  border: 1px solid var(--handoff-line-strong);
+  border-radius: 7px;
+  padding: 0;
+  background: rgba(255, 255, 255, 0.65);
+  color: var(--handoff-muted);
+  font-size: 14px;
+  line-height: 1;
+}
+
+.theme-toggle:hover,
+.theme-toggle:focus-visible,
+.theme-toggle.active {
+  border-color: color-mix(in srgb, var(--focus) 48%, var(--handoff-line-strong));
+  background: color-mix(in srgb, var(--focus) 10%, var(--handoff-surface));
+  color: var(--focus);
+  outline: 0;
+}
+
+.empty-page {
+  min-height: 100vh;
+  height: 100%;
+  box-sizing: border-box;
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding: 44px 38px;
+  background: var(--handoff-surface);
+}
+
+.empty-page h2 {
+  color: var(--handoff-ink);
+  font-size: 18px;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+.empty-page p {
+  margin-top: 7px;
+  color: var(--handoff-muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+:root[data-theme="dark"] {
+  --handoff-page: #101613;
+  --handoff-sidebar: #161f1a;
+  --handoff-surface: #19231e;
+  --handoff-ink: #edf4ef;
+  --handoff-muted: #a8b6ae;
+  --handoff-soft: #7f8e86;
+  --handoff-line: #2b3932;
+  --handoff-line-soft: #24322b;
+  --handoff-line-strong: #3b4a42;
+  --handoff-focus-950: #122c23;
+  --handoff-focus-800: #477d68;
+  --handoff-done: #879a8f;
+  --handoff-doing: #d0b877;
+  --handoff-waiting: #9eafb6;
+  --handoff-todo: #93a099;
+  --crepe-color-background: #19231e;
+  --crepe-color-on-background: #edf4ef;
+  --crepe-color-surface: #202c26;
+  --crepe-color-surface-low: #17201c;
+  --crepe-color-on-surface: #edf4ef;
+  --crepe-color-on-surface-variant: #a8b6ae;
+  --crepe-color-outline: #3b4a42;
+  --crepe-color-primary: #8ed8c1;
+  --crepe-color-secondary: #293c34;
+  --crepe-color-on-secondary: #dce9e2;
+  --crepe-color-selected: rgba(142, 216, 193, 0.18);
+  --crepe-color-hover: rgba(142, 216, 193, 0.1);
+  --crepe-color-inline-code: #efc987;
+  --crepe-color-inline-area: #121915;
+  --crepe-color-inverse: #edf4ef;
+  --crepe-color-on-inverse: #152019;
+  --crepe-shadow-1: 0 5px 18px rgba(0, 0, 0, 0.3);
+  --crepe-shadow-2: 0 16px 42px rgba(0, 0, 0, 0.42);
+}
+
+:root[data-theme="dark"] body,
+:root[data-theme="dark"] .ops-app.app,
+:root[data-theme="dark"] .workspace,
+:root[data-theme="dark"] .work-surface.task-page,
+:root[data-theme="dark"] .empty-page {
+  background-color: var(--handoff-surface);
+  color: var(--handoff-ink);
+}
+
+:root[data-theme="dark"] .rail.sidebar {
+  border-color: var(--handoff-line-strong);
+  background: linear-gradient(180deg, #1a241f 0%, var(--handoff-sidebar) 100%);
+}
+
+:root[data-theme="dark"] .brand.sidebar-head strong,
+:root[data-theme="dark"] .page-title,
+:root[data-theme="dark"] .flow-head h2,
+:root[data-theme="dark"] .settings-head h2,
+:root[data-theme="dark"] .review-head h2 {
+  color: var(--handoff-ink);
+}
+
+:root[data-theme="dark"] .brand.sidebar-head > span,
+:root[data-theme="dark"] .search.search-box,
+:root[data-theme="dark"] .task-row.task-item,
+:root[data-theme="dark"] .task-tabs .sheet-tab,
+:root[data-theme="dark"] .scroll-button.sheet-nav,
+:root[data-theme="dark"] .settings-button.settings-trigger,
+:root[data-theme="dark"] .theme-toggle,
+:root[data-theme="dark"] .task-pane-collapse {
+  border-color: var(--handoff-line-strong);
+  background: rgba(255, 255, 255, 0.045);
+  color: var(--handoff-muted);
+}
+
+:root[data-theme="dark"] .search.search-box input,
+:root[data-theme="dark"] .task-list-head select,
+:root[data-theme="dark"] .task-brief textarea,
+:root[data-theme="dark"] .flow-title-input,
+:root[data-theme="dark"] .record-modal-textarea,
+:root[data-theme="dark"] .settings-panel select,
+:root[data-theme="dark"] .review-panel select,
+:root[data-theme="dark"] .review-panel input {
+  border-color: var(--handoff-line-strong);
+  background-color: transparent;
+  color: var(--handoff-ink);
+}
+
+:root[data-theme="dark"] .task-row.task-item:hover,
+:root[data-theme="dark"] .task-row.task-item.active,
+:root[data-theme="dark"] .task-row.task-item.selected,
+:root[data-theme="dark"] .task-tabs .sheet-tab.active,
+:root[data-theme="dark"] .focus-row.focus-item.selected,
+:root[data-theme="dark"] .node-collapse-toggle:hover,
+:root[data-theme="dark"] .node-collapse-toggle:focus-visible {
+  border-color: #506158;
+  background: #243029;
+  color: var(--handoff-ink);
+}
+
+:root[data-theme="dark"] .brief-strip.task-brief,
+:root[data-theme="dark"] .flow-line.flow-row.main-flow,
+:root[data-theme="dark"] .task-knowledge-editor,
+:root[data-theme="dark"] .task-knowledge-editor-panel,
+:root[data-theme="dark"] .milkdown-editor-host,
+:root[data-theme="dark"] .milkdown-editor-host .milkdown,
+:root[data-theme="dark"] .milkdown-editor-host .ProseMirror {
+  border-color: var(--handoff-line-strong);
+  background-color: #1d2822;
+  color: var(--handoff-ink);
+}
+
+:root[data-theme="dark"] .flow-line.flow-row:not(.header):hover {
+  background: #222e27;
+}
+
+:root[data-theme="dark"] .flow-line.flow-row.selected {
+  background: linear-gradient(90deg, rgba(142, 216, 193, 0.14), transparent 74%);
+}
+
+:root[data-theme="dark"] .flow-table.flow-list::before,
+:root[data-theme="dark"] .sequence-child-mark {
+  background: #425149;
+}
+
+:root[data-theme="dark"] .flow-line.flow-row.sub::after {
+  border-color: #425149;
+}
+
+:root[data-theme="dark"] .settings-overlay,
+:root[data-theme="dark"] .review-overlay,
+:root[data-theme="dark"] .record-modal-backdrop {
+  background: rgba(4, 8, 6, 0.66);
+}
+
+:root[data-theme="dark"] .settings-panel,
+:root[data-theme="dark"] .review-panel,
+:root[data-theme="dark"] .record-modal.node-detail,
+:root[data-theme="dark"] .record-modal-header,
+:root[data-theme="dark"] .record-modal-context,
+:root[data-theme="dark"] .record-modal-footer,
+:root[data-theme="dark"] .context-menu,
+:root[data-theme="dark"] .conclusion-prompt,
+:root[data-theme="dark"] .milkdown-editor-host .link-tooltip,
+:root[data-theme="dark"] .milkdown-editor-host [class*="tooltip"] {
+  border-color: var(--handoff-line-strong);
+  background: #202b25;
+  color: var(--handoff-ink);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.42);
+}
+
+:root[data-theme="dark"] .settings-options button,
+:root[data-theme="dark"] .settings-inline-action,
+:root[data-theme="dark"] .record-modal-actions button,
+:root[data-theme="dark"] .context-menu button {
+  border-color: var(--handoff-line-strong);
+  background: #243029;
+  color: var(--handoff-ink);
+}
+
+:root[data-theme="dark"] .task-knowledge-editor-panel .milkdown-status,
+:root[data-theme="dark"] .record-modal-close:hover,
+:root[data-theme="dark"] .record-modal-close:focus-visible {
+  border-color: var(--handoff-line-strong);
+  background: #243029;
+  color: var(--handoff-ink);
+}
+
+:root[data-theme="dark"] .record-modal-actions button.primary,
+:root[data-theme="dark"] .add-group-button.sheet-add {
+  border-color: #6cae96;
+  background: #477d68;
+  color: #ffffff;
+}
+
+:root[data-theme="dark"] svg {
+  color: var(--handoff-muted);
+}
+
+:root[data-theme="dark"] .search.search-box svg {
+  stroke: var(--handoff-muted);
+}
+
+:root[data-theme="dark"] * {
+  scrollbar-color: #4a5b52 #151d19;
+}
+
+:root[data-theme="dark"] *::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+:root[data-theme="dark"] *::-webkit-scrollbar-track {
+  background: #151d19;
+}
+
+:root[data-theme="dark"] *::-webkit-scrollbar-thumb {
+  border: 2px solid #151d19;
+  border-radius: 999px;
+  background: #4a5b52;
+}
+
+@media (max-width: 870px) {
+  .empty-page {
+    padding: 32px 20px;
   }
 }
 

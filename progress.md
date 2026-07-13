@@ -1,5 +1,44 @@
 # Progress Log
 
+## Session: 2026-07-13 Empty State and Theme Switch
+
+### Phase 19: Requirement recovery and repository preparation
+- **Status:** in progress
+- Actions taken:
+  - Read the project-maintenance and file-based planning instructions.
+  - Located the requested document as `frontend_modification.md`.
+  - Preserved existing untracked user artifacts.
+  - Fetched `origin/main` and tags; confirmed local `main` matches `origin/main` at `1f36c3c`.
+  - Confirmed the document's sidebar-height requirement is already represented by the v0.1.50 baseline.
+  - Removed the `TRACK` marker from the workspace empty state and moved the empty content to the top.
+  - Added a moon/sun theme button immediately after Settings using the existing persisted theme state.
+  - Added final-layer dark variables and scoped coverage for the current sidebar, workspace, task rows, search, inputs, buttons, borders, Milkdown editor, dialogs, popups, scrollbars, and SVGs.
+  - Kept the filtered empty state to the requested single line while retaining an actionable first-run hint when no tasks exist at all.
+  - Re-fetched remote tags, confirmed `v0.1.50` is latest, and bumped package metadata to `0.1.51`.
+  - Updated the living handoff with the v0.1.51 theme and empty-state behavior.
+  - Passed `npm run check`, `git diff --check`, CSS bundling through esbuild, release metadata assertions, and the sidebar bottom-anchor contract assertion.
+  - Built the macOS ARM64 DMG/ZIP and Windows x64 NSIS packages successfully.
+  - Confirmed the release directory contains no AppleDouble `._*` files.
+- Files modified:
+  - task_plan.md
+  - findings.md
+  - progress.md
+  - Task_Track_前端项目交接说明.md
+  - package.json
+  - package-lock.json
+  - src/app.js
+  - src/styles.css
+
+### Phase 19 validation results
+- `npm run check`: pass
+- `git diff --check`: pass
+- `esbuild src/styles.css --bundle`: pass
+- Theme/empty-state/version assertions: pass
+- Sidebar bottom-anchor static contract: pass
+- `npm run dist:mac`: pass
+- `npm run dist:win`: pass
+- `find release -type f -name '._*' -print`: pass (no output)
+
 ## Session: 2026-07-12 HTML-led Production Implementation
 
 ### Phase 11: Discovery and repository preparation

@@ -4,9 +4,17 @@
 Maintain the personal task management app through scoped, low-risk improvements while preserving existing task flow behavior and release discipline.
 
 ## Current Phase
-Phase 14
+Phase 19
 
 ## Phases
+
+### Phase 19: Empty State and Theme Switch
+- [x] Read `frontend_modification.md` and confirm the latest remote baseline
+- [x] Audit current empty-state rendering, sidebar controls, and theme persistence
+- [x] Implement the documented empty state and settings-adjacent theme switch
+- [x] Verify sidebar height behavior remains unchanged for empty and populated groups
+- [ ] Run checks, package both desktop targets, and complete the release flow
+- **Status:** in_progress
 
 ### Phase 1: Requirements & Discovery
 - [x] Confirm visual direction with user
@@ -215,6 +223,7 @@ Phase 14
 | Crepe's default pasted-image upload returned temporary blob URLs that broke after editor recreation | 1 | Overrode ImageBlock `onUpload` to persist data URLs, then verified a real 966×700 PNG before and after full reload |
 | Reloading the local QA comparison tab was rejected by browser security policy | 1 | Stopped further browser actions on that tab; retained the already saved combined comparison and the separately captured same-state desktop/mobile evidence |
 | Pre-release remote tag sync was rejected because the Codex action usage limit was reached | 1 | Did not retry or work around the limit; used the already synced v0.1.45 tag state to prepare the local 0.1.46 candidate and left packaging/push pending |
+| Combined handoff/planning patch used one stale findings context line | 1 | Split the documentation update into small patches against freshly read content |
 
 ## Notes
 - Phase 9 production implementation is complete and ready for release.

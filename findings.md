@@ -1,5 +1,17 @@
 # Findings & Decisions
 
+## Phase 19 Requirements (2026-07-13)
+- `frontend_modification.md` is the user-provided source of truth for this change.
+- Local `main` and `origin/main` are identical at `1f36c3c`; v0.1.50 already contains the confirmed empty-group sidebar bottom-anchor fix.
+- Preserve the existing task data structure and all unrelated business behavior.
+- Replace the filtered-list empty state with only `没有符合筛选的任务`, positioned near the top with an approximately 18px/500 title and 13px supporting text where applicable.
+- Put a moon/sun theme switch beside Settings, persist its state in localStorage-compatible preferences, and implement dark styling with CSS variables and `[data-theme="dark"]`, never `filter: invert()`.
+- Preserve the user's untracked `.design-qa/`, `frontend_modification.md`, and `task-track.html` artifacts.
+- The app already persisted `state.theme` through both Electron storage and browser `task-track-theme` localStorage; the direct footer switch can safely reuse that path without a new data field.
+- The v0.1.45 handoff CSS introduced fixed light surface values after the original theme rules, so Phase 19 needs final-layer dark variables and component overrides for the current sidebar, workspace, editor, modal, popup, scrollbar, and SVG selectors.
+- Filtered empty state and first-run empty state share `renderEmptyPage()`. The filtered case now contains only the requested title; the first-run case keeps a short 13px creation hint so an empty installation remains actionable.
+- The latest remote release tag is `v0.1.50`, so this user-facing patch uses version `0.1.51` / tag `v0.1.51`.
+
 ## Requirements
 - 2026-07-12 correction: node records should be short text edited in the compact `task-track.html` modal; the full Milkdown editor belongs in task-level Knowledge Notes instead of node detail.
 - 2026-07-12 request: use `task-track.html` as the primary visual/interaction target, use `Task_Track_前端项目交接说明.md` as implementation guidance, and integrate the result into the existing app while preserving useful completed work.

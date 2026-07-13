@@ -630,6 +630,14 @@ function renderSidebar() {
       </section>
       <div class="sidebar-foot task-footer">
         <button class="settings-trigger settings-button ${state.settingsOpen ? "active" : ""}" type="button" data-action="toggle-settings" title="设置">⚙</button>
+        <button
+          class="theme-toggle ${state.theme === "dark" ? "active" : ""}"
+          type="button"
+          data-action="toggle-theme"
+          title="${state.theme === "dark" ? "切换到浅色主题" : "切换到深色主题"}"
+          aria-label="${state.theme === "dark" ? "切换到浅色主题" : "切换到深色主题"}"
+          aria-pressed="${state.theme === "dark"}"
+        >${state.theme === "dark" ? "☀️" : "🌙"}</button>
         <span class="autosave-status">自动保存已开启</span>
         <button class="review-shortcut" type="button" data-action="toggle-review">任务回顾</button>
       </div>
@@ -1029,9 +1037,8 @@ function renderEmptyPage() {
   const hasTasks = state.tasks.length > 0;
   return `
     <section class="task-page empty-page">
-      <div class="empty-mark">TRACK</div>
       <h2>${hasTasks ? "没有符合筛选的任务" : "没有任务"}</h2>
-      <p>${hasTasks ? "调整左侧筛选条件，或在底部输入新任务。" : "在左侧底部输入任务标题，即可创建新的处理流。"}</p>
+      ${hasTasks ? "" : "<p>双击左侧任务仓库的空白区域，即可创建新的处理流。</p>"}
     </section>
   `;
 }
@@ -2026,7 +2033,7 @@ function bind() {
     app.addEventListener("pointerdown", (event) => {
       let needsRender = false;
       const keepNodeDetail = event.target.closest(".node-detail, .flow-row:not(.flow-header), .context-menu, [data-action], [data-edit-key], button, input, textarea, select");
-      const keepSettings = event.target.closest(".settings-overlay, .settings-trigger");
+      const keepSettings = event.target.closest(".settings-overlay, .settings-trigger, .theme-toggle");
       const keepReview = event.target.closest(".review-overlay, .review-trigger");
       const keepContextMenu = event.target.closest(".context-menu");
 
@@ -2674,6 +2681,7 @@ function action(data, event = null) {
     state.settingsOpen = !state.settingsOpen;
     if (state.settingsOpen) state.reviewOpen = false;
   }
+  if (data.action === "toggle-theme") state.theme = state.theme === "dark" ? "light" : "dark";
   if (data.action === "close-settings") state.settingsOpen = false;
   if (data.action === "toggle-review") {
     state.reviewOpen = !state.reviewOpen;
