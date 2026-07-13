@@ -224,6 +224,7 @@ Phase 19
 | Reloading the local QA comparison tab was rejected by browser security policy | 1 | Stopped further browser actions on that tab; retained the already saved combined comparison and the separately captured same-state desktop/mobile evidence |
 | Pre-release remote tag sync was rejected because the Codex action usage limit was reached | 1 | Did not retry or work around the limit; used the already synced v0.1.45 tag state to prepare the local 0.1.46 candidate and left packaging/push pending |
 | Combined handoff/planning patch used one stale findings context line | 1 | Split the documentation update into small patches against freshly read content |
+| GitHub `main` push was rejected by safety review because the user had not explicitly authorized publishing | 1 | Kept the verified release commit and tag local; request explicit push approval from the user |
 
 ## Notes
 - Phase 9 production implementation is complete and ready for release.

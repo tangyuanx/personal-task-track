@@ -38,6 +38,8 @@
 - `npm run dist:mac`: pass
 - `npm run dist:win`: pass
 - `find release -type f -name '._*' -print`: pass (no output)
+- Local release commit `3317215` created and tagged `v0.1.51`.
+- GitHub push is pending explicit user approval after the safety reviewer rejected default-branch publication.
 
 ## Session: 2026-07-12 HTML-led Production Implementation
 
