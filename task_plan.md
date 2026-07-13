@@ -14,6 +14,16 @@ Phase 14
 - [x] Document findings in findings.md
 - **Status:** complete
 
+### Phase 18: Narrow-Window Empty Group Bottom Anchor
+- [x] Audit the supplied empty/populated group comparison
+- [x] Identify inherited mobile `min-height: auto` as the state-dependent layout cause
+- [x] Pin the narrow-window sidebar to `100svh` while keeping the task list flexible
+- [x] Run syntax and diff validation
+- [x] Record browser verification as blocked by the local-file URL security policy
+- [x] Build v0.1.50 for macOS ARM64 and Windows x64
+- [ ] Commit, tag, and publish v0.1.50
+- **Status:** in_progress
+
 ### Phase 17: Empty Group and Today Panel Polish
 - [x] Audit the supplied empty-group screenshot with Product Design
 - [x] Flatten the bottom group controls without changing their bottom anchor

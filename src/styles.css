@@ -5920,7 +5920,12 @@ body {
   }
 
   .rail.sidebar {
-    max-height: none;
+    height: 100vh;
+    height: 100svh;
+    min-height: 100vh;
+    min-height: 100svh;
+    max-height: 100vh;
+    max-height: 100svh;
     border-right: 0;
     border-bottom: 1px solid var(--handoff-line-strong);
   }
