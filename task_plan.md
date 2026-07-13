@@ -13,8 +13,8 @@ Phase 19
 - [x] Audit current empty-state rendering, sidebar controls, and theme persistence
 - [x] Implement the documented empty state and settings-adjacent theme switch
 - [x] Verify sidebar height behavior remains unchanged for empty and populated groups
-- [ ] Run checks, package both desktop targets, and complete the release flow
-- **Status:** in_progress
+- [x] Run checks, package both desktop targets, and complete the release flow
+- **Status:** complete
 
 ### Phase 1: Requirements & Discovery
 - [x] Confirm visual direction with user
