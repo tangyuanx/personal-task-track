@@ -6520,3 +6520,18 @@ body {
     padding: 12px 16px 14px;
   }
 }
+
+/* v0.1.53 — dark-mode focus card matched to the approved reference */
+:root[data-theme="dark"] .today-panel.today-focus {
+  border-color: rgba(103, 172, 136, 0.62);
+  background:
+    radial-gradient(ellipse 150px 75px at 100% 0%, rgba(150, 210, 175, 0.22), transparent 100%),
+    radial-gradient(ellipse 70px 70px at 100% 45%, rgba(100, 105, 100, 0.16), transparent 100%),
+    linear-gradient(145deg, #1c4d38, #0d1610);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.24);
+}
+
+:root[data-theme="dark"] .today-panel.today-focus:has(.focus-empty) {
+  height: 153px;
+  max-height: 153px;
+}

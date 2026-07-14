@@ -27,6 +27,19 @@
 - Phase 17 empty-group/sidebar polish: at the 370px desktop rail, an empty newly created group keeps a 199px flexible task repository region while the 62px group controls and 42px footer remain bottom-aligned. The group area is transparent with zero radius and no visible scrollbar, so it reads as integrated navigation rather than a floating card.
 - Phase 17 Today typography: the count now renders as a single-line `1 项待推进` label (`white-space: nowrap`) beside the 20px headline. Browser measurement confirmed a 52px-wide label with no wrapping, and the console returned no warnings or errors.
 
+## Phase 20 — dark Today focus reference match
+
+- Source visual truth: `.design-qa/today-reference-card.png`, cropped from the user-approved dark-mode reference.
+- Implementation screenshot: `.design-qa/today-after-card.png`, captured from the actual project at `333×153` in dark mode with an empty Today list.
+- Full-view and focused comparison: `.design-qa/today-after-comparison.png`; the component itself is the focused region, so a separate detail crop was not needed.
+- Viewport/state: 1280×720 app viewport, dark theme, zero Today tasks, sidebar at its 370px minimum width.
+- Fonts and typography: the existing project type scale, weights, line heights, letter spacing, and `07/15` date rendering already align with the approved reference and were intentionally left unchanged.
+- Spacing and layout rhythm: the card remains 333px wide; the empty-state height is now exactly 153px, with the existing internal label, headline, count, and empty-copy positions preserved.
+- Colors and visual tokens: only the dark Today panel receives the approved green gradient, green border, and compact shadow. Light mode and all other surfaces are unchanged.
+- Image quality and asset fidelity: the reference contains no raster or icon assets; no image substitution was required.
+- Copy and content: `今日聚焦`, `今日任务`, `0 项待推进`, and `今日暂无重点任务` match the reference exactly.
+- Browser verification: the actual project DOM rendered the expected empty state, computed size was `333×153`, and the comparison found no actionable P0/P1/P2 mismatch.
+
 ## Comparison History
 
 1. Initial implementation comparison found a P1 workflow overflow that clipped status/time columns at 1280px, a P2 duplicate root sequence marker, and a P2 information-architecture gap from missing task tabs.
@@ -37,6 +50,7 @@
 6. Phase 14 first implementation rendered image nodes but revealed that Crepe's default blob URLs did not survive editor recreation. The uploader was changed to persistent data URLs and CSP image policy was aligned with Crepe previews.
 7. Phase 14 post-fix evidence confirmed a valid 966×700 pasted image before and after reload, 27px list-item rhythm, no collapsed orphan rail, exact HTML helper copy, no oversized task-creation card, no horizontal overflow at 390×844, and no browser warnings/errors.
 8. Phase 17 compared the supplied empty-group screenshot with a fresh in-app browser capture of the same empty-group state. The final layout removes the boxed group panel and visible horizontal scrollbar while preserving bottom anchoring, keyboard inputs, arrow navigation, and add-group behavior.
+9. Phase 20 first captured the current dark Today card, which was nearly flat and measured about `333×155.7`; the scoped dark-mode override restored the approved gradient/border/shadow and fixed the empty-state height to `333×153`. The post-fix side-by-side comparison passed without P0/P1/P2 findings.
 
 ## Follow-up Polish
 
