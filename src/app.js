@@ -747,8 +747,8 @@ function renderTaskPage(task) {
           </div>
         </div>
         <div class="actions">
-          <button class="share-trigger icon-button" type="button" data-action="share-task" data-task-id="${task.id}" title="导出任务文档" aria-label="导出任务文档">
-            <span class="share-glyph" aria-hidden="true"><span class="share-arrow"></span></span>
+          <button class="share-trigger icon-button" type="button" data-action="share-task" data-task-id="${task.id}" title="分享任务" aria-label="分享任务">
+            分享
           </button>
         </div>
       </header>
@@ -768,14 +768,14 @@ function renderTaskPage(task) {
           <div class="section-heading flow-head">
             <div>
               <h2>处理流</h2>
-              <span>主轴表示顺序，缩进表示父子关系，状态通过绿色层级区分</span>
+              <span>主轴表示顺序，缩进表示父子关系</span>
             </div>
-            <span>${summary.open ? `${summary.open} 个未完成` : "所有节点已完成"}</span>
+            <span>${summary.total ? (summary.open ? `${summary.open} 个未完成` : "所有节点已完成") : ""}</span>
           </div>
           ${
             topNodes.length
-              ? `<div class="flow-list flow-table" style="${flowWidthStyle()};--flow-visible-row-count:${visibleFlowRowCount(topNodes)}" data-context="flow-root" data-task-id="${task.id}">${renderFlowHeader()}${topNodes.map((node, index) => renderFlowNode(task.id, node, 0, index, "")).join("")}${renderFlowHint()}</div>`
-              : `<div class="flow-list flow-table empty-flow" data-context="flow-root" data-task-id="${task.id}">还没有处理节点。${renderFlowHint()}</div>`
+              ? `<div class="flow-list flow-table" style="${flowWidthStyle()};--flow-visible-row-count:${visibleFlowRowCount(topNodes)}" data-context="flow-root" data-task-id="${task.id}">${renderFlowHeader()}${topNodes.map((node, index) => renderFlowNode(task.id, node, 0, index, "")).join("")}</div>`
+              : `<div class="flow-list flow-table empty-flow" data-context="flow-root" data-task-id="${task.id}"></div>`
           }
         </section>` : state.taskPane === "notes" ? renderTaskKnowledge(task) : renderTaskHistory(task)}
 
@@ -844,14 +844,6 @@ function renderTaskHistory(task) {
         }
       </div>
     </section>
-  `;
-}
-
-function renderFlowHint() {
-  return `
-    <div class="flow-hint">
-      拖动表头分隔线可调整列宽；主轴表示顺序，缩进表示父子关系，节点状态通过绿色层级、字重与删除线区分。
-    </div>
   `;
 }
 

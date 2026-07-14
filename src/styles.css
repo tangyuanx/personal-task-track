@@ -2413,12 +2413,12 @@ body.resizing-detail {
 }
 
 .empty-flow {
+  min-height: 120px;
   margin: 12px 42px 22px;
-  padding: 22px;
-  border: 1px dashed var(--line);
-  border-radius: 16px;
-  color: var(--muted);
-  background: var(--brief-bg);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 @media (max-width: 1100px) {
@@ -3313,54 +3313,18 @@ body {
   position: absolute;
   top: 24px;
   right: 30px;
-  display: grid;
-  width: 34px;
+  display: inline-flex;
   height: 34px;
-  place-items: center;
+  align-items: center;
+  justify-content: center;
   border: 0;
-  border-radius: 9px;
+  border-radius: 6px;
+  padding: 0 3px;
   background: transparent;
-}
-
-.share-glyph {
-  position: relative;
-  width: 24px;
-  height: 24px;
-  color: #707371;
-}
-
-.share-glyph::after {
-  position: absolute;
-  left: 3px;
-  right: 3px;
-  bottom: 3px;
-  height: 8px;
-  border: 2px solid currentColor;
-  border-top: 0;
-  border-radius: 0 0 3px 3px;
-  content: "";
-}
-
-.share-glyph .share-arrow {
-  position: absolute;
-  top: 2px;
-  left: 11px;
-  width: 2px;
-  height: 15px;
-  border-radius: 99px;
-  background: currentColor;
-}
-
-.share-glyph .share-arrow::before {
-  position: absolute;
-  top: 1px;
-  left: -5px;
-  width: 10px;
-  height: 10px;
-  border-top: 2px solid currentColor;
-  border-left: 2px solid currentColor;
-  content: "";
-  transform: rotate(45deg);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
 }
 
 .task-brief {
@@ -3577,17 +3541,6 @@ body {
 .flow-row.selected .flow-note {
   color: var(--focus);
   background: color-mix(in srgb, var(--focus) 8%, transparent);
-}
-
-.flow-hint {
-  display: flex;
-  justify-content: center;
-  margin: 10px 30px 0;
-  padding: 8px 12px 0;
-  border-top: 1px solid color-mix(in srgb, var(--line-soft) 72%, transparent);
-  color: color-mix(in srgb, var(--muted) 86%, var(--focus));
-  font-size: 13px;
-  line-height: 1.45;
 }
 
 .task-workbench.detail-open::before {
@@ -4387,14 +4340,27 @@ body {
 
 .icon-button.share-trigger {
   position: static;
-  display: grid;
-  width: 34px;
-  height: 34px;
-  place-items: center;
+  display: inline-flex;
+  width: auto;
+  height: 30px;
+  align-items: center;
+  justify-content: center;
   border: 0;
-  border-radius: 9px;
-  padding: 0;
+  border-radius: 0;
+  padding: 0 2px;
   background: transparent;
+  color: var(--handoff-muted, var(--muted));
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.icon-button.share-trigger:hover,
+.icon-button.share-trigger:focus-visible {
+  background: transparent;
+  color: var(--handoff-ink, var(--heading));
+  outline: 0;
+  text-decoration: underline;
+  text-underline-offset: 4px;
 }
 
 .brief-strip.task-brief {
@@ -4726,17 +4692,6 @@ body {
   color: var(--muted);
   font-family: var(--app-font);
   font-size: 13px;
-}
-
-.flow-hint {
-  margin-top: auto;
-  padding: 18px 8px 4px;
-  border-top: 1px dashed var(--handoff-line-strong);
-  border-bottom: 0;
-  color: var(--muted);
-  font-size: 11px;
-  line-height: 1.5;
-  text-align: center;
 }
 
 .record-popover.node-detail {
