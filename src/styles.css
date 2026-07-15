@@ -6639,7 +6639,7 @@ body {
   position: relative;
   height: 58px;
   min-height: 58px;
-  grid-template-columns: 20px minmax(0, 1fr) 64px;
+  grid-template-columns: 16px minmax(0, 1fr) 64px;
   gap: 10px;
   margin: 0;
   padding: 8px 10px 8px 11px;
@@ -6684,25 +6684,62 @@ body {
 }
 
 .task-row.task-item .task-check.rail-mark {
-  width: 20px;
-  height: 20px;
-  min-height: 20px;
+  position: relative;
+  display: grid;
+  width: 16px;
+  height: 16px;
+  min-height: 16px;
   align-self: center;
+  place-items: center;
   border: 1px solid var(--handoff-line-strong);
   border-radius: 50%;
+  padding: 0;
   background: transparent;
   appearance: none;
+  cursor: pointer;
 }
 
-.task-row.task-item.selected:not(:has(.task-check:checked)) .task-check,
-.task-row.task-item.active:not(:has(.task-check:checked)) .task-check {
-  border: 5px solid #92c7aa;
-  background: #274a3c;
+.task-row.task-item .task-check::after {
+  width: 6px;
+  height: 3px;
+  border-bottom: 1.5px solid var(--handoff-soft);
+  border-left: 1.5px solid var(--handoff-soft);
+  content: "";
+  transform: translateY(-1px) rotate(-45deg);
 }
 
-.task-row.task-item .task-check:checked {
+.task-row.task-item.selected .task-check:not(.is-checked),
+.task-row.task-item.active .task-check:not(.is-checked) {
+  border: 1px solid #92c7aa;
+  background: rgba(146, 199, 170, 0.1);
+}
+
+.task-row.task-item .task-check.is-checked {
   border-color: #6d9582;
   background: #6d9582;
+}
+
+.task-row.task-item .task-check.is-checked::after {
+  border-color: #edf3ee;
+}
+
+.task-row.task-item.drag-over {
+  border-color: var(--handoff-line-strong);
+  background: inherit;
+}
+
+.task-row.task-item.drag-over-before {
+  box-shadow: inset 0 2px 0 #92c7aa;
+}
+
+.task-row.task-item.drag-over-after {
+  box-shadow: inset 0 -2px 0 #92c7aa;
+}
+
+body.task-reordering,
+body.task-reordering * {
+  cursor: grabbing !important;
+  user-select: none !important;
 }
 
 .task-title-wrap.row-title {

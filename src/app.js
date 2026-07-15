@@ -174,6 +174,7 @@ let saveTimer = 0;
 let pendingPayload = null;
 let saveInFlight = false;
 let taskDragState = null;
+let suppressTaskClickUntil = 0;
 const milkdownEditors = new Map();
 const nodeNoteDrafts = new Map();
 const nodeNoteSaveTimers = new Map();
@@ -736,9 +737,9 @@ function renderGroupTabs() {
 function renderTaskItem(task) {
   const subtitle = taskSubtitle(task);
   return `
-    <div class="task-item task-row ${task.id === state.activeTaskId ? "selected active" : ""} ${task.status === "done" ? "done" : ""}" data-action="select-task" data-context="task" data-task-id="${task.id}" data-task-drag-target="${task.id}">
+    <div class="task-item task-row ${task.id === state.activeTaskId ? "selected active" : ""} ${task.status === "done" ? "done" : ""}" data-context="task" data-task-id="${task.id}" data-task-drag-target="${task.id}">
       <span class="task-drag-handle" draggable="true" data-task-drag-handle data-task-id="${task.id}" title="拖拽排序" aria-label="拖拽排序"></span>
-      <input class="task-check rail-mark" type="checkbox" title="完成" data-action="toggle-task-done" data-task-id="${task.id}" ${task.status === "done" ? "checked" : ""} />
+      <button class="task-check rail-mark ${task.status === "done" ? "is-checked" : ""}" type="button" title="${task.status === "done" ? "标记为未完成" : "标记为完成"}" aria-label="${task.status === "done" ? "标记为未完成" : "标记为完成"}" aria-pressed="${task.status === "done"}" data-action="toggle-task-done" data-task-id="${task.id}"></button>
       <span class="task-title-wrap row-title">
         <input class="task-title" placeholder="任务标题" data-edit-key="title" data-task-id="${task.id}" value="${escAttr(task.title)}" />
         <span class="task-next-line"><b>下一步</b><em>${esc(subtitle)}</em></span>
@@ -1598,47 +1599,98 @@ function settingsOptionGroup(key, value, options) {
 // ============================================================
 // DRAG & DROP (tasks, groups)
 // ============================================================
-function startTaskPointerDrag(event) {
-  if (event.button !== 0) return;
-  const handle = event.currentTarget;
-  const sourceItem = handle.closest(".task-item[data-task-id]");
-  if (!sourceItem) return;
-  event.preventDefault();
-  event.stopPropagation();
+const taskLongPressDelay = 320;
+const taskLongPressMoveTolerance = 8;
+
+function taskDropPlacement(targetItem, clientY) {
+  const bounds = targetItem.getBoundingClientRect();
+  return clientY < bounds.top + bounds.height / 2 ? "before" : "after";
+}
+
+function clearTaskDropIndicators() {
+  document.querySelectorAll(".task-item.drag-over, .task-item.drag-over-before, .task-item.drag-over-after").forEach((item) => {
+    item.classList.remove("drag-over", "drag-over-before", "drag-over-after");
+    delete item.dataset.dropPlacement;
+  });
+}
+
+function activateTaskPointerDrag() {
+  if (!taskDragState || taskDragState.active) return;
+  taskDragState.active = true;
+  taskDragState.sourceItem.classList.add("dragging");
+  taskDragState.sourceItem.setPointerCapture?.(taskDragState.pointerId);
+  document.body.classList.add("task-reordering");
+  document.activeElement?.blur?.();
+}
+
+function beginTaskPointerDrag(event, sourceItem, immediate = false) {
+  if (event.button !== 0 || !sourceItem) return;
+  if (taskDragState) finishTaskPointerDrag();
   taskDragState = {
     sourceId: sourceItem.dataset.taskId,
     sourceItem,
     targetId: "",
+    targetPlacement: "before",
+    pointerId: event.pointerId,
+    startX: event.clientX,
+    startY: event.clientY,
+    active: false,
+    timer: 0,
   };
-  sourceItem.classList.add("dragging");
-  handle.setPointerCapture?.(event.pointerId);
-  document.addEventListener("pointermove", updateTaskPointerDrag);
+  if (immediate) {
+    event.preventDefault();
+    event.stopPropagation();
+    activateTaskPointerDrag();
+  } else {
+    taskDragState.timer = window.setTimeout(activateTaskPointerDrag, taskLongPressDelay);
+  }
+  document.addEventListener("pointermove", updateTaskPointerDrag, { passive: false });
   document.addEventListener("pointerup", finishTaskPointerDrag, { once: true });
+  document.addEventListener("pointercancel", finishTaskPointerDrag, { once: true });
+}
+
+function startTaskPointerDrag(event) {
+  beginTaskPointerDrag(event, event.currentTarget.closest(".task-item[data-task-id]"), true);
+}
+
+function startTaskLongPress(event) {
+  if (event.target.closest(".task-check, input, textarea, select, button, [contenteditable], [data-task-drag-handle]")) return;
+  beginTaskPointerDrag(event, event.currentTarget, false);
 }
 
 function updateTaskPointerDrag(event) {
   if (!taskDragState) return;
+  if (!taskDragState.active) {
+    const distance = Math.hypot(event.clientX - taskDragState.startX, event.clientY - taskDragState.startY);
+    if (distance > taskLongPressMoveTolerance) finishTaskPointerDrag();
+    return;
+  }
+  event.preventDefault();
   const targetItem = document.elementFromPoint(event.clientX, event.clientY)?.closest?.("[data-task-drag-target]");
-  document.querySelectorAll(".task-item.drag-over").forEach((item) => {
-    if (item !== targetItem) item.classList.remove("drag-over");
-  });
+  clearTaskDropIndicators();
   if (!targetItem || targetItem.dataset.taskId === taskDragState.sourceId) {
     taskDragState.targetId = "";
     return;
   }
   taskDragState.targetId = targetItem.dataset.taskId;
-  targetItem.classList.add("drag-over");
+  taskDragState.targetPlacement = taskDropPlacement(targetItem, event.clientY);
+  targetItem.classList.add("drag-over", `drag-over-${taskDragState.targetPlacement}`);
 }
 
 function finishTaskPointerDrag() {
   if (!taskDragState) return;
-  const { sourceId, targetId } = taskDragState;
+  const { sourceId, targetId, targetPlacement, active, timer } = taskDragState;
+  if (timer) window.clearTimeout(timer);
   taskDragState.sourceItem?.classList.remove("dragging");
+  document.body.classList.remove("task-reordering");
   document.removeEventListener("pointermove", updateTaskPointerDrag);
-  document.querySelectorAll(".task-item.drag-over").forEach((item) => item.classList.remove("drag-over"));
+  document.removeEventListener("pointerup", finishTaskPointerDrag);
+  document.removeEventListener("pointercancel", finishTaskPointerDrag);
+  clearTaskDropIndicators();
   taskDragState = null;
-  if (targetId) {
-    reorderTasks(sourceId, targetId);
+  if (active) suppressTaskClickUntil = Date.now() + 500;
+  if (active && targetId) {
+    reorderTasks(sourceId, targetId, targetPlacement);
     render();
   }
 }
@@ -1656,14 +1708,26 @@ function finishTaskPointerDrag() {
  */
 function bind() {
   document.querySelectorAll(".task-item[data-task-id]").forEach((element) => {
-    element.addEventListener("pointerdown", (event) => {
-      if (event.target.closest("[data-task-drag-handle]")) return;
-      if (event.target.closest(".task-check")) return;
-      if (event.button !== 0 || state.activeTaskId === element.dataset.taskId) return;
-      state.activeTaskId = element.dataset.taskId;
-      state.selectedNodeId = "";
-      window.requestAnimationFrame(() => render());
-    });
+    element.addEventListener("pointerdown", startTaskLongPress);
+    element.addEventListener(
+      "click",
+      (event) => {
+        if (Date.now() < suppressTaskClickUntil) {
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
+        if (event.target.closest(".task-check, select, button, [data-task-drag-handle]")) return;
+        if (state.activeTaskId === element.dataset.taskId) return;
+        state.activeTaskId = element.dataset.taskId;
+        state.selectedNodeId = "";
+        state.recordDraft = "";
+        state.nodeDetailFullscreen = false;
+        state.nodeDetailPosition = null;
+        window.requestAnimationFrame(() => render());
+      },
+      true,
+    );
   });
 
   document.querySelectorAll("[data-task-drag-handle]").forEach((element) => {
@@ -1676,7 +1740,8 @@ function bind() {
       element.closest(".task-item")?.classList.add("dragging");
     });
     element.addEventListener("dragend", () => {
-      document.querySelectorAll(".task-item.dragging, .task-item.drag-over").forEach((item) => item.classList.remove("dragging", "drag-over"));
+      element.closest(".task-item")?.classList.remove("dragging");
+      clearTaskDropIndicators();
     });
   });
 
@@ -1686,14 +1751,21 @@ function bind() {
       if (!hasTaskDrag) return;
       event.preventDefault();
       event.dataTransfer.dropEffect = "move";
-      element.classList.add("drag-over");
+      clearTaskDropIndicators();
+      const placement = taskDropPlacement(element, event.clientY);
+      element.dataset.dropPlacement = placement;
+      element.classList.add("drag-over", `drag-over-${placement}`);
     });
-    element.addEventListener("dragleave", () => element.classList.remove("drag-over"));
+    element.addEventListener("dragleave", () => {
+      element.classList.remove("drag-over", "drag-over-before", "drag-over-after");
+      delete element.dataset.dropPlacement;
+    });
     element.addEventListener("drop", (event) => {
       event.preventDefault();
       event.stopPropagation();
-      element.classList.remove("drag-over");
-      reorderTasks(event.dataTransfer.getData("text/plain"), element.dataset.taskId);
+      const placement = element.dataset.dropPlacement || taskDropPlacement(element, event.clientY);
+      clearTaskDropIndicators();
+      reorderTasks(event.dataTransfer.getData("text/plain"), element.dataset.taskId, placement);
       render();
     });
   });
@@ -3026,17 +3098,20 @@ function reorderGroups(sourceId, targetId) {
  * Reorder tasks via drag-and-drop within a group.
  * @param {string} sourceId - Dragged task ID
  * @param {string} targetId - Drop target task ID
+ * @param {"before"|"after"} placement - Insert above or below the target task
  */
-function reorderTasks(sourceId, targetId) {
+function reorderTasks(sourceId, targetId, placement = "before") {
   if (!sourceId || !targetId || sourceId === targetId) return;
   const visibleTasks = filteredTasks();
   const sourceIndex = visibleTasks.findIndex((task) => task.id === sourceId);
-  const targetIndex = visibleTasks.findIndex((task) => task.id === targetId);
-  if (sourceIndex < 0 || targetIndex < 0) return;
+  if (sourceIndex < 0 || !visibleTasks.some((task) => task.id === targetId)) return;
 
   const orderedVisible = [...visibleTasks];
   const [source] = orderedVisible.splice(sourceIndex, 1);
-  orderedVisible.splice(targetIndex, 0, source);
+  const adjustedTargetIndex = orderedVisible.findIndex((task) => task.id === targetId);
+  if (adjustedTargetIndex < 0) return;
+  const insertionIndex = placement === "after" ? adjustedTargetIndex + 1 : adjustedTargetIndex;
+  orderedVisible.splice(insertionIndex, 0, source);
 
   const visibleIds = new Set(visibleTasks.map((task) => task.id));
   const orderedScope = sort(taskListScopeTasks());

@@ -50,6 +50,21 @@
 - Interaction verification: 全部/未完成/已完成 remain working controls; selecting 高优先 reduced the list from six tasks to two and restoring 所有优先级 returned all six. Inline title editing, priority editing, completion controls, task selection, and drag affordances remain wired to the existing behavior.
 - Browser verification: the final focused source/implementation comparison found no actionable P0/P1/P2 mismatch after removing inherited repository padding; the console returned no warnings or errors.
 
+## Phase 22 — completion control and repository sorting
+
+- Source visual truth: the user-supplied 408×427 dark task-repository screenshot, with the requested exception that the oversized circular state is replaced by a smaller check control.
+- Implementation screenshot: `/tmp/task-repository-longpress-crop.png`, captured from the actual project in dark mode at a 1280×1000 browser viewport.
+- Full-view and focused evidence: the repository crop is the relevant focused region; it was compared in the same input with the source screenshot, so a separate full-app comparison was not needed.
+- State: three realistic tasks, task A selected, task C completed, all priority/status filters visible, and the repository restored to A/B/C order after before/after sorting tests.
+- Fonts and typography: the existing repository font sizes, weights, truncation, and two-line hierarchy remain unchanged.
+- Spacing and layout rhythm: the completion column is reduced from 20px to 16px while the established 58px row height, text alignment, metadata column, dividers, and selected rail remain unchanged.
+- Colors and tokens: the idle check uses the existing muted line/check colors; selected and completed states reuse the established mint focus/completion colors and preserve dark-mode contrast.
+- Image quality and assets: the repository contains no raster imagery. The check is the project's existing completion-control motif, resized and made persistent rather than introducing a new asset family.
+- Copy and content: task title, 下一步, priority, time, status filters, and priority filter are unchanged.
+- Interaction verification: clicking a non-current task title changed both the selected repository row and right archive title; clicking the check button changed task C, `aria-pressed`, and the right status to completed. Dragging task A to the lower half of task B produced B/A/C, then dragging it to the upper half produced A/B/C. Long-press activation uses the same pointer-drag and before/after reorder path; title inputs, selects, buttons, and editable fields are excluded to prevent gesture conflicts.
+- Browser verification: completion control measured exactly 16×16px with a 1px border, the final source/implementation comparison found no actionable P0/P1/P2 mismatch, and the console returned no warnings or errors.
+- Residual test gap: the browser automation surface cannot hold a raw PointerEvent for 320ms, so the physical long-press timer was code-verified while its shared drag/drop placement and persistence path was exercised through the visible drag affordance.
+
 ## Comparison History
 
 1. Initial implementation comparison found a P1 workflow overflow that clipped status/time columns at 1280px, a P2 duplicate root sequence marker, and a P2 information-architecture gap from missing task tabs.
@@ -62,6 +77,7 @@
 8. Phase 17 compared the supplied empty-group screenshot with a fresh in-app browser capture of the same empty-group state. The final layout removes the boxed group panel and visible horizontal scrollbar while preserving bottom anchoring, keyboard inputs, arrow navigation, and add-group behavior.
 9. Phase 20 first captured the current dark Today card, which was nearly flat and measured about `333×155.7`; the scoped dark-mode override restored the approved gradient/border/shadow and fixed the empty-state height to `333×153`. The post-fix side-by-side comparison passed without P0/P1/P2 findings.
 10. Phase 21 first comparison exposed 12px of inherited repository padding that shifted all content inward. The final scoped override resets that padding, aligning the repository header, toolbar, selected rail, row borders, and content column to the reference while preserving responsive sidebar width.
+11. Phase 22 first browser pass exposed a real conflict between the long-press timer and inline title editing. Interactive text fields were excluded from the long-press hit area; the revised pass completed title edits, task selection, completion, and both before/after reorder directions without console errors.
 
 ## Follow-up Polish
 
