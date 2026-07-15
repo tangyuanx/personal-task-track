@@ -6742,6 +6742,12 @@ body.task-reordering * {
   user-select: none !important;
 }
 
+/* v0.1.56 — task completion control follows the approved light-square variant */
+.task-row.task-item .task-check.rail-mark,
+.task-row.task-item .task-check.is-checked {
+  border-radius: 5px;
+}
+
 .task-title-wrap.row-title {
   display: grid;
   min-width: 0;

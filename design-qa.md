@@ -65,6 +65,15 @@
 - Browser verification: completion control measured exactly 16×16px with a 1px border, the final source/implementation comparison found no actionable P0/P1/P2 mismatch, and the console returned no warnings or errors.
 - Residual test gap: the browser automation surface cannot hold a raw PointerEvent for 320ms, so the physical long-press timer was code-verified while its shared drag/drop placement and persistence path was exercised through the visible drag affordance.
 
+## Phase 23 — approved light-square completion control
+
+- Source visual truth: the approved Demo 方案 B, represented by the standalone interactive demo at `http://127.0.0.1:8770/task-check-demo.html`.
+- Implementation: the actual project at `http://127.0.0.1:8769/` in dark mode.
+- Focused comparison: the task repository is the only changed region; the rendered control measured `16×16px` with `5px` radius, matching the approved light-square variant.
+- State and interaction: unfinished tasks render as empty rounded-square controls with no check; completed tasks keep the existing filled check state. Existing task selection and right-side archive remain intact.
+- Browser verification: the actual project rendered three task rows, unfinished buttons exposed `标记为完成`, the completed row exposed `标记为未完成` with `aria-pressed=true`, and the console returned no warnings or errors.
+- No actionable P0/P1/P2 visual or interaction mismatch found.
+
 ## Comparison History
 
 1. Initial implementation comparison found a P1 workflow overflow that clipped status/time columns at 1280px, a P2 duplicate root sequence marker, and a P2 information-architecture gap from missing task tabs.
