@@ -620,7 +620,8 @@ function renderSidebar() {
 
       <label class="search-box search">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 21-4.35-4.35"></path><circle cx="10.8" cy="10.8" r="7.2"></circle></svg>
-        <input id="search" value="${escAttr(state.query)}" placeholder="搜索任务、节点或内容" />
+        <input id="search" value="${escAttr(state.query)}" placeholder="" aria-label="搜索任务、节点或内容" />
+        <span class="search-shortcut" aria-hidden="true">⌘ K</span>
       </label>
 
       ${renderTodayFocus(focusItems)}
@@ -3961,6 +3962,16 @@ window.addEventListener("blur", () => {
 
 window.addEventListener("focus", () => {
   if (state.restoreMarkdownFocus) window.requestAnimationFrame(restoreMarkdownSelection);
+});
+
+window.addEventListener("keydown", (event) => {
+  if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "k") return;
+  const target = event.target;
+  if (target instanceof HTMLTextAreaElement || target?.isContentEditable) return;
+  event.preventDefault();
+  state.focusSearch = true;
+  state.searchCursor = state.query.length;
+  render();
 });
 
 bootstrap();
