@@ -1093,6 +1093,18 @@ function renderContextMenu() {
     `;
   }
 
+  if (menu.kind === "group") {
+    const isDefault = menu.groupId === defaultTaskGroup.id;
+    return `
+      <div class="context-menu" style="left:${menu.x}px; top:${menu.y}px">
+        <button data-action="select-group" data-group-id="${menu.groupId}">打开分组</button>
+        <button data-action="rename-group" data-group-id="${menu.groupId}" ${isDefault ? "disabled" : ""}>重命名分组</button>
+        <hr />
+        <button class="danger" data-action="delete-group" data-group-id="${menu.groupId}" ${isDefault ? "disabled" : ""}>删除分组</button>
+      </div>
+    `;
+  }
+
   if (menu.kind === "task") {
     const task = state.tasks.find((item) => item.id === menu.taskId);
     const tags = normalizeTaskTags(task?.tags);
@@ -1807,6 +1819,19 @@ function bind() {
   });
 
   document.querySelectorAll(".sheet-tab-wrap").forEach((element) => {
+    element.addEventListener("contextmenu", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const x = Math.min(event.clientX, window.innerWidth - 210);
+      const y = Math.min(event.clientY, window.innerHeight - 245);
+      state.contextMenu = {
+        kind: "group",
+        groupId: element.dataset.groupId,
+        x,
+        y,
+      };
+      syncContextMenuRoot();
+    });
     element.addEventListener("dragstart", (event) => {
       event.dataTransfer.effectAllowed = "move";
       event.dataTransfer.setData("text/plain", element.dataset.groupId);
@@ -2793,6 +2818,12 @@ function action(data, event = null) {
   if (data.action === "reload-app") window.location.reload();
   if (data.action === "select-group") selectGroup(data.groupId);
   if (data.action === "add-group") addGroup();
+  if (data.action === "rename-group") {
+    startRenameGroup(data.groupId);
+    render();
+    return;
+  }
+  if (data.action === "delete-group") deleteGroup(data.groupId);
   if (data.action === "select-focus") {
     openTaskFromGlobalList(data.taskId, "");
   }
@@ -3073,6 +3104,33 @@ function renameGroup(groupId, value, commit = false) {
   const title = String(value || "").trim();
   if (title) group.title = title;
   if (commit) state.editingGroupId = "";
+  save();
+}
+
+/**
+ * Delete a task group and move its tasks into the protected default group.
+ * @param {string} groupId - Group ID to delete
+ */
+function deleteGroup(groupId) {
+  const group = state.taskGroups.find((item) => item.id === groupId);
+  if (!group || group.id === defaultTaskGroup.id) return;
+  if (!confirm(`确定删除分组「${group.title}」吗？该分组内任务将移动到默认分组。`)) return;
+
+  state.tasks.forEach((task) => {
+    if ((task.groupId || defaultTaskGroup.id) === groupId) {
+      task.groupId = defaultTaskGroup.id;
+      task.updatedAt = now();
+    }
+  });
+  state.taskGroups = state.taskGroups.filter((item) => item.id !== groupId);
+  state.taskGroups = normalizeTaskGroups(state.taskGroups, state.tasks);
+  if (state.activeGroupId === groupId) {
+    state.activeGroupId = defaultTaskGroup.id;
+    state.activeTaskId = tasksInActiveGroup()[0]?.id || "";
+    state.selectedNodeId = "";
+  }
+  state.editingGroupId = "";
+  state.focusGroupTitleId = "";
   save();
 }
 
