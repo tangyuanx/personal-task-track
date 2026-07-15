@@ -47,6 +47,19 @@ const priorityFilterLabels = {
   low: "低",
 };
 
+const repositoryPriorityFilterLabels = {
+  all: "所有优先级",
+  high: "高优先",
+  medium: "中优先",
+  low: "低优先",
+};
+
+const repositoryPriorityLabels = {
+  high: "高优先",
+  medium: "中优先",
+  low: "低优先",
+};
+
 const themeLabels = {
   light: "浅色",
   dark: "深色",
@@ -614,12 +627,29 @@ function renderSidebar() {
       <div class="task-list" data-context="task-list">
         <div class="task-list-head section-label">
           <span>任务仓库</span>
-          <span>${visibleCount}/${scopedTasks.length} 项</span>
+          <span>${visibleCount} / ${scopedTasks.length} 项</span>
         </div>
-        ${filteredTasks()
-          .map((task) => renderTaskItem(task))
-          .join("")}
-        <div class="task-create-hint" data-task-create-hint tabindex="0">双击空白新建任务 · 右键更多操作</div>
+        <div class="task-repository-toolbar">
+          <div class="task-status-filters" role="group" aria-label="任务状态筛选">
+            ${[
+              ["all", "全部"],
+              ["active", "未完成"],
+              ["done", "已完成"],
+            ]
+              .map(
+                ([value, label]) => `<button class="${state.taskFilter === value ? "active" : ""}" type="button" data-setting-button="task-filter" data-value="${value}">${label}</button>`,
+              )
+              .join("")}
+          </div>
+          <label class="task-priority-filter">
+            ${filterSelectHtml("priority-filter", state.priorityFilter, repositoryPriorityFilterLabels, "按优先级筛选")}
+          </label>
+        </div>
+        <div class="task-repository-rows">
+          ${filteredTasks()
+            .map((task) => renderTaskItem(task))
+            .join("")}
+        </div>
       </div>
       <section class="group-panel" aria-label="任务分组">
         <div class="group-panel-head">
@@ -704,24 +734,27 @@ function renderGroupTabs() {
 }
 
 function renderTaskItem(task) {
-  const activeTags = Object.entries(normalizeTaskTags(task.tags)).filter(([, active]) => active);
-  const subtitle = activeTags.length ? activeTags.map(([tag]) => taskTagLabels[tag]).join(" · ") : taskSubtitle(task);
+  const subtitle = taskSubtitle(task);
   return `
     <div class="task-item task-row ${task.id === state.activeTaskId ? "selected active" : ""} ${task.status === "done" ? "done" : ""}" data-action="select-task" data-context="task" data-task-id="${task.id}" data-task-drag-target="${task.id}">
       <span class="task-drag-handle" draggable="true" data-task-drag-handle data-task-id="${task.id}" title="拖拽排序" aria-label="拖拽排序"></span>
       <input class="task-check rail-mark" type="checkbox" title="完成" data-action="toggle-task-done" data-task-id="${task.id}" ${task.status === "done" ? "checked" : ""} />
       <span class="task-title-wrap row-title">
         <input class="task-title" placeholder="任务标题" data-edit-key="title" data-task-id="${task.id}" value="${escAttr(task.title)}" />
-        <span>${esc(subtitle)}</span>
+        <span class="task-next-line"><b>下一步</b><em>${esc(subtitle)}</em></span>
       </span>
-      <span class="task-priority-pill pill ${task.priority === "high" ? "hot" : task.priority === "low" ? "good" : ""} ${task.priority}">${selectHtml("priority", task.priority, priorityLabels, task.id)}</span>
+      <span class="task-row-meta">
+        <span class="task-priority-control ${task.priority}">${selectHtml("priority", task.priority, repositoryPriorityLabels, task.id)}</span>
+        <time datetime="${escAttr(task.updatedAt)}">${formatRepositoryStamp(task.updatedAt)}</time>
+      </span>
     </div>
   `;
 }
 
 function taskSubtitle(task) {
-  const summary = taskSummary(task);
-  if (summary.total) return `处理流 ${summary.done}/${summary.total}`;
+  const nextNode = nextOpenNode(task.nodes);
+  if (nextNode?.title?.trim()) return nextNode.title.trim();
+  if (task.status === "done") return "已完成";
   const text = (task.description || task.hypothesis || task.conclusion || "").trim();
   return text || "等待补充处理流";
 }
@@ -738,12 +771,12 @@ function renderTaskPage(task) {
           <div class="page-kicker kicker">工作台 / ${esc(task.title || "未命名任务")}</div>
           <input class="page-title" data-edit-key="title" data-task-id="${task.id}" value="${escAttr(task.title)}" />
           <div class="page-properties meta-line">
+            ${renderTaskActiveTagPills(task)}
             <span class="pill priority ${task.priority} ${task.priority === "high" ? "hot" : task.priority === "low" ? "good" : ""}">${priorityLabels[task.priority]}优先</span>
             <span class="pill status ${task.status === "done" ? "resolved good" : "attention good"}">${task.status === "done" ? "已完成" : "处理中"}</span>
             <span class="pill">${summary.done}/${summary.total || 0} 节点</span>
             <span class="pill">更新 ${formatShort(task.updatedAt)}</span>
             <label class="property-select">分组 ${selectHtml("groupId", task.groupId, taskGroupOptions(), task.id)}</label>
-            ${renderTaskActiveTagPills(task)}
           </div>
         </div>
         <div class="actions">
@@ -3709,6 +3742,21 @@ function formatShort(value) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(value));
+}
+
+function formatRepositoryStamp(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const current = new Date();
+  const currentDay = new Date(current.getFullYear(), current.getMonth(), current.getDate());
+  const targetDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const dayDifference = Math.round((currentDay - targetDay) / 86400000);
+  if (dayDifference === 0) {
+    return new Intl.DateTimeFormat("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false }).format(date);
+  }
+  if (dayDifference === 1) return "昨天";
+  if (dayDifference > 1 && dayDifference < 7) return `周${"日一二三四五六"[date.getDay()]}`;
+  return new Intl.DateTimeFormat("zh-CN", { month: "2-digit", day: "2-digit" }).format(date);
 }
 
 function formatMinuteStamp(value) {

@@ -40,6 +40,16 @@
 - Copy and content: `今日聚焦`, `今日任务`, `0 项待推进`, and `今日暂无重点任务` match the reference exactly.
 - Browser verification: the actual project DOM rendered the expected empty state, computed size was `333×153`, and the comparison found no actionable P0/P1/P2 mismatch.
 
+## Phase 21 — task repository reference match
+
+- Source visual truth: the user-supplied 408×427 dark task-repository screenshot.
+- Implementation state: actual project in dark mode with six realistic tasks, the first task selected, two high-priority tasks, two medium-priority tasks, two low-priority tasks, and one Today-tagged task.
+- Structure and spacing: the repository uses the reference's compact title/count header, three-part status filter, right-aligned priority filter, 58px rows, 20px circular completion state, two-line task summary, and right-aligned priority/time column.
+- Colors and hierarchy: dark rows use `#1f2722`, the selected row uses `#243c30`, dividers use `#303a32`, and the selected left rail/ring use `#92c7aa`, matching the measured reference tokens.
+- Requested content exception: Today/稍后/卡住 no longer render inside repository rows. Browser verification confirmed a tagged task has zero repository tag pills while its active tag is the first property directly below the task title in the right task archive.
+- Interaction verification: 全部/未完成/已完成 remain working controls; selecting 高优先 reduced the list from six tasks to two and restoring 所有优先级 returned all six. Inline title editing, priority editing, completion controls, task selection, and drag affordances remain wired to the existing behavior.
+- Browser verification: the final focused source/implementation comparison found no actionable P0/P1/P2 mismatch after removing inherited repository padding; the console returned no warnings or errors.
+
 ## Comparison History
 
 1. Initial implementation comparison found a P1 workflow overflow that clipped status/time columns at 1280px, a P2 duplicate root sequence marker, and a P2 information-architecture gap from missing task tabs.
@@ -51,6 +61,7 @@
 7. Phase 14 post-fix evidence confirmed a valid 966×700 pasted image before and after reload, 27px list-item rhythm, no collapsed orphan rail, exact HTML helper copy, no oversized task-creation card, no horizontal overflow at 390×844, and no browser warnings/errors.
 8. Phase 17 compared the supplied empty-group screenshot with a fresh in-app browser capture of the same empty-group state. The final layout removes the boxed group panel and visible horizontal scrollbar while preserving bottom anchoring, keyboard inputs, arrow navigation, and add-group behavior.
 9. Phase 20 first captured the current dark Today card, which was nearly flat and measured about `333×155.7`; the scoped dark-mode override restored the approved gradient/border/shadow and fixed the empty-state height to `333×153`. The post-fix side-by-side comparison passed without P0/P1/P2 findings.
+10. Phase 21 first comparison exposed 12px of inherited repository padding that shifted all content inward. The final scoped override resets that padding, aligning the repository header, toolbar, selected rail, row borders, and content column to the reference while preserving responsive sidebar width.
 
 ## Follow-up Polish
 
