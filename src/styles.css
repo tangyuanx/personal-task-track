@@ -2990,6 +2990,10 @@ body {
   text-transform: uppercase;
 }
 
+.today-panel .today-date {
+  justify-content: flex-end;
+}
+
 .today-headline {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
