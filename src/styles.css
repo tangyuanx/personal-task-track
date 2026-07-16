@@ -7308,3 +7308,31 @@ body.task-reordering * {
   min-height: 0;
   overscroll-behavior: contain;
 }
+
+/* Keep the today card metadata on one quiet line. */
+.today-headline {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 2px 0 0;
+}
+
+.today-headline strong {
+  flex: 0 0 auto;
+  font-size: 16px;
+  font-weight: 650;
+  line-height: 1.2;
+}
+
+.today-headline .today-date {
+  flex: 0 0 auto;
+  color: rgba(255, 255, 255, 0.68);
+  font: 11px var(--mono);
+}
+
+.today-headline span {
+  max-width: none;
+  margin-left: auto;
+  font-size: 11px;
+  white-space: nowrap;
+}

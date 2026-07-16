@@ -681,9 +681,9 @@ function renderTodayFocus(items) {
   const today = new Intl.DateTimeFormat("zh-CN", { month: "2-digit", day: "2-digit" }).format(new Date());
   return `
     <section class="today-focus today-panel" aria-label="今日待办">
-      <div class="section-label today-date"><span>${today}</span></div>
       <div class="today-headline">
         <strong>今日任务</strong>
+        <time class="today-date" datetime="${escAttr(new Date().toISOString())}">${today}</time>
         <span><b>${items.length}</b> 项待推进</span>
       </div>
       <div class="focus-list focus-stack">
