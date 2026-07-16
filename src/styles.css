@@ -7190,3 +7190,96 @@ body.task-reordering * {
     flex-basis: 126px;
   }
 }
+
+/* v0.1.64 — reference repository surface with right-side drag affordance */
+.task-repository-toolbar {
+  margin-bottom: 0;
+}
+
+.task-repository-rows {
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.task-row.task-item {
+  grid-template-columns: 16px minmax(0, 1fr) 64px 16px;
+  min-height: 61px;
+  height: 61px;
+  padding: 8px 0;
+  background: transparent;
+}
+
+.task-row.task-item:last-child {
+  border-bottom: 1px solid var(--handoff-line-strong);
+}
+
+.task-row.task-item:hover {
+  background: rgba(231, 240, 234, 0.5);
+}
+
+.task-row.task-item.active,
+.task-row.task-item.selected {
+  background: var(--accent-soft);
+}
+
+.task-row.task-item .task-drag-handle {
+  position: relative;
+  top: auto;
+  bottom: auto;
+  left: auto;
+  grid-column: 4;
+  grid-row: 1;
+  width: 16px;
+  height: 24px;
+  border-left: 0;
+  opacity: 0.28;
+}
+
+.task-row.task-item .task-drag-handle::before {
+  left: 5px;
+}
+
+.task-row.task-item:hover .task-drag-handle,
+.task-row.task-item.dragging .task-drag-handle,
+.task-row.task-item.active .task-drag-handle,
+.task-row.task-item.selected .task-drag-handle {
+  border-left-color: transparent;
+  opacity: 0.78;
+  background: transparent;
+}
+
+.task-row.task-item .task-check.rail-mark {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.task-row.task-item .task-title-wrap.row-title {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.task-row.task-item .task-row-meta {
+  grid-column: 3;
+  grid-row: 1;
+}
+
+:root[data-theme="dark"] .task-repository-rows {
+  background: transparent;
+}
+
+:root[data-theme="dark"] .task-row.task-item,
+:root[data-theme="dark"] .task-row.task-item.active,
+:root[data-theme="dark"] .task-row.task-item.selected {
+  background: transparent;
+}
+
+:root[data-theme="dark"] .task-row.task-item:hover {
+  background: rgba(155, 208, 177, 0.08);
+}
+
+:root[data-theme="dark"] .task-row.task-item.active,
+:root[data-theme="dark"] .task-row.task-item.selected {
+  background: rgba(155, 208, 177, 0.14);
+}
