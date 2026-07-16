@@ -7173,6 +7173,17 @@ body.task-reordering * {
   color: #edf3ee;
 }
 
+/* v0.1.63 — replace emoji theme control with stable line icons */
+.theme-toggle svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
+}
+
 @media (max-width: 480px) {
   .section-label.task-list-head .search.search-box {
     width: 126px;

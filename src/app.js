@@ -669,7 +669,7 @@ function renderSidebar() {
           title="${state.theme === "dark" ? "切换到浅色主题" : "切换到深色主题"}"
           aria-label="${state.theme === "dark" ? "切换到浅色主题" : "切换到深色主题"}"
           aria-pressed="${state.theme === "dark"}"
-        >${state.theme === "dark" ? "☀️" : "🌙"}</button>
+        >${state.theme === "dark" ? `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path></svg>` : `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9Z"></path></svg>`}</button>
         <span class="autosave-status">自动保存已开启</span>
         <button class="review-shortcut" type="button" data-action="toggle-review">任务回顾</button>
       </div>
