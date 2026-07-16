@@ -52,7 +52,7 @@
   --shadow: rgba(70, 59, 43, 0.13);
   --en-font: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
   --zh-font: "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
-  --app-font: var(--en-font), var(--zh-font), sans-serif;
+  --app-font: var(--zh-font), var(--en-font), sans-serif;
   --mono: "SFMono-Regular", "Cascadia Mono", "Roboto Mono", Consolas, monospace;
   color: var(--ink);
   background: var(--panel);
