@@ -770,7 +770,7 @@ function renderTaskPage(task) {
     <div class="task-page work-surface">
       <header class="page-header topbar">
         <div class="page-title-block title-block">
-          <div class="page-kicker kicker">工作台 / ${esc(task.title || "未命名任务")}</div>
+          <div class="page-kicker kicker">工作台</div>
           <input class="page-title" data-edit-key="title" data-task-id="${task.id}" value="${escAttr(task.title)}" />
           <div class="page-properties meta-line">
             ${renderTaskActiveTagPills(task)}
