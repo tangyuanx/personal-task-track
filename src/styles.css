@@ -7073,3 +7073,45 @@ body.task-reordering * {
   border-bottom-color: #9bd0b1;
   background: rgba(155, 208, 177, 0.05);
 }
+
+/* v0.1.61 — keep repository search beside its title */
+.section-label.task-list-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.task-list-head-tools {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.task-list-head-tools .search.search-box {
+  width: 142px;
+  min-height: 30px;
+  flex: 0 0 142px;
+  margin: 0;
+}
+
+.task-list-head-tools .search.search-box input {
+  font-size: 12px;
+}
+
+@media (max-width: 480px) {
+  .task-list-head-tools {
+    gap: 7px;
+  }
+
+  .task-list-head-tools > span {
+    display: none;
+  }
+
+  .task-list-head-tools .search.search-box {
+    width: 126px;
+    flex-basis: 126px;
+  }
+}

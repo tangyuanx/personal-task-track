@@ -618,18 +618,19 @@ function renderSidebar() {
         <span>v${esc(APP_VERSION || "dev")}</span>
       </div>
 
-      <label class="search-box search">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 21-4.35-4.35"></path><circle cx="10.8" cy="10.8" r="7.2"></circle></svg>
-        <input id="search" value="${escAttr(state.query)}" placeholder="" aria-label="搜索任务、节点或内容" />
-        <span class="search-shortcut" aria-hidden="true">⌘ K</span>
-      </label>
-
       ${renderTodayFocus(focusItems)}
 
       <div class="task-list" data-context="task-list">
         <div class="task-list-head section-label">
           <span>任务仓库</span>
-          <span>${visibleCount} / ${scopedTasks.length} 项</span>
+          <div class="task-list-head-tools">
+            <span>${visibleCount} / ${scopedTasks.length} 项</span>
+            <label class="search-box search">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 21-4.35-4.35"></path><circle cx="10.8" cy="10.8" r="7.2"></circle></svg>
+              <input id="search" value="${escAttr(state.query)}" placeholder="" aria-label="搜索任务、节点或内容" />
+              <span class="search-shortcut" aria-hidden="true">⌘ K</span>
+            </label>
+          </div>
         </div>
         <div class="task-repository-toolbar">
           <div class="task-status-filters" role="group" aria-label="任务状态筛选">
