@@ -7115,3 +7115,67 @@ body.task-reordering * {
     flex-basis: 126px;
   }
 }
+
+/* v0.1.62 — make repository title, count, and priority control read as one row */
+.section-label.task-list-head {
+  justify-content: flex-start;
+}
+
+.section-label.task-list-head .task-list-count {
+  color: var(--handoff-soft);
+  font-size: 9px;
+  font-weight: 520;
+}
+
+.section-label.task-list-head .search.search-box {
+  width: 142px;
+  min-height: 30px;
+  flex: 0 0 142px;
+  margin: 0 0 0 auto;
+}
+
+.task-priority-filter {
+  display: flex;
+  width: auto;
+  height: 30px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+  overflow: visible;
+  border: 0;
+  border-bottom: 1px solid var(--handoff-line-strong);
+  border-radius: 0;
+  background: transparent;
+}
+
+.task-priority-filter > span {
+  color: var(--handoff-muted);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.task-priority-filter select {
+  width: auto;
+  height: auto;
+  min-width: 74px;
+  padding: 0 12px 0 0;
+  color: var(--handoff-ink);
+  font-size: 10px;
+  cursor: pointer;
+}
+
+:root[data-theme="dark"] .task-priority-filter {
+  border-bottom-color: #4a5b52;
+  background: transparent;
+}
+
+:root[data-theme="dark"] .task-priority-filter select {
+  color: #edf3ee;
+}
+
+@media (max-width: 480px) {
+  .section-label.task-list-head .search.search-box {
+    width: 126px;
+    flex-basis: 126px;
+  }
+}
