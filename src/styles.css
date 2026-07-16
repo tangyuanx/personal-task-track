@@ -7164,8 +7164,12 @@ body.task-reordering * {
   cursor: pointer;
 }
 
+.task-priority-filter {
+  border-bottom: 0;
+}
+
 :root[data-theme="dark"] .task-priority-filter {
-  border-bottom-color: #4a5b52;
+  border-bottom: 0;
   background: transparent;
 }
 
