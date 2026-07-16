@@ -698,14 +698,11 @@ function renderTodayFocus(items) {
 }
 
 function renderTodayFocusItem(item) {
-  const { task, node, kind, badge, nextText } = item;
+  const { task, node, kind, nextText } = item;
   const selected = task.id === state.activeTaskId && (!node?.id || node.id === state.selectedNodeId);
-  const pillClass = kind === "high" || kind === "blocked" ? "hot" : "";
   return `
     <article class="focus-item focus-row ${kind} ${selected ? "selected" : ""}" data-action="select-focus" data-task-id="${task.id}" data-node-id="${node?.id || ""}">
-      <span class="focus-rail rail-mark"></span>
       <span class="row-title"><strong>${esc(task.title || "未命名任务")}</strong><span>下一步：${esc(nextText)}</span></span>
-      <span class="pill ${pillClass}">${badge}</span>
     </article>
   `;
 }

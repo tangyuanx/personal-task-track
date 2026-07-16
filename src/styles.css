@@ -7309,6 +7309,30 @@ body.task-reordering * {
   overscroll-behavior: contain;
 }
 
+/* Keep today focus rows quiet: title and next step only. */
+.focus-row.focus-item {
+  grid-template-columns: minmax(0, 1fr);
+  padding: 7px 9px;
+  border: 1px solid transparent;
+  background: transparent;
+}
+
+.focus-row.focus-item .focus-rail,
+.focus-row.focus-item > .pill {
+  display: none;
+}
+
+.focus-row.focus-item.selected {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.09);
+  box-shadow: none;
+}
+
+:root[data-theme="dark"] .focus-row.focus-item.selected {
+  border-color: rgba(127, 208, 178, 0.2);
+  background: rgba(127, 208, 178, 0.1);
+}
+
 /* Keep the today card metadata on one quiet line. */
 .today-headline {
   display: flex;
