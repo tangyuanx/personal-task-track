@@ -7283,3 +7283,15 @@ body.task-reordering * {
 :root[data-theme="dark"] .task-row.task-item.selected {
   background: rgba(155, 208, 177, 0.14);
 }
+
+/* Keep the settings body scrollable when the panel content exceeds the viewport. */
+.settings-panel .settings-body {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.settings-panel .settings-content {
+  height: 100%;
+  min-height: 0;
+  overscroll-behavior: contain;
+}
