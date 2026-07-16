@@ -55,9 +55,9 @@ const repositoryPriorityFilterLabels = {
 };
 
 const repositoryPriorityLabels = {
-  high: "高优先",
-  medium: "中优先",
-  low: "低优先",
+  high: "高",
+  medium: "中",
+  low: "低",
 };
 
 const themeLabels = {
