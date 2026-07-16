@@ -7168,6 +7168,11 @@ body.task-reordering * {
   border-bottom: 0;
 }
 
+.task-priority-filter select,
+.task-row-meta time {
+  text-decoration: none;
+}
+
 :root[data-theme="dark"] .task-priority-filter {
   border-bottom: 0;
   background: transparent;
