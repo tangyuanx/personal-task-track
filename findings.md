@@ -155,3 +155,32 @@
 - Browser insertion produced real Milkdown image nodes and persisted them across reload, but their blob URLs were blocked by the app CSP. Crepe renders pasted data images through `blob:` URLs, so `img-src` must explicitly allow `blob:` in addition to `data:`.
 - Further inspection showed Crepe's default ImageBlock uploader returns `URL.createObjectURL(file)`. Saving that blob URL into task Markdown makes the image invalid after editor recreation/reload. Production must override ImageBlock `onUpload` to convert files to persistent data URLs; CSP `blob:` support remains useful for editor-internal previews.
 - Final browser measurements: list item height about 27.15px, marker 20×24px, paragraph vertical margins about 1.12px; a real supplied PNG rendered at 966×700 before and after reload; collapsed rail endpoint equaled the last root center; 390×844 document width remained 375px within a 390px viewport; console warnings/errors were empty.
+
+## Full Product Audit Findings (2026-07-18)
+
+- Remote `origin/main` and `origin/HEAD` remain at `9848430` / `v0.1.72`.
+- Local `main` is one release commit ahead at `0184eae` / `v0.1.73`; that commit changes `src/styles.css`, package metadata, and installs a tracked Taste Skill.
+- The working tree contains unrelated workspace configuration and design artifacts: deletion of the tracked Taste Skill, a replacement untracked `frontend-design` skill, `.design-qa/`, `.planning/`, and several HTML/Markdown mockups. Preserve these changes and do not stage them as application release work.
+- `package.json` currently exposes only syntax/bundle checks; the project has no focused automated regression suite for state normalization or user actions.
+- Broad text search accidentally included the generated `src/vendor/milkdown-editor.js` bundle and produced excessive noise. All subsequent audits must exclude generated vendor and release output.
+- The product direction remains a compact, calm, local-first task workbench. Any optional visual work should preserve density, hierarchy, keyboard focus, and reduced-motion behavior rather than introduce decorative layout changes.
+- Baseline `npm run check` and `git diff --check` both pass at local v0.1.73.
+- The renderer is a 3,974-line single-script application and the stylesheet is 7,396 lines; the current check command only verifies generated bundling and JavaScript syntax, so state/persistence regressions can pass unnoticed.
+- Browser and Electron normalization are not equivalent: renderer normalization repairs task tags, task notes, group membership, widths, fonts, filters, and attachments, while `electron/storage.cjs` only applies shallow defaults to several of those fields. The renderer currently compensates on read, but the disk layer can retain malformed values and needs direct regression coverage.
+- `FEATURE_MAP.md` is materially stale (old line counts and line references) and should be regenerated or changed to symbol-based navigation as part of the living handoff update.
+- The current source contains many misplaced JSDoc blocks inside function bodies. They are harmless comments and pass syntax checks, but make maintenance and audits harder; avoid broad comment-only churn unless the affected file is already being edited.
+- Confirmed export defect: `taskMarkdown()` calls nonexistent `taskGroups()` at `src/app.js:2905`; clicking “分享任务” throws before the export bridge or browser download can run. The intended source is `state.taskGroups`.
+- Immediate task export can miss the newest Knowledge Notes edit because `shareTask()` serializes `task.notes` without first capturing and flushing the mounted Milkdown draft.
+- Renderer normalization dereferences `task.groupId` and `node.children` without first rejecting/null-normalizing array entries. A syntactically valid data file containing `null` or malformed task/node records can make the Electron read path throw and silently fall back to browser storage.
+- Several task operations assume string fields (`task.conclusion.trim()`, `task.description.trim()`, etc.). Normalization must guarantee those types rather than rely on previously well-formed files.
+- Node status updates accept any string. UI menus currently emit only known values, but validating the status at the mutation boundary prevents malformed persisted state and makes future callers safe.
+- Full and production-only npm audits report zero known vulnerabilities. Compatible updates were applied: `@milkdown/crepe` 7.21.2 → 7.21.3 and Electron 42.5.0 → 42.7.0; Electron 43 was intentionally not adopted because it is a major-version upgrade.
+- Every literal `data-action` rendered by `src/app.js` maps to a branch in `action()`. Direct-call static analysis found no remaining undefined application function calls after correcting `taskGroups()`.
+- `index.html` still used v0.1.46 query strings for renderer resources. v0.1.74 now uses a matching cache identifier so installed upgrades do not retain stale CSS/JS.
+- Keyboard gaps were confirmed for Today focus and Review rows. They now expose button semantics, focus rings, and Enter/Space activation; global Escape closes context menus and modal panels.
+- `FEATURE_MAP.md` line counts and fixed line references had drifted substantially. It now uses stable function/file names and documents the regression suite.
+- Remote tags stop at v0.1.72, while the local base commit already has a complete v0.1.73 tag. Publish v0.1.73 as the preserved prior release and v0.1.74 as the current audit release so remote history remains contiguous.
+- The first release build with `asar: false` passed but electron-builder flagged that configuration as strongly discouraged and bundled the already-precompiled Milkdown dependency tree again. Moving Milkdown to devDependencies and enabling ASAR removes the redundant runtime tree.
+- ASAR creation on the external project volume produced a corrupted header offset for both platforms. Build output must be redirected to an internal APFS temp directory; the source tree can remain on the external drive.
+- `scripts/build.cjs` now detects `/Volumes` workspaces, uses per-platform internal temp output, copies only release artifacts back, and removes AppleDouble files. Standard `npm run dist:mac` and `npm run dist:win` both pass with ASAR enabled.
+- Final ASAR artifacts: macOS ARM64 DMG and ZIP are about 114 MB each; Windows x64 NSIS is about 98 MB. Both packaged apps contain `app.asar` with `index.html`, `src/app.js`, `electron/main.cjs`, and `package.json`.

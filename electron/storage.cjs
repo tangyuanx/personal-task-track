@@ -13,9 +13,18 @@
 
 const fs = require("node:fs/promises");
 const path = require("node:path");
+const crypto = require("node:crypto");
 
 const DATA_FILE = "task-data.json";
 const DATA_VERSION = 1;
+const DEFAULT_GROUP = { id: "group_inbox", title: "默认", order: 1 };
+const TASK_STATUSES = new Set(["active", "done"]);
+const NODE_STATUSES = new Set(["todo", "done", "blocked", "later"]);
+const PRIORITIES = new Set(["high", "medium", "low"]);
+const TASK_FILTERS = new Set(["all", "today", "active", "done", "blocked", "later"]);
+const PRIORITY_FILTERS = new Set(["all", "high", "medium", "low"]);
+const ZH_FONTS = new Set(["system", "yahei", "pingfang", "songti", "simsun", "fangsong", "heiti", "kaiti"]);
+const EN_FONTS = new Set(["inter", "system", "segoe", "arial", "helvetica", "times", "georgia", "mono"]);
 
 function dataFilePath(userDataPath) {
   return path.join(userDataPath, DATA_FILE);
@@ -64,41 +73,205 @@ async function writeTaskData(userDataPath, data) {
 }
 
 function normalizeTaskData(data) {
-  const safeData = data && typeof data === "object" ? data : {};
+  const safeData = isRecord(data) ? data : {};
+  const tasks = normalizeTasks(safeData.tasks);
+  const taskGroups = normalizeTaskGroups(safeData.taskGroups, tasks);
+  const legacyFonts = migrateLegacyFont(safeData.font);
   return {
     version: DATA_VERSION,
-    tasks: Array.isArray(safeData.tasks)
-      ? safeData.tasks.map((task) => ({
-          ...task,
-          notes: typeof task?.notes === "string" ? task.notes : "",
-          nodes: normalizeTaskNodes(task?.nodes),
-        }))
-      : [],
-    taskGroups: Array.isArray(safeData.taskGroups) ? safeData.taskGroups : [],
-    activeGroupId: typeof safeData.activeGroupId === "string" ? safeData.activeGroupId : "",
-    flowWidths: safeData.flowWidths && typeof safeData.flowWidths === "object" ? safeData.flowWidths : {},
-    sidebarWidth: Number.isFinite(Number(safeData.sidebarWidth)) ? Number(safeData.sidebarWidth) : 390,
-    detailHeight: Number.isFinite(Number(safeData.detailHeight)) ? Number(safeData.detailHeight) : 58,
-    attachments: safeData.attachments && typeof safeData.attachments === "object" ? safeData.attachments : { images: {} },
+    tasks,
+    taskGroups,
+    activeGroupId: taskGroups.some((group) => group.id === safeData.activeGroupId)
+      ? safeData.activeGroupId
+      : taskGroups[0]?.id || DEFAULT_GROUP.id,
+    flowWidths: normalizeFlowWidths(safeData.flowWidths),
+    sidebarWidth: clampNumber(safeData.sidebarWidth, 390, 370, 560),
+    detailHeight: clampNumber(safeData.detailHeight, 58, 50, 82),
+    attachments: normalizeAttachments(safeData.attachments),
     theme: safeData.theme === "dark" ? "dark" : "light",
-    font: ["songti", "heiti", "system", "mono"].includes(safeData.font) ? safeData.font : "songti",
-    zhFont: typeof safeData.zhFont === "string" ? safeData.zhFont : "system",
-    enFont: typeof safeData.enFont === "string" ? safeData.enFont : "inter",
-    taskFilter: typeof safeData.taskFilter === "string" ? safeData.taskFilter : "",
-    priorityFilter: typeof safeData.priorityFilter === "string" ? safeData.priorityFilter : "",
-    newTaskPriority: typeof safeData.newTaskPriority === "string" ? safeData.newTaskPriority : "",
-    updatedAt: typeof safeData.updatedAt === "string" ? safeData.updatedAt : new Date().toISOString(),
+    font: ["songti", "heiti", "system", "mono"].includes(safeData.font) ? safeData.font : "system",
+    zhFont: ZH_FONTS.has(safeData.zhFont) ? safeData.zhFont : legacyFonts.zhFont,
+    enFont: EN_FONTS.has(safeData.enFont) ? safeData.enFont : legacyFonts.enFont,
+    taskFilter: TASK_FILTERS.has(safeData.taskFilter) ? safeData.taskFilter : "all",
+    priorityFilter: PRIORITY_FILTERS.has(safeData.priorityFilter) ? safeData.priorityFilter : "all",
+    newTaskPriority: PRIORITIES.has(safeData.newTaskPriority) ? safeData.newTaskPriority : "medium",
+    updatedAt: normalizeDateValue(safeData.updatedAt, new Date().toISOString()),
   };
 }
 
-function normalizeTaskNodes(nodes) {
+function normalizeTasks(tasks) {
+  const seenTaskIds = new Set();
+  return (Array.isArray(tasks) ? tasks : [])
+    .filter(isRecord)
+    .map((task, index) => {
+      const taskId = uniqueDataId(task.id, "task", seenTaskIds);
+      const createdAt = normalizeDateValue(task.createdAt, new Date().toISOString());
+      const updatedAt = normalizeDateValue(task.updatedAt, createdAt);
+      const hypothesis = normalizeText(task.hypothesis);
+      return {
+        ...task,
+        id: taskId,
+        order: normalizeOrder(task.order, index + 1),
+        groupId: normalizeIdentifier(task.groupId) || DEFAULT_GROUP.id,
+        title: normalizeText(task.title),
+        description: normalizeText(task.description),
+        status: TASK_STATUSES.has(task.status) ? task.status : "active",
+        priority: PRIORITIES.has(task.priority) ? task.priority : "medium",
+        tags: normalizeTaskTags(task.tags),
+        notes: normalizeText(task.notes),
+        hypothesis,
+        hypothesisUpdatedAt: normalizeOptionalDateValue(
+          task.hypothesisUpdatedAt,
+          hypothesis ? updatedAt : "",
+        ),
+        conclusion: normalizeText(task.conclusion),
+        createdAt,
+        updatedAt,
+        resolvedAt: normalizeOptionalDateValue(task.resolvedAt),
+        nodes: normalizeTaskNodes(task.nodes, taskId),
+      };
+    });
+}
+
+function normalizeTaskNodes(nodes, taskId = "", parentId = null, seenNodeIds = new Set()) {
   return Array.isArray(nodes)
-    ? nodes.map((node) => ({
-        ...node,
-        collapsed: Boolean(node?.collapsed),
-        children: normalizeTaskNodes(node?.children),
-      }))
+    ? nodes
+        .filter(isRecord)
+        .map((node, index) => {
+          const nodeId = uniqueDataId(node.id, "node", seenNodeIds);
+          const createdAt = normalizeDateValue(node.createdAt, new Date().toISOString());
+          return {
+            ...node,
+            id: nodeId,
+            taskId,
+            parentId,
+            order: normalizeOrder(node.order, index + 1),
+            type: parentId ? "subtask" : "step",
+            title: normalizeText(node.title),
+            status: NODE_STATUSES.has(node.status) ? node.status : "todo",
+            note: normalizeText(node.note),
+            hypothesis: normalizeText(node.hypothesis),
+            conclusion: normalizeText(node.conclusion),
+            createdAt,
+            updatedAt: normalizeDateValue(node.updatedAt, createdAt),
+            collapsed: Boolean(node.collapsed),
+            children: normalizeTaskNodes(node.children, taskId, nodeId, seenNodeIds),
+          };
+        })
     : [];
+}
+
+function normalizeTaskGroups(groups, tasks) {
+  const seen = new Set();
+  const normalized = (Array.isArray(groups) ? groups : [])
+    .filter(isRecord)
+    .map((group, index) => {
+      const groupId = normalizeIdentifier(group.id);
+      const title = normalizeText(group.title).trim();
+      if (!groupId || !title || seen.has(groupId)) return null;
+      seen.add(groupId);
+      return { ...group, id: groupId, title, order: normalizeOrder(group.order, index + 1) };
+    })
+    .filter(Boolean);
+
+  if (!seen.has(DEFAULT_GROUP.id)) {
+    normalized.unshift({ ...DEFAULT_GROUP });
+    seen.add(DEFAULT_GROUP.id);
+  }
+  tasks.forEach((task) => {
+    if (!seen.has(task.groupId)) {
+      seen.add(task.groupId);
+      normalized.push({ id: task.groupId, title: "未命名分组", order: normalized.length + 1 });
+    }
+  });
+  return normalized
+    .sort((a, b) => a.order - b.order)
+    .map((group, index) => ({ ...group, order: index + 1 }));
+}
+
+function normalizeTaskTags(tags) {
+  if (Array.isArray(tags)) {
+    return {
+      today: tags.includes("today"),
+      later: tags.includes("later"),
+      blocked: tags.includes("blocked"),
+    };
+  }
+  const raw = isRecord(tags) ? tags : {};
+  return {
+    today: Boolean(raw.today),
+    later: Boolean(raw.later),
+    blocked: Boolean(raw.blocked),
+  };
+}
+
+function normalizeFlowWidths(value) {
+  const raw = isRecord(value) ? value : {};
+  return {
+    title: clampNumber(raw.title, 360, 190, 720),
+    note: clampNumber(raw.note, 330, 180, 760),
+  };
+}
+
+function normalizeAttachments(value) {
+  const raw = isRecord(value) ? value : {};
+  const images = isRecord(raw.images) ? raw.images : {};
+  return {
+    images: Object.fromEntries(
+      Object.entries(images).filter(
+        ([imageId, dataUrl]) =>
+          Boolean(normalizeIdentifier(imageId)) &&
+          typeof dataUrl === "string" &&
+          dataUrl.startsWith("data:image/"),
+      ),
+    ),
+  };
+}
+
+function migrateLegacyFont(value) {
+  if (value === "songti") return { zhFont: "songti", enFont: "inter" };
+  if (value === "heiti") return { zhFont: "heiti", enFont: "inter" };
+  if (value === "mono") return { zhFont: "yahei", enFont: "mono" };
+  return { zhFont: "system", enFont: "inter" };
+}
+
+function isRecord(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function normalizeText(value) {
+  return typeof value === "string" ? value : value == null ? "" : String(value);
+}
+
+function normalizeIdentifier(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function uniqueDataId(value, prefix, seen) {
+  let normalized = normalizeIdentifier(value);
+  if (!normalized || seen.has(normalized)) normalized = `${prefix}_${crypto.randomUUID()}`;
+  seen.add(normalized);
+  return normalized;
+}
+
+function normalizeOrder(value, fallback) {
+  const order = Number(value);
+  return Number.isFinite(order) && order > 0 ? Math.round(order) : fallback;
+}
+
+function clampNumber(value, fallback, min, max) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.max(min, Math.min(max, Math.round(number)));
+}
+
+function normalizeDateValue(value, fallback) {
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isFinite(date.getTime()) ? date.toISOString() : fallback;
+}
+
+function normalizeOptionalDateValue(value, fallback = "") {
+  return value ? normalizeDateValue(value, fallback) : fallback;
 }
 
 async function backupCorruptData(userDataPath) {
@@ -120,6 +293,7 @@ async function backupCorruptData(userDataPath) {
 module.exports = {
   DATA_FILE,
   dataFilePath,
+  normalizeTaskData,
   readTaskData,
   writeTaskData,
 };

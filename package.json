@@ -1,6 +1,6 @@
 {
   "name": "personal-task-track",
-  "version": "0.1.73",
+  "version": "0.1.74",
   "description": "A local-first personal task flow tracker for programmer daily work.",
   "private": true,
   "license": "UNLICENSED",
@@ -18,7 +18,8 @@
     "dev": "electron .",
     "start": "electron .",
     "build:milkdown": "node scripts/build-milkdown.cjs",
-    "check": "npm run build:milkdown && node --check src/app.js && node --check electron/main.cjs && node --check electron/preload.cjs && node --check electron/storage.cjs && node --check scripts/build-milkdown.cjs",
+    "test": "node --test scripts/test.cjs",
+    "check": "npm run build:milkdown && node --check src/app.js && node --check electron/main.cjs && node --check electron/preload.cjs && node --check electron/storage.cjs && node --check scripts/after-pack.cjs && node --check scripts/build.cjs && node --check scripts/build-milkdown.cjs && node --check scripts/make-ico.cjs && node --check scripts/test.cjs && npm test",
     "dist": "node scripts/build.cjs",
     "dist:mac": "node scripts/build.cjs --mac",
     "dist:win": "node scripts/build.cjs --win"
@@ -27,7 +28,7 @@
     "appId": "io.github.tangyuanx.personal-task-track",
     "productName": "Personal Task Track",
     "icon": "build/icon",
-    "asar": false,
+    "asar": true,
     "afterPack": "scripts/after-pack.cjs",
     "directories": {
       "output": "release"
@@ -67,11 +68,10 @@
     }
   },
   "devDependencies": {
-    "electron": "^42.5.0",
+    "@milkdown/crepe": "^7.21.3",
+    "electron": "^42.7.0",
     "electron-builder": "^26.15.3",
     "esbuild": "^0.28.1"
   },
-  "dependencies": {
-    "@milkdown/crepe": "^7.21.2"
-  }
+  "dependencies": {}
 }

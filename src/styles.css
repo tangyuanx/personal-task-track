@@ -7384,6 +7384,14 @@ button:not(:disabled):active,
   transform: scale(0.985);
 }
 
+.focus-item[role="button"]:focus-visible,
+.review-item[role="button"]:focus-visible {
+  border-color: var(--focus);
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px var(--focus-ring);
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

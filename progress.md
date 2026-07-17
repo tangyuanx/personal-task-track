@@ -516,3 +516,40 @@
   - Verified the new-task form card is absent, the compact creation hint is visible, and mobile 390×844 has no horizontal overflow.
   - Captured desktop/mobile implementation evidence and a combined source/implementation comparison under `.design-qa/`; updated `design-qa.md` with `final result: passed`.
   - Browser console checks returned no warnings or errors.
+
+## Session: 2026-07-18 Full Product Audit and Completion
+
+### Phase 15: Repository recovery and audit baseline
+- **Status:** in progress
+- Actions taken:
+  - Read the project-specific maintenance workflow, persistent planning workflow, GitHub publishing workflow, and relevant local design guidance.
+  - Ran planning session catch-up and inspected repository history/status before modifying application code.
+  - Fetched the latest remote `main` and tags.
+  - Confirmed remote remains at v0.1.72 while local v0.1.73 is a complete release commit.
+  - Identified and preserved unrelated workspace skill, planning, design-QA, and HTML mockup changes.
+  - Established four audit phases covering baseline, functional/data integrity, corrective implementation, and release.
+  - Passed the existing Milkdown build and JavaScript syntax checks plus `git diff --check`.
+  - Catalogued renderer, Electron, preload, storage, build, and feature-map entry points.
+  - Began comparing browser-side and Electron-side normalization contracts.
+  - Traced task export and confirmed a runtime reference error plus a draft-flush race.
+  - Traced malformed-data behavior and confirmed null/mistyped records can escape the disk layer and break renderer normalization.
+  - Added eight Node regression tests covering storage normalization/round-trip/corrupt backup, renderer normalization, export, filtered ordering, node integrity, and Markdown URL safety.
+  - Upgraded Milkdown from 7.21.2 to 7.21.3 and Electron from 42.5.0 to 42.7.0; install reported zero vulnerabilities.
+  - Re-ran full and production-only npm audits with network access; both reported zero known vulnerabilities.
+  - Fixed task export, immediate Milkdown draft export, malformed-data recovery, old font migration, invalid node status persistence, and deleted-descendant detail state.
+  - Added global Escape behavior, keyboard activation/focus styles for Today and Review rows, and accessible names for core title/brief/group controls.
+  - Updated renderer resource cache identifiers for v0.1.74.
+  - Replaced the stale line-number-based feature map and updated README plus the living handoff.
+  - Bumped the current audit release to v0.1.74 because the preserved local base is already tagged v0.1.73.
+  - Completed an initial non-ASAR macOS/Windows build, then enabled ASAR and moved precompiled Milkdown to devDependencies to remove redundant packaged modules.
+  - Updated `scripts/build.cjs` to make internal-temp ASAR packaging automatic for this external-volume repository.
+  - Re-ran the standard `npm run dist:mac` and `npm run dist:win` commands successfully with ASAR enabled.
+  - Verified both package trees contain `app.asar`, copied final artifacts to `release/`, confirmed zero `._*` files, and calculated SHA-256 checksums for the DMG, ZIP, and EXE.
+  - Passed the final eight-test regression run, syntax/bundle checks, `git diff --check`, full npm audit, and production-only npm audit immediately before release; both audits reported zero vulnerabilities.
+  - Refreshed remote `main` and tags immediately before publishing and confirmed the remote still ends at v0.1.72.
+- Errors:
+  - A post-update production-only npm audit could not reach the registry inside the sandbox; the approved network retry passed with zero vulnerabilities.
+  - A combined accessibility/cache patch missed one helper context; splitting it into focused patches succeeded.
+  - ASAR-enabled output on the external volume failed with a corrupted ASAR header offset on both platforms; the next build uses an internal APFS output directory.
+- Errors:
+  - Initial TODO/error search included the generated Milkdown vendor bundle and returned excessive output; future searches exclude `src/vendor` and `release`.

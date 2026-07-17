@@ -225,8 +225,43 @@ Phase 19
 | Pre-release remote tag sync was rejected because the Codex action usage limit was reached | 1 | Did not retry or work around the limit; used the already synced v0.1.45 tag state to prepare the local 0.1.46 candidate and left packaging/push pending |
 | Combined handoff/planning patch used one stale findings context line | 1 | Split the documentation update into small patches against freshly read content |
 | GitHub `main` push was rejected by safety review because the user had not explicitly authorized publishing | 1 | Kept the verified release commit and tag local; request explicit push approval from the user |
+| Post-update `npm audit --omit=dev` failed inside the network-restricted sandbox with `ENOTFOUND registry.npmjs.org` | 1 | Re-ran the same read-only audit with approved network access; zero vulnerabilities |
+| Combined accessibility/cache-bust patch missed the current helper-function context | 1 | Split the edit into smaller patches against freshly inspected source; all intended changes then applied |
+| ASAR-enabled macOS and Windows packaging failed on the external volume with an out-of-range ASAR header offset | 1 | Keep ASAR enabled, change build output to an internal APFS temporary directory, then copy verified artifacts back to `release` |
 
 ## Notes
 - Phase 9 production implementation is complete and ready for release.
 - Phase 10 visual alignment is complete and ready for release.
 - Avoid a marketing hero; the first screen should be the usable product surface.
+
+## Session: 2026-07-18 Full Product Audit and Completion
+
+### Phase 15: Repository Recovery and Audit Baseline
+- [x] Read project maintenance, planning, and publishing instructions
+- [x] Inspect repository status and preserve unrelated workspace skill/mockup changes
+- [x] Fetch the latest remote `main` and tags without overwriting local work
+- [x] Confirm local `v0.1.73` is a complete release commit ahead of remote `v0.1.72`
+- [x] Establish the current feature, persistence, and UI test baseline
+- **Status:** complete
+
+### Phase 16: Functional and Data-Integrity Audit
+- [x] Trace every user-facing action through render, state mutation, persistence, and normalization
+- [x] Audit task/group/node CRUD, ordering, filters, review, export, notes, attachments, theme, and layout persistence
+- [x] Run automated syntax/build checks and add focused regression coverage where the project lacks it
+- [x] Record and prioritize reproducible defects and incomplete behavior
+- **Status:** complete
+
+### Phase 17: Correctness Fixes and Practical Completion
+- [x] Fix all confirmed correctness defects in scope
+- [x] Complete high-value missing behavior that fits the current product model
+- [x] Add restrained usability/accessibility improvements only where they reduce friction
+- [x] Keep browser and Electron persistence schemas aligned
+- **Status:** complete
+
+### Phase 18: Regression, Packaging, and Release
+- [x] Run focused tests, `npm run check`, and `git diff --check`
+- [x] Build macOS and Windows packages and verify no AppleDouble files
+- [x] Update the living handoff and audit records
+- [x] Bump from the highest remote release tag, commit intentionally, tag, push `main`, and push the tag
+- [x] Confirm local `main` matches `origin/main` and preserve unrelated workspace changes
+- **Status:** complete

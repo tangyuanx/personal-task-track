@@ -107,6 +107,14 @@ const taskTagLabels = {
   later: "稍后",
   blocked: "卡住",
 };
+const editFieldLabels = {
+  title: "标题",
+  description: "背景与目标",
+  hypothesis: "当前判断与进展",
+  conclusion: "结果与总结",
+  priority: "优先级",
+  groupId: "任务分组",
+};
 
 const reviewPresetLabels = {
   week: "本周",
@@ -121,6 +129,9 @@ const reviewDateFieldLabels = {
   created: "创建日期",
   resolved: "解决日期",
 };
+
+const taskStatusValues = new Set(["active", "done"]);
+const nodeStatusValues = new Set(["todo", "done", "blocked", "later"]);
 
 let state = {
 
@@ -238,33 +249,114 @@ function loadBrowserTasks() {
 }
 
 function normalizeTasks(tasks) {
-  return tasks.map((task) => ({
-    ...task,
-    groupId: task.groupId || defaultTaskGroup.id,
-    tags: normalizeTaskTags(task.tags),
-    notes: typeof task.notes === "string" ? task.notes : "",
-    nodes: normalizeNodes(task.nodes),
-    hypothesisUpdatedAt: task.hypothesisUpdatedAt || (task.hypothesis ? task.updatedAt || task.createdAt || now() : ""),
-  }));
+  const seenTaskIds = new Set();
+  return (Array.isArray(tasks) ? tasks : [])
+    .filter(isRecord)
+    .map((task, index) => {
+      const taskId = uniqueDataId(task.id, "task", seenTaskIds);
+      const createdAt = normalizeDateValue(task.createdAt, now());
+      const updatedAt = normalizeDateValue(task.updatedAt, createdAt);
+      const hypothesis = normalizeText(task.hypothesis);
+      return {
+        ...task,
+        id: taskId,
+        order: normalizeOrder(task.order, index + 1),
+        groupId: normalizeIdentifier(task.groupId) || defaultTaskGroup.id,
+        title: normalizeText(task.title),
+        description: normalizeText(task.description),
+        status: taskStatusValues.has(task.status) ? task.status : "active",
+        priority: normalizePriority(task.priority),
+        tags: normalizeTaskTags(task.tags),
+        notes: normalizeText(task.notes),
+        hypothesis,
+        hypothesisUpdatedAt: normalizeOptionalDateValue(
+          task.hypothesisUpdatedAt,
+          hypothesis ? updatedAt : "",
+        ),
+        conclusion: normalizeText(task.conclusion),
+        createdAt,
+        updatedAt,
+        resolvedAt: normalizeOptionalDateValue(task.resolvedAt),
+        nodes: normalizeNodes(task.nodes, taskId),
+      };
+    });
 }
 
-function normalizeNodes(nodes) {
+function normalizeNodes(nodes, taskId = "", parentId = null, seenNodeIds = new Set()) {
   return Array.isArray(nodes)
-    ? nodes.map((node) => ({
-        ...node,
-        collapsed: Boolean(node.collapsed),
-        children: normalizeNodes(node.children),
-      }))
+    ? nodes
+        .filter(isRecord)
+        .map((node, index) => {
+          const nodeId = uniqueDataId(node.id, "node", seenNodeIds);
+          const createdAt = normalizeDateValue(node.createdAt, now());
+          return {
+            ...node,
+            id: nodeId,
+            taskId,
+            parentId,
+            order: normalizeOrder(node.order, index + 1),
+            type: parentId ? "subtask" : "step",
+            title: normalizeText(node.title),
+            status: nodeStatusValues.has(node.status) ? node.status : "todo",
+            note: normalizeText(node.note),
+            hypothesis: normalizeText(node.hypothesis),
+            conclusion: normalizeText(node.conclusion),
+            createdAt,
+            updatedAt: normalizeDateValue(node.updatedAt, createdAt),
+            collapsed: Boolean(node.collapsed),
+            children: normalizeNodes(node.children, taskId, nodeId, seenNodeIds),
+          };
+        })
     : [];
 }
 
 function normalizeTaskTags(tags) {
+  if (Array.isArray(tags)) {
+    return {
+      today: tags.includes("today"),
+      later: tags.includes("later"),
+      blocked: tags.includes("blocked"),
+    };
+  }
   const raw = tags && typeof tags === "object" ? tags : {};
   return {
     today: Boolean(raw.today),
     later: Boolean(raw.later),
     blocked: Boolean(raw.blocked),
   };
+}
+
+function isRecord(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function normalizeText(value) {
+  return typeof value === "string" ? value : value == null ? "" : String(value);
+}
+
+function normalizeIdentifier(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function uniqueDataId(value, prefix, seen) {
+  let normalized = normalizeIdentifier(value);
+  if (!normalized || seen.has(normalized)) normalized = id(prefix);
+  seen.add(normalized);
+  return normalized;
+}
+
+function normalizeOrder(value, fallback) {
+  const order = Number(value);
+  return Number.isFinite(order) && order > 0 ? Math.round(order) : fallback;
+}
+
+function normalizeDateValue(value, fallback) {
+  const date = safeDate(value);
+  return date ? date.toISOString() : fallback;
+}
+
+function normalizeOptionalDateValue(value, fallback = "") {
+  return value ? normalizeDateValue(value, fallback) : fallback;
 }
 
 function normalizeAttachments(value) {
@@ -661,7 +753,7 @@ function renderSidebar() {
         ${renderGroupTabs()}
       </section>
       <div class="sidebar-foot task-footer">
-        <button class="settings-trigger settings-button ${state.settingsOpen ? "active" : ""}" type="button" data-action="toggle-settings" title="设置">⚙</button>
+        <button class="settings-trigger settings-button ${state.settingsOpen ? "active" : ""}" type="button" data-action="toggle-settings" title="设置" aria-label="设置">⚙</button>
         <button
           class="theme-toggle ${state.theme === "dark" ? "active" : ""}"
           type="button"
@@ -701,7 +793,7 @@ function renderTodayFocusItem(item) {
   const { task, node, kind, nextText } = item;
   const selected = task.id === state.activeTaskId && (!node?.id || node.id === state.selectedNodeId);
   return `
-    <article class="focus-item focus-row ${kind} ${selected ? "selected" : ""}" data-action="select-focus" data-task-id="${task.id}" data-node-id="${node?.id || ""}">
+    <article class="focus-item focus-row ${kind} ${selected ? "selected" : ""}" role="button" tabindex="0" data-action="select-focus" data-task-id="${task.id}" data-node-id="${node?.id || ""}">
       <span class="row-title"><strong>${esc(task.title || "未命名任务")}</strong><span>下一步：${esc(nextText)}</span></span>
     </article>
   `;
@@ -710,7 +802,7 @@ function renderTodayFocusItem(item) {
 function renderGroupTabs() {
   return `
     <div class="sheet-bar group-nav" aria-label="任务分组">
-      <button class="sheet-nav scroll-button" type="button" data-action="scroll-sheets" data-direction="-1" title="查看前面的分组">‹</button>
+      <button class="sheet-nav scroll-button" type="button" data-action="scroll-sheets" data-direction="-1" title="查看前面的分组" aria-label="查看前面的分组">‹</button>
       <div class="sheet-tabs task-tabs" data-sheet-tabs>
         ${sort(state.taskGroups)
           .map(
@@ -718,7 +810,7 @@ function renderGroupTabs() {
               <span class="sheet-tab-wrap" draggable="true" data-group-id="${group.id}">
                 ${
                   state.editingGroupId === group.id
-                    ? `<input class="sheet-edit" data-group-title="${group.id}" value="${escAttr(group.title)}" />`
+                    ? `<input class="sheet-edit" data-group-title="${group.id}" value="${escAttr(group.title)}" aria-label="分组名称" />`
                     : `<button class="sheet-tab ${group.id === state.activeGroupId ? "active" : ""}" type="button" data-action="select-group" data-group-id="${group.id}" title="${escAttr(group.title)}">${esc(group.title)}</button>`
                 }
               </span>
@@ -726,8 +818,8 @@ function renderGroupTabs() {
           )
           .join("")}
       </div>
-      <button class="sheet-nav scroll-button" type="button" data-action="scroll-sheets" data-direction="1" title="查看后面的分组">›</button>
-      <button class="sheet-add add-group-button" type="button" data-action="add-group" title="新增分组">+</button>
+      <button class="sheet-nav scroll-button" type="button" data-action="scroll-sheets" data-direction="1" title="查看后面的分组" aria-label="查看后面的分组">›</button>
+      <button class="sheet-add add-group-button" type="button" data-action="add-group" title="新增分组" aria-label="新增分组">+</button>
     </div>
   `;
 }
@@ -739,7 +831,7 @@ function renderTaskItem(task) {
       <span class="task-drag-handle" draggable="true" data-task-drag-handle data-task-id="${task.id}" title="拖拽排序" aria-label="拖拽排序"></span>
       <button class="task-check rail-mark ${task.status === "done" ? "is-checked" : ""}" type="button" title="${task.status === "done" ? "标记为未完成" : "标记为完成"}" aria-label="${task.status === "done" ? "标记为未完成" : "标记为完成"}" aria-pressed="${task.status === "done"}" data-action="toggle-task-done" data-task-id="${task.id}"></button>
       <span class="task-title-wrap row-title">
-        <input class="task-title" placeholder="任务标题" data-edit-key="title" data-task-id="${task.id}" value="${escAttr(task.title)}" />
+        <input class="task-title" placeholder="任务标题" aria-label="任务标题" data-edit-key="title" data-task-id="${task.id}" value="${escAttr(task.title)}" />
         <span class="task-next-line"><b>下一步</b><em>${esc(subtitle)}</em></span>
       </span>
       <span class="task-row-meta">
@@ -768,7 +860,7 @@ function renderTaskPage(task) {
       <header class="page-header topbar">
         <div class="page-title-block title-block">
           <div class="page-kicker kicker">工作台</div>
-          <input class="page-title" data-edit-key="title" data-task-id="${task.id}" value="${escAttr(task.title)}" />
+          <input class="page-title" aria-label="任务标题" data-edit-key="title" data-task-id="${task.id}" value="${escAttr(task.title)}" />
           <div class="page-properties meta-line">
             ${renderTaskActiveTagPills(task)}
             <span class="pill priority ${task.priority} ${task.priority === "high" ? "hot" : task.priority === "low" ? "good" : ""}">${priorityLabels[task.priority]}优先</span>
@@ -1279,20 +1371,20 @@ function nextOpenNode(nodes) {
 // HTML HELPER FUNCTIONS (input, select, textarea builders)
 // ============================================================
 function inputHtml(key, value, taskId, className = "", nodeId = "") {
-  return `<input class="${className}" data-edit-key="${key}" data-task-id="${taskId}" data-node-id="${nodeId}" value="${escAttr(value)}" />`;
+  return `<input class="${className}" aria-label="${escAttr(editFieldLabels[key] || key)}" data-edit-key="${key}" data-task-id="${taskId}" data-node-id="${nodeId}" value="${escAttr(value)}" />`;
 }
 
 function nodeTitleInputHtml(node, taskId) {
-  return `<input class="flow-title-input" placeholder="填写节点标题" data-edit-key="title" data-task-id="${taskId}" data-node-id="${node.id}" value="${escAttr(node.title)}" />`;
+  return `<input class="flow-title-input" placeholder="填写节点标题" aria-label="节点标题" data-edit-key="title" data-task-id="${taskId}" data-node-id="${node.id}" value="${escAttr(node.title)}" />`;
 }
 
 function textareaHtml(key, value, taskId, nodeId = "") {
-  return `<textarea data-edit-key="${key}" data-task-id="${taskId}" data-node-id="${nodeId}">${esc(value)}</textarea>`;
+  return `<textarea aria-label="${escAttr(editFieldLabels[key] || key)}" data-edit-key="${key}" data-task-id="${taskId}" data-node-id="${nodeId}">${esc(value)}</textarea>`;
 }
 
 function selectHtml(key, value, options, taskId, nodeId = "") {
   return `
-    <select data-edit-key="${key}" data-task-id="${taskId}" data-node-id="${nodeId}">
+    <select aria-label="${escAttr(editFieldLabels[key] || key)}" data-edit-key="${key}" data-task-id="${taskId}" data-node-id="${nodeId}">
       ${Object.entries(options)
         .map(([optionValue, label]) => `<option value="${optionValue}" ${optionValue === value ? "selected" : ""}>${label}</option>`)
         .join("")}
@@ -1478,7 +1570,7 @@ function renderReviewItem({ task, date }) {
   const group = state.taskGroups.find((item) => item.id === (task.groupId || defaultTaskGroup.id));
   const summary = taskSummary(task);
   return `
-    <article class="review-item" data-action="open-review-task" data-task-id="${task.id}">
+    <article class="review-item" role="button" tabindex="0" data-action="open-review-task" data-task-id="${task.id}">
       <div>
         <strong>${esc(task.title || "未命名任务")}</strong>
         <p>${esc((task.conclusion || task.hypothesis || task.description || "").trim() || "没有摘要")}</p>
@@ -1785,6 +1877,14 @@ function bind() {
       event.stopPropagation();
       action(element.dataset, event);
     });
+    if (element.getAttribute("role") === "button") {
+      element.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        event.stopPropagation();
+        action(element.dataset, event);
+      });
+    }
   });
 
   document.querySelectorAll(".sheet-tab").forEach((element) => {
@@ -2112,6 +2212,7 @@ function bind() {
       }
       if (event.key === "Escape") {
         event.preventDefault();
+        event.stopPropagation();
         exitNodeDetail();
         render();
       }
@@ -2873,6 +2974,8 @@ function action(data, event = null) {
 async function shareTask(taskId) {
   const task = state.tasks.find((item) => item.id === taskId);
   if (!task) return;
+  captureMountedMilkdownDrafts();
+  flushNodeNoteDrafts({ persist: true });
   const markdown = taskMarkdown(task);
 
   try {
@@ -2902,7 +3005,7 @@ function taskMarkdown(task) {
   const tags = Object.entries(normalizeTaskTags(task.tags))
     .filter(([, active]) => active)
     .map(([tag]) => taskTagLabels[tag]);
-  const groupTitle = taskGroups().find((group) => group.id === task.groupId)?.title || "默认";
+  const groupTitle = state.taskGroups.find((group) => group.id === task.groupId)?.title || "默认";
   const lines = [
     `# ${task.title || "未命名任务"}`,
     "",
@@ -3046,6 +3149,7 @@ function createTask(title, shouldRender = true) {
     hypothesis: "",
     hypothesisUpdatedAt: "",
     conclusion: "",
+    notes: "",
     createdAt: now(),
     updatedAt: now(),
     nodes: [],
@@ -3517,7 +3621,7 @@ function toggleAllNodes(taskId) {
 function markNodeStatus(taskId, nodeId, status) {
   const task = state.tasks.find((item) => item.id === taskId);
   const node = task ? findNode(task.nodes, nodeId) : null;
-  if (!task || !node) return;
+  if (!task || !node || !nodeStatusValues.has(status)) return;
   node.status = status;
   node.updatedAt = now();
   task.updatedAt = now();
@@ -3532,10 +3636,14 @@ function deleteNode(taskId, nodeId) {
   if (!confirm("确定删除这个节点及其子节点？")) return;
   const task = state.tasks.find((item) => item.id === taskId);
   if (!task) return;
+  const deletedNode = findNode(task.nodes, nodeId);
+  const deletedIds = new Set(deletedNode ? flatten([deletedNode]).map((node) => node.id) : []);
   task.nodes = removeNode(task.nodes, nodeId);
   task.updatedAt = now();
-  if (state.selectedNodeId === nodeId) {
+  if (deletedIds.has(state.selectedNodeId)) {
     state.selectedNodeId = "";
+    state.recordDraft = "";
+    state.nodeDetailFullscreen = false;
     state.nodeDetailPosition = null;
   }
 }
@@ -3962,6 +4070,22 @@ window.addEventListener("focus", () => {
 });
 
 window.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    if (state.contextMenu) {
+      event.preventDefault();
+      state.contextMenu = null;
+      syncContextMenuRoot();
+      return;
+    }
+    if (state.selectedNodeId || state.settingsOpen || state.reviewOpen) {
+      event.preventDefault();
+      exitNodeDetail();
+      state.settingsOpen = false;
+      state.reviewOpen = false;
+      render();
+      return;
+    }
+  }
   if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "k") return;
   const target = event.target;
   if (target instanceof HTMLTextAreaElement || target?.isContentEditable) return;

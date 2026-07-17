@@ -1,9 +1,9 @@
 # Personal Task Track 项目持续交接说明
 
 > 文档性质：**生产项目的持续交接入口（Living Handoff）**
-> 当前生产版本：**v0.1.51**
-> 当前生产提交：**见标签 `v0.1.51`**
-> 最近核对日期：**2026-07-13（Asia/Shanghai）**
+> 当前生产版本：**v0.1.74**
+> 当前生产提交：**见标签 `v0.1.74`**
+> 最近核对日期：**2026-07-18（Asia/Shanghai）**
 > 远程仓库：`git@github.com:tangyuanx/personal-task-track.git`
 > 当前生产形态：**Electron 桌面应用 + Vanilla JavaScript + 本地 Milkdown/Crepe**
 > 生产数据持久化：Electron `userData/task-data.json`；浏览器预览使用 `localStorage` 降级
@@ -55,22 +55,28 @@ package.json                    当前版本、依赖、构建和打包配置
 
 ## 0.2 当前任务状态
 
-截至 2026-07-13：
+截至 2026-07-18：
 
-- v0.1.49 已发布到远程 `main`；
-- 标签 `v0.1.49` 已推送，并指向提交 `a14bf4d`；
+- v0.1.74 已发布到远程 `main`，标签 `v0.1.74` 已推送；
 - macOS ARM64 DMG/ZIP 和 Windows x64 NSIS 安装包已成功构建；
-- `npm run check`、`git diff --check` 和设计 QA 已通过；
+- `npm run check`、8 项 Node 回归测试、`git diff --check`、依赖安全审计和设计 QA 已通过；
 - v0.1.47 已完成知识笔记页签缓存、处理流状态视觉和右键状态菜单修复，但其空分组布局覆盖错误地取消了任务区弹性高度，导致任务分组与底栏上移；
 - v0.1.48 已撤销该错误覆盖，恢复任务区占用侧栏剩余空间、任务分组与底栏稳定贴底；macOS ARM64 与 Windows x64 安装包均已构建；
 - v0.1.49 已完成：空分组底部分组区改为贴底扁平导航，隐藏冗余横向滚动条但保留滚动/箭头导航；今日任务数量说明改为单行“n 项待推进”；macOS ARM64 与 Windows x64 安装包均已成功构建；
 - v0.1.50 已发布：窄窗口侧栏明确使用 `100svh` 高度，任务仓库继续作为弹性区，空分组和有任务分组的分组/设置区都以窗口底部为锚点；macOS ARM64 与 Windows x64 安装包均已成功构建；
 - v0.1.51 已发布：筛选无结果时移除 `TRACK` 标记，仅在工作区顶部保留“没有符合筛选的任务”；设置按钮右侧新增月亮/太阳主题快捷切换，复用既有 Electron 与 localStorage 持久化；补齐最终版侧栏、工作区、任务行、搜索、输入控件、按钮、边框、Milkdown、弹窗、滚动条和 SVG 的深色主题覆盖；
+- v0.1.73 已完成 Taste Skill 接入和任务工作台视觉细化，并作为本次发布链的前序标签补推；
+- v0.1.74 完成全量功能与数据完整性审计：修复任务导出调用不存在函数的问题，导出前刷新最新 Milkdown 草稿；对任务、节点、分组、状态、优先级、时间戳、附件和旧字体设置做双端严格规范化；修复删除父节点后子节点详情残留；增加全局 `Esc` 关闭、今日任务/回顾项键盘操作和表单辅助名称；
+- v0.1.74 新增 `scripts/test.cjs`，覆盖数据规范化、原子读写、损坏备份、旧设置迁移、任务导出、过滤排序、节点完整性和 Markdown URL 安全；`npm run check` 会自动执行这些测试；
+- 依赖更新到 Electron 42.7.0 和 Milkdown/Crepe 7.21.3，完整 npm 审计与生产依赖审计均为 0 个已知漏洞；
+- 发布包启用 ASAR；Milkdown 只作为构建期依赖，运行时使用已生成的 `src/vendor` 资源，避免把整套编辑器依赖重复打入安装包；
+- 外置卷直接生成 ASAR 会触发 electron-builder 头读取错误，`scripts/build.cjs` 会在 `/Volumes` 工作区自动改用本机临时目录构建，再只复制最终产物回 `release` 并清理 AppleDouble；
+- `FEATURE_MAP.md` 已改为按函数名定位，移除会随源码变化而失效的固定行号；
 - 本文档从本次提交开始纳入 Git，并作为后续会话的持续交接入口；
 - `task-track.html` 是用户提供的视觉/交互基线文件，目前仍是本地参考文件，不等于生产入口；
 - `.design-qa/` 是本地截图和比较证据目录，不属于生产运行依赖。
 
-如果后续工作已经发生，必须在结束前更新这一小节，不能让“当前任务状态”长期停留在 v0.1.50。
+如果后续工作已经发生，必须在结束前更新这一小节，不能让“当前任务状态”长期停留在旧版本。
 
 ## 0.3 当前产品形态
 
@@ -149,11 +155,11 @@ task-track.html                    v1.3.1 设计原型，本地视觉参考
 当前 `package.json`：
 
 ```text
-应用版本             0.1.51
-Electron             ^42.5.0
+应用版本             0.1.74
+Electron             ^42.7.0
 electron-builder     ^26.15.3
 esbuild              ^0.28.1
-@milkdown/crepe      ^7.21.2
+@milkdown/crepe      ^7.21.3
 ```
 
 常用命令：
@@ -162,12 +168,15 @@ esbuild              ^0.28.1
 npm install             # 仅依赖缺失或 lockfile 变化时
 npm run dev             # 启动 Electron
 npm run build:milkdown  # 重建 Milkdown vendor bundle
-npm run check           # Milkdown 构建 + 关键 JS 语法检查
+npm test                # 运行 Node 回归测试
+npm run check           # Milkdown 构建 + JS 语法检查 + 回归测试
 npm run dist:mac        # macOS ARM64 DMG + ZIP
 npm run dist:win        # Windows x64 NSIS
 ```
 
 `npm run check` 会先运行 `build:milkdown`，所以即使只改 `src/milkdown-editor.entry.js`，最终检查也会同步生成 bundle。
+
+本仓库位于外置卷时，`npm run dist:mac` / `npm run dist:win` 会自动把 electron-builder 输出放到系统临时目录，完成后复制 `.dmg`、`.zip`、`.exe`、`.blockmap` 和 `.yml` 到仓库 `release/`。不要绕过 `scripts/build.cjs` 直接在外置卷生成 ASAR。
 
 ## 0.7 当前持久化和数据兼容
 
@@ -191,16 +200,15 @@ src/app.js
 const DATA_VERSION = 1;
 ```
 
-桌面规范化目前覆盖：
+桌面与浏览器规范化目前共同覆盖：
 
-- `tasks`，其中任务级 `notes` 缺失时补为空字符串；
-- 递归节点树及节点 `collapsed`；
-- `taskGroups`、`activeGroupId`；
-- 处理流列宽、侧栏宽度、详情高度；
-- 图片附件 data URL；
-- 主题和中英文字体；
-- 任务筛选、优先级筛选、新任务优先级；
-- `updatedAt`。
+- 过滤空值、修复重复/缺失 ID，并重建任务/节点父子关系；
+- 任务与节点的字符串字段、顺序、状态、优先级和时间戳；
+- 旧数组任务标签到 `{ today, later, blocked }` 的迁移；
+- 递归节点树、节点 `collapsed`、`taskGroups` 和 `activeGroupId`；
+- 处理流列宽、侧栏宽度、详情高度和图片附件 data URL；
+- 主题、中英文字体和旧 `font` 设置迁移；
+- 任务筛选、优先级筛选和新任务优先级。
 
 ### 浏览器预览环境
 
