@@ -50,7 +50,7 @@
   --glass-soft: rgba(255, 255, 255, 0.44);
   --inset-highlight: rgba(255, 255, 255, 0.52);
   --shadow: rgba(70, 59, 43, 0.13);
-  --en-font: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+  --en-font: "Avenir Next", "SF Pro Display", "Segoe UI", ui-sans-serif, sans-serif;
   --zh-font: "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
   --app-font: var(--zh-font), var(--en-font), sans-serif;
   --mono: "SFMono-Regular", "Cascadia Mono", "Roboto Mono", Consolas, monospace;
@@ -156,7 +156,7 @@
 }
 
 :root[data-en-font="inter"] {
-  --en-font: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+  --en-font: "Avenir Next", "SF Pro Display", "Segoe UI", ui-sans-serif, sans-serif;
 }
 
 :root[data-en-font="system"] {
@@ -7359,4 +7359,38 @@ body.task-reordering * {
   margin-left: auto;
   font-size: 11px;
   white-space: nowrap;
+}
+
+/* Taste Skill application: calm utilitarian feedback for a dense task workspace. */
+button,
+select,
+.task-item,
+.task-row,
+.flow-row:not(.flow-header),
+.focus-item {
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    opacity 160ms ease,
+    transform 160ms ease;
+}
+
+button:not(:disabled):active,
+.task-item:active,
+.task-row:active,
+.flow-row:not(.flow-header):active,
+.focus-item:active {
+  transform: scale(0.985);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
 }
