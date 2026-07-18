@@ -7311,6 +7311,7 @@ body.task-reordering * {
 
 /* Keep today focus rows quiet: title and next step only. */
 .focus-row.focus-item {
+  position: relative;
   grid-template-columns: minmax(0, 1fr);
   padding: 7px 9px;
   border: 1px solid transparent;
@@ -7323,14 +7324,50 @@ body.task-reordering * {
 }
 
 .focus-row.focus-item.selected {
-  border-color: rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.09);
-  box-shadow: none;
+  border-color: transparent;
+  background: linear-gradient(
+    90deg,
+    rgba(224, 245, 236, 0.09),
+    rgba(255, 255, 255, 0.035) 68%,
+    transparent
+  );
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.025);
 }
 
 :root[data-theme="dark"] .focus-row.focus-item.selected {
-  border-color: rgba(127, 208, 178, 0.2);
-  background: rgba(127, 208, 178, 0.1);
+  border-color: transparent;
+  background: linear-gradient(
+    90deg,
+    rgba(127, 208, 178, 0.12),
+    rgba(127, 208, 178, 0.045) 68%,
+    transparent
+  );
+}
+
+.focus-row.focus-item.selected::before {
+  position: absolute;
+  top: 9px;
+  bottom: 9px;
+  left: 0;
+  width: 3px;
+  border-radius: 99px;
+  background: #b7decf;
+  box-shadow: 0 0 12px rgba(183, 222, 207, 0.22);
+  pointer-events: none;
+  content: "";
+}
+
+:root[data-theme="dark"] .focus-row.focus-item.selected::before {
+  background: #7fd0b2;
+  box-shadow: 0 0 12px rgba(127, 208, 178, 0.22);
+}
+
+.focus-row.focus-item.selected .row-title strong {
+  color: #ffffff;
+}
+
+.focus-row.focus-item.selected .row-title span {
+  color: rgba(255, 255, 255, 0.72);
 }
 
 /* Keep the today card metadata on one quiet line. */
