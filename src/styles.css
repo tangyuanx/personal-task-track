@@ -7439,3 +7439,183 @@ button:not(:disabled):active,
     transition-duration: 0.01ms !important;
   }
 }
+
+/* v0.1.76 — compact task introduction, aligned with the approved detail demo */
+.topbar.page-header {
+  padding-bottom: 12px;
+}
+
+.page-title {
+  min-height: 34px;
+  font-size: clamp(23px, 2.05vw, 28px);
+  letter-spacing: -0.6px;
+}
+
+.meta-line.page-properties {
+  gap: 7px 11px;
+  margin-top: 8px;
+  color: var(--handoff-muted, var(--muted));
+  font-size: 12px;
+}
+
+.task-context-item,
+.task-context-progress,
+.task-context-group {
+  display: inline-flex;
+  min-height: 18px;
+  align-items: center;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--handoff-muted, var(--muted));
+  font-size: 12px;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+
+.task-context-item {
+  font-weight: 650;
+}
+
+.task-context-item.task-tag {
+  color: var(--focus);
+}
+
+.task-context-item.priority.high {
+  color: var(--priority-high, #a77a36);
+}
+
+.task-context-item.priority.low {
+  color: var(--focus);
+}
+
+.task-context-item.status {
+  color: var(--handoff-ink, var(--ink));
+}
+
+.task-context-progress {
+  color: var(--handoff-ink, var(--ink));
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.task-context-divider {
+  width: 1px;
+  height: 14px;
+  background: var(--handoff-line-strong, var(--line-strong));
+}
+
+.task-context-group {
+  gap: 5px;
+}
+
+.task-context-group select {
+  width: auto;
+  max-width: 150px;
+  height: 20px;
+  border: 0;
+  padding: 0 17px 0 0;
+  background: transparent;
+  color: var(--handoff-ink, var(--ink));
+  font: inherit;
+  outline: 0;
+}
+
+.brief-strip.task-brief {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  margin: 13px 38px 0;
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.brief-cell.brief-field,
+.brief-cell.brief-field.conclusion {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  gap: 0;
+  padding: 0 18px;
+  border: 0;
+  border-left: 1px solid var(--handoff-line-strong, var(--line-strong));
+  border-radius: 0;
+  background: transparent;
+}
+
+.brief-cell.brief-field:first-child {
+  padding-left: 0;
+  border-left: 0;
+}
+
+.brief-cell.brief-field:last-child {
+  padding-right: 0;
+}
+
+.brief-label {
+  display: flex;
+  width: 100%;
+  min-height: 25px;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+  padding: 0 0 7px;
+  border-bottom: 1px solid var(--handoff-line, var(--line));
+  color: var(--handoff-ink, var(--ink));
+  background: transparent;
+}
+
+.brief-label,
+.brief-label b {
+  font-family: var(--app-font);
+  font-size: 11px;
+  font-weight: 720;
+  letter-spacing: 0.04em;
+  text-transform: none;
+}
+
+.brief-label b {
+  color: inherit;
+}
+
+.brief-stamp {
+  color: var(--handoff-muted, var(--muted));
+  font: 10px/1.35 var(--mono);
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+.task-brief textarea {
+  min-height: 61px;
+  height: 61px;
+  max-height: 102px;
+  margin: 0;
+  padding: 9px 0 0;
+  overflow-y: auto;
+  resize: none;
+  background: transparent;
+  color: var(--handoff-ink, var(--ink));
+  font-size: 12px;
+  font-weight: 450;
+  letter-spacing: 0.01em;
+  line-height: 1.7;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--focus) 28%, transparent) transparent;
+}
+
+.task-brief textarea:focus {
+  box-shadow: inset 0 -1px var(--focus);
+}
+
+@media (max-width: 980px) {
+  .brief-strip.task-brief {
+    grid-template-columns: repeat(3, minmax(210px, 1fr));
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+}

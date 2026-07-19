@@ -863,11 +863,11 @@ function renderTaskPage(task) {
           <input class="page-title" aria-label="任务标题" data-edit-key="title" data-task-id="${task.id}" value="${escAttr(task.title)}" />
           <div class="page-properties meta-line">
             ${renderTaskActiveTagPills(task)}
-            <span class="pill priority ${task.priority} ${task.priority === "high" ? "hot" : task.priority === "low" ? "good" : ""}">${priorityLabels[task.priority]}优先</span>
-            <span class="pill status ${task.status === "done" ? "resolved good" : "attention good"}">${task.status === "done" ? "已完成" : "处理中"}</span>
-            <span class="pill">${summary.done}/${summary.total || 0} 节点</span>
-            <span class="pill">更新 ${formatShort(task.updatedAt)}</span>
-            <label class="property-select">分组 ${selectHtml("groupId", task.groupId, taskGroupOptions(), task.id)}</label>
+            <span class="task-context-item priority ${task.priority}">${priorityLabels[task.priority]}优先</span>
+            <span class="task-context-item status ${task.status === "done" ? "resolved" : "attention"}">${task.status === "done" ? "已完成" : "处理中"}</span>
+            <span class="task-context-divider" aria-hidden="true"></span>
+            <span class="task-context-progress">${summary.done}/${summary.total || 0} 节点</span>
+            <label class="task-context-group"><span>分组</span>${selectHtml("groupId", task.groupId, taskGroupOptions(), task.id)}</label>
           </div>
         </div>
         <div class="actions">
@@ -880,9 +880,9 @@ function renderTaskPage(task) {
       ${needsConclusion ? renderConclusionPrompt() : ""}
 
       <section class="task-brief brief-strip" aria-label="任务简报">
-        ${renderBriefField("背景 / 目标", textareaHtml("description", task.description, task.id), "", false, "background")}
-        ${renderBriefField("当前判断 / 进展", textareaHtml("hypothesis", task.hypothesis, task.id), task.hypothesisUpdatedAt, false, "hypothesis")}
-        ${renderBriefField("结果 / 总结", textareaHtml("conclusion", task.conclusion, task.id), "", needsConclusion, "conclusion")}
+        ${renderBriefField("背景", textareaHtml("description", task.description, task.id), "", false, "background")}
+        ${renderBriefField("进展", textareaHtml("hypothesis", task.hypothesis, task.id), task.hypothesisUpdatedAt, false, "hypothesis")}
+        ${renderBriefField("结论", textareaHtml("conclusion", task.conclusion, task.id), "", needsConclusion, "conclusion")}
       </section>
 
       ${renderTaskPaneTabs(task)}
@@ -1003,16 +1003,15 @@ function renderTaskTagRow(task) {
 function renderTaskActiveTagPills(task) {
   return Object.entries(normalizeTaskTags(task.tags))
     .filter(([, active]) => active)
-    .map(([tag]) => `<span class="pill task-tag-pill">${taskTagLabels[tag]}</span>`)
+    .map(([tag]) => `<span class="task-context-item task-tag">${taskTagLabels[tag]}</span>`)
     .join("");
 }
 
 function renderBriefField(label, control, timestamp = "", attention = false, variant = "") {
   return `
     <label class="brief-field brief-cell ${variant} ${attention ? "needs-attention" : ""}">
-      <span class="brief-label"><b>${label}</b></span>
+      <span class="brief-label"><b>${label}</b>${timestamp ? `<time class="brief-stamp">${formatShort(timestamp)}</time>` : ""}</span>
       ${control}
-      ${timestamp ? `<small class="brief-stamp">${formatShort(timestamp)}</small>` : ""}
     </label>
   `;
 }
@@ -2285,8 +2284,12 @@ function resizeTaskBriefTextareas() {
 }
 
 function resizeTaskBriefTextarea(element) {
+  const lineHeight = Number.parseFloat(window.getComputedStyle(element).lineHeight) || 20;
+  const minHeight = lineHeight * 3;
+  const maxHeight = lineHeight * 5;
   element.style.height = "0px";
-  element.style.height = `${Math.min(180, Math.max(34, element.scrollHeight))}px`;
+  element.style.height = `${Math.min(maxHeight, Math.max(minHeight, element.scrollHeight))}px`;
+  element.style.overflowY = element.scrollHeight > maxHeight ? "auto" : "hidden";
 }
 
 function applySetting(key, value) {
