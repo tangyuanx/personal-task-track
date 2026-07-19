@@ -7625,3 +7625,279 @@ button:not(:disabled):active,
     padding-bottom: 4px;
   }
 }
+
+/* ============================================================
+   Processing flow — compact tree presentation
+   ============================================================ */
+.flow-section .flow-head.section-heading {
+  min-height: 31px;
+  padding-bottom: 9px;
+}
+
+.flow-section .flow-head.section-heading > div > span,
+.flow-section .flow-head.section-heading > span {
+  display: none;
+}
+
+.flow-table.flow-list {
+  --flow-rail: #c8d3cc;
+}
+
+.flow-table.flow-list::before {
+  display: none;
+}
+
+.flow-line.flow-row,
+.flow-line.flow-row.sub {
+  grid-template-columns:
+    34px
+    minmax(276px, clamp(276px, var(--flow-title-width, 360px), 25vw))
+    minmax(150px, clamp(150px, var(--flow-note-width, 330px), 20vw))
+    72px
+    108px;
+  gap: 0;
+  min-height: 54px;
+  padding: 0 12px;
+}
+
+.flow-line.flow-row.main-flow {
+  min-height: 61px;
+  background: #f8f9f8;
+}
+
+.flow-line.flow-row.header {
+  min-height: 36px;
+  padding: 0 12px;
+  color: var(--handoff-muted);
+  font-size: 11px;
+  font-weight: 720;
+  letter-spacing: 0.08em;
+}
+
+.flow-header > :nth-child(2) {
+  padding-left: 21px;
+}
+
+.flow-header > :nth-child(3) {
+  padding-left: 18px;
+  border-left: 1px solid var(--handoff-line-soft, #edf0ee);
+}
+
+.flow-header > :nth-child(4),
+.flow-header > :nth-child(5) {
+  visibility: hidden;
+}
+
+.flow-sequence-cell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0;
+}
+
+.flow-sequence-cell .sequence-index {
+  color: var(--handoff-muted);
+  font: 700 10px var(--mono);
+  text-align: left;
+}
+
+.flow-check.dot,
+.flow-line.sub .flow-check.dot {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 34px;
+  height: 100%;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.flow-title-cell.process-cell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding-left: 0;
+}
+
+.flow-root-marker {
+  position: relative;
+  z-index: 1;
+  width: 3px;
+  height: 23px;
+  flex: 0 0 auto;
+  margin-right: 13px;
+  border-radius: 99px;
+  background: var(--flow-rail);
+}
+
+.flow-item > .flow-row.main-flow:has(+ .flow-item) .flow-root-marker::after {
+  position: absolute;
+  top: 50%;
+  bottom: -31px;
+  left: 1px;
+  z-index: 0;
+  width: 1px;
+  background: var(--flow-rail);
+  content: "";
+  pointer-events: none;
+}
+
+.flow-line.sub .flow-title-cell.process-cell {
+  padding-left: calc(var(--tree-depth) * 22px + 14px);
+}
+
+.flow-tree-guides {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: calc(var(--tree-depth) * 22px + 2px);
+  pointer-events: none;
+}
+
+.flow-tree-rail {
+  position: absolute;
+  top: -27px;
+  bottom: 50%;
+  left: calc(var(--rail-index) * 22px + 1px);
+  width: 1px;
+  background: var(--flow-rail);
+}
+
+.flow-tree-rail.continues {
+  bottom: -27px;
+}
+
+.flow-tree-elbow {
+  position: absolute;
+  top: 50%;
+  left: calc((var(--tree-depth) - 1) * 22px + 1px);
+  width: 34px;
+  height: 1px;
+  background: var(--flow-rail);
+}
+
+.flow-title-line {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.flow-title-line .node-collapse-toggle,
+.flow-title-line .node-collapse-spacer {
+  display: none;
+}
+
+.flow-title-input,
+.flow-line.done .flow-title-input {
+  color: var(--handoff-ink);
+  font-size: 13px;
+  font-weight: 660;
+  text-decoration: none;
+}
+
+.flow-line.main-flow .flow-title-input {
+  font-weight: 760;
+}
+
+.flow-line.sub .flow-title-input {
+  color: var(--handoff-text-secondary, var(--text-secondary));
+  font-size: 12px;
+  font-weight: 560;
+}
+
+.flow-note.process-cell {
+  display: flex;
+  min-width: 0;
+  min-height: 30px;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 5px 6px 5px 18px;
+  border-left: 1px solid var(--handoff-line-soft, #edf0ee);
+  border-radius: 0;
+  background: transparent;
+  color: var(--handoff-muted);
+  text-align: left;
+}
+
+.flow-note.process-cell > strong {
+  overflow: hidden;
+  color: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.flow-note.process-cell > span,
+.flow-relation {
+  display: none;
+}
+
+.flow-status {
+  justify-self: end;
+  padding: 0;
+  color: var(--handoff-muted);
+  font-size: 11px;
+  font-weight: 680;
+  text-decoration: none;
+}
+
+.flow-status::before {
+  width: 5px;
+  height: 5px;
+  margin-right: 6px;
+  border-radius: 50%;
+  opacity: 1;
+}
+
+.flow-status.status-done,
+.flow-line.done .flow-status {
+  color: var(--handoff-done);
+  text-decoration: none;
+  opacity: 0.88;
+}
+
+.flow-updated.note-link,
+.flow-line.done .flow-updated {
+  justify-self: end;
+  padding-left: 17px;
+  color: var(--handoff-muted);
+  font: 10px var(--mono);
+  text-decoration: none;
+  opacity: 1;
+}
+
+:root[data-theme="dark"] .flow-table.flow-list {
+  --flow-rail: #425149;
+}
+
+@media (max-width: 1180px) {
+  .flow-line.flow-row,
+  .flow-line.flow-row.sub {
+    grid-template-columns: 34px minmax(220px, clamp(220px, var(--flow-title-width, 320px), 25vw)) minmax(145px, clamp(145px, var(--flow-note-width, 250px), 18vw)) 72px;
+  }
+}
+
+@media (max-width: 870px) {
+  .flow-line.flow-row,
+  .flow-line.flow-row.sub {
+    grid-template-columns: 34px minmax(0, 1fr);
+    gap: 6px 10px;
+    padding: 8px 0;
+  }
+
+  .flow-line.sub .flow-title-cell.process-cell {
+    padding-left: calc(var(--tree-depth) * 22px + 14px);
+  }
+
+  .flow-note,
+  .flow-status,
+  .flow-updated {
+    grid-column: 2;
+    margin-left: 0;
+  }
+}

@@ -890,15 +890,11 @@ function renderTaskPage(task) {
       <section class="task-workbench lower">
         ${state.taskPane === "flow" ? `<section class="flow-section flow" data-context="flow-root" data-task-id="${task.id}">
           <div class="section-heading flow-head">
-            <div>
-              <h2>处理流</h2>
-              <span>主轴表示顺序，缩进表示父子关系</span>
-            </div>
-            <span>${summary.total ? (summary.open ? `${summary.open} 个未完成` : "所有节点已完成") : ""}</span>
+            <div><h2>处理流</h2></div>
           </div>
           ${
             topNodes.length
-              ? `<div class="flow-list flow-table" style="${flowWidthStyle()};--flow-visible-row-count:${visibleFlowRowCount(topNodes)}" data-context="flow-root" data-task-id="${task.id}">${renderFlowHeader()}${topNodes.map((node, index) => renderFlowNode(task.id, node, 0, index, "")).join("")}</div>`
+              ? `<div class="flow-list flow-table" style="${flowWidthStyle()};--flow-visible-row-count:${visibleFlowRowCount(topNodes)}" data-context="flow-root" data-task-id="${task.id}">${renderFlowHeader()}${topNodes.map((node, index) => renderFlowNode(task.id, node, 0, index, [], index === topNodes.length - 1)).join("")}</div>`
               : `<div class="flow-list flow-table empty-flow" data-context="flow-root" data-task-id="${task.id}"></div>`
           }
         </section>` : state.taskPane === "notes" ? renderTaskKnowledge(task) : renderTaskHistory(task)}
@@ -1016,28 +1012,33 @@ function renderBriefField(label, control, timestamp = "", attention = false, var
   `;
 }
 
-function renderFlowNode(taskId, node, depth, rootIndex = 0, parentTitle = "") {
+function renderFlowNode(taskId, node, depth, rootIndex = 0, lineage = [], isLast = true) {
   const children = sort(node.children);
   const isSelected = state.selectedNodeId === node.id;
-  const indent = Math.min(depth, 4) * 16;
+  const treeDepth = Math.min(depth, 3);
   const branch = depth === 0 ? "main-flow" : "sub-flow";
   const noteSummary = nodeNoteSummary(node.note);
-  const relationship = depth === 0 ? `主流程第 ${rootIndex + 1} 步` : `属于 ${parentTitle || "上级节点"}`;
+  const railContinuations = [...lineage, !isLast].slice(0, treeDepth);
+  const treeGuides =
+    depth > 0
+      ? `<span class="flow-tree-guides" aria-hidden="true">${Array.from(
+          { length: treeDepth },
+          (_, index) => `<span class="flow-tree-rail ${railContinuations[index] ? "continues" : ""}" style="--rail-index:${index}"></span>`,
+        ).join("")}<span class="flow-tree-elbow"></span></span>`
+      : "";
   return `
     <article class="flow-item depth-${Math.min(depth, 6)}">
-      <div class="flow-row flow-line ${branch} ${branch === "sub-flow" ? "sub" : ""} ${node.status} ${isSelected ? "selected" : ""}" style="--indent:${indent}px" data-context="node" data-task-id="${taskId}" data-node-id="${node.id}">
+      <div class="flow-row flow-line ${branch} ${branch === "sub-flow" ? "sub" : ""} ${node.status} ${isSelected ? "selected" : ""}" style="--tree-depth:${treeDepth}" data-context="node" data-task-id="${taskId}" data-node-id="${node.id}">
         <span class="flow-sequence-cell">
-          ${depth === 0 ? `<span class="sequence-index">${String(rootIndex + 1).padStart(2, "0")}</span>` : `<span class="sequence-child-mark" aria-hidden="true"></span>`}
+          ${depth === 0 ? `<span class="sequence-index">${String(rootIndex + 1).padStart(2, "0")}</span>` : ""}
           <input class="flow-check dot" type="checkbox" title="完成" data-action="toggle-node-done" data-task-id="${taskId}" data-node-id="${node.id}" ${node.status === "done" ? "checked" : ""} />
         </span>
         <span class="flow-title-cell flow-title process-cell">
-          <span class="flow-indent"></span>
-          <span class="flow-branch-mark"></span>
+          ${depth === 0 ? `<span class="flow-root-marker" aria-hidden="true"></span>` : treeGuides}
           <span class="flow-title-line">
             ${children.length ? `<button class="node-collapse-toggle" type="button" data-action="toggle-node-collapse" data-task-id="${taskId}" data-node-id="${node.id}" title="${node.collapsed ? "展开子节点" : "收起子节点"}">${node.collapsed ? "+" : "−"}</button>` : `<span class="node-collapse-spacer"></span>`}
             ${nodeTitleInputHtml(node, taskId)}
           </span>
-          <span class="flow-relation">${esc(relationship)}</span>
         </span>
         <button class="flow-note note-link process-cell ${isSelected ? "record-trigger" : ""}" type="button" data-action="select-node" data-task-id="${taskId}" data-node-id="${node.id}" title="打开节点记录">
           <strong>${esc(noteSummary.title)}</strong>
@@ -1046,7 +1047,13 @@ function renderFlowNode(taskId, node, depth, rootIndex = 0, parentTitle = "") {
         <span class="flow-status status-${node.status}">${nodeStatusText(node.status)}</span>
         <span class="flow-updated note-link">${formatShort(node.updatedAt)}</span>
       </div>
-      ${children.length && !node.collapsed ? children.map((child) => renderFlowNode(taskId, child, depth + 1, rootIndex, node.title)).join("") : ""}
+      ${
+        children.length && !node.collapsed
+          ? children
+              .map((child, index) => renderFlowNode(taskId, child, depth + 1, rootIndex, depth === 0 ? [] : [...lineage, !isLast], index === children.length - 1))
+              .join("")
+          : ""
+      }
     </article>
   `;
 }
@@ -1054,11 +1061,11 @@ function renderFlowNode(taskId, node, depth, rootIndex = 0, parentTitle = "") {
 function renderFlowHeader() {
   return `
     <div class="flow-row flow-line flow-header header">
-      <span>顺序</span>
+      <span></span>
       ${renderFlowHeadCell("title", "处理")}
       ${renderFlowHeadCell("note", "记录")}
-      ${renderFlowHeadCell("", "状态")}
-      ${renderFlowHeadCell("", "更新时间")}
+      ${renderFlowHeadCell("", "")}
+      ${renderFlowHeadCell("", "")}
     </div>
   `;
 }
