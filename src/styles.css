@@ -7501,8 +7501,14 @@ button:not(:disabled):active,
 }
 
 .task-context-divider {
+  display: block;
+  min-height: 0;
+  flex: 0 0 1px;
   width: 1px;
   height: 14px;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
   background: var(--handoff-line-strong, var(--line-strong));
 }
 
