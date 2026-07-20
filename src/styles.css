@@ -8070,12 +8070,22 @@ button:not(:disabled):active,
   height: 0;
 }
 
-/* A selected Today row needs to read clearly against the dark focus surface. */
+/* A selected Today row is a quiet layer of mist, not a separate card. */
 .focus-row.focus-item.selected,
 :root[data-theme="dark"] .focus-row.focus-item.selected {
-  border-color: rgba(231, 255, 244, 0.38);
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0.24), rgba(215, 250, 232, 0.1) 82%, transparent);
-  box-shadow: inset 3px 0 0 #bde5d5, inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  border-color: transparent;
+  background: rgba(232, 250, 240, 0.1);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.09),
+    inset 0 0 24px rgba(218, 245, 231, 0.06),
+    0 6px 18px rgba(3, 31, 22, 0.08);
+  backdrop-filter: blur(8px);
+}
+
+.focus-row.focus-item.selected::before,
+:root[data-theme="dark"] .focus-row.focus-item.selected::before {
+  display: none;
+  content: none;
 }
 
 .focus-row.focus-item.selected .row-title strong,

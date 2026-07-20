@@ -205,6 +205,22 @@ test("renderer normalization restores safe task and node invariants", async () =
   assert.notEqual(tasks[0].nodes[0].id, tasks[0].nodes[0].children[0].id);
 });
 
+test("today focus highlights the active task even when it suggests a different node", async () => {
+  const harness = await rendererHarness();
+  const html = harness.evaluate(`(() => {
+    state.activeTaskId = "today_task";
+    state.selectedNodeId = "";
+    return renderTodayFocusItem({
+      task: { id: "today_task", title: "今日任务" },
+      node: { id: "next_step" },
+      kind: "normal",
+      nextText: "下一步"
+    });
+  })()`);
+
+  assert.match(html, /focus-row normal selected/);
+});
+
 test("task Markdown export resolves the task group and includes knowledge notes", async () => {
   const harness = await rendererHarness();
   const markdown = harness.evaluate(`(() => {

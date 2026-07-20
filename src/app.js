@@ -795,7 +795,9 @@ function renderTodayFocus(items) {
 
 function renderTodayFocusItem(item) {
   const { task, node, kind, nextText } = item;
-  const selected = task.id === state.activeTaskId && (!node?.id || node.id === state.selectedNodeId);
+  // Today focus represents a task, not the currently opened flow node. A task
+  // must remain visibly selected even when its suggested next step is different.
+  const selected = task.id === state.activeTaskId;
   return `
     <article class="focus-item focus-row ${kind} ${selected ? "selected" : ""}" role="button" tabindex="0" data-action="select-focus" data-task-id="${task.id}" data-node-id="${node?.id || ""}">
       <span class="row-title"><strong>${esc(task.title || "未命名任务")}</strong><span>下一步：${esc(nextText)}</span></span>
