@@ -152,6 +152,16 @@ test("disk normalization preserves every supported typography choice", () => {
   }
 });
 
+test("Chinese and English font settings stay isolated in the application font chain", async () => {
+  const [styles, app] = await Promise.all([
+    fs.readFile(path.join(__dirname, "..", "src", "styles.css"), "utf8"),
+    fs.readFile(path.join(__dirname, "..", "src", "app.js"), "utf8"),
+  ]);
+
+  assert.match(styles, /--app-font:\s*var\(--zh-font\),\s*var\(--en-font\),\s*sans-serif;/);
+  assert.doesNotMatch(app, /横向滚动\s*·\s*双击重命名/);
+});
+
 test("disk persistence writes and reads a normalized atomic payload", async (t) => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "personal-task-track-test-"));
   t.after(() => fs.rm(directory, { recursive: true, force: true }));

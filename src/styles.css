@@ -52,7 +52,7 @@
   --shadow: rgba(70, 59, 43, 0.13);
   --en-font: "TaskTrack English Inter", sans-serif;
   --zh-font: "TaskTrack Chinese System", sans-serif;
-  --app-font: var(--en-font), var(--zh-font), sans-serif;
+  --app-font: var(--zh-font), var(--en-font), sans-serif;
   --mono: var(--app-font);
   color: var(--ink);
   background: var(--panel);

@@ -752,7 +752,6 @@ function renderSidebar() {
       <section class="group-panel" aria-label="任务分组">
         <div class="group-panel-head">
           <strong>任务分组</strong>
-          <span>横向滚动 · 双击重命名</span>
         </div>
         ${renderGroupTabs()}
       </section>
