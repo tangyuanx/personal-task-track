@@ -50,10 +50,10 @@
   --glass-soft: rgba(255, 255, 255, 0.44);
   --inset-highlight: rgba(255, 255, 255, 0.52);
   --shadow: rgba(70, 59, 43, 0.13);
-  --en-font: "Avenir Next", "SF Pro Display", "Segoe UI", ui-sans-serif, sans-serif;
-  --zh-font: "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  --en-font: "TaskTrack English Inter", sans-serif;
+  --zh-font: "TaskTrack Chinese System", sans-serif;
   --app-font: var(--en-font), var(--zh-font), sans-serif;
-  --mono: "SFMono-Regular", "Cascadia Mono", "Roboto Mono", Consolas, monospace;
+  --mono: var(--app-font);
   color: var(--ink);
   background: var(--panel);
   font-family: var(--app-font);
@@ -122,85 +122,115 @@
 }
 
 
-/* ===== FONT DEFINITIONS ===== */
+/* ===== FONT DEFINITIONS =====
+   Split the character ranges at the font-face level. A system UI font can
+   contain Chinese glyphs, so a plain CSS fallback list cannot keep the two
+   settings independent. */
+@font-face {
+  font-family: "TaskTrack English Inter";
+  src: local("Avenir Next"), local("SF Pro Display"), local("Segoe UI");
+  unicode-range: U+0000-024F, U+0370-052F, U+2000-214F;
+}
+
+@font-face { font-family: "TaskTrack English System"; src: local("SF Pro Text"), local("Segoe UI"), local("Arial"); unicode-range: U+0000-024F, U+0370-052F, U+2000-214F; }
+@font-face { font-family: "TaskTrack English Segoe"; src: local("Segoe UI"), local("Avenir Next"), local("Arial"); unicode-range: U+0000-024F, U+0370-052F, U+2000-214F; }
+@font-face { font-family: "TaskTrack English Arial"; src: local("Arial"), local("Helvetica"); unicode-range: U+0000-024F, U+0370-052F, U+2000-214F; }
+@font-face { font-family: "TaskTrack English Helvetica"; src: local("Helvetica"), local("Arial"); unicode-range: U+0000-024F, U+0370-052F, U+2000-214F; }
+@font-face { font-family: "TaskTrack English Verdana"; src: local("Verdana"), local("Geneva"), local("Arial"); unicode-range: U+0000-024F, U+0370-052F, U+2000-214F; }
+@font-face { font-family: "TaskTrack English Trebuchet"; src: local("Trebuchet MS"), local("Segoe UI"), local("Arial"); unicode-range: U+0000-024F, U+0370-052F, U+2000-214F; }
+@font-face { font-family: "TaskTrack English Tahoma"; src: local("Tahoma"), local("Segoe UI"), local("Arial"); unicode-range: U+0000-024F, U+0370-052F, U+2000-214F; }
+@font-face { font-family: "TaskTrack English Times"; src: local("Times New Roman"), local("Times"); unicode-range: U+0000-024F, U+0370-052F, U+2000-214F; }
+@font-face { font-family: "TaskTrack English Georgia"; src: local("Georgia"), local("Times New Roman"); unicode-range: U+0000-024F, U+0370-052F, U+2000-214F; }
+@font-face { font-family: "TaskTrack English Courier"; src: local("Courier New"), local("Courier"), local("Consolas"); unicode-range: U+0000-024F, U+0370-052F, U+2000-214F; }
+@font-face { font-family: "TaskTrack English Mono"; src: local("SFMono-Regular"), local("Cascadia Mono"), local("Consolas"); unicode-range: U+0000-024F, U+0370-052F, U+2000-214F; }
+
+@font-face { font-family: "TaskTrack Chinese System"; src: local("PingFang SC"), local("Microsoft YaHei"), local("Noto Sans CJK SC"); unicode-range: U+2E80-2EFF, U+3000-303F, U+3040-30FF, U+3100-312F, U+31A0-31BF, U+3200-32FF, U+3400-4DBF, U+4E00-9FFF, U+F900-FAFF, U+FE10-FE1F, U+FE30-FE4F, U+FF00-FFEF; }
+@font-face { font-family: "TaskTrack Chinese YaHei"; src: local("Microsoft YaHei"), local("PingFang SC"), local("Noto Sans CJK SC"); unicode-range: U+2E80-2EFF, U+3000-303F, U+3040-30FF, U+3100-312F, U+31A0-31BF, U+3200-32FF, U+3400-4DBF, U+4E00-9FFF, U+F900-FAFF, U+FE10-FE1F, U+FE30-FE4F, U+FF00-FFEF; }
+@font-face { font-family: "TaskTrack Chinese PingFang"; src: local("PingFang SC"), local("Hiragino Sans GB"), local("Microsoft YaHei"); unicode-range: U+2E80-2EFF, U+3000-303F, U+3040-30FF, U+3100-312F, U+31A0-31BF, U+3200-32FF, U+3400-4DBF, U+4E00-9FFF, U+F900-FAFF, U+FE10-FE1F, U+FE30-FE4F, U+FF00-FFEF; }
+@font-face { font-family: "TaskTrack Chinese Songti"; src: local("Songti SC"), local("STSong"), local("SimSun"); unicode-range: U+2E80-2EFF, U+3000-303F, U+3040-30FF, U+3100-312F, U+31A0-31BF, U+3200-32FF, U+3400-4DBF, U+4E00-9FFF, U+F900-FAFF, U+FE10-FE1F, U+FE30-FE4F, U+FF00-FFEF; }
+@font-face { font-family: "TaskTrack Chinese SimSun"; src: local("SimSun"), local("Songti SC"), local("STSong"); unicode-range: U+2E80-2EFF, U+3000-303F, U+3040-30FF, U+3100-312F, U+31A0-31BF, U+3200-32FF, U+3400-4DBF, U+4E00-9FFF, U+F900-FAFF, U+FE10-FE1F, U+FE30-FE4F, U+FF00-FFEF; }
+@font-face { font-family: "TaskTrack Chinese FangSong"; src: local("FangSong"), local("FangSong_GB2312"), local("STFangsong"); unicode-range: U+2E80-2EFF, U+3000-303F, U+3040-30FF, U+3100-312F, U+31A0-31BF, U+3200-32FF, U+3400-4DBF, U+4E00-9FFF, U+F900-FAFF, U+FE10-FE1F, U+FE30-FE4F, U+FF00-FFEF; }
+@font-face { font-family: "TaskTrack Chinese Heiti"; src: local("SimHei"), local("Heiti SC"), local("Microsoft YaHei"); unicode-range: U+2E80-2EFF, U+3000-303F, U+3040-30FF, U+3100-312F, U+31A0-31BF, U+3200-32FF, U+3400-4DBF, U+4E00-9FFF, U+F900-FAFF, U+FE10-FE1F, U+FE30-FE4F, U+FF00-FFEF; }
+@font-face { font-family: "TaskTrack Chinese KaiTi"; src: local("KaiTi"), local("Kaiti SC"), local("STKaiti"); unicode-range: U+2E80-2EFF, U+3000-303F, U+3040-30FF, U+3100-312F, U+31A0-31BF, U+3200-32FF, U+3400-4DBF, U+4E00-9FFF, U+F900-FAFF, U+FE10-FE1F, U+FE30-FE4F, U+FF00-FFEF; }
+
 :root[data-zh-font="system"] {
-  --zh-font: "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  --zh-font: "TaskTrack Chinese System", sans-serif;
 }
 
 :root[data-zh-font="yahei"] {
-  --zh-font: "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", sans-serif;
+  --zh-font: "TaskTrack Chinese YaHei", sans-serif;
 }
 
 :root[data-zh-font="pingfang"] {
-  --zh-font: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --zh-font: "TaskTrack Chinese PingFang", sans-serif;
 }
 
 :root[data-zh-font="songti"] {
-  --zh-font: "Songti SC", "STSong", SimSun, serif;
+  --zh-font: "TaskTrack Chinese Songti", serif;
 }
 
 :root[data-zh-font="simsun"] {
-  --zh-font: SimSun, "Songti SC", "STSong", serif;
+  --zh-font: "TaskTrack Chinese SimSun", serif;
 }
 
 :root[data-zh-font="fangsong"] {
-  --zh-font: FangSong, "FangSong_GB2312", "STFangsong", serif;
+  --zh-font: "TaskTrack Chinese FangSong", serif;
 }
 
 :root[data-zh-font="heiti"] {
-  --zh-font: SimHei, "Heiti SC", "Microsoft YaHei", sans-serif;
+  --zh-font: "TaskTrack Chinese Heiti", sans-serif;
 }
 
 :root[data-zh-font="kaiti"] {
-  --zh-font: KaiTi, "Kaiti SC", "STKaiti", serif;
+  --zh-font: "TaskTrack Chinese KaiTi", serif;
 }
 
 :root[data-en-font="inter"] {
-  --en-font: "Avenir Next", "SF Pro Display", "Segoe UI", ui-sans-serif, sans-serif;
+  --en-font: "TaskTrack English Inter", sans-serif;
 }
 
 :root[data-en-font="system"] {
-  --en-font: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+  --en-font: "TaskTrack English System", sans-serif;
 }
 
 :root[data-en-font="segoe"] {
-  --en-font: "Segoe UI", Arial, sans-serif;
+  --en-font: "TaskTrack English Segoe", sans-serif;
 }
 
 :root[data-en-font="arial"] {
-  --en-font: Arial, Helvetica, sans-serif;
+  --en-font: "TaskTrack English Arial", sans-serif;
 }
 
 :root[data-en-font="helvetica"] {
-  --en-font: Helvetica, Arial, sans-serif;
+  --en-font: "TaskTrack English Helvetica", sans-serif;
 }
 
 :root[data-en-font="verdana"] {
-  --en-font: Verdana, Geneva, sans-serif;
+  --en-font: "TaskTrack English Verdana", sans-serif;
 }
 
 :root[data-en-font="trebuchet"] {
-  --en-font: "Trebuchet MS", "Segoe UI", sans-serif;
+  --en-font: "TaskTrack English Trebuchet", sans-serif;
 }
 
 :root[data-en-font="tahoma"] {
-  --en-font: Tahoma, "Segoe UI", sans-serif;
+  --en-font: "TaskTrack English Tahoma", sans-serif;
 }
 
 :root[data-en-font="times"] {
-  --en-font: "Times New Roman", Times, serif;
+  --en-font: "TaskTrack English Times", serif;
 }
 
 :root[data-en-font="georgia"] {
-  --en-font: Georgia, "Times New Roman", serif;
+  --en-font: "TaskTrack English Georgia", serif;
 }
 
 :root[data-en-font="courier"] {
-  --en-font: "Courier New", Courier, monospace;
+  --en-font: "TaskTrack English Courier", monospace;
 }
 
 :root[data-en-font="mono"] {
-  --en-font: "SFMono-Regular", "Cascadia Mono", "Roboto Mono", Consolas, monospace;
+  --en-font: "TaskTrack English Mono", monospace;
 }
 
 * {
@@ -8024,4 +8054,80 @@ button:not(:disabled):active,
   min-height: 100%;
   overflow: visible;
   padding-bottom: 32px;
+}
+
+/* Today keeps its own wheel-scrolling list without a permanent right rail. */
+.focus-stack {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.focus-stack::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+/* A selected Today row needs to read clearly against the dark focus surface. */
+.focus-row.focus-item.selected,
+:root[data-theme="dark"] .focus-row.focus-item.selected {
+  border-color: rgba(231, 255, 244, 0.38);
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.24), rgba(215, 250, 232, 0.1) 82%, transparent);
+  box-shadow: inset 3px 0 0 #bde5d5, inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.focus-row.focus-item.selected .row-title strong,
+:root[data-theme="dark"] .focus-row.focus-item.selected .row-title strong {
+  color: #ffffff;
+}
+
+.focus-row.focus-item.selected .row-title span,
+:root[data-theme="dark"] .focus-row.focus-item.selected .row-title span {
+  color: rgba(255, 255, 255, 0.78);
+}
+
+/* The repository drag affordance stays on the right; selection never creates a left rail. */
+.task-row.task-item .task-drag-handle,
+.task-row.task-item.active .task-drag-handle,
+.task-row.task-item.selected .task-drag-handle {
+  border-left: 0;
+}
+
+/* Status is plain text. Disable the historical pseudo-element in every state. */
+.flow-status::before,
+.flow-status.status-todo::before,
+.flow-status.status-done::before,
+.flow-status.status-blocked::before,
+.flow-status.status-later::before {
+  display: none;
+  width: 0;
+  height: 0;
+  margin: 0;
+  content: none;
+}
+
+/* Editing stays attached to the parent surface; focus is shown with a quiet line. */
+.task-brief textarea,
+.flow-title-input,
+.node-detail-title,
+.record-modal-textarea {
+  background: transparent;
+}
+
+.task-brief textarea:focus,
+.flow-title-input:focus,
+.node-detail-title:focus,
+.record-modal-textarea:focus {
+  background: color-mix(in srgb, var(--focus) 5%, transparent);
+  box-shadow: inset 0 -1px color-mix(in srgb, var(--focus) 64%, transparent);
+}
+
+:root[data-theme="dark"] .task-brief textarea:focus,
+:root[data-theme="dark"] .flow-title-input:focus,
+:root[data-theme="dark"] .node-detail-title:focus,
+:root[data-theme="dark"] .record-modal-textarea:focus {
+  background: color-mix(in srgb, var(--focus) 10%, transparent);
+  box-shadow: inset 0 -1px color-mix(in srgb, var(--focus) 70%, transparent);
 }

@@ -139,6 +139,19 @@ test("disk normalization repairs malformed records and legacy preferences", () =
   assert.equal(normalized.enFont, "mono");
 });
 
+test("disk normalization preserves every supported typography choice", () => {
+  const zhFonts = ["system", "yahei", "pingfang", "songti", "simsun", "fangsong", "heiti", "kaiti"];
+  const enFonts = ["inter", "system", "segoe", "arial", "helvetica", "verdana", "trebuchet", "tahoma", "times", "georgia", "courier", "mono"];
+
+  for (const zhFont of zhFonts) {
+    assert.equal(normalizeTaskData({ zhFont, enFont: "inter" }).zhFont, zhFont);
+  }
+
+  for (const enFont of enFonts) {
+    assert.equal(normalizeTaskData({ zhFont: "system", enFont }).enFont, enFont);
+  }
+});
+
 test("disk persistence writes and reads a normalized atomic payload", async (t) => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "personal-task-track-test-"));
   t.after(() => fs.rm(directory, { recursive: true, force: true }));
