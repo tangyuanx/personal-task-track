@@ -182,6 +182,26 @@ test("task repository renders priority without an update timestamp", async () =>
   assert.doesNotMatch(app, /<time datetime="\$\{escAttr\(task\.updatedAt\)\}">/);
 });
 
+test("task repository follows the approved compact ordering layout", async () => {
+  const [app, styles] = await Promise.all([
+    fs.readFile(path.join(__dirname, "..", "src", "app.js"), "utf8"),
+    fs.readFile(path.join(__dirname, "..", "src", "styles.css"), "utf8"),
+  ]);
+  const harness = await rendererHarness();
+  const html = harness.evaluate(`renderTaskItem(normalizeTasks([{
+    id: "ordered_task", title: "有序任务", priority: "high", nodes: []
+  }])[0], 3)`);
+
+  assert.match(app, /\.map\(\(task, index\) => renderTaskItem\(task, index \+ 1\)\)/);
+  assert.doesNotMatch(app, /class="task-repository-columns"/);
+  assert.match(html, /task-sequence" aria-hidden="true">03/);
+  assert.match(html, /draggable="true"/);
+  assert.match(html, /repository-complete/);
+  assert.doesNotMatch(html, /task-drag-handle/);
+  assert.match(styles, /grid-template-columns: 42px minmax\(0, 1fr\) 82px 34px;/);
+  assert.match(styles, /\.task-row\.task-item \{[\s\S]*min-height: 48px;[\s\S]*border: 0;/);
+});
+
 test("disk persistence writes and reads a normalized atomic payload", async (t) => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "personal-task-track-test-"));
   t.after(() => fs.rm(directory, { recursive: true, force: true }));

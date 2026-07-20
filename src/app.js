@@ -745,7 +745,7 @@ function renderSidebar() {
         </div>
         <div class="task-repository-rows">
           ${filteredTasks()
-            .map((task) => renderTaskItem(task))
+            .map((task, index) => renderTaskItem(task, index + 1))
             .join("")}
         </div>
       </div>
@@ -829,19 +829,19 @@ function renderGroupTabs() {
   `;
 }
 
-function renderTaskItem(task) {
+function renderTaskItem(task, displayOrder) {
   const subtitle = taskSubtitle(task);
   return `
-    <div class="task-item task-row ${task.id === state.activeTaskId ? "selected active" : ""} ${task.status === "done" ? "done" : ""}" data-context="task" data-task-id="${task.id}" data-task-drag-target="${task.id}">
-      <span class="task-drag-handle" draggable="true" data-task-drag-handle data-task-id="${task.id}" title="拖拽排序" aria-label="拖拽排序"></span>
-      <button class="task-check rail-mark ${task.status === "done" ? "is-checked" : ""}" type="button" title="${task.status === "done" ? "标记为未完成" : "标记为完成"}" aria-label="${task.status === "done" ? "标记为未完成" : "标记为完成"}" aria-pressed="${task.status === "done"}" data-action="toggle-task-done" data-task-id="${task.id}"></button>
+    <div class="task-item task-row ${task.id === state.activeTaskId ? "selected active" : ""} ${task.status === "done" ? "done" : ""}" draggable="true" data-context="task" data-task-id="${task.id}" data-task-drag-target="${task.id}">
+      <span class="task-sequence" aria-hidden="true">${String(displayOrder).padStart(2, "0")}</span>
       <span class="task-title-wrap row-title">
         <input class="task-title" placeholder="任务标题" aria-label="任务标题" data-edit-key="title" data-task-id="${task.id}" value="${escAttr(task.title)}" />
-        <span class="task-next-line"><b>下一步</b><em>${esc(subtitle)}</em></span>
+        <span class="task-next-line">下一步：${esc(subtitle)}</span>
       </span>
       <span class="task-row-meta">
         <span class="task-priority-control ${task.priority}">${selectHtml("priority", task.priority, repositoryPriorityLabels, task.id)}</span>
       </span>
+      <button class="task-check repository-complete ${task.status === "done" ? "is-checked" : ""}" type="button" title="${task.status === "done" ? "标记为未完成" : "标记为完成"}" aria-label="${task.status === "done" ? "标记为未完成" : "标记为完成"}" aria-pressed="${task.status === "done"}" data-action="toggle-task-done" data-task-id="${task.id}"></button>
     </div>
   `;
 }
@@ -1760,12 +1760,8 @@ function beginTaskPointerDrag(event, sourceItem, immediate = false) {
   document.addEventListener("pointercancel", finishTaskPointerDrag, { once: true });
 }
 
-function startTaskPointerDrag(event) {
-  beginTaskPointerDrag(event, event.currentTarget.closest(".task-item[data-task-id]"), true);
-}
-
 function startTaskLongPress(event) {
-  if (event.target.closest(".task-check, input, textarea, select, button, [contenteditable], [data-task-drag-handle]")) return;
+  if (event.target.closest(".task-check, input, textarea, select, button, [contenteditable]")) return;
   beginTaskPointerDrag(event, event.currentTarget, false);
 }
 
@@ -1828,7 +1824,7 @@ function bind() {
           event.stopPropagation();
           return;
         }
-        if (event.target.closest(".task-check, select, button, [data-task-drag-handle]")) return;
+        if (event.target.closest(".task-check, select, button")) return;
         if (state.activeTaskId === element.dataset.taskId) return;
         state.activeTaskId = element.dataset.taskId;
         state.selectedNodeId = "";
@@ -1841,17 +1837,18 @@ function bind() {
     );
   });
 
-  document.querySelectorAll("[data-task-drag-handle]").forEach((element) => {
-    element.addEventListener("click", (event) => event.stopPropagation());
-    element.addEventListener("pointerdown", startTaskPointerDrag);
+  document.querySelectorAll(".task-item[data-task-id]").forEach((element) => {
     element.addEventListener("dragstart", (event) => {
-      event.stopPropagation();
+      if (event.target.closest(".task-check, input, textarea, select, button, [contenteditable]")) {
+        event.preventDefault();
+        return;
+      }
       event.dataTransfer.effectAllowed = "move";
       event.dataTransfer.setData("text/plain", element.dataset.taskId);
-      element.closest(".task-item")?.classList.add("dragging");
+      element.classList.add("dragging");
     });
     element.addEventListener("dragend", () => {
-      element.closest(".task-item")?.classList.remove("dragging");
+      element.classList.remove("dragging");
       clearTaskDropIndicators();
     });
   });
