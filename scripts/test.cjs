@@ -162,6 +162,18 @@ test("Chinese and English font settings stay isolated in the application font ch
   assert.doesNotMatch(app, /横向滚动\s*·\s*双击重命名/);
 });
 
+test("flow status renders as an independent text-only element", async () => {
+  const [styles, app] = await Promise.all([
+    fs.readFile(path.join(__dirname, "..", "src", "styles.css"), "utf8"),
+    fs.readFile(path.join(__dirname, "..", "src", "app.js"), "utf8"),
+  ]);
+
+  assert.match(app, /class="flow-status-text status-\$\{node\.status\}"/);
+  assert.doesNotMatch(app, /class="flow-status status-\$\{node\.status\}"/);
+  assert.match(styles, /\.flow-status-text::before,[\s\S]*display: none !important;/);
+  assert.match(styles, /\.flow-status-text\s*\{[\s\S]*box-shadow: none;/);
+});
+
 test("disk persistence writes and reads a normalized atomic payload", async (t) => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "personal-task-track-test-"));
   t.after(() => fs.rm(directory, { recursive: true, force: true }));

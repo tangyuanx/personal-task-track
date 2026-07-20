@@ -1048,7 +1048,7 @@ function renderFlowNode(taskId, node, depth, rootIndex = 0, lineage = [], isLast
           <strong>${esc(noteSummary.title)}</strong>
           <span>${esc(noteSummary.detail)}</span>
         </button>
-        <span class="flow-status status-${node.status}">${nodeStatusText(node.status)}</span>
+        <span class="flow-status-text status-${node.status}">${nodeStatusText(node.status)}</span>
         <span class="flow-updated note-link">${formatShort(node.updatedAt)}</span>
       </div>
       ${
