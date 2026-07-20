@@ -8141,3 +8141,15 @@ button:not(:disabled):active,
   background: color-mix(in srgb, var(--focus) 10%, transparent);
   box-shadow: inset 0 -1px color-mix(in srgb, var(--focus) 70%, transparent);
 }
+
+/* Task metadata is editorial context, not a row of pill controls. */
+.meta-line.page-properties > .task-context-item,
+.meta-line.page-properties > .task-context-progress,
+.meta-line.page-properties > .task-context-group {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
