@@ -24,7 +24,7 @@ const PRIORITIES = new Set(["high", "medium", "low"]);
 const TASK_FILTERS = new Set(["all", "today", "active", "done", "blocked", "later"]);
 const PRIORITY_FILTERS = new Set(["all", "high", "medium", "low"]);
 const ZH_FONTS = new Set(["system", "yahei", "pingfang", "songti", "simsun", "fangsong", "heiti", "kaiti"]);
-const EN_FONTS = new Set(["inter", "system", "segoe", "arial", "helvetica", "times", "georgia", "mono"]);
+const EN_FONTS = new Set(["inter", "system", "segoe", "arial", "helvetica", "verdana", "trebuchet", "tahoma", "times", "georgia", "courier", "mono"]);
 
 function dataFilePath(userDataPath) {
   return path.join(userDataPath, DATA_FILE);

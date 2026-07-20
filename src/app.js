@@ -82,8 +82,12 @@ const enFontLabels = {
   segoe: "Segoe UI",
   arial: "Arial",
   helvetica: "Helvetica",
+  verdana: "Verdana",
+  trebuchet: "Trebuchet MS",
+  tahoma: "Tahoma",
   times: "Times New Roman",
   georgia: "Georgia",
+  courier: "Courier New",
   mono: "Monospace",
 };
 
@@ -865,7 +869,6 @@ function renderTaskPage(task) {
             ${renderTaskActiveTagPills(task)}
             <span class="task-context-item priority ${task.priority}">${priorityLabels[task.priority]}优先</span>
             <span class="task-context-item status ${task.status === "done" ? "resolved" : "attention"}">${task.status === "done" ? "已完成" : "处理中"}</span>
-            <span class="task-context-divider" aria-hidden="true"></span>
             <span class="task-context-progress">${summary.done}/${summary.total || 0} 节点</span>
             <label class="task-context-group"><span>分组</span>${selectHtml("groupId", task.groupId, taskGroupOptions(), task.id)}</label>
           </div>

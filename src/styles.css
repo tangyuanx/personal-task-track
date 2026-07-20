@@ -52,7 +52,7 @@
   --shadow: rgba(70, 59, 43, 0.13);
   --en-font: "Avenir Next", "SF Pro Display", "Segoe UI", ui-sans-serif, sans-serif;
   --zh-font: "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
-  --app-font: var(--zh-font), var(--en-font), sans-serif;
+  --app-font: var(--en-font), var(--zh-font), sans-serif;
   --mono: "SFMono-Regular", "Cascadia Mono", "Roboto Mono", Consolas, monospace;
   color: var(--ink);
   background: var(--panel);
@@ -175,12 +175,28 @@
   --en-font: Helvetica, Arial, sans-serif;
 }
 
+:root[data-en-font="verdana"] {
+  --en-font: Verdana, Geneva, sans-serif;
+}
+
+:root[data-en-font="trebuchet"] {
+  --en-font: "Trebuchet MS", "Segoe UI", sans-serif;
+}
+
+:root[data-en-font="tahoma"] {
+  --en-font: Tahoma, "Segoe UI", sans-serif;
+}
+
 :root[data-en-font="times"] {
   --en-font: "Times New Roman", Times, serif;
 }
 
 :root[data-en-font="georgia"] {
   --en-font: Georgia, "Times New Roman", serif;
+}
+
+:root[data-en-font="courier"] {
+  --en-font: "Courier New", Courier, monospace;
 }
 
 :root[data-en-font="mono"] {
@@ -7900,4 +7916,112 @@ button:not(:disabled):active,
     grid-column: 2;
     margin-left: 0;
   }
+}
+
+/* Cross-platform UI corrections: explicit metrics and ownership keep Chromium
+   layouts stable when the available system font differs between macOS and Windows. */
+.task-row.task-item.active,
+.task-row.task-item.selected {
+  border-color: color-mix(in srgb, var(--focus) 44%, var(--handoff-line-strong, var(--line)));
+  background: linear-gradient(90deg, color-mix(in srgb, var(--focus) 18%, transparent), transparent 86%);
+  box-shadow: inset 3px 0 0 var(--focus), inset 0 0 0 1px color-mix(in srgb, var(--focus) 12%, transparent);
+}
+
+.focus-row.focus-item.selected {
+  border-color: color-mix(in srgb, var(--focus) 38%, var(--handoff-line-strong, var(--line)));
+  background: linear-gradient(90deg, color-mix(in srgb, var(--focus) 16%, transparent), transparent 86%);
+  box-shadow: inset 3px 0 0 var(--focus), inset 0 0 0 1px color-mix(in srgb, var(--focus) 10%, transparent);
+}
+
+.focus-row.focus-item.selected .row-title strong {
+  color: var(--heading);
+}
+
+.focus-row.focus-item.selected .row-title span {
+  color: var(--muted);
+}
+
+:root[data-theme="dark"] .task-row.task-item.active,
+:root[data-theme="dark"] .task-row.task-item.selected,
+:root[data-theme="dark"] .focus-row.focus-item.selected {
+  border-color: color-mix(in srgb, var(--focus) 48%, var(--handoff-line-strong, var(--line)));
+  background: linear-gradient(90deg, rgba(127, 208, 178, 0.22), rgba(127, 208, 178, 0.05) 86%, transparent);
+  box-shadow: inset 3px 0 0 #7fd0b2, inset 0 0 0 1px rgba(127, 208, 178, 0.12);
+}
+
+:root[data-theme="dark"] .focus-row.focus-item.selected .row-title strong {
+  color: var(--heading);
+}
+
+:root[data-theme="dark"] .focus-row.focus-item.selected .row-title span {
+  color: var(--muted);
+}
+
+/* Keep the status and its update time in dedicated right-hand columns. */
+.flow-line.flow-row,
+.flow-line.flow-row.sub {
+  grid-template-columns:
+    34px
+    minmax(210px, clamp(210px, var(--flow-title-width, 360px), 25vw))
+    minmax(130px, 1fr)
+    max-content
+    max-content;
+}
+
+.flow-status {
+  grid-column: 4;
+  justify-self: end;
+  min-height: 0;
+  padding: 0;
+  line-height: 1.3;
+}
+
+.flow-status::before {
+  display: none;
+  content: none;
+}
+
+.flow-updated.note-link,
+.flow-line.done .flow-updated {
+  display: block;
+  grid-column: 5;
+  justify-self: end;
+  min-width: 96px;
+  padding-left: 17px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+@media (min-width: 871px) and (max-width: 1180px) {
+  .flow-line.flow-row,
+  .flow-line.flow-row.sub {
+    grid-template-columns: 34px minmax(190px, 0.9fr) minmax(120px, 1fr) max-content max-content;
+  }
+
+  .flow-updated,
+  .flow-header > :last-child {
+    display: block;
+  }
+}
+
+/* The settings panel has one intentional scroll owner, so the type preview is
+   reachable instead of being clipped by a nested fixed-height grid. */
+.settings-panel {
+  max-height: min(760px, calc(100vh - 32px));
+  max-height: min(760px, calc(100dvh - 32px));
+}
+
+.settings-panel .settings-body {
+  display: block;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.settings-panel .settings-content {
+  height: auto;
+  min-height: 100%;
+  overflow: visible;
+  padding-bottom: 32px;
 }
