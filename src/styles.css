@@ -8409,8 +8409,12 @@ button:not(:disabled):active,
 
 /* Repository cleanup: keep task priority beside completion and suppress inherited check art. */
 .task-row.task-item {
-  grid-template-columns: 42px minmax(0, 1fr) max-content 16px;
-  column-gap: 8px;
+  grid-template-columns: 32px minmax(0, 1fr) max-content 16px;
+  column-gap: 6px;
+  border-bottom: 0;
+}
+
+.task-row.task-item:last-child {
   border-bottom: 0;
 }
 
@@ -8428,9 +8432,14 @@ button:not(:disabled):active,
   border-top: 0;
 }
 
+.rail.sidebar > .task-footer.sidebar-foot {
+  margin-top: 0;
+  padding-top: 0;
+}
+
 @media (max-width: 600px) {
   .task-row.task-item {
-    grid-template-columns: 34px minmax(0, 1fr) max-content 16px;
+    grid-template-columns: 28px minmax(0, 1fr) max-content 16px;
   }
 }
 
@@ -8465,7 +8474,7 @@ button:not(:disabled):active,
 
 @media (max-width: 600px) {
   .task-row.task-item {
-    grid-template-columns: 34px minmax(0, 1fr) max-content 16px;
+    grid-template-columns: 28px minmax(0, 1fr) max-content 16px;
   }
 
   .task-row.task-item .task-title {

@@ -210,9 +210,11 @@ test("repository and flow cleanup leave no inherited separators or duplicate hea
 
   assert.doesNotMatch(app, /<strong>任务分组<\/strong>/);
   assert.doesNotMatch(app, /<div class="section-heading flow-head">[\s\S]*?<h2>处理流<\/h2>/);
-  assert.match(styles, /\.task-row\.task-item \{[\s\S]*grid-template-columns: 42px minmax\(0, 1fr\) max-content 16px;[\s\S]*column-gap: 8px;[\s\S]*border-bottom: 0;/);
+  assert.match(styles, /\.task-row\.task-item \{[\s\S]*grid-template-columns: 32px minmax\(0, 1fr\) max-content 16px;[\s\S]*column-gap: 6px;[\s\S]*border-bottom: 0;/);
+  assert.match(styles, /\.task-row\.task-item:last-child \{[\s\S]*border-bottom: 0;/);
   assert.match(styles, /\.repository-complete:not\(\.is-checked\)::after \{[\s\S]*display: none;/);
   assert.match(styles, /\.group-panel,[\s\S]*\.task-footer\.sidebar-foot \{[\s\S]*border-top: 0;/);
+  assert.match(styles, /\.rail\.sidebar > \.task-footer\.sidebar-foot \{[\s\S]*margin-top: 0;[\s\S]*padding-top: 0;/);
 });
 
 test("disk persistence writes and reads a normalized atomic payload", async (t) => {
