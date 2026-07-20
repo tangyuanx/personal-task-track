@@ -202,6 +202,19 @@ test("task repository follows the approved compact ordering layout", async () =>
   assert.match(styles, /\.task-row\.task-item \{[\s\S]*min-height: 48px;[\s\S]*border: 0;/);
 });
 
+test("repository and flow cleanup leave no inherited separators or duplicate headings", async () => {
+  const [app, styles] = await Promise.all([
+    fs.readFile(path.join(__dirname, "..", "src", "app.js"), "utf8"),
+    fs.readFile(path.join(__dirname, "..", "src", "styles.css"), "utf8"),
+  ]);
+
+  assert.doesNotMatch(app, /<strong>任务分组<\/strong>/);
+  assert.doesNotMatch(app, /<div class="section-heading flow-head">[\s\S]*?<h2>处理流<\/h2>/);
+  assert.match(styles, /\.task-row\.task-item \{[\s\S]*grid-template-columns: 42px minmax\(0, 1fr\) max-content 16px;[\s\S]*column-gap: 8px;[\s\S]*border-bottom: 0;/);
+  assert.match(styles, /\.repository-complete:not\(\.is-checked\)::after \{[\s\S]*display: none;/);
+  assert.match(styles, /\.group-panel,[\s\S]*\.task-footer\.sidebar-foot \{[\s\S]*border-top: 0;/);
+});
+
 test("disk persistence writes and reads a normalized atomic payload", async (t) => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "personal-task-track-test-"));
   t.after(() => fs.rm(directory, { recursive: true, force: true }));

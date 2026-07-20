@@ -8407,6 +8407,33 @@ button:not(:disabled):active,
   transform: rotate(-45deg);
 }
 
+/* Repository cleanup: keep task priority beside completion and suppress inherited check art. */
+.task-row.task-item {
+  grid-template-columns: 42px minmax(0, 1fr) max-content 16px;
+  column-gap: 8px;
+  border-bottom: 0;
+}
+
+.task-row.task-item .repository-complete:not(.is-checked)::after {
+  display: none;
+  content: none;
+}
+
+.task-row.task-item .task-row-meta {
+  justify-self: end;
+}
+
+.group-panel,
+.task-footer.sidebar-foot {
+  border-top: 0;
+}
+
+@media (max-width: 600px) {
+  .task-row.task-item {
+    grid-template-columns: 34px minmax(0, 1fr) max-content 16px;
+  }
+}
+
 .task-row.task-item.done:not(.selected) {
   opacity: 1;
 }
@@ -8438,7 +8465,7 @@ button:not(:disabled):active,
 
 @media (max-width: 600px) {
   .task-row.task-item {
-    grid-template-columns: 34px minmax(0, 1fr) 64px 30px;
+    grid-template-columns: 34px minmax(0, 1fr) max-content 16px;
   }
 
   .task-row.task-item .task-title {

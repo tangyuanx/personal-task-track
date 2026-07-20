@@ -750,9 +750,6 @@ function renderSidebar() {
         </div>
       </div>
       <section class="group-panel" aria-label="任务分组">
-        <div class="group-panel-head">
-          <strong>任务分组</strong>
-        </div>
         ${renderGroupTabs()}
       </section>
       <div class="sidebar-foot task-footer">
@@ -892,9 +889,6 @@ function renderTaskPage(task) {
 
       <section class="task-workbench lower">
         ${state.taskPane === "flow" ? `<section class="flow-section flow" data-context="flow-root" data-task-id="${task.id}">
-          <div class="section-heading flow-head">
-            <div><h2>处理流</h2></div>
-          </div>
           ${
             topNodes.length
               ? `<div class="flow-list flow-table" style="${flowWidthStyle()};--flow-visible-row-count:${visibleFlowRowCount(topNodes)}" data-context="flow-root" data-task-id="${task.id}">${renderFlowHeader()}${topNodes.map((node, index) => renderFlowNode(task.id, node, 0, index, [], index === topNodes.length - 1)).join("")}</div>`
