@@ -841,7 +841,6 @@ function renderTaskItem(task) {
       </span>
       <span class="task-row-meta">
         <span class="task-priority-control ${task.priority}">${selectHtml("priority", task.priority, repositoryPriorityLabels, task.id)}</span>
-        <time datetime="${escAttr(task.updatedAt)}">${formatRepositoryStamp(task.updatedAt)}</time>
       </span>
     </div>
   `;
@@ -3995,21 +3994,6 @@ function formatShort(value) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(value));
-}
-
-function formatRepositoryStamp(value) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  const current = new Date();
-  const currentDay = new Date(current.getFullYear(), current.getMonth(), current.getDate());
-  const targetDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  const dayDifference = Math.round((currentDay - targetDay) / 86400000);
-  if (dayDifference === 0) {
-    return new Intl.DateTimeFormat("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false }).format(date);
-  }
-  if (dayDifference === 1) return "昨天";
-  if (dayDifference > 1 && dayDifference < 7) return `周${"日一二三四五六"[date.getDay()]}`;
-  return new Intl.DateTimeFormat("zh-CN", { month: "2-digit", day: "2-digit" }).format(date);
 }
 
 function formatMinuteStamp(value) {

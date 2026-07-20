@@ -174,6 +174,14 @@ test("flow status renders as an independent text-only element", async () => {
   assert.match(styles, /\.flow-status-text\s*\{[\s\S]*box-shadow: none;/);
 });
 
+test("task repository renders priority without an update timestamp", async () => {
+  const app = await fs.readFile(path.join(__dirname, "..", "src", "app.js"), "utf8");
+
+  assert.match(app, /class="task-priority-control \$\{task\.priority\}"/);
+  assert.doesNotMatch(app, /formatRepositoryStamp/);
+  assert.doesNotMatch(app, /<time datetime="\$\{escAttr\(task\.updatedAt\)\}">/);
+});
+
 test("disk persistence writes and reads a normalized atomic payload", async (t) => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "personal-task-track-test-"));
   t.after(() => fs.rm(directory, { recursive: true, force: true }));
