@@ -8188,3 +8188,15 @@ button:not(:disabled):active,
   border-left-color: transparent;
   background: transparent;
 }
+
+/* Brief timestamps share the title row, including when fonts or widths differ. */
+.brief-label {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  align-items: baseline;
+}
+
+.brief-label .brief-stamp {
+  grid-column: 2;
+  justify-self: end;
+}
