@@ -753,11 +753,7 @@ function renderSidebar() {
             ${filterSelectHtml("priority-filter", state.priorityFilter, repositoryPriorityFilterLabels, "按优先级筛选")}
           </label>
         </div>
-        <div class="task-repository-rows">
-          ${filteredTasks()
-            .map((task, index) => renderTaskItem(task, index + 1))
-            .join("")}
-        </div>
+        <div class="task-repository-rows">${renderTaskRepositoryRows()}</div>
       </div>
       <section class="group-panel" aria-label="任务分组">
         ${renderGroupTabs()}
@@ -851,6 +847,22 @@ function renderTaskItem(task, displayOrder) {
       <button class="task-check repository-complete ${task.status === "done" ? "is-checked" : ""}" type="button" title="${task.status === "done" ? "标记为未完成" : "标记为完成"}" aria-label="${task.status === "done" ? "标记为未完成" : "标记为完成"}" aria-pressed="${task.status === "done"}" data-action="toggle-task-done" data-task-id="${task.id}"></button>
     </div>
   `;
+}
+
+function renderTaskRepositoryRows() {
+  return filteredTasks()
+    .map((task, index) => renderTaskItem(task, index + 1))
+    .join("");
+}
+
+function refreshTaskRepository() {
+  const scopedTasks = taskListStatsTasks();
+  const count = document.querySelector(".task-list-count");
+  const rows = document.querySelector(".task-repository-rows");
+  if (count) count.textContent = `${filteredTasks().length} / ${scopedTasks.length} 项`;
+  if (!rows) return;
+  rows.innerHTML = renderTaskRepositoryRows();
+  bindTaskRepositoryRows(rows);
 }
 
 function taskSubtitle(task) {
@@ -1262,7 +1274,7 @@ function syncContextMenuRoot() {
  * Get tasks matching current filters (search query + task filter + priority filter).
  * @returns {Array} Filtered task list
  */
-function filteredTasks() {
+function filteredTasks({ includeQuery = true } = {}) {
   const q = state.query.trim().toLowerCase();
   return taskListScopeTasks()
     .filter((task) => {
@@ -1275,7 +1287,7 @@ function filteredTasks() {
       if (state.taskFilter === "blocked" && !tags.blocked && !hasBlocked) return false;
       if (state.taskFilter === "later" && !tags.later && !hasLater) return false;
       if (state.priorityFilter !== "all" && task.priority !== state.priorityFilter) return false;
-      if (q) {
+      if (includeQuery && q) {
         const taskText = `${task.title} ${task.description} ${task.hypothesis} ${task.conclusion}`.toLowerCase();
         const nodeHit = flatten(task.nodes).some((node) => `${node.title} ${node.note}`.toLowerCase().includes(q));
         return taskText.includes(q) || nodeHit;
@@ -1801,7 +1813,202 @@ function finishTaskPointerDrag() {
  *   [data-setting] for preferences, [data-context] for right-click.
  */
 function bind() {
-  document.querySelectorAll(".task-item[data-task-id]").forEach((element) => {
+  return bindTaskRepositoryRows(document);
+
+  bindTaskRepositoryRows();
+
+  document.querySelectorAll("[data-action]").forEach((element) => {
+    if (element.closest(".task-item")) return;
+    element.addEventListener("click", (event) => {
+      event.stopPropagation();
+      action(element.dataset, event);
+    });
+    if (element.getAttribute("role") === "button") {
+      element.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        event.stopPropagation();
+        action(element.dataset, event);
+      });
+    }
+  });
+
+  document.querySelectorAll("[data-edit-key]").forEach((element) => {
+    if (element.closest(".task-item")) return;
+    bindEditableField(element);
+  });
+
+  document.querySelectorAll("[data-context]").forEach((element) => {
+    if (element.closest(".task-item")) return;
+    bindContextMenu(element);
+  });
+
+  document.querySelectorAll(".sheet-tab").forEach((element) => {
+    element.addEventListener("dblclick", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      startRenameGroup(element.dataset.groupId);
+      render();
+    });
+  });
+
+  document.querySelectorAll("[data-group-title]").forEach((element) => {
+    element.addEventListener("click", (event) => event.stopPropagation());
+    element.addEventListener("input", (event) => renameGroup(event.target.dataset.groupTitle, event.target.value, false));
+    element.addEventListener("blur", (event) => {
+      renameGroup(event.target.dataset.groupTitle, event.target.value, true);
+      window.setTimeout(render, 0);
+    });
+    element.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        renameGroup(event.target.dataset.groupTitle, event.target.value, true);
+        render();
+      }
+      if (event.key === "Escape") {
+        state.editingGroupId = "";
+        render();
+      }
+    });
+  });
+
+  document.querySelectorAll(".sheet-tab-wrap").forEach((element) => {
+    element.addEventListener("contextmenu", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const x = Math.min(event.clientX, window.innerWidth - 210);
+      const y = Math.min(event.clientY, window.innerHeight - 245);
+      state.contextMenu = { kind: "group", groupId: element.dataset.groupId, x, y };
+      syncContextMenuRoot();
+    });
+    element.addEventListener("dragstart", (event) => {
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", element.dataset.groupId);
+      element.classList.add("dragging");
+    });
+    element.addEventListener("dragend", () => element.classList.remove("dragging"));
+    element.addEventListener("dragover", (event) => {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "move";
+    });
+    element.addEventListener("drop", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      reorderGroups(event.dataTransfer.getData("text/plain"), element.dataset.groupId);
+      render();
+    });
+  });
+
+  const groupScroller = document.querySelector("[data-sheet-tabs]");
+  groupScroller?.addEventListener(
+    "wheel",
+    (event) => {
+      if (groupScroller.scrollWidth <= groupScroller.clientWidth) return;
+      const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+      if (!delta) return;
+      event.preventDefault();
+      groupScroller.scrollLeft += delta;
+    },
+    { passive: false },
+  );
+
+  const newTaskPriority = document.querySelector("[data-new-task-priority]");
+  if (newTaskPriority) {
+    newTaskPriority.addEventListener("change", (event) => {
+      state.newTaskPriority = event.target.value;
+    });
+    newTaskPriority.addEventListener("click", (event) => {
+      event.stopPropagation();
+    });
+  }
+
+  const newTaskTitle = document.querySelector("[data-new-task-title]");
+  if (newTaskTitle) {
+    newTaskTitle.addEventListener("click", (event) => {
+      event.stopPropagation();
+    });
+    newTaskTitle.addEventListener("blur", (event) => createTaskFromBlank(event.target.value));
+    newTaskTitle.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        const title = event.target.value;
+        event.target.value = "";
+        createTaskFromBlank(title);
+      }
+    });
+  }
+
+  const taskList = document.querySelector('.task-list[data-context="task-list"]');
+  taskList?.addEventListener("dblclick", (event) => {
+    if (event.target.closest(".task-row, .task-list-head, button, input, select")) return;
+    event.preventDefault();
+    addBlankTask();
+    render();
+  });
+
+  const taskCreateHint = document.querySelector("[data-task-create-hint]");
+  taskCreateHint?.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    addBlankTask();
+    render();
+  });
+
+  document.querySelectorAll("[data-setting]").forEach((element) => {
+    element.addEventListener("click", (event) => event.stopPropagation());
+    element.addEventListener("change", (event) => {
+      if (event.target.dataset.setting === "theme") state.theme = normalizeTheme(event.target.value);
+      if (event.target.dataset.setting === "zh-font") state.zhFont = normalizeZhFont(event.target.value);
+      if (event.target.dataset.setting === "en-font") state.enFont = normalizeEnFont(event.target.value);
+      if (event.target.dataset.setting === "task-filter") state.taskFilter = normalizeTaskFilter(event.target.value);
+    });
+  });
+
+  const search = document.querySelector("#search");
+  if (search) {
+    let isComposing = false;
+    const refreshSearch = () => {
+      state.query = search.value;
+      refreshTaskRepository();
+    };
+    search.addEventListener("click", (event) => event.stopPropagation());
+    search.addEventListener("compositionstart", () => {
+      isComposing = true;
+    });
+    search.addEventListener("compositionend", () => {
+      isComposing = false;
+      refreshSearch();
+    });
+    search.addEventListener("input", () => {
+      if (!isComposing) refreshSearch();
+    });
+  }
+
+  const taskFilter = document.querySelector("[data-task-filter]");
+  if (taskFilter) {
+    taskFilter.addEventListener("click", (event) => {
+      event.stopPropagation();
+    });
+    taskFilter.addEventListener("change", (event) => {
+      state.taskFilter = event.target.value;
+      state.selectedNodeId = "";
+      render();
+    });
+  }
+
+  const priorityFilter = document.querySelector("[data-priority-filter]");
+  if (priorityFilter) {
+    priorityFilter.addEventListener("click", (event) => event.stopPropagation());
+    priorityFilter.addEventListener("change", (event) => {
+      state.priorityFilter = event.target.value;
+      state.selectedNodeId = "";
+      render();
+    });
+  }
+}
+
+function bindTaskRepositoryRows(scope = document) {
+  scope.querySelectorAll(".task-item[data-task-id]").forEach((element) => {
     element.addEventListener("pointerdown", startTaskLongPress);
     element.addEventListener(
       "click",
@@ -1823,6 +2030,75 @@ function bind() {
       true,
     );
   });
+
+  if (scope !== document) {
+    scope.querySelectorAll(".task-item[data-task-id]").forEach((element) => {
+      element.addEventListener("dragstart", (event) => {
+        if (event.target.closest(".task-check, input, textarea, select, button, [contenteditable]")) {
+          event.preventDefault();
+          return;
+        }
+        event.dataTransfer.effectAllowed = "move";
+        event.dataTransfer.setData("text/plain", element.dataset.taskId);
+        element.classList.add("dragging");
+      });
+      element.addEventListener("dragend", () => {
+        element.classList.remove("dragging");
+        clearTaskDropIndicators();
+      });
+      element.addEventListener("dragover", (event) => {
+        const hasTaskDrag = Array.from(event.dataTransfer.types || []).includes("text/plain");
+        if (!hasTaskDrag) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "move";
+        clearTaskDropIndicators();
+        const placement = taskDropPlacement(element, event.clientY);
+        element.dataset.dropPlacement = placement;
+        element.classList.add("drag-over", `drag-over-${placement}`);
+      });
+      element.addEventListener("dragleave", () => {
+        element.classList.remove("drag-over", "drag-over-before", "drag-over-after");
+        delete element.dataset.dropPlacement;
+      });
+      element.addEventListener("drop", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const placement = element.dataset.dropPlacement || taskDropPlacement(element, event.clientY);
+        clearTaskDropIndicators();
+        reorderTasks(event.dataTransfer.getData("text/plain"), element.dataset.taskId, placement);
+        render();
+      });
+      element.querySelectorAll("[data-action]").forEach((control) => {
+        control.addEventListener("click", (event) => {
+          event.stopPropagation();
+          action(control.dataset, event);
+        });
+      });
+      element.querySelectorAll("[data-edit-key]").forEach((control) => {
+        control.addEventListener("input", (event) => edit(event.target.dataset, event.target.value));
+        control.addEventListener("change", (event) => {
+          edit(event.target.dataset, event.target.value);
+          refreshTaskRepository();
+        });
+        control.addEventListener("click", (event) => event.stopPropagation());
+      });
+      element.addEventListener("contextmenu", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        state.contextMenu = {
+          kind: "task",
+          taskId: element.dataset.taskId,
+          nodeId: "",
+          x: Math.min(event.clientX, window.innerWidth - 210),
+          y: Math.min(event.clientY, window.innerHeight - 245),
+        };
+        state.activeTaskId = element.dataset.taskId;
+        state.selectedNodeId = "";
+        render();
+      });
+    });
+    return;
+  }
 
   document.querySelectorAll(".task-item[data-task-id]").forEach((element) => {
     element.addEventListener("dragstart", (event) => {
@@ -2108,12 +2384,21 @@ function bind() {
 
   const search = document.querySelector("#search");
   if (search) {
+    let isComposing = false;
+    const refreshSearch = () => {
+      state.query = search.value;
+      refreshTaskRepository();
+    };
     search.addEventListener("click", (event) => event.stopPropagation());
-    search.addEventListener("input", (event) => {
-      state.query = event.target.value;
-      state.focusSearch = true;
-      state.searchCursor = event.target.selectionStart || state.query.length;
-      render();
+    search.addEventListener("compositionstart", () => {
+      isComposing = true;
+    });
+    search.addEventListener("compositionend", () => {
+      isComposing = false;
+      refreshSearch();
+    });
+    search.addEventListener("input", () => {
+      if (!isComposing) refreshSearch();
     });
   }
 
@@ -3656,7 +3941,7 @@ function deleteNode(taskId, nodeId) {
 }
 
 function activeTask() {
-  const visibleTasks = filteredTasks();
+  const visibleTasks = filteredTasks({ includeQuery: false });
   return visibleTasks.find((task) => task.id === state.activeTaskId) || visibleTasks[0] || null;
 }
 

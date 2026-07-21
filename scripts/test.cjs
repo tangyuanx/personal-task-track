@@ -385,6 +385,30 @@ test("filtered task reordering preserves hidden task slots", async () => {
   ]);
 });
 
+test("search filters repository rows without switching the active task", async () => {
+  const app = await fs.readFile(path.join(__dirname, "..", "src", "app.js"), "utf8");
+  const harness = await rendererHarness();
+  const result = harness.json(`(() => {
+    state.taskGroups = [{ id: "group_inbox", title: "默认", order: 1 }];
+    state.activeGroupId = "group_inbox";
+    state.taskFilter = "all";
+    state.priorityFilter = "all";
+    state.tasks = normalizeTasks([
+      { id: "active", title: "当前任务", groupId: "group_inbox", nodes: [] },
+      { id: "hit", title: "可搜索任务", groupId: "group_inbox", nodes: [] }
+    ]);
+    state.activeTaskId = "active";
+    state.query = "可搜索";
+    return { active: activeTask().id, results: filteredTasks().map((task) => task.id) };
+  })()`);
+
+  assert.equal(result.active, "active");
+  assert.deepEqual(result.results, ["hit"]);
+  assert.match(app, /function refreshTaskRepository\(\)/);
+  assert.match(app, /filteredTasks\(\{ includeQuery: false \}\)/);
+  assert.match(app, /compositionstart/);
+});
+
 test("node mutation rejects invalid statuses and clears deleted descendant detail", async () => {
   const harness = await rendererHarness();
   const result = harness.json(`(() => {
