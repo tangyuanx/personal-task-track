@@ -6111,6 +6111,15 @@ body {
   color: var(--handoff-muted);
 }
 
+/* Keep the version as quiet metadata, without a badge treatment. */
+.brand.sidebar-head > span,
+:root[data-theme="dark"] .brand.sidebar-head > span {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
 :root[data-theme="dark"] .search.search-box input,
 :root[data-theme="dark"] .task-list-head select,
 :root[data-theme="dark"] .task-brief textarea,

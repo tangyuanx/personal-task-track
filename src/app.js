@@ -48,10 +48,10 @@ const priorityFilterLabels = {
 };
 
 const repositoryPriorityFilterLabels = {
-  all: "所有优先级",
-  high: "高优先",
-  medium: "中优先",
-  low: "低优先",
+  all: "all",
+  high: "high",
+  medium: "medium",
+  low: "low",
 };
 
 const repositoryPriorityLabels = {
@@ -719,7 +719,6 @@ function renderSidebar() {
       <div class="sidebar-head brand">
         <div>
           <strong>Task Track</strong>
-          <small>个人任务工作台</small>
         </div>
         <span>v${esc(APP_VERSION || "dev")}</span>
       </div>
@@ -782,7 +781,7 @@ function renderTodayFocus(items) {
       <div class="today-headline">
         <strong>今日任务</strong>
         <time class="today-date" datetime="${escAttr(new Date().toISOString())}">${today}</time>
-        <span><b>${items.length}</b> 项待推进</span>
+        <span><b>${items.length}</b> 项待办</span>
       </div>
       <div class="focus-list focus-stack">
         ${
