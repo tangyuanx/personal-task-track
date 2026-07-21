@@ -54,7 +54,6 @@
   --zh-font: "TaskTrack Chinese System", sans-serif;
   --app-font: var(--zh-font), var(--en-font), sans-serif;
   --mono: var(--app-font);
-  --font-scale: 1;
   color: var(--ink);
   background: var(--panel);
   font-family: var(--app-font);
@@ -166,14 +165,6 @@
   --zh-font: "TaskTrack Chinese Noto", sans-serif;
 }
 
-:root[data-font-size="compact"] {
-  --font-scale: 0.9;
-}
-
-:root[data-font-size="large"] {
-  --font-scale: 1.1;
-}
-
 :root[data-zh-font="yahei"] {
   --zh-font: "TaskTrack Chinese YaHei", sans-serif;
 }
@@ -258,8 +249,6 @@ html,
 body,
 #root {
   height: 100%;
-  width: calc(100% / var(--font-scale));
-  zoom: var(--font-scale);
 }
 
 body {
@@ -1464,30 +1453,6 @@ p {
   margin: 18px 42px 0;
 }
 
-.conclusion-prompt {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 10px 42px 0;
-  padding: 9px 11px;
-  border: 1px solid rgba(255, 123, 114, 0.38);
-  border-left: 3px solid var(--red);
-  border-radius: 8px;
-  color: var(--ink);
-  background: rgba(255, 123, 114, 0.1);
-}
-
-.conclusion-prompt strong {
-  color: var(--red);
-  font-size: 13px;
-}
-
-.conclusion-prompt span {
-  color: var(--muted);
-  font-size: 13px;
-}
-
-
 /* ===== BRIEF FIELDS (Background / Conclusion) ===== */
 .brief-field {
   display: grid;
@@ -2637,7 +2602,6 @@ body.resizing-detail {
   }
 
   .task-brief,
-  .conclusion-prompt,
   .flow-list,
   .empty-flow,
   .node-detail {
@@ -6197,7 +6161,6 @@ body {
 :root[data-theme="dark"] .record-modal-context,
 :root[data-theme="dark"] .record-modal-footer,
 :root[data-theme="dark"] .context-menu,
-:root[data-theme="dark"] .conclusion-prompt,
 :root[data-theme="dark"] .milkdown-editor-host .link-tooltip,
 :root[data-theme="dark"] .milkdown-editor-host [class*="tooltip"] {
   border-color: var(--handoff-line-strong);

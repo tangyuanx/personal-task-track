@@ -142,7 +142,6 @@ test("disk normalization repairs malformed records and legacy preferences", () =
 test("disk normalization preserves every supported typography choice", () => {
   const zhFonts = ["system", "noto", "yahei", "pingfang", "songti", "simsun", "fangsong", "heiti", "kaiti"];
   const enFonts = ["inter", "system", "segoe", "arial", "helvetica", "verdana", "trebuchet", "tahoma", "times", "georgia", "courier", "mono"];
-  const fontSizes = ["compact", "default", "large"];
 
   for (const zhFont of zhFonts) {
     assert.equal(normalizeTaskData({ zhFont, enFont: "inter" }).zhFont, zhFont);
@@ -152,9 +151,6 @@ test("disk normalization preserves every supported typography choice", () => {
     assert.equal(normalizeTaskData({ zhFont: "system", enFont }).enFont, enFont);
   }
 
-  for (const fontSize of fontSizes) {
-    assert.equal(normalizeTaskData({ fontSize }).fontSize, fontSize);
-  }
 });
 
 test("Chinese and English font settings stay isolated in the application font chain", async () => {
@@ -167,11 +163,11 @@ test("Chinese and English font settings stay isolated in the application font ch
   assert.doesNotMatch(app, /横向滚动\s*·\s*双击重命名/);
 });
 
-test("font size preference and bundled cross-platform fonts are available", async () => {
+test("bundled cross-platform fonts are available", async () => {
   const [app, styles, normalized] = await Promise.all([
     fs.readFile(path.join(__dirname, "..", "src", "app.js"), "utf8"),
     fs.readFile(path.join(__dirname, "..", "src", "styles.css"), "utf8"),
-    Promise.resolve(normalizeTaskData({ fontSize: "large", zhFont: "noto", enFont: "inter" })),
+    Promise.resolve(normalizeTaskData({ zhFont: "noto", enFont: "inter" })),
   ]);
   const fontDirectory = path.join(__dirname, "..", "src", "assets", "fonts");
   const [inter, noto, notoBold] = await Promise.all([
@@ -180,17 +176,39 @@ test("font size preference and bundled cross-platform fonts are available", asyn
     fs.stat(path.join(fontDirectory, "NotoSansCJKsc-Bold.otf")),
   ]);
 
-  assert.equal(normalized.fontSize, "large");
   assert.equal(normalized.zhFont, "noto");
-  assert.match(app, /const FONT_SIZE_KEY = "task-track-font-size";/);
-  assert.match(app, /fontSize: normalizeFontSize\(localStorage\.getItem\(FONT_SIZE_KEY\)\)/);
+  assert.doesNotMatch(app, /task-track-font-size/);
   assert.match(styles, /url\("\.\/assets\/fonts\/InterVariable\.woff2"\)/);
   assert.match(styles, /url\("\.\/assets\/fonts\/NotoSansCJKsc-Regular\.otf"\)/);
   assert.match(styles, /url\("\.\/assets\/fonts\/NotoSansCJKsc-Bold\.otf"\)/);
-  assert.match(styles, /:root\[data-font-size="large"\][\s\S]*--font-scale: 1\.1;/);
+  assert.doesNotMatch(styles, /--font-scale/);
   assert.ok(inter.size > 100000);
   assert.ok(noto.size > 10000000);
   assert.ok(notoBold.size > 10000000);
+});
+
+test("missing conclusion highlights only the current task without locking task selection", async () => {
+  const [app, styles] = await Promise.all([
+    fs.readFile(path.join(__dirname, "..", "src", "app.js"), "utf8"),
+    fs.readFile(path.join(__dirname, "..", "src", "styles.css"), "utf8"),
+  ]);
+  const harness = await rendererHarness();
+  const result = harness.json(`(() => {
+    state.tasks = normalizeTasks([
+      { id: "prompted", title: "待结论", conclusion: "", nodes: [] },
+      { id: "other", title: "可切换", conclusion: "", nodes: [] }
+    ]);
+    state.activeTaskId = "other";
+    state.conclusionPromptTaskId = "prompted";
+    return { active: activeTask().id, promptedPage: renderTaskPage(state.tasks[0]) };
+  })()`);
+
+  assert.equal(result.active, "other");
+  assert.match(result.promptedPage, /needs-attention/);
+  assert.doesNotMatch(result.promptedPage, /conclusion-prompt/);
+  assert.doesNotMatch(app, /function renderConclusionPrompt/);
+  assert.doesNotMatch(app, /if \(state\.conclusionPromptTaskId\) \{/);
+  assert.doesNotMatch(styles, /\.conclusion-prompt \{/);
 });
 
 test("flow status renders as an independent text-only element", async () => {

@@ -8,7 +8,6 @@ const FLOW_WIDTH_KEY = "task-flow-column-widths-v1";
 const THEME_KEY = "task-track-theme";
 const ZH_FONT_KEY = "task-track-zh-font";
 const EN_FONT_KEY = "task-track-en-font";
-const FONT_SIZE_KEY = "task-track-font-size";
 const TASK_FILTER_KEY = "task-track-task-filter";
 const PRIORITY_FILTER_KEY = "task-track-priority-filter";
 const NEW_TASK_PRIORITY_KEY = "task-track-new-task-priority";
@@ -93,12 +92,6 @@ const enFontLabels = {
   mono: "Monospace",
 };
 
-const fontSizeLabels = {
-  compact: "紧凑（90%）",
-  default: "默认（100%）",
-  large: "放大（110%）",
-};
-
 const defaultFlowWidths = {
   title: 360,
   note: 330,
@@ -165,7 +158,6 @@ let state = {
   theme: "light",
   zhFont: "system",
   enFont: "inter",
-  fontSize: "default",
   settingsOpen: false,
   reviewOpen: false,
 
@@ -465,10 +457,6 @@ function normalizeEnFont(value) {
   return Object.hasOwn(enFontLabels, value) ? value : "inter";
 }
 
-function normalizeFontSize(value) {
-  return Object.hasOwn(fontSizeLabels, value) ? value : "default";
-}
-
 function migrateLegacyFont(value) {
   if (value === "songti") return { zhFont: "songti", enFont: "inter" };
   if (value === "heiti") return { zhFont: "heiti", enFont: "inter" };
@@ -485,7 +473,6 @@ function loadBrowserTypography() {
   return {
     zhFont: normalizeZhFont(localStorage.getItem(ZH_FONT_KEY) || legacy.zhFont),
     enFont: normalizeEnFont(localStorage.getItem(EN_FONT_KEY) || legacy.enFont),
-    fontSize: normalizeFontSize(localStorage.getItem(FONT_SIZE_KEY)),
   };
 }
 
@@ -550,8 +537,7 @@ async function loadAppData() {
       const sidebarWidth = normalizeSidebarWidth(stored?.sidebarWidth);
       const detailHeight = normalizeDetailHeight(stored?.detailHeight);
       const attachments = normalizeAttachments(stored?.attachments);
-      const fontSize = normalizeFontSize(stored?.fontSize);
-      return { tasks, taskGroups, activeGroupId, flowWidths, sidebarWidth, detailHeight, attachments, theme, zhFont, enFont, fontSize, taskFilter, priorityFilter, newTaskPriority };
+      return { tasks, taskGroups, activeGroupId, flowWidths, sidebarWidth, detailHeight, attachments, theme, zhFont, enFont, taskFilter, priorityFilter, newTaskPriority };
     } catch (error) {
       console.error("Failed to read local task data.", error);
     }
@@ -592,7 +578,6 @@ function save() {
     theme: state.theme,
     zhFont: state.zhFont,
     enFont: state.enFont,
-    fontSize: state.fontSize,
     taskFilter: state.taskFilter,
     priorityFilter: state.priorityFilter,
     newTaskPriority: state.newTaskPriority,
@@ -610,7 +595,6 @@ function save() {
     localStorage.setItem(THEME_KEY, state.theme);
     localStorage.setItem(ZH_FONT_KEY, state.zhFont);
     localStorage.setItem(EN_FONT_KEY, state.enFont);
-    localStorage.setItem(FONT_SIZE_KEY, state.fontSize);
     localStorage.setItem(TASK_FILTER_KEY, state.taskFilter);
     localStorage.setItem(PRIORITY_FILTER_KEY, state.priorityFilter);
     localStorage.setItem(NEW_TASK_PRIORITY_KEY, state.newTaskPriority);
@@ -694,7 +678,6 @@ function render() {
   document.documentElement.dataset.theme = state.theme;
   document.documentElement.dataset.zhFont = state.zhFont;
   document.documentElement.dataset.enFont = state.enFont;
-  document.documentElement.dataset.fontSize = state.fontSize;
   const task = activeTask();
   if (task) state.activeTaskId = task.id;
   document.querySelector("#root").innerHTML = `
@@ -895,8 +878,6 @@ function renderTaskPage(task) {
         </div>
       </header>
 
-      ${needsConclusion ? renderConclusionPrompt() : ""}
-
       <section class="task-brief brief-strip" aria-label="任务简报">
         ${renderBriefField("背景", textareaHtml("description", task.description, task.id), "", false, "background")}
         ${renderBriefField("进展", textareaHtml("hypothesis", task.hypothesis, task.id), task.hypothesisUpdatedAt, false, "hypothesis")}
@@ -987,15 +968,6 @@ function visibleFlowRowCount(nodes) {
     (count, node) => count + 1 + (node.collapsed ? 0 : visibleFlowRowCount(node.children || [])),
     0,
   );
-}
-
-function renderConclusionPrompt() {
-  return `
-    <div class="conclusion-prompt">
-      <strong>需要补充结论</strong>
-      <span>这个任务还没有结论，补充后再标记为已完成。</span>
-    </div>
-  `;
 }
 
 function renderTaskTagButton(task, tag, label) {
@@ -1470,13 +1442,6 @@ function renderSettingsPanel() {
                 <p>用于英文、数字和拉丁字符。</p>
               </div>
               ${settingsSelectHtml("en-font", state.enFont, enFontLabels)}
-            </section>
-            <section class="settings-group">
-              <div class="settings-group-head">
-                <h3>文字大小</h3>
-                <p>全局调整文字与阅读密度，设置会自动保存。</p>
-              </div>
-              ${settingsOptionGroup("font-size", state.fontSize, fontSizeLabels)}
             </section>
             <section class="settings-group">
               <div class="settings-group-head">
@@ -2077,7 +2042,6 @@ function bind() {
       if (event.target.dataset.setting === "theme") state.theme = normalizeTheme(event.target.value);
       if (event.target.dataset.setting === "zh-font") state.zhFont = normalizeZhFont(event.target.value);
       if (event.target.dataset.setting === "en-font") state.enFont = normalizeEnFont(event.target.value);
-      if (event.target.dataset.setting === "font-size") state.fontSize = normalizeFontSize(event.target.value);
       if (event.target.dataset.setting === "task-filter") state.taskFilter = normalizeTaskFilter(event.target.value);
       if (event.target.dataset.setting === "priority-filter") state.priorityFilter = normalizePriorityFilter(event.target.value);
       if (event.target.dataset.setting === "new-task-priority") state.newTaskPriority = normalizePriority(event.target.value);
@@ -2323,7 +2287,6 @@ function applySetting(key, value) {
   if (key === "theme") state.theme = normalizeTheme(value);
   if (key === "zh-font") state.zhFont = normalizeZhFont(value);
   if (key === "en-font") state.enFont = normalizeEnFont(value);
-  if (key === "font-size") state.fontSize = normalizeFontSize(value);
   if (key === "task-filter") state.taskFilter = normalizeTaskFilter(value);
   if (key === "priority-filter") state.priorityFilter = normalizePriorityFilter(value);
   if (key === "new-task-priority") state.newTaskPriority = normalizePriority(value);
@@ -3108,9 +3071,8 @@ function edit(data, value) {
       task[data.editKey] = value;
     }
     if (data.editKey === "hypothesis") task.hypothesisUpdatedAt = now();
-    if (data.editKey === "conclusion" && value.trim()) {
+    if (data.editKey === "conclusion" && value.trim() && state.conclusionPromptTaskId === task.id) {
       state.conclusionPromptTaskId = "";
-      document.querySelector(".conclusion-prompt")?.remove();
       document.querySelector(".task-brief label.needs-attention")?.classList.remove("needs-attention");
     }
     task.updatedAt = now();
@@ -3680,10 +3642,6 @@ function deleteNode(taskId, nodeId) {
 }
 
 function activeTask() {
-  if (state.conclusionPromptTaskId) {
-    const promptedTask = state.tasks.find((task) => task.id === state.conclusionPromptTaskId);
-    if (promptedTask) return promptedTask;
-  }
   const visibleTasks = filteredTasks();
   return visibleTasks.find((task) => task.id === state.activeTaskId) || visibleTasks[0] || null;
 }
@@ -4070,7 +4028,6 @@ async function bootstrap() {
   state.theme = data.theme;
   state.zhFont = data.zhFont;
   state.enFont = data.enFont;
-  state.fontSize = data.fontSize;
   state.taskFilter = data.taskFilter;
   state.priorityFilter = data.priorityFilter;
   state.newTaskPriority = data.newTaskPriority;
