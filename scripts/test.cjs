@@ -140,8 +140,9 @@ test("disk normalization repairs malformed records and legacy preferences", () =
 });
 
 test("disk normalization preserves every supported typography choice", () => {
-  const zhFonts = ["system", "yahei", "pingfang", "songti", "simsun", "fangsong", "heiti", "kaiti"];
+  const zhFonts = ["system", "noto", "yahei", "pingfang", "songti", "simsun", "fangsong", "heiti", "kaiti"];
   const enFonts = ["inter", "system", "segoe", "arial", "helvetica", "verdana", "trebuchet", "tahoma", "times", "georgia", "courier", "mono"];
+  const fontSizes = ["compact", "default", "large"];
 
   for (const zhFont of zhFonts) {
     assert.equal(normalizeTaskData({ zhFont, enFont: "inter" }).zhFont, zhFont);
@@ -149,6 +150,10 @@ test("disk normalization preserves every supported typography choice", () => {
 
   for (const enFont of enFonts) {
     assert.equal(normalizeTaskData({ zhFont: "system", enFont }).enFont, enFont);
+  }
+
+  for (const fontSize of fontSizes) {
+    assert.equal(normalizeTaskData({ fontSize }).fontSize, fontSize);
   }
 });
 
@@ -160,6 +165,32 @@ test("Chinese and English font settings stay isolated in the application font ch
 
   assert.match(styles, /--app-font:\s*var\(--zh-font\),\s*var\(--en-font\),\s*sans-serif;/);
   assert.doesNotMatch(app, /横向滚动\s*·\s*双击重命名/);
+});
+
+test("font size preference and bundled cross-platform fonts are available", async () => {
+  const [app, styles, normalized] = await Promise.all([
+    fs.readFile(path.join(__dirname, "..", "src", "app.js"), "utf8"),
+    fs.readFile(path.join(__dirname, "..", "src", "styles.css"), "utf8"),
+    Promise.resolve(normalizeTaskData({ fontSize: "large", zhFont: "noto", enFont: "inter" })),
+  ]);
+  const fontDirectory = path.join(__dirname, "..", "src", "assets", "fonts");
+  const [inter, noto, notoBold] = await Promise.all([
+    fs.stat(path.join(fontDirectory, "InterVariable.woff2")),
+    fs.stat(path.join(fontDirectory, "NotoSansCJKsc-Regular.otf")),
+    fs.stat(path.join(fontDirectory, "NotoSansCJKsc-Bold.otf")),
+  ]);
+
+  assert.equal(normalized.fontSize, "large");
+  assert.equal(normalized.zhFont, "noto");
+  assert.match(app, /const FONT_SIZE_KEY = "task-track-font-size";/);
+  assert.match(app, /fontSize: normalizeFontSize\(localStorage\.getItem\(FONT_SIZE_KEY\)\)/);
+  assert.match(styles, /url\("\.\/assets\/fonts\/InterVariable\.woff2"\)/);
+  assert.match(styles, /url\("\.\/assets\/fonts\/NotoSansCJKsc-Regular\.otf"\)/);
+  assert.match(styles, /url\("\.\/assets\/fonts\/NotoSansCJKsc-Bold\.otf"\)/);
+  assert.match(styles, /:root\[data-font-size="large"\][\s\S]*--font-scale: 1\.1;/);
+  assert.ok(inter.size > 100000);
+  assert.ok(noto.size > 10000000);
+  assert.ok(notoBold.size > 10000000);
 });
 
 test("flow status renders as an independent text-only element", async () => {

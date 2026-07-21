@@ -23,8 +23,9 @@ const NODE_STATUSES = new Set(["todo", "done", "blocked", "later"]);
 const PRIORITIES = new Set(["high", "medium", "low"]);
 const TASK_FILTERS = new Set(["all", "today", "active", "done", "blocked", "later"]);
 const PRIORITY_FILTERS = new Set(["all", "high", "medium", "low"]);
-const ZH_FONTS = new Set(["system", "yahei", "pingfang", "songti", "simsun", "fangsong", "heiti", "kaiti"]);
+const ZH_FONTS = new Set(["system", "noto", "yahei", "pingfang", "songti", "simsun", "fangsong", "heiti", "kaiti"]);
 const EN_FONTS = new Set(["inter", "system", "segoe", "arial", "helvetica", "verdana", "trebuchet", "tahoma", "times", "georgia", "courier", "mono"]);
+const FONT_SIZES = new Set(["compact", "default", "large"]);
 
 function dataFilePath(userDataPath) {
   return path.join(userDataPath, DATA_FILE);
@@ -92,6 +93,7 @@ function normalizeTaskData(data) {
     font: ["songti", "heiti", "system", "mono"].includes(safeData.font) ? safeData.font : "system",
     zhFont: ZH_FONTS.has(safeData.zhFont) ? safeData.zhFont : legacyFonts.zhFont,
     enFont: EN_FONTS.has(safeData.enFont) ? safeData.enFont : legacyFonts.enFont,
+    fontSize: FONT_SIZES.has(safeData.fontSize) ? safeData.fontSize : "default",
     taskFilter: TASK_FILTERS.has(safeData.taskFilter) ? safeData.taskFilter : "all",
     priorityFilter: PRIORITY_FILTERS.has(safeData.priorityFilter) ? safeData.priorityFilter : "all",
     newTaskPriority: PRIORITIES.has(safeData.newTaskPriority) ? safeData.newTaskPriority : "medium",
