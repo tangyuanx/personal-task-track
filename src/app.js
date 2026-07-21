@@ -923,9 +923,6 @@ function renderTaskKnowledge(task) {
   const stats = markdownStats(task.notes);
   return `
     <section class="task-knowledge-pane" data-task-id="${task.id}">
-      <div class="section-heading flow-head">
-        <div><h2>知识笔记</h2><span>沉淀与当前任务相关的知识、分析和可复用结论</span></div>
-      </div>
       <section class="markdown-panel milkdown-panel task-knowledge-editor-panel" data-task-id="${task.id}" data-editor-focus-target="task">
         <div class="milkdown-editor-host" data-editor-kind="task" data-task-id="${task.id}">
           <div class="milkdown-loading">正在加载 Milkdown 编辑器...</div>
@@ -945,9 +942,6 @@ function renderTaskHistory(task) {
     .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
   return `
     <section class="task-history-pane">
-      <div class="section-heading flow-head">
-        <div><h2>历史处理</h2><span>按更新时间查看任务节点的推进轨迹</span></div>
-      </div>
       <div class="task-history-list">
         ${
           events.length
