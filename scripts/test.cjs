@@ -205,6 +205,9 @@ test("missing conclusion highlights only the current task without locking task s
 
   assert.equal(result.active, "other");
   assert.match(result.promptedPage, /needs-attention/);
+  assert.match(app, /function renderCompletionNotice/);
+  assert.match(app, /请先填写结论，再标记完成/);
+  assert.match(styles, /\.completion-notice \{/);
   assert.doesNotMatch(result.promptedPage, /conclusion-prompt/);
   assert.doesNotMatch(app, /function renderConclusionPrompt/);
   assert.doesNotMatch(app, /if \(state\.conclusionPromptTaskId\) \{/);

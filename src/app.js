@@ -189,6 +189,7 @@ let state = {
 let saveTimer = 0;
 let pendingPayload = null;
 let saveInFlight = false;
+let conclusionNoticeTimer = 0;
 let taskDragState = null;
 let suppressTaskClickUntil = 0;
 const milkdownEditors = new Map();
@@ -690,12 +691,20 @@ function render() {
       ${state.settingsOpen ? renderSettingsPanel() : ""}
       ${state.reviewOpen ? renderReviewPanel() : ""}
     </main>
+    ${renderCompletionNotice()}
   `;
   restoreCachedKnowledgePane(task);
   bind();
   resizeTaskBriefTextareas();
   focusPendingElement();
   window.requestAnimationFrame(() => mountMilkdownEditors());
+}
+
+function renderCompletionNotice() {
+  const task = state.tasks.find((item) => item.id === state.conclusionPromptTaskId);
+  return task
+    ? `<div class="completion-notice" role="status" aria-live="polite">请先填写结论，再标记完成</div>`
+    : "";
 }
 
 function renderSidebar() {
@@ -3065,10 +3074,7 @@ function edit(data, value) {
       task[data.editKey] = value;
     }
     if (data.editKey === "hypothesis") task.hypothesisUpdatedAt = now();
-    if (data.editKey === "conclusion" && value.trim() && state.conclusionPromptTaskId === task.id) {
-      state.conclusionPromptTaskId = "";
-      document.querySelector(".task-brief label.needs-attention")?.classList.remove("needs-attention");
-    }
+    if (data.editKey === "conclusion" && value.trim()) clearConclusionNotice(task.id);
     task.updatedAt = now();
     save();
     return;
@@ -3521,7 +3527,7 @@ function toggleTaskDone(taskId) {
   const task = state.tasks.find((item) => item.id === taskId);
   if (!task) return;
   if (task.status !== "done" && !task.conclusion.trim()) {
-    state.conclusionPromptTaskId = taskId;
+    showConclusionNotice(taskId);
     return;
   }
   task.status = task.status === "done" ? "active" : "done";
@@ -3530,6 +3536,20 @@ function toggleTaskDone(taskId) {
     state.conclusionPromptTaskId = "";
   }
   task.updatedAt = now();
+}
+
+function showConclusionNotice(taskId) {
+  state.conclusionPromptTaskId = taskId;
+  window.clearTimeout(conclusionNoticeTimer);
+  conclusionNoticeTimer = window.setTimeout(() => clearConclusionNotice(taskId), 4200);
+}
+
+function clearConclusionNotice(taskId) {
+  if (state.conclusionPromptTaskId !== taskId) return;
+  state.conclusionPromptTaskId = "";
+  window.clearTimeout(conclusionNoticeTimer);
+  document.querySelector(".completion-notice")?.remove();
+  document.querySelector(".task-brief label.needs-attention")?.classList.remove("needs-attention");
 }
 
 /**
