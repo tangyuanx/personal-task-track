@@ -8470,6 +8470,60 @@ button:not(:disabled):active,
   }
 }
 
+/* Final, demo-matched processing-flow layout. Keep this last: legacy flow rules above are intentionally overridden. */
+.flow-list.flow-table .flow-line.flow-row,
+.flow-list.flow-table .flow-line.flow-row.sub {
+  grid-template-columns: 30px minmax(0, 1.35fr) minmax(180px, .8fr) 72px 118px;
+  min-height: 40px;
+  padding: 0;
+  border-bottom: 0;
+  background: transparent;
+}
+
+.flow-list.flow-table .flow-line.flow-row:not(.header)::before,
+.flow-list.flow-table .flow-line.flow-row.sub::after,
+.flow-list.flow-table .flow-root-marker,
+.flow-list.flow-table .flow-check,
+.flow-list.flow-table .node-collapse-toggle,
+.flow-list.flow-table .node-collapse-spacer {
+  display: none;
+  content: none;
+}
+
+.flow-list.flow-table .flow-line.flow-row.depth-1 .flow-title-cell.process-cell {
+  padding-left: 26px;
+}
+
+.flow-list.flow-table .flow-line.flow-row.depth-2 .flow-title-cell.process-cell,
+.flow-list.flow-table .flow-line.flow-row.depth-3 .flow-title-cell.process-cell,
+.flow-list.flow-table .flow-line.flow-row.depth-4 .flow-title-cell.process-cell,
+.flow-list.flow-table .flow-line.flow-row.depth-5 .flow-title-cell.process-cell,
+.flow-list.flow-table .flow-line.flow-row.depth-6 .flow-title-cell.process-cell {
+  padding-left: 48px;
+}
+
+.flow-list.flow-table .flow-line.flow-row.depth-1 .flow-tree-guides {
+  display: block;
+  opacity: .55;
+}
+
+.flow-list.flow-table .flow-line.flow-row.depth-2 .flow-tree-guides,
+.flow-list.flow-table .flow-line.flow-row.depth-3 .flow-tree-guides,
+.flow-list.flow-table .flow-line.flow-row.depth-4 .flow-tree-guides,
+.flow-list.flow-table .flow-line.flow-row.depth-5 .flow-tree-guides,
+.flow-list.flow-table .flow-line.flow-row.depth-6 .flow-tree-guides {
+  display: none;
+}
+
+.flow-list.flow-table .flow-title-input:focus { background: transparent; box-shadow: none; }
+
+@media (max-width: 870px) {
+  .flow-list.flow-table .flow-line.flow-row,
+  .flow-list.flow-table .flow-line.flow-row.sub {
+    grid-template-columns: 28px minmax(110px, 1fr) minmax(70px, .7fr) 48px 86px;
+  }
+}
+
 .task-row.task-item.done:not(.selected) {
   opacity: 1;
 }
