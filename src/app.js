@@ -910,7 +910,7 @@ function renderTaskPage(task) {
         ${state.taskPane === "flow" ? `<section class="flow-section flow" data-context="flow-root" data-task-id="${task.id}">
           ${
             topNodes.length
-              ? `<div class="flow-list flow-table" style="${flowWidthStyle()};--flow-visible-row-count:${visibleFlowRowCount(topNodes)}" data-context="flow-root" data-task-id="${task.id}">${renderFlowHeader()}${topNodes.map((node, index) => renderFlowNode(task.id, node, 0, index, [], index === topNodes.length - 1)).join("")}</div>`
+              ? `<div class="flow-list flow-table" style="${flowWidthStyle()};--flow-visible-row-count:${visibleFlowRowCount(topNodes)}" data-context="flow-root" data-task-id="${task.id}">${topNodes.map((node, index) => renderFlowNode(task.id, node, 0, index, [], index === topNodes.length - 1)).join("")}</div>`
               : `<div class="flow-list flow-table empty-flow" data-context="flow-root" data-task-id="${task.id}"></div>`
           }
         </section>` : state.taskPane === "notes" ? renderTaskKnowledge(task) : renderTaskHistory(task)}
@@ -1030,21 +1030,14 @@ function renderFlowNode(taskId, node, depth, rootIndex = 0, lineage = [], isLast
   return `
     <article class="flow-item depth-${Math.min(depth, 6)}">
       <div class="flow-row flow-line ${branch} ${branch === "sub-flow" ? "sub" : ""} ${node.status} ${isSelected ? "selected" : ""}" style="--tree-depth:${treeDepth}" data-context="node" data-task-id="${taskId}" data-node-id="${node.id}">
-        <span class="flow-sequence-cell">
-          ${depth === 0 ? `<span class="sequence-index">${String(rootIndex + 1).padStart(2, "0")}</span>` : ""}
-          <input class="flow-check dot" type="checkbox" title="完成" data-action="toggle-node-done" data-task-id="${taskId}" data-node-id="${node.id}" ${node.status === "done" ? "checked" : ""} />
-        </span>
+        <span class="flow-sequence-cell">${depth === 0 ? `<span class="sequence-index">${rootIndex + 1}</span>` : ""}</span>
         <span class="flow-title-cell flow-title process-cell">
-          ${depth === 0 ? `<span class="flow-root-marker" aria-hidden="true"></span>` : treeGuides}
+          ${depth === 1 ? treeGuides : ""}
           <span class="flow-title-line">
-            ${children.length ? `<button class="node-collapse-toggle" type="button" data-action="toggle-node-collapse" data-task-id="${taskId}" data-node-id="${node.id}" title="${node.collapsed ? "展开子节点" : "收起子节点"}">${node.collapsed ? "+" : "−"}</button>` : `<span class="node-collapse-spacer"></span>`}
             ${nodeTitleInputHtml(node, taskId)}
           </span>
         </span>
-        <button class="flow-note note-link process-cell ${isSelected ? "record-trigger" : ""}" type="button" data-action="select-node" data-task-id="${taskId}" data-node-id="${node.id}" title="打开节点记录">
-          <strong>${esc(noteSummary.title)}</strong>
-          <span>${esc(noteSummary.detail)}</span>
-        </button>
+        <input class="flow-record-input" readonly aria-label="节点记录" data-action="select-node" data-task-id="${taskId}" data-node-id="${node.id}" value="${escAttr(node.note ? noteSummary.title : "")}" placeholder="记录" />
         <span class="flow-status-text status-${node.status}">${nodeStatusText(node.status)}</span>
         <span class="flow-updated note-link">${formatShort(node.updatedAt)}</span>
       </div>

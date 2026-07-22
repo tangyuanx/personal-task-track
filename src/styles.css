@@ -1863,6 +1863,23 @@ body.resizing-detail {
   text-decoration: line-through;
 }
 
+/* Confirmed minimal processing-flow presentation. */
+.flow-list.flow-table { border-top: 0; }
+.flow-row { grid-template-columns: 30px minmax(0, 1.35fr) minmax(180px, .8fr) 72px 118px; min-height: 40px; padding: 0; border-bottom: 0; }
+.flow-row:not(.flow-header):hover { background: rgba(104, 169, 142, .035); }
+.flow-sequence-cell { display:flex; justify-content:center; }
+.sequence-index { color: var(--faint); font: 600 12px var(--mono); }
+.flow-title-cell { gap:0; }
+.flow-title-line { display:flex; min-width:0; width:100%; }
+.flow-title-input { height:32px; padding:6px 0; border:0; border-radius:0; font-size:16px; font-weight:600; }
+.flow-title-input:focus { background:transparent; box-shadow:none; }
+.flow-row.depth-2 .flow-title-cell,.flow-row.depth-3 .flow-title-cell,.flow-row.depth-4 .flow-title-cell,.flow-row.depth-5 .flow-title-cell,.flow-row.depth-6 .flow-title-cell { padding-left:48px; }
+.flow-tree-guides { opacity:.55; }
+.flow-record-input { width:100%; min-width:0; padding:6px 8px; border:0; border-left:1px solid color-mix(in srgb,var(--line-soft) 70%,transparent); outline:0; color:var(--muted); background:transparent; font:13px var(--app-font); text-overflow:ellipsis; cursor:text; }
+.flow-record-input::placeholder { color:var(--faint); }
+.flow-status-text { justify-self:end; font-size:13px; }
+.flow-updated { justify-self:end; padding-left:5px; font-size:12px; white-space:nowrap; }
+
 .flow-status {
   justify-self: start;
   min-width: 56px;
