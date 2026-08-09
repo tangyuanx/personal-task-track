@@ -3,6 +3,7 @@ const { contextBridge, ipcRenderer } = require("electron");
 contextBridge.exposeInMainWorld("personalTaskTrack", {
   platform: process.platform,
   appVersion: ipcRenderer.sendSync("app:version"),
+  environment: ipcRenderer.sendSync("app:environment"),
   storage: {
     read: () => ipcRenderer.invoke("task-data:read"),
     write: (data) => ipcRenderer.invoke("task-data:write", data),
@@ -14,5 +15,8 @@ contextBridge.exposeInMainWorld("personalTaskTrack", {
   export: {
     nodeDetailPdf: (payload) => ipcRenderer.invoke("node-detail:export-pdf", payload),
     taskDocument: (payload) => ipcRenderer.invoke("task:export-document", payload),
+  },
+  bugReports: {
+    submit: (payload) => ipcRenderer.invoke("bug-report:submit", payload),
   },
 });

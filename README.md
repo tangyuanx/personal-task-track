@@ -13,6 +13,7 @@
 - 数据保存在本机应用数据目录中的 `task-data.json`，不依赖云端服务。
 - 会自动修复可恢复的旧版/异常字段；JSON 损坏时先生成带时间戳的备份，再以空数据安全启动。
 - 首次启动不预置任务数据，从空列表开始记录。
+- 设置中的“帮助与反馈 → 反馈问题”可以将用户主动填写的问题提交到独立服务，并自动创建 GitHub Issue。
 
 ## 下载和安装
 
@@ -21,13 +22,30 @@
 - macOS: 下载 `.dmg` 或 `.zip`。
 - Windows: 下载 `.exe` 安装包。
 
-当前没有做应用商店分发，也没有接入远程服务。macOS 未签名版本首次打开时可能会出现系统安全提示，可在 Finder 中右键应用并选择打开。若后续需要双击无提示打开，需要配置 Apple Developer ID 签名和 notarization，但不需要上架 App Store。
+当前没有做应用商店分发。任务数据仍只保存在本机；仅当用户主动确认并提交 Bug 反馈时，应用才会把反馈表单和可选的基础环境信息发送到独立反馈服务。macOS 未签名版本首次打开时可能会出现系统安全提示，可在 Finder 中右键应用并选择打开。若后续需要双击无提示打开，需要配置 Apple Developer ID 签名和 notarization，但不需要上架 App Store。
 
 ## 开发
 
 ```bash
 npm install
 npm run dev
+```
+
+Bug 反馈联调需要另开一个终端启动后端：
+
+```bash
+cd bug-report-server
+npm install
+cp .env.example .env.local
+# 在 .env.local 中设置服务端 GITHUB_TOKEN
+set -a && . ./.env.local && set +a
+npm run dev
+```
+
+桌面开发环境默认连接 `http://127.0.0.1:3000`。连接已部署服务时：
+
+```bash
+BUG_REPORT_API_URL=https://feedback.example.com npm run dev
 ```
 
 ## 检查
@@ -74,4 +92,21 @@ git push origin v0.1.0
 - macOS: `~/Library/Application Support/Personal Task Track/task-data.json`
 - Windows: `%APPDATA%/Personal Task Track/task-data.json`
 
-数据只保存在本机，不会上传到远程服务。浏览器预览模式下会回退使用 `localStorage`，仅用于开发预览。
+任务数据只保存在本机，不会上传到远程服务。浏览器预览模式下会回退使用 `localStorage`，仅用于开发预览。
+
+## Bug 反馈架构
+
+```text
+渲染器表单
+→ Electron 预加载白名单桥
+→ Electron 主进程 POST /api/bug-reports（10 秒超时）
+→ 独立 TypeScript/Fastify 服务
+→ GitHub REST API
+→ tangyuanx/personal-task-track Issue
+```
+
+客户端不包含 GitHub Token，不直接调用 GitHub API，也不会将任务数据库、任务标题/内容、笔记、本地文件、Cookie、密码、Token、完整用户目录、日志或附件自动上传。用户允许时只附带软件版本、操作系统、架构、当前模块、提交时间和首次运行生成的随机 UUID 安装标识。
+
+后端位于 `bug-report-server/`，包含本地启动、环境变量、Fine-grained Token 最小权限和 Node/Docker 部署说明。创建 Issue 所需的最小权限是只针对 `personal-task-track` 仓库的 `Issues: Read and write`；详情以 [GitHub Create an issue 文档](https://docs.github.com/en/rest/issues/issues?apiVersion=2022-11-28#create-an-issue) 和 [Fine-grained Token 管理文档](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens) 为准。
+
+服务端安全边界包括 100KB 请求体、字段长度校验、单 IP 每小时 5 次、CORS 白名单、安全响应头、GitHub 超时/错误转换和统一 JSON 错误；日志不输出 Token、Authorization 请求头或完整联系方式。`.env` 与 `.env.*` 已加入 `.gitignore`，`.env.example` 不含真实凭据。

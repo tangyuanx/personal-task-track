@@ -1,5 +1,31 @@
 # Progress Log
 
+## Session: 2026-08-09 In-app Bug Reporting
+
+### Phase 20: Requirement recovery and repository preparation
+- **Status:** complete
+- Actions taken:
+  - Read the project maintenance, file-based planning, and frontend design instructions.
+  - Read `bug反馈功能.md` and translated its client, server, security, testing, and documentation requirements into Phase 20.
+  - Preserved all existing untracked and deleted user artifacts.
+  - Fetched `origin/main` and tags; confirmed local `main` matches `origin/main` at `7f13e51` / `v0.1.99`.
+  - Audited package/build metadata, README, HTML/CSP, Electron main/preload/storage modules, build scripts, Milkdown entry, ignore rules, renderer function map, and stylesheet selector map.
+  - Implemented the renderer form, installation UUID persistence, constrained Electron environment/report bridge, timeout-aware main-process HTTP client, TypeScript/Fastify backend, GitHub Issue retries, security middleware, and initial client/server tests.
+  - Installed the isolated server dependencies; npm audit reported zero known vulnerabilities.
+  - First server TypeScript build found strict unknown/optional-label typing errors; added type guards and a label predicate.
+  - Passed the isolated backend build after running the tsx IPC-dependent test runner outside the sandbox.
+  - Passed the final full suite with 25 renderer/storage/client tests and 11 mocked backend tests, followed by `git diff --check`.
+  - Added README and backend documentation for architecture, local development, environment variables, official GitHub token permissions, and Node/Docker deployment.
+  - Added `.env.example` ignore exceptions so the safe sample is tracked while real `.env` files remain ignored.
+  - Added explicit UUID persistence, request whitelist, rapid-submit guard, and 100KB body-limit regression coverage.
+  - Confirmed remote `v0.1.99` remains latest and bumped the desktop release to `0.1.100`, including renderer cache identifiers.
+  - Built the macOS ARM64 DMG/ZIP and Windows x64 NSIS artifacts successfully.
+  - Confirmed `release/` contains no AppleDouble files and the packaged ASAR contains the new constrained client bridge but not the independent backend.
+- Files modified:
+  - task_plan.md
+  - findings.md
+  - progress.md
+
 ## Session: 2026-07-13 Empty State and Theme Switch
 
 ### Phase 19: Requirement recovery and repository preparation

@@ -1,6 +1,6 @@
 {
   "name": "personal-task-track",
-  "version": "0.1.99",
+  "version": "0.1.100",
   "description": "A local-first personal task flow tracker for programmer daily work.",
   "private": true,
   "license": "UNLICENSED",
@@ -17,9 +17,10 @@
   "scripts": {
     "dev": "electron .",
     "start": "electron .",
+    "postinstall": "npm --prefix bug-report-server ci",
     "build:milkdown": "node scripts/build-milkdown.cjs",
-    "test": "node --test scripts/test.cjs",
-    "check": "npm run build:milkdown && node --check src/app.js && node --check electron/main.cjs && node --check electron/preload.cjs && node --check electron/storage.cjs && node --check scripts/after-pack.cjs && node --check scripts/build.cjs && node --check scripts/build-milkdown.cjs && node --check scripts/make-ico.cjs && node --check scripts/test.cjs && npm test",
+    "test": "node --test scripts/test.cjs scripts/bug-report-client.test.cjs && npm --prefix bug-report-server test",
+    "check": "npm run build:milkdown && node --check src/app.js && node --check electron/main.cjs && node --check electron/preload.cjs && node --check electron/storage.cjs && node --check electron/bug-report-client.cjs && node --check scripts/after-pack.cjs && node --check scripts/build.cjs && node --check scripts/build-milkdown.cjs && node --check scripts/make-ico.cjs && node --check scripts/test.cjs && node --check scripts/bug-report-client.test.cjs && npm --prefix bug-report-server run build && npm test",
     "dist": "node scripts/build.cjs",
     "dist:mac": "node scripts/build.cjs --mac",
     "dist:win": "node scripts/build.cjs --win"

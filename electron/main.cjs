@@ -10,7 +10,9 @@
 
 const { app, BrowserWindow, Menu, clipboard, dialog, ipcMain, shell } = require("electron");
 const fs = require("node:fs/promises");
+const os = require("node:os");
 const path = require("node:path");
+const { BugReportClientError, createBugReportClient } = require("./bug-report-client.cjs");
 const { readTaskData, writeTaskData } = require("./storage.cjs");
 /**
  * Create the main application window.
@@ -68,6 +70,12 @@ function registerStorageHandlers() {
   ipcMain.on("app:version", (event) => {
     event.returnValue = app.getVersion();
   });
+  ipcMain.on("app:environment", (event) => {
+    event.returnValue = {
+      os: `${platformName(process.platform)} ${os.release()}`,
+      architecture: process.arch,
+    };
+  });
   ipcMain.handle("task-data:read", () => readTaskData(app.getPath("userData")));
 /**
  * Export a task document as Markdown or PDF.
@@ -86,6 +94,24 @@ function registerStorageHandlers() {
   });
   ipcMain.handle("node-detail:export-pdf", async (_event, payload) => exportNodeDetailPdf(payload));
   ipcMain.handle("task:export-document", async (_event, payload) => exportTaskDocument(payload));
+  ipcMain.handle("bug-report:submit", async (_event, payload) => {
+    try {
+      const baseUrl = process.env.BUG_REPORT_API_URL || (app.isPackaged ? "" : "http://127.0.0.1:3000");
+      return await createBugReportClient({ baseUrl }).submit(payload);
+    } catch (error) {
+      const safeError = error instanceof BugReportClientError
+        ? error
+        : new BugReportClientError("REQUEST_FAILED", "反馈提交失败，请稍后重试");
+      return { success: false, code: safeError.code, message: safeError.message };
+    }
+  });
+}
+
+function platformName(platform) {
+  if (platform === "win32") return "Windows";
+  if (platform === "darwin") return "macOS";
+  if (platform === "linux") return "Linux";
+  return "Unknown OS";
 }
 
 async function exportTaskDocument(payload) {

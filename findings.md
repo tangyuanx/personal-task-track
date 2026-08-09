@@ -184,3 +184,27 @@
 - ASAR creation on the external project volume produced a corrupted header offset for both platforms. Build output must be redirected to an internal APFS temp directory; the source tree can remain on the external drive.
 - `scripts/build.cjs` now detects `/Volumes` workspaces, uses per-platform internal temp output, copies only release artifacts back, and removes AppleDouble files. Standard `npm run dist:mac` and `npm run dist:win` both pass with ASAR enabled.
 - Final ASAR artifacts: macOS ARM64 DMG and ZIP are about 114 MB each; Windows x64 NSIS is about 98 MB. Both packaged apps contain `app.asar` with `index.html`, `src/app.js`, `electron/main.cjs`, and `package.json`.
+# 2026-08-09 Bug Reporting Feature
+
+- `bug反馈功能.md` requires a complete HTTPS client-to-backend-to-GitHub Issue flow; the desktop client must never contain or receive a GitHub token.
+- The client form must validate title/category/description, optionally collect a random installation UUID and basic environment metadata, handle duplicate submission, timeout, offline, non-JSON/server errors, and clear on success.
+- The new backend must expose `POST /api/bug-reports` and `GET /health`, use environment-only GitHub configuration, apply request-size limits, IP rate limiting, CORS allowlisting, security headers, input length validation, GitHub timeout/error handling, sanitized logging, and consistent JSON errors.
+- Required tests include client network/error behavior and mocked GitHub outcomes, including fallback creation when an optional category label is missing.
+- Existing unrelated uncommitted artifacts and `.agents/skills` changes belong to the user and must be preserved.
+- Remote fetch completed on 2026-08-09; local `main` and `origin/main` are identical at `7f13e51` (`v0.1.99`).
+- The application is a framework-free renderer (`index.html` + `src/app.js` + `src/styles.css`) hosted in Electron 42 with context isolation, sandboxing, a narrow preload bridge, JSON-file persistence, and a browser `localStorage` fallback.
+- Build tooling is npm + esbuild + electron-builder; runtime dependencies are currently empty and Milkdown is bundled at build time from devDependencies.
+- There is no existing HTTP client or network abstraction. The current CSP has `connect-src 'self'`, so a remote report service cannot be called from the renderer without either broadening CSP or routing HTTPS through a constrained Electron main-process bridge.
+- Settings already render as a modal overlay from centralized state and action dispatch. A compact “帮助与反馈” section inside that panel is the lowest-risk entry point required by the specification.
+- Persistent state is normalized independently in `src/app.js` and `electron/storage.cjs`; adding `installationId` requires both paths plus browser storage coverage.
+- The current project tests use Node's built-in `node:test` and a VM renderer harness. The server can stay lightweight and TypeScript-first without adding a second frontend framework; tests should continue using built-in mocking/local HTTP primitives where practical.
+
+## Phase 20 implementation decisions
+
+- Renderer network access will remain disabled by CSP. A narrow `bugReports.submit(payload)` preload API will invoke a main-process client that accepts only the report payload, enforces timeout/error parsing, and targets `BUG_REPORT_API_URL` (localhost default only in development).
+- Basic OS/version/architecture metadata will come from an IPC-backed read-only environment object. `currentPage` stays renderer-derived and never contains task titles or task content.
+- `installationId` will be a UUID v4 generated once, normalized and persisted through both Electron JSON storage and the browser fallback. No hardware-derived identifier is used.
+- The feedback UI reuses the existing modal vocabulary: graphite/white surfaces, the existing green focus color, compact 12–14px controls, one feedback-ID success receipt as the signature element, responsive bottom-sheet behavior, keyboard focus, and dark-mode parity.
+- The independent server will use TypeScript + Fastify, manual CORS allowlisting/security headers, a small in-memory per-IP limiter, strict field/body limits, abortable GitHub requests, sanitized error responses, and no sensitive request logging.
+- GitHub Issue creation will first try base and optional category labels, retry without the optional category on 422, and finally retry without labels if repository labels are unavailable. GitHub calls remain fully mocked in tests.
+- GitHub's official REST documentation confirms that `POST /repos/{owner}/{repo}/issues` accepts fine-grained personal access tokens and only requires repository `Issues: write`; the token can be restricted to the single `personal-task-track` repository.

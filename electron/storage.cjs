@@ -95,6 +95,7 @@ function normalizeTaskData(data) {
     taskFilter: TASK_FILTERS.has(safeData.taskFilter) ? safeData.taskFilter : "all",
     priorityFilter: PRIORITY_FILTERS.has(safeData.priorityFilter) ? safeData.priorityFilter : "all",
     newTaskPriority: PRIORITIES.has(safeData.newTaskPriority) ? safeData.newTaskPriority : "medium",
+    installationId: normalizeInstallationId(safeData.installationId),
     updatedAt: normalizeDateValue(safeData.updatedAt, new Date().toISOString()),
   };
 }
@@ -272,6 +273,13 @@ function normalizeDateValue(value, fallback) {
 
 function normalizeOptionalDateValue(value, fallback = "") {
   return value ? normalizeDateValue(value, fallback) : fallback;
+}
+
+function normalizeInstallationId(value) {
+  const normalized = normalizeIdentifier(value).toLowerCase();
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(normalized)
+    ? normalized
+    : crypto.randomUUID();
 }
 
 async function backupCorruptData(userDataPath) {

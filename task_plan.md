@@ -4,9 +4,20 @@
 Maintain the personal task management app through scoped, low-risk improvements while preserving existing task flow behavior and release discipline.
 
 ## Current Phase
-Phase 19
+Phase 20
 
 ## Phases
+
+### Phase 20: In-app Bug Reporting
+- [x] Read `bug反馈功能.md`, project maintenance guidance, and frontend design guidance
+- [x] Preserve existing uncommitted user artifacts and confirm local `main` matches `origin/main`
+- [x] Audit all application code, README, renderer state, Electron bridge, persistence, network patterns, and build setup
+- [x] Implement the client feedback entry, validated form, environment consent, request lifecycle, and success/error states
+- [x] Implement the isolated bug-report backend, GitHub Issue integration, security controls, and configuration sample
+- [x] Add the required mocked server and client tests
+- [x] Update README and supporting documentation for architecture, development, token permissions, and deployment
+- [x] Run checks, builds, version bump, commit, tag, and publish the release
+- **Status:** complete
 
 ### Phase 19: Empty State and Theme Switch
 - [x] Read `frontend_modification.md` and confirm the latest remote baseline
@@ -206,6 +217,7 @@ Phase 19
 
 ## Errors Encountered
 | Error | Attempt | Resolution |
+| TypeScript strict build rejected unknown Fastify errors and a possibly undefined optional label | 1 | Added explicit error-property guards and a string type predicate before rerunning server checks |
 |-------|---------|------------|
 | None | 1 | Not applicable |
 | Browser blocked file:// URL | 1 | Started a local 127.0.0.1 static server and verified through localhost |

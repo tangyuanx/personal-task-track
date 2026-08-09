@@ -153,6 +153,13 @@ test("disk normalization preserves every supported typography choice", () => {
 
 });
 
+test("disk normalization creates and preserves a random UUID installation identifier", () => {
+  const created = normalizeTaskData({}).installationId;
+  assert.match(created, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+  assert.equal(normalizeTaskData({ installationId: created }).installationId, created);
+  assert.notEqual(normalizeTaskData({}).installationId, created);
+});
+
 test("Chinese and English font settings stay isolated in the application font chain", async () => {
   const [styles, app] = await Promise.all([
     fs.readFile(path.join(__dirname, "..", "src", "styles.css"), "utf8"),
@@ -447,4 +454,35 @@ test("Markdown URLs reject executable schemes", async () => {
     harness.evaluate(`safeMarkdownUrl("https://example.com/path?q=1&x=2")`),
     "https://example.com/path?q=1&amp;x=2",
   );
+});
+
+test("bug feedback prevents a second rapid submission while one is in flight", async () => {
+  const harness = await rendererHarness();
+  const result = await harness.evaluate(`(() => {
+    state.feedbackSubmitting = true;
+    return submitBugReport();
+  })()`);
+  assert.equal(result, false);
+});
+
+test("bug feedback payload contains only form and optional basic environment fields", async () => {
+  const harness = await rendererHarness();
+  const payload = harness.json(`(() => {
+    state.tasks = [{ id: "private", title: "不得上传的任务标题", description: "不得上传" }];
+    state.installationId = "123e4567-e89b-42d3-a456-426614174000";
+    state.feedbackDraft = {
+      title: "列表没有刷新",
+      category: "malfunction",
+      description: "保存后列表仍然没有显示新增任务。",
+      reproductionSteps: "点击保存",
+      contact: "",
+      includeEnvironment: true,
+      confirmed: true
+    };
+    return bugReportPayload();
+  })()`);
+  assert.equal(payload.category, "功能异常");
+  assert.equal(payload.environment.installationId, "123e4567-e89b-42d3-a456-426614174000");
+  assert.equal(payload.tasks, undefined);
+  assert.doesNotMatch(JSON.stringify(payload), /不得上传/);
 });

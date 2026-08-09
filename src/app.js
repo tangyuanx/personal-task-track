@@ -16,9 +16,12 @@ const ACTIVE_GROUP_KEY = "task-track-active-group";
 const SIDEBAR_WIDTH_KEY = "task-track-sidebar-width";
 const DETAIL_HEIGHT_KEY = "task-track-detail-height";
 const ATTACHMENTS_KEY = "task-track-attachments";
+const INSTALLATION_ID_KEY = "task-track-installation-id";
 const DATA_VERSION = 1;
 const desktopStorage = window.personalTaskTrack?.storage;
 const desktopExport = window.personalTaskTrack?.export;
+const desktopBugReports = window.personalTaskTrack?.bugReports;
+const desktopEnvironment = window.personalTaskTrack?.environment || {};
 const APP_VERSION = window.personalTaskTrack?.appVersion || "";
 
 const priorityLabels = {
@@ -63,6 +66,16 @@ const repositoryPriorityLabels = {
 const themeLabels = {
   light: "浅色",
   dark: "深色",
+};
+
+const bugCategoryLabels = {
+  malfunction: "功能异常",
+  crash: "软件崩溃",
+  data: "数据异常",
+  display: "界面显示",
+  performance: "性能问题",
+  suggestion: "功能建议",
+  other: "其他",
 };
 
 const zhFontLabels = {
@@ -160,6 +173,12 @@ let state = {
   enFont: "inter",
   settingsOpen: false,
   reviewOpen: false,
+  feedbackOpen: false,
+  feedbackDraft: createEmptyFeedbackDraft(),
+  feedbackErrors: {},
+  feedbackSubmitting: false,
+  feedbackResult: null,
+  feedbackMessage: "",
 
 // ============================================================
 // RUNTIME VARIABLES
@@ -181,6 +200,7 @@ let state = {
   sidebarWidth: defaultSidebarWidth,
   detailHeight: defaultDetailHeight,
   attachments: { images: {} },
+  installationId: "",
   conclusionPromptTaskId: "",
   contextMenu: null,
   nodeDetailPosition: null,
@@ -207,6 +227,39 @@ function id(prefix) {
 
 function now() {
   return new Date().toISOString();
+}
+
+function createEmptyFeedbackDraft() {
+  return {
+    title: "",
+    category: "",
+    description: "",
+    reproductionSteps: "",
+    contact: "",
+    includeEnvironment: true,
+    confirmed: false,
+  };
+}
+
+function createInstallationId() {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  const bytes = new Uint8Array(16);
+  if (globalThis.crypto?.getRandomValues) {
+    globalThis.crypto.getRandomValues(bytes);
+  } else {
+    for (let index = 0; index < bytes.length; index += 1) bytes[index] = Math.floor(Math.random() * 256);
+  }
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+function normalizeInstallationId(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(normalized)
+    ? normalized
+    : createInstallationId();
 }
 
 /**
@@ -511,6 +564,10 @@ function loadBrowserAttachments() {
   }
 }
 
+function loadBrowserInstallationId() {
+  return normalizeInstallationId(localStorage.getItem(INSTALLATION_ID_KEY));
+}
+
 
 // ============================================================
 // DATA PERSISTENCE (save / flush / normalize)
@@ -538,7 +595,8 @@ async function loadAppData() {
       const sidebarWidth = normalizeSidebarWidth(stored?.sidebarWidth);
       const detailHeight = normalizeDetailHeight(stored?.detailHeight);
       const attachments = normalizeAttachments(stored?.attachments);
-      return { tasks, taskGroups, activeGroupId, flowWidths, sidebarWidth, detailHeight, attachments, theme, zhFont, enFont, taskFilter, priorityFilter, newTaskPriority };
+      const installationId = normalizeInstallationId(stored?.installationId);
+      return { tasks, taskGroups, activeGroupId, flowWidths, sidebarWidth, detailHeight, attachments, theme, zhFont, enFont, taskFilter, priorityFilter, newTaskPriority, installationId };
     } catch (error) {
       console.error("Failed to read local task data.", error);
     }
@@ -556,6 +614,7 @@ async function loadAppData() {
     sidebarWidth: loadBrowserSidebarWidth(),
     detailHeight: loadBrowserDetailHeight(),
     attachments: loadBrowserAttachments(),
+    installationId: loadBrowserInstallationId(),
     theme: loadBrowserTheme(),
     ...typography,
     ...preferences,
@@ -582,6 +641,7 @@ function save() {
     taskFilter: state.taskFilter,
     priorityFilter: state.priorityFilter,
     newTaskPriority: state.newTaskPriority,
+    installationId: state.installationId,
     updatedAt: now(),
   };
 
@@ -599,6 +659,7 @@ function save() {
     localStorage.setItem(TASK_FILTER_KEY, state.taskFilter);
     localStorage.setItem(PRIORITY_FILTER_KEY, state.priorityFilter);
     localStorage.setItem(NEW_TASK_PRIORITY_KEY, state.newTaskPriority);
+    localStorage.setItem(INSTALLATION_ID_KEY, state.installationId);
     return;
   }
 
@@ -690,6 +751,7 @@ function render() {
       <div id="context-menu-root">${renderContextMenu()}</div>
       ${state.settingsOpen ? renderSettingsPanel() : ""}
       ${state.reviewOpen ? renderReviewPanel() : ""}
+      ${state.feedbackOpen ? renderBugReportPanel() : ""}
     </main>
     ${renderCompletionNotice()}
   `;
@@ -1479,6 +1541,15 @@ function renderSettingsPanel() {
                 <button class="settings-inline-action" type="button" data-action="toggle-review">打开任务回顾</button>
               </div>
             </section>
+            <section class="settings-group">
+              <div class="settings-group-head">
+                <h3>帮助与反馈</h3>
+                <p>遇到问题时，可以提交信息供后续定位。</p>
+              </div>
+              <div class="settings-stack">
+                <button class="settings-inline-action" type="button" data-action="open-feedback">反馈问题</button>
+              </div>
+            </section>
             <div class="settings-preview">
               <span>Preview</span>
               <strong class="settings-preview-zh">任务流中文字体预览</strong>
@@ -1494,6 +1565,99 @@ function renderSettingsPanel() {
       </section>
     </div>
   `;
+}
+
+function renderBugReportPanel() {
+  const draft = state.feedbackDraft;
+  const errors = state.feedbackErrors;
+  const fieldError = (key) => errors[key] ? `<span class="feedback-field-error" id="feedback-${key}-error">${esc(errors[key])}</span>` : "";
+  return `
+    <div class="feedback-overlay" data-feedback-backdrop>
+      <section class="feedback-panel" role="dialog" aria-modal="true" aria-labelledby="feedback-title">
+        <header class="feedback-head">
+          <div>
+            <span>Help & Feedback</span>
+            <h2 id="feedback-title">反馈问题</h2>
+            <p>请只填写与问题有关的信息，不要粘贴密码、Token 或私人文件内容。</p>
+          </div>
+          <button class="settings-close" type="button" data-action="close-feedback" title="关闭" aria-label="关闭反馈表单" ${state.feedbackSubmitting ? "disabled" : ""}>×</button>
+        </header>
+        ${state.feedbackResult ? renderBugReportSuccess() : `
+          <form class="feedback-form" data-feedback-form novalidate>
+            <div class="feedback-grid">
+              <label class="feedback-field feedback-field-wide">
+                <span>问题标题 <b>必填</b></span>
+                <input data-feedback-field="title" maxlength="100" value="${escAttr(draft.title)}" placeholder="用一句话说明遇到的问题" aria-describedby="feedback-title-hint ${errors.title ? "feedback-title-error" : ""}" />
+                <small id="feedback-title-hint">3～100 字</small>
+                ${fieldError("title")}
+              </label>
+              <label class="feedback-field">
+                <span>问题类型 <b>必填</b></span>
+                <select data-feedback-field="category">
+                  <option value="">请选择</option>
+                  ${Object.entries(bugCategoryLabels).map(([value, label]) => `<option value="${value}" ${draft.category === value ? "selected" : ""}>${label}</option>`).join("")}
+                </select>
+                ${fieldError("category")}
+              </label>
+              <label class="feedback-field feedback-field-wide">
+                <span>问题描述 <b>必填</b></span>
+                <textarea data-feedback-field="description" maxlength="5000" rows="6" placeholder="说明发生了什么、期望看到什么结果">${esc(draft.description)}</textarea>
+                <small>至少 10 字，最多 5000 字</small>
+                ${fieldError("description")}
+              </label>
+              <label class="feedback-field feedback-field-wide">
+                <span>复现步骤 <em>选填</em></span>
+                <textarea data-feedback-field="reproductionSteps" maxlength="5000" rows="4" placeholder="1. 打开…&#10;2. 点击…&#10;3. 出现…">${esc(draft.reproductionSteps)}</textarea>
+                ${fieldError("reproductionSteps")}
+              </label>
+              <label class="feedback-field feedback-field-wide">
+                <span>联系方式 <em>选填，仅用于问题沟通</em></span>
+                <input data-feedback-field="contact" maxlength="200" value="${escAttr(draft.contact)}" placeholder="邮箱或其他联系方式" />
+                ${fieldError("contact")}
+              </label>
+            </div>
+            <div class="feedback-consent">
+              <label>
+                <input type="checkbox" data-feedback-field="includeEnvironment" ${draft.includeEnvironment ? "checked" : ""} />
+                <span>附带基础环境信息</span>
+              </label>
+              <p>${esc(feedbackEnvironmentSummary())}</p>
+              <p>不会上传任务数据库、任务标题或内容、笔记、本地文件、Cookie、密码、Token、完整用户目录路径、日志或附件。</p>
+            </div>
+            <label class="feedback-confirm ${errors.confirmed ? "has-error" : ""}">
+              <input type="checkbox" data-feedback-field="confirmed" ${draft.confirmed ? "checked" : ""} />
+              <span>我已检查反馈内容，并确认其中不含敏感信息。反馈会作为公开 GitHub Issue 提交。</span>
+            </label>
+            ${fieldError("confirmed")}
+            ${state.feedbackMessage ? `<div class="feedback-message" role="alert">${esc(state.feedbackMessage)}</div>` : ""}
+            <footer class="feedback-actions">
+              <button type="button" data-action="close-feedback" ${state.feedbackSubmitting ? "disabled" : ""}>取消</button>
+              <button class="primary" type="submit" ${state.feedbackSubmitting ? "disabled" : ""}>${state.feedbackSubmitting ? "正在提交…" : "提交反馈"}</button>
+            </footer>
+          </form>
+        `}
+      </section>
+    </div>
+  `;
+}
+
+function renderBugReportSuccess() {
+  const result = state.feedbackResult;
+  return `
+    <div class="feedback-success" role="status" aria-live="polite">
+      <span class="feedback-success-mark" aria-hidden="true">✓</span>
+      <p>反馈提交成功</p>
+      <strong>${esc(result.reportId)}</strong>
+      ${result.issueNumber ? `<p>GitHub Issue：${result.issueUrl ? `<a href="${escAttr(result.issueUrl)}">#${result.issueNumber}</a>` : `#${result.issueNumber}`}</p>` : ""}
+      <button type="button" data-action="close-feedback">完成</button>
+    </div>
+  `;
+}
+
+function feedbackEnvironmentSummary() {
+  const osName = desktopEnvironment.os || "浏览器预览环境";
+  const architecture = desktopEnvironment.architecture || "未知架构";
+  return `将发送：软件版本 ${APP_VERSION || "dev"}、${osName}、${architecture}、当前模块、提交时间和随机安装标识。`;
 }
 
 
@@ -2374,6 +2538,33 @@ function bindTaskRepositoryRows(scope = document) {
     });
   }
 
+  const feedbackPanel = document.querySelector(".feedback-panel");
+  feedbackPanel?.addEventListener("click", (event) => event.stopPropagation());
+
+  const feedbackBackdrop = document.querySelector("[data-feedback-backdrop]");
+  feedbackBackdrop?.addEventListener("pointerdown", (event) => {
+    if (event.target !== feedbackBackdrop || state.feedbackSubmitting) return;
+    closeBugReport();
+    render();
+  });
+
+  document.querySelectorAll("[data-feedback-field]").forEach((element) => {
+    const updateDraft = (event) => {
+      const key = event.target.dataset.feedbackField;
+      state.feedbackDraft[key] = event.target.type === "checkbox" ? event.target.checked : event.target.value;
+      delete state.feedbackErrors[key];
+      state.feedbackMessage = "";
+    };
+    element.addEventListener("input", updateDraft);
+    element.addEventListener("change", updateDraft);
+  });
+
+  const feedbackForm = document.querySelector("[data-feedback-form]");
+  feedbackForm?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    void submitBugReport();
+  });
+
   const search = document.querySelector("#search");
   if (search) {
     let isComposing = false;
@@ -2570,6 +2761,95 @@ function applySetting(key, value) {
   if (key === "task-filter") state.taskFilter = normalizeTaskFilter(value);
   if (key === "priority-filter") state.priorityFilter = normalizePriorityFilter(value);
   if (key === "new-task-priority") state.newTaskPriority = normalizePriority(value);
+}
+
+function closeBugReport() {
+  if (state.feedbackSubmitting) return;
+  state.feedbackOpen = false;
+  state.feedbackErrors = {};
+  state.feedbackMessage = "";
+  state.feedbackResult = null;
+}
+
+function validateBugReportDraft(draft = state.feedbackDraft) {
+  const errors = {};
+  const titleLength = unicodeLength(draft.title.trim());
+  const descriptionLength = unicodeLength(draft.description.trim());
+  if (titleLength < 3 || titleLength > 100) errors.title = "问题标题需为 3～100 字";
+  if (!Object.hasOwn(bugCategoryLabels, draft.category)) errors.category = "请选择问题类型";
+  if (descriptionLength < 10 || descriptionLength > 5000) errors.description = "问题描述需为 10～5000 字";
+  if (unicodeLength(draft.reproductionSteps.trim()) > 5000) errors.reproductionSteps = "复现步骤最多 5000 字";
+  if (unicodeLength(draft.contact.trim()) > 200) errors.contact = "联系方式最多 200 字";
+  if (!draft.confirmed) errors.confirmed = "请确认隐私提示后再提交";
+  return errors;
+}
+
+function unicodeLength(value) {
+  return Array.from(String(value || "")).length;
+}
+
+function currentPageName() {
+  if (state.taskPane === "notes") return "Knowledge Notes";
+  if (state.taskPane === "history") return "Task History";
+  return "Task Flow";
+}
+
+function bugReportPayload() {
+  const draft = state.feedbackDraft;
+  const includeEnvironment = draft.includeEnvironment !== false;
+  return {
+    title: draft.title.trim(),
+    category: bugCategoryLabels[draft.category],
+    description: draft.description.trim(),
+    reproductionSteps: draft.reproductionSteps.trim(),
+    contact: draft.contact.trim(),
+    includeEnvironment,
+    environment: includeEnvironment
+      ? {
+          appVersion: APP_VERSION || "dev",
+          os: String(desktopEnvironment.os || "Browser Preview"),
+          architecture: String(desktopEnvironment.architecture || "unknown"),
+          currentPage: currentPageName(),
+          submittedAt: now(),
+          installationId: state.installationId,
+        }
+      : undefined,
+  };
+}
+
+async function submitBugReport() {
+  if (state.feedbackSubmitting) return false;
+  const errors = validateBugReportDraft();
+  if (Object.keys(errors).length) {
+    state.feedbackErrors = errors;
+    state.feedbackMessage = "请完善标记的内容";
+    render();
+    return false;
+  }
+
+  state.feedbackSubmitting = true;
+  state.feedbackErrors = {};
+  state.feedbackMessage = "";
+  state.feedbackResult = null;
+  render();
+
+  try {
+    if (!desktopBugReports?.submit) throw new Error("SERVICE_NOT_AVAILABLE");
+    const result = await desktopBugReports.submit(bugReportPayload());
+    if (!result?.success) {
+      state.feedbackMessage = String(result?.message || "反馈提交失败，请稍后重试").slice(0, 240);
+      return false;
+    }
+    state.feedbackDraft = createEmptyFeedbackDraft();
+    state.feedbackResult = result;
+    return true;
+  } catch {
+    state.feedbackMessage = "网络不可用，请检查连接后重试";
+    return false;
+  } finally {
+    state.feedbackSubmitting = false;
+    render();
+  }
 }
 
 function startColumnResize(event, column) {
@@ -3174,10 +3454,21 @@ function action(data, event = null) {
   }
   if (data.action === "toggle-settings") {
     state.settingsOpen = !state.settingsOpen;
-    if (state.settingsOpen) state.reviewOpen = false;
+    if (state.settingsOpen) {
+      state.reviewOpen = false;
+      state.feedbackOpen = false;
+    }
   }
   if (data.action === "toggle-theme") state.theme = state.theme === "dark" ? "light" : "dark";
   if (data.action === "close-settings") state.settingsOpen = false;
+  if (data.action === "open-feedback") {
+    state.settingsOpen = false;
+    state.reviewOpen = false;
+    state.feedbackOpen = true;
+    state.feedbackResult = null;
+    state.feedbackMessage = "";
+  }
+  if (data.action === "close-feedback") closeBugReport();
   if (data.action === "toggle-review") {
     state.reviewOpen = !state.reviewOpen;
     if (state.reviewOpen) state.settingsOpen = false;
@@ -4322,6 +4613,7 @@ async function bootstrap() {
   state.taskFilter = data.taskFilter;
   state.priorityFilter = data.priorityFilter;
   state.newTaskPriority = data.newTaskPriority;
+  state.installationId = normalizeInstallationId(data.installationId);
   state.activeTaskId = tasksInActiveGroup()[0]?.id || "";
   render();
 }
@@ -4342,11 +4634,12 @@ window.addEventListener("keydown", (event) => {
       syncContextMenuRoot();
       return;
     }
-    if (state.selectedNodeId || state.settingsOpen || state.reviewOpen) {
+    if (state.selectedNodeId || state.settingsOpen || state.reviewOpen || state.feedbackOpen) {
       event.preventDefault();
       exitNodeDetail();
       state.settingsOpen = false;
       state.reviewOpen = false;
+      closeBugReport();
       render();
       return;
     }
