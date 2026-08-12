@@ -246,3 +246,17 @@
 - Milkdown's CommonMark image schema explicitly declares images as `inline`, `group: inline`, and atomic. Crepe renders them through a `span.milkdown-image-inline` node view containing `img.image-inline`.
 - The project override targeted every knowledge-editor `img` and forced `display: block`, overriding the inline node's intended geometry. The vendor wrapper itself remains `inline-flex` with `vertical-align: text-bottom`.
 - The scoped correction keeps the wrapper inline, reserves two pixels at the editor edge for the caret, and renders only its child image as `inline-block` aligned to the bottom. Crepe's separate `.milkdown-image-block` selectors remain untouched.
+
+# 2026-08-12 Markdown Lists, Code Semantics, and Performance
+
+- The supplied screenshot shows both ordered and unordered first-level items beginning much farther right than normal paragraphs, a wide warm code-block wash with a high-contrast active line number, and a backtick-delimited phrase remaining as literal text.
+- The desired writing surface is restrained and document-like: compact markers, quiet neutral code containers, readable monospace inline code, and immediate structural transformations without decorative animation.
+- Typora's official Markdown reference treats inline code as backtick-wrapped text inside a normal paragraph, and fenced code blocks as three backticks followed by Return with optional language syntax highlighting.
+- Typora's official quick-start describes live preview: inline styles render when their closing syntax is completed, while block styles render during typing or after Return. This is the interaction baseline, not a requirement to copy Typora's theme.
+- Current local `main` and remote `origin/main` match at `4a42857` / `v0.1.104`; existing unrelated skill, planning, design-QA, design-system, and mockup artifacts remain user-owned.
+- The final first-level list offset was cumulative: `1.35em` outer padding plus an explicit 20px label wrapper and 4px flex gap. Nested indentation can be preserved separately through `.content-dom` lists.
+- Milkdown's built-in inline-code input rule recognizes only one opening and closing backtick. A project input rule using a captured backtick run and matching backreference supports both standard single delimiters and longer matching delimiters allowed by CommonMark.
+- Crepe's default CodeMirror feature installs `basicSetup` (59 default key bindings plus gutters, active-line treatment, folding, search, and other extensions). The app does not configure code languages, so most of that surface is visual/runtime overhead rather than needed functionality.
+- Retaining Crepe's code-block component while replacing only its `extensions` array with drawing and editing keymaps preserves code editing, navigation, undo integration, language/copy controls, and lazy viewport mounting while removing line numbers and heavy editor chrome.
+- Milkdown's listener waits 200ms and then serializes the entire ProseMirror document for every `markdownUpdated` event. Because pasted images are stored as persistent data URLs inside Markdown, structural changes can trigger expensive full-document/base64 serialization during active editing.
+- Switching to the non-serializing `updated` event and scheduling `getMarkdown()` after a 320ms quiet period through `requestIdleCallback` moves that work out of the structural input transaction. Blur and explicit `getMarkdown()` still flush current content synchronously, preserving save/export correctness.

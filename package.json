@@ -1,6 +1,6 @@
 {
   "name": "personal-task-track",
-  "version": "0.1.104",
+  "version": "0.1.105",
   "description": "A local-first personal task flow tracker for programmer daily work.",
   "private": true,
   "license": "UNLICENSED",
@@ -69,10 +69,11 @@
     }
   },
   "devDependencies": {
+    "@codemirror/commands": "6.10.4",
+    "@codemirror/view": "6.43.4",
     "@milkdown/crepe": "^7.21.3",
     "electron": "^42.7.0",
     "electron-builder": "^26.15.3",
     "esbuild": "^0.28.1"
-  },
-  "dependencies": {}
+  }
 }

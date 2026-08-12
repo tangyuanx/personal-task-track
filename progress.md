@@ -1,5 +1,34 @@
 # Progress Log
 
+## Session: 2026-08-12 Markdown Lists, Code Semantics, and Performance
+
+### Phase 25: Evidence and source audit
+- **Status:** complete
+- Actions taken:
+  - Read the project maintenance, persistent planning, and frontend design instructions.
+  - Inspected the supplied screenshot at original resolution and separated the four reported issues into list geometry, block-code presentation, inline-code parsing, and editing latency.
+  - Consulted Typora's official Markdown reference and quick-start for the expected backtick and live-preview behavior.
+  - Preserved all unrelated user artifacts and confirmed local `main` matches `origin/main` at `4a42857` / `v0.1.104`.
+  - Began auditing the final knowledge-editor CSS and Milkdown/CodeMirror integration.
+  - Traced first-level list whitespace to cumulative outer padding, marker width, and flex gap while preserving a separate nested-list indentation path.
+  - Confirmed Milkdown's built-in inline-code rule only matches a single backtick pair and added a matching-delimiter rule for one or more backticks.
+  - Reconfigured Crepe's existing code-block component with a lean CodeMirror extension set instead of the full `basicSetup` bundle.
+  - Replaced synchronous `markdownUpdated` serialization with a quiet-period idle serializer that flushes on blur and explicit reads.
+  - Added scoped light/dark styles for compact lists, neutral code blocks without gutters/active-line wash, and restrained inline code.
+  - Added regression contracts covering list indentation, block/inline code presentation, flexible backticks, lean CodeMirror setup, and deferred serialization.
+  - Repaired the assertion fixture and passed all 27 focused desktop tests, direct single/double-backtick samples, Milkdown bundling, and `git diff --check`.
+  - Passed the full project check with 31 desktop/client tests and 11 mocked backend tests.
+  - Declared the directly imported CodeMirror commands/view packages as exact development dependencies and confirmed the lockfile resolves them at 6.10.4 and 6.43.4.
+  - Re-ran the complete check after dependency locking and regenerated the tracked Milkdown browser bundle successfully.
+  - Re-fetched remote `main` and tags, confirmed zero divergence at v0.1.104, then bumped release and cache metadata to v0.1.105.
+  - Removed old release output, passed the final v0.1.105 check, and built the macOS ARM64 DMG/ZIP plus Windows x64 NSIS packages successfully.
+  - Confirmed all six v0.1.105 artifacts are present, no AppleDouble files exist, package/lock/cache versions agree, remote `main` is unchanged, and v0.1.105 is not already present remotely.
+  - Prepared the scoped v0.1.105 release commit and tag for automatic publication.
+- Errors:
+  - A quick CommonJS export probe expanded `$inputRule` in the shell and produced a syntax error; switched to quoted ESM inspection for package APIs.
+  - The first inline-code source assertion accidentally contained a non-breaking space and failed despite a successful Milkdown bundle; split it into stable structural assertions.
+  - The sandbox blocked the backend test runner's local IPC pipe; the approved out-of-sandbox retry passed all tests.
+
 ## Session: 2026-08-12 Knowledge Image Caret Alignment
 
 ### Phase 24: Screenshot diagnosis and source audit

@@ -1,6 +1,11 @@
 import { Crepe } from "@milkdown/crepe";
+import { defaultKeymap, indentWithTab } from "@codemirror/commands";
+import { drawSelection, keymap } from "@codemirror/view";
+import { codeBlockConfig } from "@milkdown/kit/component/code-block";
 import { commandsCtx } from "@milkdown/kit/core";
-import { insertImageCommand } from "@milkdown/kit/preset/commonmark";
+import { markRule } from "@milkdown/kit/prose";
+import { inlineCodeSchema, insertImageCommand } from "@milkdown/kit/preset/commonmark";
+import { $inputRule } from "@milkdown/kit/utils";
 import "@milkdown/crepe/theme/frame.css";
 import "@milkdown/crepe/theme/common/code-mirror.css";
 import "@milkdown/crepe/theme/common/cursor.css";
@@ -13,6 +18,28 @@ import "@milkdown/crepe/theme/common/toolbar.css";
 import "@milkdown/crepe/theme/common/top-bar.css";
 
 const instances = new WeakMap();
+const completeInlineCodeInputRule = $inputRule((ctx) =>
+  markRule(/(`+)([^`\n]+)\1$/, inlineCodeSchema.type(ctx)),
+);
+
+function scheduleIdle(callback) {
+  const timer = window.setTimeout(() => {
+    if (typeof window.requestIdleCallback === "function") {
+      callback.idleId = window.requestIdleCallback(callback, { timeout: 500 });
+      return;
+    }
+    callback();
+  }, 320);
+  return timer;
+}
+
+function cancelScheduledIdle(timer, callback) {
+  window.clearTimeout(timer);
+  if (callback.idleId && typeof window.cancelIdleCallback === "function") {
+    window.cancelIdleCallback(callback.idleId);
+  }
+  callback.idleId = 0;
+}
 
 function imageFileToDataUrl(file) {
   return new Promise((resolve, reject) => {
@@ -48,21 +75,47 @@ class MilkdownTaskEditor {
       },
     });
 
+    crepe.editor
+      .config((ctx) => {
+        ctx.update(codeBlockConfig.key, (config) => ({
+          ...config,
+          extensions: [drawSelection(), keymap.of(defaultKeymap.concat(indentWithTab))],
+        }));
+      })
+      .use(completeInlineCodeInputRule);
+
     let lastMarkdown = markdown;
+    let markdownTimer = 0;
+    const emitMarkdown = () => {
+      cancelScheduledIdle(markdownTimer, emitMarkdown);
+      markdownTimer = 0;
+      const nextMarkdown = crepe.getMarkdown();
+      if (nextMarkdown === lastMarkdown) return nextMarkdown;
+      lastMarkdown = nextMarkdown;
+      onChange?.(nextMarkdown);
+      return nextMarkdown;
+    };
+    const scheduleMarkdown = () => {
+      cancelScheduledIdle(markdownTimer, emitMarkdown);
+      markdownTimer = scheduleIdle(emitMarkdown);
+    };
     crepe.on((listener) => {
-      listener.markdownUpdated((_, nextMarkdown) => {
-        if (nextMarkdown === lastMarkdown) return;
-        lastMarkdown = nextMarkdown;
-        onChange?.(nextMarkdown);
-      });
+      listener.updated(scheduleMarkdown);
+      listener.blur(emitMarkdown);
+      listener.destroy(() => cancelScheduledIdle(markdownTimer, emitMarkdown));
     });
 
     await crepe.create();
     const instance = {
-      getMarkdown: () => crepe.getMarkdown(),
+      getMarkdown: () => {
+        cancelScheduledIdle(markdownTimer, emitMarkdown);
+        markdownTimer = 0;
+        return crepe.getMarkdown();
+      },
       insertImage: ({ src, alt = "图片", title = "" }) =>
         crepe.editor.action((ctx) => ctx.get(commandsCtx).call(insertImageCommand.key, { src, alt, title })),
       destroy: async () => {
+        cancelScheduledIdle(markdownTimer, emitMarkdown);
         instances.delete(root);
         await crepe.destroy();
       },

@@ -6336,21 +6336,26 @@ body {
 .task-knowledge-editor-panel .ProseMirror ul,
 .task-knowledge-editor-panel .ProseMirror ol {
   margin: 0.38em 0;
-  padding-left: 1.35em;
+  padding-left: 0;
 }
 
 .task-knowledge-editor-panel .milkdown-list-item-block {
   margin: 0.12em 0;
 }
 
+.task-knowledge-editor-panel .ProseMirror .content-dom ul,
+.task-knowledge-editor-panel .ProseMirror .content-dom ol {
+  margin-left: 18px;
+}
+
 .task-knowledge-editor-panel .milkdown-list-item-block > .list-item,
 .task-knowledge-editor-panel .milkdown-list-item-block li {
-  gap: 4px;
+  gap: 3px;
 }
 
 .task-knowledge-editor-panel .milkdown-list-item-block li .label-wrapper,
 .task-knowledge-editor-panel .milkdown-list-item-block li .label-wrapper .label {
-  width: 20px !important;
+  width: 18px !important;
   height: 24px !important;
   padding-top: 0 !important;
   padding-bottom: 0 !important;
@@ -6377,6 +6382,81 @@ body {
   height: auto;
   border-radius: 8px;
   vertical-align: bottom;
+}
+
+.task-knowledge-editor-panel .milkdown .milkdown-code-block {
+  margin: 0.7em 0;
+  border: 1px solid #e1e5e2;
+  border-radius: 8px;
+  padding: 9px 12px 11px;
+  background: #f5f7f6;
+  box-shadow: none;
+}
+
+.task-knowledge-editor-panel .milkdown .milkdown-code-block.selected {
+  outline: 1px solid #aeb9b2;
+  outline-offset: 1px;
+}
+
+.task-knowledge-editor-panel .milkdown .milkdown-code-block .cm-editor,
+.task-knowledge-editor-panel .milkdown .milkdown-code-block .milkdown-code-block-placeholder {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.task-knowledge-editor-panel .milkdown .milkdown-code-block .cm-scroller,
+.task-knowledge-editor-panel .milkdown .milkdown-code-block .milkdown-code-block-placeholder {
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.task-knowledge-editor-panel .milkdown .milkdown-code-block .cm-content {
+  padding: 2px 0;
+}
+
+.task-knowledge-editor-panel .milkdown .milkdown-code-block .cm-gutters {
+  display: none;
+}
+
+.task-knowledge-editor-panel .milkdown .milkdown-code-block .cm-activeLine {
+  background: transparent;
+}
+
+.task-knowledge-editor-panel .milkdown .milkdown-code-block .tools .language-button {
+  margin-bottom: 5px;
+  padding: 1px 5px;
+  background: transparent;
+  color: var(--handoff-soft);
+  font-size: 10px;
+  font-weight: 520;
+}
+
+.task-knowledge-editor-panel .ProseMirror :not(pre) > code {
+  border: 1px solid #e0e5e2;
+  border-radius: 4px;
+  padding: 0.08em 0.32em;
+  background: #f2f5f3;
+  color: #34463d;
+  font-family: var(--mono);
+  font-size: 0.92em;
+}
+
+:root[data-theme="dark"] .task-knowledge-editor-panel .milkdown .milkdown-code-block {
+  border-color: #35423b;
+  background: #18221d;
+}
+
+:root[data-theme="dark"] .task-knowledge-editor-panel .milkdown .milkdown-code-block.selected {
+  outline-color: #63736a;
+}
+
+:root[data-theme="dark"] .task-knowledge-editor-panel .ProseMirror :not(pre) > code {
+  border-color: #3b4941;
+  background: #202b25;
+  color: #cddbd3;
 }
 
 .task-knowledge-editor-panel .milkdown-status {

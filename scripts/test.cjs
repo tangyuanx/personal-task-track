@@ -488,6 +488,33 @@ test("knowledge images keep the caret beside the inline image node", async () =>
   assert.doesNotMatch(styles, /\.task-knowledge-editor-panel \.ProseMirror img\s*\{[\s\S]*?display:\s*block;/);
 });
 
+test("knowledge lists and code use compact document-like presentation", async () => {
+  const styles = await fs.readFile(path.join(__dirname, "..", "src", "styles.css"), "utf8");
+  const listRule = styles.match(/\.task-knowledge-editor-panel \.ProseMirror ul,[\s\S]*?\.task-knowledge-editor-panel \.ProseMirror ol\s*\{([\s\S]*?)\}/)?.[1] || "";
+  const nestedListRule = styles.match(/\.task-knowledge-editor-panel \.ProseMirror \.content-dom ul,[\s\S]*?\.content-dom ol\s*\{([\s\S]*?)\}/)?.[1] || "";
+  const codeBlockRule = styles.match(/\.task-knowledge-editor-panel \.milkdown \.milkdown-code-block\s*\{([\s\S]*?)\}/)?.[1] || "";
+  const inlineCodeRule = styles.match(/\.task-knowledge-editor-panel \.ProseMirror :not\(pre\) > code\s*\{([\s\S]*?)\}/)?.[1] || "";
+
+  assert.match(listRule, /padding-left:\s*0;/);
+  assert.match(nestedListRule, /margin-left:\s*18px;/);
+  assert.match(codeBlockRule, /background:\s*#f5f7f6;/);
+  assert.match(codeBlockRule, /box-shadow:\s*none;/);
+  assert.match(inlineCodeRule, /font-family:\s*var\(--mono\);/);
+  assert.match(styles, /\.milkdown-code-block \.cm-gutters\s*\{[\s\S]*?display:\s*none;/);
+});
+
+test("Milkdown handles matching backtick code spans and defers markdown serialization", async () => {
+  const entry = await fs.readFile(path.join(__dirname, "..", "src", "milkdown-editor.entry.js"), "utf8");
+
+  assert.match(entry, /const completeInlineCodeInputRule = \$inputRule/);
+  assert.match(entry, /markRule\(\/\(`\+\)\(\[\^`\\n\]\+\)\\1\$\//);
+  assert.match(entry, /inlineCodeSchema\.type\(ctx\)/);
+  assert.match(entry, /extensions:\s*\[drawSelection\(\), keymap\.of\(defaultKeymap\.concat\(indentWithTab\)\)\]/);
+  assert.match(entry, /listener\.updated\(scheduleMarkdown\)/);
+  assert.match(entry, /requestIdleCallback/);
+  assert.doesNotMatch(entry, /listener\.markdownUpdated/);
+});
+
 test("node mutation rejects invalid statuses and clears deleted descendant detail", async () => {
   const harness = await rendererHarness();
   const result = harness.json(`(() => {

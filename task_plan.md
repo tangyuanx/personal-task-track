@@ -4,9 +4,18 @@
 Maintain the personal task management app through scoped, low-risk improvements while preserving existing task flow behavior and release discipline.
 
 ## Current Phase
-Phase 24
+Phase 25
 
 ## Phases
+
+### Phase 25: Markdown Lists, Code Semantics, and Editing Performance
+- [x] Inspect the supplied screenshot, recover context, and confirm the latest remote baseline
+- [x] Audit Milkdown list/code DOM, CommonMark input rules, code styling, and save hot path
+- [x] Tighten list alignment and redesign block/inline code presentation
+- [x] Restore reliable backtick inline-code input and reduce structural-edit latency
+- [x] Add focused regression coverage and run full validation
+- [x] Build, version, commit, tag, and publish the release
+- **Status:** complete
 
 ### Phase 24: Knowledge Image Caret Alignment
 - [x] Inspect the supplied screenshot and confirm the latest remote baseline
