@@ -1,5 +1,24 @@
 # Progress Log
 
+## Session: 2026-08-12 Knowledge List Marker Contrast
+
+### Phase 26: Contrast audit and scoped correction
+- **Status:** in progress
+- Actions taken:
+  - Read the project maintenance, persistent planning, and frontend design instructions and recovered the previous release context.
+  - Preserved unrelated user artifacts, fetched remote `main` and tags, and confirmed zero divergence at `3526988` / `v0.1.105`.
+  - Traced the faint ordered/unordered markers to Crepe's shared outline-color rule rather than the new list spacing overrides.
+  - Chose the theme-aware application ink token plus a restrained semibold numeric weight, leaving all v0.1.105 list geometry unchanged.
+  - Overrode both text labels and SVG bullets with the light/dark-aware ink token and added regression assertions for color, fill, and weight.
+  - Passed the focused list-presentation regression test and `git diff --check`.
+  - Passed the full project check with 31 desktop/client tests and 11 mocked backend tests.
+  - Re-fetched remote main/tags, confirmed v0.1.105 remained latest with zero divergence, and bumped release/cache metadata to v0.1.106.
+  - Removed old release output, passed the final v0.1.106 check, and built the macOS ARM64 DMG/ZIP plus Windows x64 NSIS packages successfully.
+  - Confirmed all six v0.1.106 artifacts are present, no AppleDouble files exist, package/lock/cache versions agree, remote `main` is unchanged, and v0.1.106 is not already present remotely.
+  - Prepared the scoped v0.1.106 release commit and tag for automatic publication.
+- Errors:
+  - The first planning-file patch contained an extra hunk delimiter and was rejected without modifying files; corrected the patch structure on the next attempt.
+
 ## Session: 2026-08-12 Markdown Lists, Code Semantics, and Performance
 
 ### Phase 25: Evidence and source audit

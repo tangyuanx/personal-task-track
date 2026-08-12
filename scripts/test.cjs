@@ -492,11 +492,15 @@ test("knowledge lists and code use compact document-like presentation", async ()
   const styles = await fs.readFile(path.join(__dirname, "..", "src", "styles.css"), "utf8");
   const listRule = styles.match(/\.task-knowledge-editor-panel \.ProseMirror ul,[\s\S]*?\.task-knowledge-editor-panel \.ProseMirror ol\s*\{([\s\S]*?)\}/)?.[1] || "";
   const nestedListRule = styles.match(/\.task-knowledge-editor-panel \.ProseMirror \.content-dom ul,[\s\S]*?\.content-dom ol\s*\{([\s\S]*?)\}/)?.[1] || "";
+  const listMarkerRule = styles.match(/\.task-knowledge-editor-panel \.milkdown-list-item-block li \.label-wrapper,[\s\S]*?\.label-wrapper \.label\s*\{([\s\S]*?)\}/)?.[1] || "";
   const codeBlockRule = styles.match(/\.task-knowledge-editor-panel \.milkdown \.milkdown-code-block\s*\{([\s\S]*?)\}/)?.[1] || "";
   const inlineCodeRule = styles.match(/\.task-knowledge-editor-panel \.ProseMirror :not\(pre\) > code\s*\{([\s\S]*?)\}/)?.[1] || "";
 
   assert.match(listRule, /padding-left:\s*0;/);
   assert.match(nestedListRule, /margin-left:\s*18px;/);
+  assert.match(listMarkerRule, /color:\s*var\(--handoff-ink\);/);
+  assert.match(listMarkerRule, /font-weight:\s*600;/);
+  assert.match(styles, /\.milkdown-list-item-block li \.label-wrapper svg\s*\{[\s\S]*?fill:\s*currentColor;/);
   assert.match(codeBlockRule, /background:\s*#f5f7f6;/);
   assert.match(codeBlockRule, /box-shadow:\s*none;/);
   assert.match(inlineCodeRule, /font-family:\s*var\(--mono\);/);

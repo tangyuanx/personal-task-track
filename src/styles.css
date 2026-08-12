@@ -6359,7 +6359,14 @@ body {
   height: 24px !important;
   padding-top: 0 !important;
   padding-bottom: 0 !important;
+  color: var(--handoff-ink);
+  font-weight: 600;
   line-height: 24px !important;
+}
+
+.task-knowledge-editor-panel .milkdown-list-item-block li .label-wrapper svg {
+  color: var(--handoff-ink);
+  fill: currentColor;
 }
 
 .task-knowledge-editor-panel .milkdown-list-item-block > .list-item > .children .content-dom > p {

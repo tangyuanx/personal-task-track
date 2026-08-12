@@ -260,3 +260,9 @@
 - Retaining Crepe's code-block component while replacing only its `extensions` array with drawing and editing keymaps preserves code editing, navigation, undo integration, language/copy controls, and lazy viewport mounting while removing line numbers and heavy editor chrome.
 - Milkdown's listener waits 200ms and then serializes the entire ProseMirror document for every `markdownUpdated` event. Because pasted images are stored as persistent data URLs inside Markdown, structural changes can trigger expensive full-document/base64 serialization during active editing.
 - Switching to the non-serializing `updated` event and scheduling `getMarkdown()` after a 320ms quiet period through `requestIdleCallback` moves that work out of the structural input transaction. Blur and explicit `getMarkdown()` still flush current content synchronously, preserving save/export correctness.
+
+# 2026-08-12 Knowledge List Marker Contrast
+
+- The v0.1.105 list geometry is correct, but Crepe's vendor rule colors both ordered labels and unordered SVG markers with `--crepe-color-outline` (`#a8a8a8` in the light theme), which is visibly weaker than the note text.
+- The application already defines theme-aware `--handoff-ink` values for both light and dark surfaces. Using that token for list markers keeps contrast consistent in both themes without introducing another palette value.
+- The marker override should change only color/fill and numeric weight; the 18px marker width, 3px gap, and nested 18px indentation must remain unchanged.

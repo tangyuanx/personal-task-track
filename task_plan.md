@@ -4,9 +4,17 @@
 Maintain the personal task management app through scoped, low-risk improvements while preserving existing task flow behavior and release discipline.
 
 ## Current Phase
-Phase 25
+Phase 26
 
 ## Phases
+
+### Phase 26: Knowledge List Marker Contrast
+- [x] Recover the v0.1.105 release context and confirm the latest remote baseline
+- [x] Audit final Milkdown marker colors and application light/dark tokens
+- [x] Increase ordered and unordered marker contrast without changing list geometry
+- [x] Add regression coverage and run full validation
+- [x] Build, version, commit, tag, and publish the release
+- **Status:** complete
 
 ### Phase 25: Markdown Lists, Code Semantics, and Editing Performance
 - [x] Inspect the supplied screenshot, recover context, and confirm the latest remote baseline
