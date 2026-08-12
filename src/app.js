@@ -165,6 +165,7 @@ let state = {
   recordDraft: "",
   query: "",
   taskFilter: "all",
+  taskDateFilter: "",
   priorityFilter: "all",
   newTaskPriority: "medium",
   markdownMode: "edit",
@@ -495,6 +496,17 @@ function normalizeTaskFilter(value) {
   return Object.hasOwn(taskFilterLabels, value) ? value : "all";
 }
 
+function normalizeTaskDateFilter(value) {
+  const text = String(value || "");
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
+  if (!match) return "";
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(year, month - 1, day);
+  return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day ? text : "";
+}
+
 function normalizePriorityFilter(value) {
   return Object.hasOwn(priorityFilterLabels, value) ? value : "all";
 }
@@ -797,16 +809,39 @@ function renderSidebar() {
           </label>
         </div>
         <div class="task-repository-toolbar">
-          <div class="task-status-filters" role="group" aria-label="任务状态筛选">
-            ${[
-              ["all", "全部"],
-              ["active", "未完成"],
-              ["done", "已完成"],
-            ]
-              .map(
-                ([value, label]) => `<button class="${state.taskFilter === value ? "active" : ""}" type="button" data-setting-button="task-filter" data-value="${value}">${label}</button>`,
-              )
-              .join("")}
+          <div class="task-filter-primary">
+            <div class="task-status-filters" role="group" aria-label="任务状态筛选">
+              ${[
+                ["all", "全部"],
+                ["active", "未完成"],
+                ["done", "已完成"],
+              ]
+                .map(
+                  ([value, label]) => `<button class="${state.taskFilter === value ? "active" : ""}" type="button" data-setting-button="task-filter" data-value="${value}">${label}</button>`,
+                )
+                .join("")}
+            </div>
+            <button
+              class="task-calendar-filter ${state.taskDateFilter ? "active" : ""}"
+              type="button"
+              popovertarget="task-date-filter-popover"
+              title="按最后活动日期筛选"
+              aria-label="${state.taskDateFilter ? `当前按 ${escAttr(state.taskDateFilter)} 的最后活动日期筛选` : "按最后活动日期筛选"}"
+              aria-pressed="${Boolean(state.taskDateFilter)}"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M16 3v4M8 3v4M3 10h18"></path></svg>
+              ${state.taskDateFilter ? `<span>${taskDateFilterLabel(state.taskDateFilter)}</span>` : ""}
+            </button>
+            <div class="task-date-filter-popover" id="task-date-filter-popover" popover>
+              <label>
+                <span>最后活动日期</span>
+                <input type="date" data-task-date-filter value="${escAttr(state.taskDateFilter)}" aria-label="选择任务最后活动日期" />
+              </label>
+              <footer>
+                <small>与状态、优先级同时生效</small>
+                ${state.taskDateFilter ? `<button type="button" data-action="clear-task-date-filter">清除</button>` : ""}
+              </footer>
+            </div>
           </div>
           <label class="task-priority-filter">
             <span>优先级 ·</span>
@@ -1338,6 +1373,7 @@ function filteredTasks({ includeQuery = true } = {}) {
       if (state.taskFilter === "done" && task.status !== "done") return false;
       if (state.taskFilter === "blocked" && !tags.blocked && !hasBlocked) return false;
       if (state.taskFilter === "later" && !tags.later && !hasLater) return false;
+      if (state.taskDateFilter && localDateKey(latestTaskTime(task)) !== state.taskDateFilter) return false;
       if (state.priorityFilter !== "all" && task.priority !== state.priorityFilter) return false;
       if (includeQuery && q) {
         const taskText = `${task.title} ${task.description} ${task.hypothesis} ${task.conclusion}`.toLowerCase();
@@ -2159,6 +2195,13 @@ function bind() {
       render();
     });
   }
+
+  const taskDateFilter = document.querySelector("[data-task-date-filter]");
+  taskDateFilter?.addEventListener("change", (event) => {
+    state.taskDateFilter = normalizeTaskDateFilter(event.target.value);
+    state.selectedNodeId = "";
+    render();
+  });
 }
 
 function bindTaskRepositoryRows(scope = document) {
@@ -3476,6 +3519,7 @@ function action(data, event = null) {
     state.reviewPreset = Object.hasOwn(reviewPresetLabels, data.preset) ? data.preset : "week";
     if (state.reviewPreset === "custom") ensureReviewCustomDates();
   }
+  if (data.action === "clear-task-date-filter") state.taskDateFilter = "";
   if (data.action === "open-review-task") openTaskFromGlobalList(data.taskId);
   if (data.action === "reload-app") window.location.reload();
   if (data.action === "select-group") selectGroup(data.groupId);
@@ -3669,6 +3713,7 @@ function openTaskFromGlobalList(taskId, nodeId = "") {
   state.nodeDetailFullscreen = false;
   state.nodeDetailPosition = null;
   state.taskFilter = "all";
+  state.taskDateFilter = "";
   state.priorityFilter = "all";
   state.query = "";
   state.reviewOpen = false;
@@ -4550,6 +4595,20 @@ function formatShort(value) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(value));
+}
+
+function localDateKey(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const year = String(date.getFullYear()).padStart(4, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function taskDateFilterLabel(value) {
+  const normalized = normalizeTaskDateFilter(value);
+  return normalized ? `${normalized.slice(5, 7)}/${normalized.slice(8, 10)}` : "";
 }
 
 function formatMinuteStamp(value) {

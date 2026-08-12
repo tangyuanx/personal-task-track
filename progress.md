@@ -1,5 +1,30 @@
 # Progress Log
 
+## Session: 2026-08-12 Calendar-integrated Task Filtering
+
+### Phase 23: Discovery and low-impact integration
+- **Status:** in progress
+- Actions taken:
+  - Read the project maintenance, persistent planning, and frontend design instructions.
+  - Recovered the previous session context and recorded the completed v0.1.102 publication.
+  - Preserved all existing unrelated user artifacts and fetched the latest remote baseline.
+  - Confirmed local `main` and `origin/main` match at `ebf913c` / `v0.1.102`.
+  - Began auditing the status-filter row, task date fields, renderer state, persistence, review helpers, and tests.
+  - Chose the existing last-activity timestamp as the date meaning, avoiding new task fields or storage migration.
+  - Chose a runtime-only calendar filter that composes with all existing repository filters and resets when opening a task from global views.
+  - Added the compact calendar trigger directly after the status controls, an anchored native date popover, active `MM/DD` feedback, and a clear action.
+  - Added local-day normalization and last-activity filtering without changing the persisted status/priority preference payload.
+  - Added regression coverage for active/done composition, alternate-day exclusion, active-date labeling, invalid dates, and non-persistence.
+  - Passed JavaScript syntax validation, all 24 focused desktop tests, and `git diff --check`.
+  - Passed the full project check with 28 desktop/client tests and 11 mocked backend tests.
+  - Re-fetched remote main/tags, confirmed `v0.1.102` remains latest with zero branch divergence, and bumped release metadata to `0.1.103`.
+  - Removed old release output and passed the full v0.1.103 project check again.
+  - Built the macOS ARM64 DMG/ZIP and Windows x64 NSIS packages successfully.
+  - Confirmed all six v0.1.103 release artifacts are present, `release/` contains no AppleDouble files, version/cache metadata is consistent, and remote `main` is unchanged with no existing v0.1.103 tag.
+  - Prepared the scoped v0.1.103 release commit and tag for publication under the standing automatic-push preference.
+- Errors:
+  - The first combined release-verification orchestration had a JavaScript quoting syntax error before any shell command ran; split the checks into simpler calls.
+
 ## Session: 2026-08-12 Redundant Section Label Removal
 
 ### Phase 22: Simplified information hierarchy
@@ -16,6 +41,7 @@
   - Bumped package and renderer cache metadata to `0.1.102` after confirming `v0.1.101` remains the remote baseline.
   - Built the macOS ARM64 DMG/ZIP and Windows x64 NSIS packages successfully.
   - Confirmed the v0.1.102 release artifacts are present and `release/` contains no AppleDouble files.
+  - Published commit `ebf913c` to remote `main` and pushed tag `v0.1.102`; post-push verification returned `0 0` divergence.
 
 ## Session: 2026-08-12 Narrow Sidebar Resize Affordance
 

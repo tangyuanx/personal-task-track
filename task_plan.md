@@ -4,9 +4,18 @@
 Maintain the personal task management app through scoped, low-risk improvements while preserving existing task flow behavior and release discipline.
 
 ## Current Phase
-Phase 22
+Phase 23
 
 ## Phases
+
+### Phase 23: Calendar-integrated Task Filtering
+- [x] Recover the previous release context and confirm local `main` matches `origin/main`
+- [x] Audit existing task dates, status filters, persistence, and review-date helpers
+- [x] Implement a compact calendar control fused with the status filter row
+- [x] Add regression coverage without changing existing status or priority behavior
+- [x] Validate, build, and version the release
+- [x] Commit, tag, and publish the release
+- **Status:** complete
 
 ### Phase 22: Remove Redundant Section Labels
 - [x] Inspect the repository and workspace heading markup and final layout rules
@@ -14,8 +23,8 @@ Phase 22
 - [x] Remove the redundant labels and revise the empty-state reference
 - [x] Add a regression contract for the simplified hierarchy
 - [x] Validate, package, and version the release
-- [ ] Commit, tag, and publish the release
-- **Status:** in progress
+- [x] Commit, tag, and publish the release
+- **Status:** complete
 
 ### Phase 21: Narrow Sidebar Resize Affordance
 - [x] Inspect the supplied screenshot and current sidebar resize CSS/behavior

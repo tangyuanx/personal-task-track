@@ -7118,6 +7118,137 @@ body.task-reordering * {
   color: #edf3ee;
 }
 
+/* v0.1.103 — calendar filter composed with repository status navigation */
+.task-filter-primary {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.task-calendar-filter {
+  anchor-name: --task-calendar-filter;
+  display: inline-flex;
+  min-width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  padding: 0 6px;
+  background: transparent;
+  color: var(--handoff-muted);
+}
+
+.task-calendar-filter svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.6;
+}
+
+.task-calendar-filter span {
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.task-calendar-filter:hover,
+.task-calendar-filter:focus-visible {
+  border-color: var(--handoff-line-strong);
+  color: var(--handoff-ink);
+}
+
+.task-calendar-filter:focus-visible {
+  outline: 1px solid var(--handoff-accent);
+  outline-offset: 2px;
+}
+
+.task-calendar-filter.active {
+  border-color: color-mix(in srgb, var(--handoff-accent) 42%, var(--handoff-line-strong));
+  background: color-mix(in srgb, var(--handoff-accent) 9%, transparent);
+  color: var(--handoff-ink);
+}
+
+.task-date-filter-popover {
+  position: fixed;
+  position-anchor: --task-calendar-filter;
+  inset: auto;
+  top: anchor(bottom);
+  left: anchor(left);
+  width: 218px;
+  margin: 6px 0 0;
+  border: 1px solid var(--handoff-line-strong);
+  border-radius: 10px;
+  padding: 11px;
+  background: var(--handoff-surface);
+  color: var(--handoff-ink);
+  box-shadow: 0 14px 34px rgba(24, 34, 29, 0.16);
+}
+
+.task-date-filter-popover label {
+  display: grid;
+  gap: 7px;
+  color: var(--handoff-muted);
+  font-size: 10px;
+}
+
+.task-date-filter-popover input {
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid var(--handoff-line-strong);
+  border-radius: 7px;
+  padding: 0 8px;
+  background: transparent;
+  color: var(--handoff-ink);
+  font: inherit;
+  font-size: 11px;
+}
+
+.task-date-filter-popover footer {
+  display: flex;
+  min-height: 24px;
+  align-items: end;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.task-date-filter-popover small {
+  color: var(--handoff-soft);
+  font-size: 9px;
+}
+
+.task-date-filter-popover footer button {
+  border: 0;
+  padding: 3px 0;
+  background: transparent;
+  color: var(--handoff-accent);
+  font-size: 10px;
+}
+
+:root[data-theme="dark"] .task-calendar-filter.active {
+  background: rgba(146, 199, 170, 0.11);
+  color: #edf3ee;
+}
+
+:root[data-theme="dark"] .task-date-filter-popover {
+  border-color: #3f4c44;
+  background: #202923;
+  color: #edf3ee;
+}
+
+:root[data-theme="dark"] .task-date-filter-popover input {
+  border-color: #3f4c44;
+  color: #edf3ee;
+  color-scheme: dark;
+}
+
 /* v0.1.60 — icon-first search entry */
 .search.search-box {
   min-height: 38px;

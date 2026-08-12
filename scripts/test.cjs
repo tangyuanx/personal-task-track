@@ -438,6 +438,40 @@ test("search filters repository rows without switching the active task", async (
   assert.match(app, /compositionstart/);
 });
 
+test("calendar filter composes with task status and leaves existing preferences unchanged", async () => {
+  const [app, styles] = await Promise.all([
+    fs.readFile(path.join(__dirname, "..", "src", "app.js"), "utf8"),
+    fs.readFile(path.join(__dirname, "..", "src", "styles.css"), "utf8"),
+  ]);
+  const harness = await rendererHarness();
+  const result = harness.json(`(() => {
+    state.taskGroups = [{ id: "group_inbox", title: "默认", order: 1 }];
+    state.activeGroupId = "group_inbox";
+    state.query = "";
+    state.priorityFilter = "all";
+    state.taskDateFilter = "2026-08-12";
+    state.tasks = normalizeTasks([
+      { id: "active_match", title: "当日未完成", status: "active", updatedAt: new Date(2026, 7, 12, 10).toISOString(), nodes: [] },
+      { id: "done_match", title: "当日已完成", status: "done", updatedAt: new Date(2026, 7, 12, 18).toISOString(), nodes: [] },
+      { id: "other_day", title: "其他日期", status: "active", updatedAt: new Date(2026, 7, 11, 10).toISOString(), nodes: [] }
+    ]);
+    state.taskFilter = "active";
+    const active = filteredTasks().map((task) => task.id);
+    state.taskFilter = "done";
+    const done = filteredTasks().map((task) => task.id);
+    return { active, done, label: taskDateFilterLabel(state.taskDateFilter) };
+  })()`);
+
+  assert.deepEqual(result.active, ["active_match"]);
+  assert.deepEqual(result.done, ["done_match"]);
+  assert.equal(result.label, "08/12");
+  assert.equal(harness.evaluate(`normalizeTaskDateFilter("2026-02-30")`), "");
+  assert.match(app, /popovertarget="task-date-filter-popover"/);
+  assert.match(app, /最后活动日期/);
+  assert.doesNotMatch(app, /taskDateFilter:\s*state\.taskDateFilter/);
+  assert.match(styles, /anchor-name:\s*--task-calendar-filter;/);
+});
+
 test("node mutation rejects invalid statuses and clears deleted descendant detail", async () => {
   const harness = await rendererHarness();
   const result = harness.json(`(() => {

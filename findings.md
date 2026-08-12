@@ -224,3 +224,14 @@
 - Both labels can be removed from renderer markup without compensating CSS: the repository row is flex-based with search auto-aligned right, and the task title naturally becomes the first child of its title block.
 - The first-run empty-state instruction currently names “任务仓库”; it should say “任务列表” after the visible label is removed.
 - Remote fetch completed on 2026-08-12; local `main` and `origin/main` are identical at `5bdc9f1` / `v0.1.101`. Existing unrelated skill, planning, design-QA, design-system, and mockup artifacts remain user-owned.
+
+# 2026-08-12 Calendar-integrated Task Filtering
+
+- Tasks already carry normalized `createdAt` and `updatedAt` timestamps, and every task/node mutation advances the task's `updatedAt`; there is no planned-date or due-date field.
+- Adding a due-date field would require UI, persistence, migration, and per-task editing changes that conflict with the request to avoid disrupting existing behavior.
+- The lowest-impact date meaning is “last activity date,” using the latest task/node update and local calendar-day comparison.
+- The date filter should be runtime-only so reopening the app cannot unexpectedly hide tasks behind a stale date. Existing status and priority preferences remain persisted and unchanged.
+- The filter will compose with group scope, status, priority, and search rather than replace any existing filter.
+- A compact calendar button immediately after the status group plus a native date popover preserves the current toolbar hierarchy. The button expands only when active to show `MM/DD`, and the popover includes a clear action and plain-language date meaning.
+- Chromium's native Popover API and CSS anchor positioning are available in the Electron 42 runtime, avoiding custom overlay state and outside-click handling.
+- Remote `main` and local `main` match at `ebf913c` / `v0.1.102`; unrelated skill, planning, design-QA, design-system, and mockup artifacts remain user-owned.
