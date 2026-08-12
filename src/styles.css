@@ -330,12 +330,25 @@ p {
   right: -8px;
   bottom: 0;
   width: 22px;
+  background: transparent;
   cursor: col-resize;
+  touch-action: none;
 }
 
-.sidebar-resizer:hover {
-  background: color-mix(in srgb, var(--focus) 14%, transparent);
-  border-left: 1px solid color-mix(in srgb, var(--focus) 24%, transparent);
+.sidebar-resizer::before {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 14px;
+  width: 1px;
+  background: transparent;
+  content: "";
+  transition: background-color 140ms ease;
+}
+
+.sidebar-resizer:hover::before,
+body.resizing-sidebar .sidebar-resizer::before {
+  background: color-mix(in srgb, var(--focus) 48%, var(--line));
 }
 
 

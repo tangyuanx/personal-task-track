@@ -4,9 +4,17 @@
 Maintain the personal task management app through scoped, low-risk improvements while preserving existing task flow behavior and release discipline.
 
 ## Current Phase
-Phase 20
+Phase 21
 
 ## Phases
+
+### Phase 21: Narrow Sidebar Resize Affordance
+- [x] Inspect the supplied screenshot and current sidebar resize CSS/behavior
+- [x] Preserve unrelated user artifacts and confirm local `main` matches `origin/main`
+- [x] Separate the 22px drag hit area from the visible divider treatment
+- [x] Add a regression contract for hit-area width and visual-line width
+- [x] Validate, package, version, commit, tag, and publish the release
+- **Status:** complete
 
 ### Phase 20: In-app Bug Reporting
 - [x] Read `bug反馈功能.md`, project maintenance guidance, and frontend design guidance
@@ -240,6 +248,7 @@ Phase 20
 | Post-update `npm audit --omit=dev` failed inside the network-restricted sandbox with `ENOTFOUND registry.npmjs.org` | 1 | Re-ran the same read-only audit with approved network access; zero vulnerabilities |
 | Combined accessibility/cache-bust patch missed the current helper-function context | 1 | Split the edit into smaller patches against freshly inspected source; all intended changes then applied |
 | ASAR-enabled macOS and Windows packaging failed on the external volume with an out-of-range ASAR header offset | 1 | Keep ASAR enabled, change build output to an internal APFS temporary directory, then copy verified artifacts back to `release` |
+| Copying the v0.1.101 Windows artifact back to the external drive created one AppleDouble `._*` file after packaging cleanup | 1 | Remove the single generated metadata file and rerun the release-directory check before staging |
 
 ## Notes
 - Phase 9 production implementation is complete and ready for release.

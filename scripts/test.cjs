@@ -276,6 +276,20 @@ test("repository and flow cleanup leave no inherited separators or duplicate hea
   assert.match(styles, /\.rail\.sidebar > \.task-footer\.sidebar-foot \{[\s\S]*margin-top: 0;[\s\S]*padding-top: 0;/);
 });
 
+test("sidebar resize keeps a broad transparent hit area with a one-pixel visible divider", async () => {
+  const styles = await fs.readFile(path.join(__dirname, "..", "src", "styles.css"), "utf8");
+  const resizerRule = styles.match(/\.sidebar-resizer\s*\{([\s\S]*?)\}/)?.[1] || "";
+  const dividerRule = styles.match(/\.sidebar-resizer::before\s*\{([\s\S]*?)\}/)?.[1] || "";
+
+  assert.match(resizerRule, /right:\s*-8px;/);
+  assert.match(resizerRule, /width:\s*22px;/);
+  assert.match(resizerRule, /background:\s*transparent;/);
+  assert.match(dividerRule, /left:\s*14px;/);
+  assert.match(dividerRule, /width:\s*1px;/);
+  assert.doesNotMatch(styles, /\.sidebar-resizer:hover\s*\{[\s\S]*?background:/);
+  assert.match(styles, /body\.resizing-sidebar \.sidebar-resizer::before/);
+});
+
 test("disk persistence writes and reads a normalized atomic payload", async (t) => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "personal-task-track-test-"));
   t.after(() => fs.rm(directory, { recursive: true, force: true }));

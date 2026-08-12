@@ -1,5 +1,30 @@
 # Progress Log
 
+## Session: 2026-08-12 Narrow Sidebar Resize Affordance
+
+### Phase 21: Screenshot audit and repository preparation
+- **Status:** complete
+- Actions taken:
+  - Read the project maintenance, persistent planning, and frontend design instructions.
+  - Inspected the supplied screenshot at original resolution and confirmed the full 22px hover background is the visual obstruction.
+  - Audited the sidebar resizer CSS and pointer-resize implementation.
+  - Preserved all existing unrelated user artifacts, including the newly present `design-system/` files.
+  - Fetched `origin/main` and tags; confirmed local `main` matches `origin/main` at `7f000ed` / `v0.1.100`.
+  - Kept the resizer's `right: -8px; width: 22px` pointer target intact while removing its full-width hover fill.
+  - Added a 1px pseudo-element at the actual sidebar boundary (`left: 14px`) and strengthened only that line on hover or active resize.
+  - Added a regression contract asserting the transparent 22px hit area, 1px visible divider, and active-resize treatment.
+  - Passed targeted JavaScript syntax checks, 26 desktop/client tests, and `git diff --check`.
+  - Passed the full project check, including 26 desktop/client tests and 11 mocked backend tests.
+  - Re-fetched remote tags, confirmed `v0.1.100` is latest, and bumped the desktop release to `0.1.101` with matching renderer cache identifiers.
+  - Built the macOS ARM64 DMG/ZIP and Windows x64 NSIS packages successfully.
+  - Removed one generated AppleDouble metadata file created while copying the Windows artifact back to the external drive; the final `find release -type f -name '._*' -print` check returned no output.
+- Files modified:
+  - task_plan.md
+  - findings.md
+  - progress.md
+  - src/styles.css
+  - scripts/test.cjs
+
 ## Session: 2026-08-09 In-app Bug Reporting
 
 ### Phase 20: Requirement recovery and repository preparation

@@ -208,3 +208,11 @@
 - The independent server will use TypeScript + Fastify, manual CORS allowlisting/security headers, a small in-memory per-IP limiter, strict field/body limits, abortable GitHub requests, sanitized error responses, and no sensitive request logging.
 - GitHub Issue creation will first try base and optional category labels, retry without the optional category on 422, and finally retry without labels if repository labels are unavailable. GitHub calls remain fully mocked in tests.
 - GitHub's official REST documentation confirms that `POST /repos/{owner}/{repo}/issues` accepts fine-grained personal access tokens and only requires repository `Issues: write`; the token can be restricted to the single `personal-task-track` repository.
+
+# 2026-08-12 Sidebar Resize Affordance
+
+- The supplied 1280×820 screenshot shows the 22px `.sidebar-resizer` hover background as a full-height green-tinted strip overlapping the repository completion controls.
+- The drag behavior itself is correct and should retain its broad hit target; only the visible affordance needs to become narrow.
+- Current geometry is `right: -8px; width: 22px`, placing the actual sidebar boundary 14px from the resizer's left edge. A pseudo-element at `left: 14px` can render a 1px divider while the parent remains a transparent 22px pointer target.
+- The visual direction is deliberately utilitarian: keep the existing palette and typography, remove the full-width hover wash, and use only a quiet boundary line that strengthens slightly on hover/active resize.
+- Remote `main` and local `main` match at `7f000ed` / `v0.1.100`; unrelated `.agents`, `.design-qa`, `.planning`, `design-system`, and mockup artifacts remain user-owned and must not be staged.
