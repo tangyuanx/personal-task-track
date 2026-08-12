@@ -216,3 +216,11 @@
 - Current geometry is `right: -8px; width: 22px`, placing the actual sidebar boundary 14px from the resizer's left edge. A pseudo-element at `left: 14px` can render a 1px divider while the parent remains a transparent 22px pointer target.
 - The visual direction is deliberately utilitarian: keep the existing palette and typography, remove the full-width hover wash, and use only a quiet boundary line that strengthens slightly on hover/active resize.
 - Remote `main` and local `main` match at `7f000ed` / `v0.1.100`; unrelated `.agents`, `.design-qa`, `.planning`, `design-system`, and mockup artifacts remain user-owned and must not be staged.
+
+# 2026-08-12 Redundant Section Label Removal
+
+- The left repository count/search row already establishes task-list context, so “任务仓库” adds no actionable information.
+- The active task title and property row already establish workspace context, so the “工作台” kicker competes with the primary title without improving orientation.
+- Both labels can be removed from renderer markup without compensating CSS: the repository row is flex-based with search auto-aligned right, and the task title naturally becomes the first child of its title block.
+- The first-run empty-state instruction currently names “任务仓库”; it should say “任务列表” after the visible label is removed.
+- Remote fetch completed on 2026-08-12; local `main` and `origin/main` are identical at `5bdc9f1` / `v0.1.101`. Existing unrelated skill, planning, design-QA, design-system, and mockup artifacts remain user-owned.

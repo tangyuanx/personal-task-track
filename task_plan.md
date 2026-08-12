@@ -4,9 +4,18 @@
 Maintain the personal task management app through scoped, low-risk improvements while preserving existing task flow behavior and release discipline.
 
 ## Current Phase
-Phase 21
+Phase 22
 
 ## Phases
+
+### Phase 22: Remove Redundant Section Labels
+- [x] Inspect the repository and workspace heading markup and final layout rules
+- [x] Preserve unrelated user artifacts and confirm local `main` matches `origin/main`
+- [x] Remove the redundant labels and revise the empty-state reference
+- [x] Add a regression contract for the simplified hierarchy
+- [x] Validate, package, and version the release
+- [ ] Commit, tag, and publish the release
+- **Status:** in progress
 
 ### Phase 21: Narrow Sidebar Resize Affordance
 - [x] Inspect the supplied screenshot and current sidebar resize CSS/behavior

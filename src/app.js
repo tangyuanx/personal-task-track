@@ -789,7 +789,6 @@ function renderSidebar() {
 
       <div class="task-list" data-context="task-list">
         <div class="task-list-head section-label">
-          <span>任务仓库</span>
           <span class="task-list-count">${visibleCount} / ${scopedTasks.length} 项</span>
           <label class="search-box search">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 21-4.35-4.35"></path><circle cx="10.8" cy="10.8" r="7.2"></circle></svg>
@@ -943,7 +942,6 @@ function renderTaskPage(task) {
     <div class="task-page work-surface">
       <header class="page-header topbar">
         <div class="page-title-block title-block">
-          <div class="page-kicker kicker">工作台</div>
           <input class="page-title" aria-label="任务标题" data-edit-key="title" data-task-id="${task.id}" value="${escAttr(task.title)}" />
           <div class="page-properties meta-line">
             ${renderTaskActiveTagPills(task)}
@@ -1216,7 +1214,7 @@ function renderEmptyPage() {
   return `
     <section class="task-page empty-page">
       <h2>${hasTasks ? "没有符合筛选的任务" : "没有任务"}</h2>
-      ${hasTasks ? "" : "<p>双击左侧任务仓库的空白区域，即可创建新的处理流。</p>"}
+      ${hasTasks ? "" : "<p>双击左侧任务列表的空白区域，即可创建新的处理流。</p>"}
     </section>
   `;
 }

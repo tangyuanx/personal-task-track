@@ -1,5 +1,22 @@
 # Progress Log
 
+## Session: 2026-08-12 Redundant Section Label Removal
+
+### Phase 22: Simplified information hierarchy
+- **Status:** in progress
+- Actions taken:
+  - Read the project maintenance, persistent planning, and frontend design instructions.
+  - Preserved all existing unrelated user artifacts and fetched the latest remote baseline.
+  - Confirmed local `main` matches `origin/main` at `5bdc9f1` / `v0.1.101`.
+  - Audited the final repository-header and task-header layout rules and confirmed both labels can be removed without leaving structural gaps.
+  - Removed “任务仓库” and “工作台” from renderer markup and revised the first-run instruction to refer to the left task list.
+  - Added a regression contract for the simplified hierarchy; the focused suite passed all 23 tests.
+  - Passed JavaScript syntax validation and `git diff --check`.
+  - Passed the full project check with 27 desktop/client tests and 11 mocked backend tests.
+  - Bumped package and renderer cache metadata to `0.1.102` after confirming `v0.1.101` remains the remote baseline.
+  - Built the macOS ARM64 DMG/ZIP and Windows x64 NSIS packages successfully.
+  - Confirmed the v0.1.102 release artifacts are present and `release/` contains no AppleDouble files.
+
 ## Session: 2026-08-12 Narrow Sidebar Resize Affordance
 
 ### Phase 21: Screenshot audit and repository preparation
