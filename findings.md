@@ -235,3 +235,14 @@
 - A compact calendar button immediately after the status group plus a native date popover preserves the current toolbar hierarchy. The button expands only when active to show `MM/DD`, and the popover includes a clear action and plain-language date meaning.
 - Chromium's native Popover API and CSS anchor positioning are available in the Electron 42 runtime, avoiding custom overlay state and outside-click handling.
 - Remote `main` and local `main` match at `ebf913c` / `v0.1.102`; unrelated skill, planning, design-QA, design-system, and mockup artifacts remain user-owned.
+
+# 2026-08-12 Knowledge Image Caret Alignment
+
+- The supplied screenshot shows a pasted knowledge-note image followed by a visible caret at the far-left line below it, while subsequently typed text is inserted immediately after the image.
+- This mismatch indicates that the ProseMirror document selection is correct but the browser's inline caret geometry disagrees with the rendered image layout.
+- The leading hypothesis is a block-level image override applied to an inline CommonMark image node: `display: block` moves the visual caret to a new line even though the document has no paragraph break.
+- The fix must preserve persistent data-URL uploads, Milkdown commands, Markdown structure, and image sizing; only the final knowledge-editor image layout/caret geometry should change.
+- Remote `main` and local `main` match at `d0d4639` / `v0.1.103`; unrelated skill, planning, design-QA, design-system, and mockup artifacts remain user-owned.
+- Milkdown's CommonMark image schema explicitly declares images as `inline`, `group: inline`, and atomic. Crepe renders them through a `span.milkdown-image-inline` node view containing `img.image-inline`.
+- The project override targeted every knowledge-editor `img` and forced `display: block`, overriding the inline node's intended geometry. The vendor wrapper itself remains `inline-flex` with `vertical-align: text-bottom`.
+- The scoped correction keeps the wrapper inline, reserves two pixels at the editor edge for the caret, and renders only its child image as `inline-block` aligned to the bottom. Crepe's separate `.milkdown-image-block` selectors remain untouched.

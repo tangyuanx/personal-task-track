@@ -4,9 +4,18 @@
 Maintain the personal task management app through scoped, low-risk improvements while preserving existing task flow behavior and release discipline.
 
 ## Current Phase
-Phase 23
+Phase 24
 
 ## Phases
+
+### Phase 24: Knowledge Image Caret Alignment
+- [x] Inspect the supplied screenshot and confirm the latest remote baseline
+- [x] Audit Milkdown image node structure, insertion command, and final CSS overrides
+- [x] Correct caret rendering without changing image persistence or typing semantics
+- [x] Add focused regression coverage and run full validation
+- [x] Build and version the release
+- [x] Commit, tag, and publish the release
+- **Status:** complete
 
 ### Phase 23: Calendar-integrated Task Filtering
 - [x] Recover the previous release context and confirm local `main` matches `origin/main`

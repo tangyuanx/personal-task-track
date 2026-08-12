@@ -6366,10 +6366,17 @@ body {
   max-width: 100%;
 }
 
-.task-knowledge-editor-panel .ProseMirror img {
-  display: block;
+.task-knowledge-editor-panel .ProseMirror .milkdown-image-inline {
+  max-width: calc(100% - 2px);
+  vertical-align: bottom;
+}
+
+.task-knowledge-editor-panel .ProseMirror .milkdown-image-inline > .image-inline {
+  display: inline-block;
+  max-width: 100%;
   height: auto;
   border-radius: 8px;
+  vertical-align: bottom;
 }
 
 .task-knowledge-editor-panel .milkdown-status {

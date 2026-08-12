@@ -472,6 +472,22 @@ test("calendar filter composes with task status and leaves existing preferences 
   assert.match(styles, /anchor-name:\s*--task-calendar-filter;/);
 });
 
+test("knowledge images keep the caret beside the inline image node", async () => {
+  const [entry, styles] = await Promise.all([
+    fs.readFile(path.join(__dirname, "..", "src", "milkdown-editor.entry.js"), "utf8"),
+    fs.readFile(path.join(__dirname, "..", "src", "styles.css"), "utf8"),
+  ]);
+  const inlineImageRule = styles.match(/\.task-knowledge-editor-panel \.ProseMirror \.milkdown-image-inline\s*\{([\s\S]*?)\}/)?.[1] || "";
+  const imageRule = styles.match(/\.task-knowledge-editor-panel \.ProseMirror \.milkdown-image-inline > \.image-inline\s*\{([\s\S]*?)\}/)?.[1] || "";
+
+  assert.match(entry, /insertImageCommand/);
+  assert.match(inlineImageRule, /max-width:\s*calc\(100% - 2px\);/);
+  assert.match(inlineImageRule, /vertical-align:\s*bottom;/);
+  assert.match(imageRule, /display:\s*inline-block;/);
+  assert.match(imageRule, /vertical-align:\s*bottom;/);
+  assert.doesNotMatch(styles, /\.task-knowledge-editor-panel \.ProseMirror img\s*\{[\s\S]*?display:\s*block;/);
+});
+
 test("node mutation rejects invalid statuses and clears deleted descendant detail", async () => {
   const harness = await rendererHarness();
   const result = harness.json(`(() => {

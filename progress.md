@@ -1,5 +1,27 @@
 # Progress Log
 
+## Session: 2026-08-12 Knowledge Image Caret Alignment
+
+### Phase 24: Screenshot diagnosis and source audit
+- **Status:** in progress
+- Actions taken:
+  - Read the project maintenance, persistent planning, and frontend design instructions.
+  - Inspected the supplied screenshot at original resolution and recorded the caret-versus-insertion mismatch.
+  - Preserved all existing unrelated user artifacts and fetched the latest remote baseline.
+  - Confirmed local `main` and `origin/main` match at `d0d4639` / `v0.1.103`.
+  - Located knowledge-editor and record-editor image overrides for focused inspection.
+  - Confirmed Milkdown's image schema is inline and Crepe wraps pasted images in `span.milkdown-image-inline` with an `img.image-inline` child.
+  - Replaced the knowledge editor's generic block-image override with a scoped inline-node rule that preserves image sizing and reserves caret space at the right edge.
+  - Added a regression contract for the official insert command, inline wrapper geometry, child image display, and removal of the conflicting block override.
+  - Passed JavaScript syntax validation, all 25 focused desktop tests, and `git diff --check`.
+  - Passed the full project check with 29 desktop/client tests and 11 mocked backend tests.
+  - Re-fetched remote main/tags, confirmed `v0.1.103` remains latest with zero branch divergence, and bumped release/cache metadata to `0.1.104`.
+  - Removed old release output, passed the full v0.1.104 check again, and built the macOS ARM64 DMG/ZIP plus Windows x64 NSIS packages successfully.
+  - Confirmed all six v0.1.104 artifacts are present, `release/` contains no AppleDouble files, version/cache metadata is consistent, and remote `main` is unchanged with no existing v0.1.104 tag.
+  - Prepared the scoped v0.1.104 release commit and tag for automatic publication.
+- Errors:
+  - The initial source search included a stale guessed path `src/milkdown-entry.js`; continued using the actual file map without repeating that path.
+
 ## Session: 2026-08-12 Calendar-integrated Task Filtering
 
 ### Phase 23: Discovery and low-impact integration
