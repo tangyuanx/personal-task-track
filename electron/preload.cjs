@@ -19,4 +19,17 @@ contextBridge.exposeInMainWorld("personalTaskTrack", {
   bugReports: {
     submit: (payload) => ipcRenderer.invoke("bug-report:submit", payload),
   },
+  updates: {
+    getState: () => ipcRenderer.invoke("app-update:get-state"),
+    setAutomaticChecks: (enabled) => ipcRenderer.invoke("app-update:set-automatic-checks", enabled === true),
+    check: () => ipcRenderer.invoke("app-update:check"),
+    download: () => ipcRenderer.invoke("app-update:download"),
+    install: () => ipcRenderer.invoke("app-update:install"),
+    onState: (callback) => {
+      if (typeof callback !== "function") return () => {};
+      const listener = (_event, state) => callback(state);
+      ipcRenderer.on("app-update:state", listener);
+      return () => ipcRenderer.removeListener("app-update:state", listener);
+    },
+  },
 });

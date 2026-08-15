@@ -21,6 +21,7 @@ const DATA_VERSION = 1;
 const desktopStorage = window.personalTaskTrack?.storage;
 const desktopExport = window.personalTaskTrack?.export;
 const desktopBugReports = window.personalTaskTrack?.bugReports;
+const desktopUpdates = window.personalTaskTrack?.updates;
 const desktopEnvironment = window.personalTaskTrack?.environment || {};
 const APP_VERSION = window.personalTaskTrack?.appVersion || "";
 
@@ -166,6 +167,7 @@ const reviewDateFieldLabels = {
 
 const taskStatusValues = new Set(["active", "done"]);
 const nodeStatusValues = new Set(["todo", "done", "blocked", "later"]);
+const appUpdateStatuses = new Set(["idle", "unsupported", "checking", "latest", "available", "downloading", "downloaded", "error"]);
 
 let state = {
 
@@ -236,6 +238,14 @@ const milkdownEditors = new Map();
 const nodeNoteDrafts = new Map();
 const nodeNoteSaveTimers = new Map();
 let cachedKnowledgePane = null;
+let appUpdateState = normalizeAppUpdateState({
+  status: desktopUpdates ? "idle" : "unsupported",
+  supported: Boolean(desktopUpdates),
+  unsupportedReason: desktopUpdates ? "" : "development",
+  automaticChecks: true,
+  currentVersion: APP_VERSION,
+});
+let unsubscribeAppUpdates = null;
 
 
 // ============================================================
@@ -1773,6 +1783,15 @@ function renderSettingsPanel() {
                 </label>
               </div>
             </section>
+            <section class="settings-group settings-update-group" aria-labelledby="software-update-title">
+              <div class="settings-group-head">
+                <h3 id="software-update-title">软件更新</h3>
+                <p>从 GitHub Release 检查新版本。下载和安装都由你决定。</p>
+              </div>
+              <div class="settings-update-slot">
+                ${renderUpdateSettingsControls()}
+              </div>
+            </section>
             <section class="settings-group">
               <div class="settings-group-head">
                 <h3>时间回顾</h3>
@@ -1797,15 +1816,236 @@ function renderSettingsPanel() {
               <strong class="settings-preview-en">Task flow English 123</strong>
               <p>背景、当前判断、结论保持轻量，处理流保持主视线。</p>
             </div>
-            <div class="settings-version">
-              <span>当前版本</span>
-              <strong>${APP_VERSION ? `v${esc(APP_VERSION)}` : "开发预览"}</strong>
-            </div>
           </div>
         </div>
       </section>
     </div>
   `;
+}
+
+function normalizeAppUpdateState(value) {
+  const raw = value && typeof value === "object" ? value : {};
+  const status = appUpdateStatuses.has(raw.status) ? raw.status : "unsupported";
+  const safeNumber = (number) => Number.isFinite(Number(number)) && Number(number) > 0 ? Number(number) : 0;
+  return {
+    status,
+    supported: raw.supported === true,
+    unsupportedReason: ["", "development", "mac-signing-required", "platform-unsupported"].includes(raw.unsupportedReason)
+      ? raw.unsupportedReason
+      : "platform-unsupported",
+    automaticChecks: raw.automaticChecks !== false,
+    currentVersion: String(raw.currentVersion || APP_VERSION || "").slice(0, 64),
+    version: String(raw.version || "").slice(0, 64),
+    releaseDate: String(raw.releaseDate || "").slice(0, 64),
+    size: safeNumber(raw.size),
+    percent: Math.max(0, Math.min(100, safeNumber(raw.percent))),
+    transferred: safeNumber(raw.transferred),
+    total: safeNumber(raw.total),
+    bytesPerSecond: safeNumber(raw.bytesPerSecond),
+    lastCheckedAt: String(raw.lastCheckedAt || "").slice(0, 64),
+    errorCode: String(raw.errorCode || "").replace(/[^0-9A-Z_.-]/gi, "").slice(0, 64),
+  };
+}
+
+function renderUpdateSettingsControls() {
+  const update = appUpdateState;
+  const busy = update.status === "checking" || update.status === "downloading";
+  const currentVersion = update.currentVersion || APP_VERSION;
+  return `
+    <div class="settings-update-controls" aria-busy="${busy}">
+      <div class="settings-update-preference">
+        <div>
+          <strong>自动检查更新</strong>
+          <span>${update.automaticChecks ? "应用启动后定期检查" : "仅在手动操作时检查"}</span>
+        </div>
+        <button
+          class="settings-update-switch"
+          type="button"
+          role="switch"
+          aria-checked="${update.automaticChecks}"
+          aria-label="自动检查更新"
+          data-update-automatic
+          ${update.supported ? "" : "disabled"}
+        ></button>
+      </div>
+      <div class="settings-update-action-row">
+        <div>
+          <strong>当前版本</strong>
+          <span><b class="settings-update-version">${currentVersion ? `v${esc(currentVersion)}` : "开发预览"}</b>${update.supported ? ` · ${esc(updatePlatformLabel())}` : ""}</span>
+        </div>
+        <button class="settings-inline-action settings-update-check" type="button" data-update-action="check" ${!update.supported || busy ? "disabled" : ""}>
+          ${update.status === "checking" ? "检查中…" : "检查更新"}
+        </button>
+      </div>
+      <div class="settings-update-status" aria-live="polite">
+        ${renderUpdateStatus(update)}
+      </div>
+    </div>
+  `;
+}
+
+function renderUpdateStatus(update) {
+  if (update.status === "idle") return "";
+  if (update.status === "unsupported") {
+    const macUnsigned = update.unsupportedReason === "mac-signing-required";
+    const development = update.unsupportedReason === "development";
+    return updateStatusSheet({
+      icon: "i",
+      title: macUnsigned ? "当前 macOS 版本暂未启用应用内更新" : development ? "安装版支持应用内更新" : "当前系统暂不支持应用内更新",
+      detail: macUnsigned ? "完成应用签名与公证后即可启用。" : development ? "开发预览不会连接更新服务，请在安装版中使用。" : "你仍可以从 GitHub Release 获取新版本。",
+    });
+  }
+  if (update.status === "checking") {
+    return updateStatusSheet({ icon: "", title: "正在检查更新…", detail: "正在连接 GitHub Release。", spinning: true });
+  }
+  if (update.status === "latest") {
+    return updateStatusSheet({ icon: "✓", title: "已是最新版本", detail: `刚刚检查 · 当前为 v${esc(update.currentVersion || APP_VERSION)}` });
+  }
+  if (update.status === "available") {
+    const metadata = [formatUpdateSize(update.size), formatUpdateDate(update.releaseDate)].filter(Boolean).join(" · ");
+    return updateStatusSheet({
+      icon: "↑",
+      tone: "available",
+      title: `v${esc(update.version)} 可用`,
+      detail: metadata || "新版本已发布",
+      notes: ["新版本可直接在应用内下载", "下载完成后由你决定何时重启"],
+      actions: `<button class="settings-update-button ghost" type="button" data-update-action="later">稍后</button><button class="settings-update-button primary" type="button" data-update-action="download">下载更新</button>`,
+    });
+  }
+  if (update.status === "downloading") {
+    const percent = Math.round(update.percent);
+    const detail = [
+      `${percent}%`,
+      update.bytesPerSecond ? `${formatUpdateSize(update.bytesPerSecond)}/s` : "",
+      "下载期间可以继续使用",
+    ].filter(Boolean).join(" · ");
+    return updateStatusSheet({
+      icon: "↓",
+      title: `正在下载 v${esc(update.version)}`,
+      detail,
+      progress: percent,
+    });
+  }
+  if (update.status === "downloaded") {
+    return updateStatusSheet({
+      icon: "✓",
+      title: `v${esc(update.version)} 已准备好`,
+      detail: "重启应用后完成安装，请先确认正在编辑的内容已保存。",
+      actions: `<button class="settings-update-button ghost" type="button" data-update-action="later">稍后</button><button class="settings-update-button primary" type="button" data-update-action="install">重启并更新</button>`,
+    });
+  }
+  return updateStatusSheet({
+    icon: "!",
+    tone: "error",
+    title: "暂时无法检查或下载更新",
+    detail: "请检查网络连接，当前版本仍可正常使用。",
+    actions: `<button class="settings-update-button" type="button" data-update-action="check">重试</button>`,
+  });
+}
+
+function updateStatusSheet({ icon, title, detail, tone = "", spinning = false, notes = [], actions = "", progress = null }) {
+  return `
+    <div class="settings-update-sheet" ${tone ? `data-tone="${tone}"` : ""}>
+      <div class="settings-update-sheet-top">
+        <div class="settings-update-copy">
+          <span class="settings-update-icon ${spinning ? "spinning" : ""}" aria-hidden="true">${icon}</span>
+          <div>
+            <strong>${title}</strong>
+            <p>${detail}</p>
+          </div>
+        </div>
+      </div>
+      ${notes.length ? `<ul>${notes.map((note) => `<li>${note}</li>`).join("")}</ul>` : ""}
+      ${actions ? `<div class="settings-update-actions">${actions}</div>` : ""}
+      ${progress !== null ? `<div class="settings-update-progress" aria-hidden="true"><span style="width:${progress}%"></span></div>` : ""}
+    </div>
+  `;
+}
+
+function updatePlatformLabel() {
+  if (window.personalTaskTrack?.platform === "win32") return "Windows x64";
+  if (window.personalTaskTrack?.platform === "darwin") return "macOS";
+  return "Desktop";
+}
+
+function formatUpdateSize(value) {
+  const bytes = Number(value);
+  if (!Number.isFinite(bytes) || bytes <= 0) return "";
+  if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
+  return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
+}
+
+function formatUpdateDate(value) {
+  const date = safeDate(value);
+  return date ? new Intl.DateTimeFormat("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit" }).format(date) : "";
+}
+
+function refreshUpdateSettings() {
+  const slot = document.querySelector(".settings-update-slot");
+  if (!slot) return;
+  slot.innerHTML = renderUpdateSettingsControls();
+  bindUpdateSettingsControls();
+}
+
+function bindUpdateSettingsControls() {
+  document.querySelector("[data-update-automatic]")?.addEventListener("click", async (event) => {
+    event.stopPropagation();
+    if (!desktopUpdates?.setAutomaticChecks) return;
+    const previous = appUpdateState.automaticChecks;
+    appUpdateState = { ...appUpdateState, automaticChecks: !previous };
+    refreshUpdateSettings();
+    try {
+      appUpdateState = normalizeAppUpdateState(await desktopUpdates.setAutomaticChecks(!previous));
+    } catch {
+      appUpdateState = { ...appUpdateState, automaticChecks: previous, status: "error", errorCode: "PREFERENCE_FAILED" };
+    }
+    refreshUpdateSettings();
+  });
+
+  document.querySelectorAll("[data-update-action]").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const action = event.currentTarget.dataset.updateAction;
+      if (action === "later") {
+        event.currentTarget.closest(".settings-update-sheet")?.remove();
+        return;
+      }
+      void runUpdateAction(action);
+    });
+  });
+}
+
+async function runUpdateAction(action) {
+  if (!desktopUpdates) return;
+  if (action === "check") appUpdateState = { ...appUpdateState, status: "checking", errorCode: "" };
+  if (action === "download") appUpdateState = { ...appUpdateState, status: "downloading", percent: 0, errorCode: "" };
+  refreshUpdateSettings();
+  try {
+    const result = action === "check"
+      ? await desktopUpdates.check()
+      : action === "download"
+        ? await desktopUpdates.download()
+        : await desktopUpdates.install();
+    if (result && typeof result === "object") appUpdateState = normalizeAppUpdateState(result);
+  } catch {
+    appUpdateState = { ...appUpdateState, status: "error", errorCode: "UPDATE_ACTION_FAILED" };
+  }
+  refreshUpdateSettings();
+}
+
+async function initializeAppUpdates() {
+  if (!desktopUpdates?.getState) return;
+  try {
+    appUpdateState = normalizeAppUpdateState(await desktopUpdates.getState());
+  } catch {
+    appUpdateState = normalizeAppUpdateState({ status: "error", supported: true, currentVersion: APP_VERSION, errorCode: "STATE_FAILED" });
+  }
+  if (!unsubscribeAppUpdates && desktopUpdates.onState) {
+    unsubscribeAppUpdates = desktopUpdates.onState((nextState) => {
+      appUpdateState = normalizeAppUpdateState(nextState);
+      refreshUpdateSettings();
+    });
+  }
 }
 
 function renderBugReportPanel() {
@@ -2787,6 +3027,8 @@ function bindTaskRepositoryRows(scope = document) {
       render();
     });
   }
+
+  bindUpdateSettingsControls();
 
   const feedbackPanel = document.querySelector(".feedback-panel");
   feedbackPanel?.addEventListener("click", (event) => event.stopPropagation());
@@ -5006,7 +5248,7 @@ function escAttr(value) {
  * Called immediately at the end of the script.
  */
 async function bootstrap() {
-  const data = await loadAppData();
+  const [data] = await Promise.all([loadAppData(), initializeAppUpdates()]);
   state.tasks = data.tasks;
   state.taskGroups = data.taskGroups;
   state.activeGroupId = data.activeGroupId;

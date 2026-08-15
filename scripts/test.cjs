@@ -170,6 +170,61 @@ test("Chinese and English font settings stay isolated in the application font ch
   assert.doesNotMatch(app, /横向滚动\s*·\s*双击重命名/);
 });
 
+test("settings expose the confirmed application update flow without silent install controls", async () => {
+  const [app, styles, preload, updater] = await Promise.all([
+    fs.readFile(path.join(__dirname, "..", "src", "app.js"), "utf8"),
+    fs.readFile(path.join(__dirname, "..", "src", "styles.css"), "utf8"),
+    fs.readFile(path.join(__dirname, "..", "electron", "preload.cjs"), "utf8"),
+    fs.readFile(path.join(__dirname, "..", "electron", "updater.cjs"), "utf8"),
+  ]);
+  const harness = await rendererHarness();
+  const available = harness.evaluate(`(() => {
+    appUpdateState = normalizeAppUpdateState({
+      status: "available",
+      supported: true,
+      automaticChecks: true,
+      currentVersion: "0.1.109",
+      version: "0.1.110",
+      size: 30000000,
+      releaseDate: "2026-08-15T08:00:00.000Z"
+    });
+    return renderUpdateSettingsControls();
+  })()`);
+  const downloaded = harness.evaluate(`(() => {
+    appUpdateState = normalizeAppUpdateState({ status: "downloaded", supported: true, currentVersion: "0.1.109", version: "0.1.110" });
+    return renderUpdateSettingsControls();
+  })()`);
+
+  assert.match(app, /<h3 id="software-update-title">软件更新<\/h3>/);
+  assert.match(available, /自动检查更新/);
+  assert.match(available, /v0\.1\.110 可用/);
+  assert.match(available, /data-update-action="download">下载更新/);
+  assert.match(downloaded, /data-update-action="install">重启并更新/);
+  assert.match(styles, /\.settings-update-progress span\s*\{[\s\S]*background:\s*var\(--focus\);/);
+  assert.match(preload, /app-update:get-state/);
+  assert.match(updater, /autoDownload = false/);
+  assert.match(updater, /autoInstallOnAppQuit = false/);
+  assert.doesNotMatch(app, /自动安装更新/);
+});
+
+test("release configuration uses deterministic updater artifacts and excludes debug metadata", async () => {
+  const [packageJson, buildScript, workflow, verifier] = await Promise.all([
+    fs.readFile(path.join(__dirname, "..", "package.json"), "utf8").then(JSON.parse),
+    fs.readFile(path.join(__dirname, "build.cjs"), "utf8"),
+    fs.readFile(path.join(__dirname, "..", ".github", "workflows", "release.yml"), "utf8"),
+    fs.readFile(path.join(__dirname, "verify-update-artifacts.cjs"), "utf8"),
+  ]);
+
+  assert.equal(packageJson.build.win.artifactName, "Personal-Task-Track-${version}-${arch}-setup.${ext}");
+  assert.equal(packageJson.build.mac.artifactName, "Personal-Task-Track-${version}-${arch}.${ext}");
+  assert.deepEqual(packageJson.build.publish, [{ provider: "github", owner: "tangyuanx", repo: "personal-task-track" }]);
+  assert.match(buildScript, /new Set\(\["latest\.yml", "latest-mac\.yml"\]\)/);
+  assert.match(workflow, /release\/latest\.yml/);
+  assert.match(workflow, /release\/latest-mac\.yml/);
+  assert.doesNotMatch(workflow, /release\/\*\.yml/);
+  assert.match(verifier, /references missing artifact/);
+});
+
 test("bundled cross-platform fonts are available", async () => {
   const [app, styles, normalized] = await Promise.all([
     fs.readFile(path.join(__dirname, "..", "src", "app.js"), "utf8"),

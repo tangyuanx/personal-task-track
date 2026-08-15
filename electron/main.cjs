@@ -12,14 +12,17 @@ const { app, BrowserWindow, Menu, clipboard, dialog, ipcMain, shell } = require(
 const fs = require("node:fs/promises");
 const os = require("node:os");
 const path = require("node:path");
+const { autoUpdater } = require("electron-updater");
 const { BugReportClientError, createBugReportClient } = require("./bug-report-client.cjs");
 const { readTaskData, writeTaskData } = require("./storage.cjs");
+const { createUpdateController } = require("./updater.cjs");
 /**
  * Create the main application window.
  * Sets up preload, CSP, and external link handling.
  */
 
 const isMac = process.platform === "darwin";
+let updateController = null;
 
 function createWindow() {
   const window = new BrowserWindow({
@@ -337,16 +340,27 @@ function createMenu() {
   Menu.setApplicationMenu(null);
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   app.setName("Personal Task Track");
   registerStorageHandlers();
+  updateController = createUpdateController({
+    app,
+    BrowserWindow,
+    ipcMain,
+    autoUpdater,
+    macUpdatesEnabled: false,
+  });
+  updateController.registerIpc();
   createMenu();
   createWindow();
+  await updateController.start();
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 });
+
+app.on("before-quit", () => updateController?.stop());
 
 app.on("window-all-closed", () => {
   if (!isMac) app.quit();

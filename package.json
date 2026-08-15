@@ -1,6 +1,6 @@
 {
   "name": "personal-task-track",
-  "version": "0.1.109",
+  "version": "0.1.110",
   "description": "A local-first personal task flow tracker for programmer daily work.",
   "private": true,
   "license": "UNLICENSED",
@@ -19,8 +19,8 @@
     "start": "electron .",
     "postinstall": "npm --prefix bug-report-server ci",
     "build:milkdown": "node scripts/build-milkdown.cjs",
-    "test": "node --test scripts/test.cjs scripts/bug-report-client.test.cjs && npm --prefix bug-report-server test",
-    "check": "npm run build:milkdown && node --check src/app.js && node --check electron/main.cjs && node --check electron/preload.cjs && node --check electron/storage.cjs && node --check electron/bug-report-client.cjs && node --check scripts/after-pack.cjs && node --check scripts/build.cjs && node --check scripts/build-milkdown.cjs && node --check scripts/make-ico.cjs && node --check scripts/test.cjs && node --check scripts/bug-report-client.test.cjs && npm --prefix bug-report-server run build && npm test",
+    "test": "node --test scripts/test.cjs scripts/bug-report-client.test.cjs scripts/updater.test.cjs && npm --prefix bug-report-server test",
+    "check": "npm run build:milkdown && node --check src/app.js && node --check electron/main.cjs && node --check electron/preload.cjs && node --check electron/storage.cjs && node --check electron/updater.cjs && node --check electron/bug-report-client.cjs && node --check scripts/after-pack.cjs && node --check scripts/build.cjs && node --check scripts/build-milkdown.cjs && node --check scripts/make-ico.cjs && node --check scripts/verify-update-artifacts.cjs && node --check scripts/test.cjs && node --check scripts/bug-report-client.test.cjs && node --check scripts/updater.test.cjs && npm --prefix bug-report-server run build && npm test",
     "dist": "node scripts/build.cjs",
     "dist:mac": "node scripts/build.cjs --mac",
     "dist:win": "node scripts/build.cjs --win"
@@ -43,9 +43,17 @@
       "!**/._*",
       "!**/.DS_Store"
     ],
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "tangyuanx",
+        "repo": "personal-task-track"
+      }
+    ],
     "mac": {
       "identity": null,
       "category": "public.app-category.productivity",
+      "artifactName": "Personal-Task-Track-${version}-${arch}.${ext}",
       "target": [
         "dmg",
         "zip"
@@ -53,6 +61,7 @@
     },
     "win": {
       "executableName": "PersonalTaskTrack",
+      "artifactName": "Personal-Task-Track-${version}-${arch}-setup.${ext}",
       "target": [
         {
           "target": "nsis",
@@ -75,5 +84,8 @@
     "electron": "^42.7.0",
     "electron-builder": "^26.15.3",
     "esbuild": "^0.28.1"
+  },
+  "dependencies": {
+    "electron-updater": "6.8.9"
   }
 }

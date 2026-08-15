@@ -44,9 +44,11 @@ process.exit(result.status ?? 1);
 
 function copyReleaseArtifacts(sourceDirectory, targetDirectory) {
   const releaseExtensions = new Set([".blockmap", ".dmg", ".exe", ".yml", ".zip"]);
+  const updateMetadataFiles = new Set(["latest.yml", "latest-mac.yml"]);
   fs.mkdirSync(targetDirectory, { recursive: true });
   for (const entry of fs.readdirSync(sourceDirectory, { withFileTypes: true })) {
     if (!entry.isFile() || !releaseExtensions.has(path.extname(entry.name).toLowerCase())) continue;
+    if (path.extname(entry.name).toLowerCase() === ".yml" && !updateMetadataFiles.has(entry.name)) continue;
     fs.copyFileSync(
       path.join(sourceDirectory, entry.name),
       path.join(targetDirectory, entry.name),
