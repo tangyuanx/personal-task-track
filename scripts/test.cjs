@@ -516,11 +516,45 @@ test("recurring tasks normalize, become due at local time, and reactivate for a 
 test("recurrence controls feed every Today surface and refresh while the app stays open", async () => {
   const app = await fs.readFile(path.join(__dirname, "..", "src", "app.js"), "utf8");
   assert.match(app, /data-recurrence-field="frequency"/);
-  assert.match(app, /data-recurrence-field="weekday"/);
+  assert.match(app, /data-recurrence-weekday=/);
   assert.match(app, /data-recurrence-field="time"/);
   assert.match(app, /state\.taskFilter === "today" && !isTaskScheduledForToday\(task\)/);
   assert.match(app, /\.filter\(\(task\) => isTaskScheduledForToday\(task\)\)/);
   assert.match(app, /window\.setInterval\?\.\([\s\S]*?30000/);
+});
+
+test("recurrence settings use the selected summary popover and preview future occurrences", async () => {
+  const [app, styles] = await Promise.all([
+    fs.readFile(path.join(__dirname, "..", "src", "app.js"), "utf8"),
+    fs.readFile(path.join(__dirname, "..", "src", "styles.css"), "utf8"),
+  ]);
+  const harness = await rendererHarness();
+  const result = harness.json(`(() => {
+    const task = normalizeTasks([{
+      id: "weekly",
+      recurrence: { frequency: "weekly", weekday: 5, time: "08:30" },
+      nodes: []
+    }])[0];
+    recurrencePopoverTaskId = task.id;
+    return {
+      html: renderTaskRecurrenceControls(task),
+      upcoming: recurrenceUpcomingLabels(task.recurrence, new Date(2026, 7, 15, 10, 0), 3),
+    };
+  })()`);
+  const finalRules = styles.slice(styles.lastIndexOf("v0.1.108 — scheme-B recurrence popover"));
+
+  assert.match(result.html, /class="task-recurrence-trigger"/);
+  assert.match(result.html, /aria-expanded="true"/);
+  assert.match(result.html, /每周五 · 08:30/);
+  assert.match(result.html, /role="dialog" aria-label="循环设置"/);
+  assert.match(result.html, /data-recurrence-weekday="5"/);
+  assert.match(result.html, /未来三次/);
+  assert.deepEqual(result.upcoming, ["8月21日 周五 08:30", "8月28日 周五 08:30", "9月4日 周五 08:30"]);
+  assert.match(app, /let recurrencePopoverTaskId = "";/);
+  assert.match(finalRules, /\.task-recurrence-popover\s*\{[\s\S]*width:\s*min\(360px,/);
+  assert.match(finalRules, /\.brief-strip\.task-brief\s*\{[\s\S]*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\);[\s\S]*min-height:\s*94px;/);
+  assert.match(finalRules, /\.brief-cell\.brief-field,[\s\S]*border-bottom:\s*1px solid/);
+  assert.match(finalRules, /\.brief-label \.brief-stamp\s*\{[\s\S]*display:\s*none;/);
 });
 
 test("group and node mutations do not steal repository title focus", async () => {

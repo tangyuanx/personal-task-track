@@ -93,3 +93,57 @@
 - P3: the source prototype's bilingual UI/data model is not migrated in this release because production has an established single-language persisted schema. A future schema migration can add per-language task content without risking existing user data.
 
 final result: passed
+
+## Phase 28 — recurrence popover and task brief layout
+
+- Source visual truth: `/var/folders/6r/6tb8rrdx2k38kb0mp8gqt6c80000gn/T/codex-clipboard-f32cff11-feb9-4b89-b59e-8f9f765ca2f6.png`.
+- Source pixels: 1130 × 358.
+- Implementation: `/Volumes/T7/work/personal-task-track/index.html`.
+- Intended browser viewport: 1520 × 760 CSS px, density 1.
+- Implementation screenshot: unavailable.
+- State: light theme; weekly recurrence at 09:00; recurrence summary visible; Background / Progress / Conclusion populated.
+
+### Findings
+
+- [P2] Browser-rendered visual comparison is unavailable.
+  Location: production task workspace.
+  Evidence: the in-app browser rejected navigation to the external-drive `file://` production page under its URL security policy, so no implementation screenshot could be captured.
+  Impact: fonts, spacing, tokens, icon rendering, and final responsive composition cannot be certified from rendered evidence in this run.
+  Fix: visually inspect the packaged Electron application or provide an allowed browser-served preview in a future QA pass.
+
+### Required Fidelity Surfaces
+
+- Fonts and typography: implemented from the existing application font tokens; rendered comparison blocked.
+- Spacing and layout rhythm: source measurements were translated into equal columns, approximately 94px field height, 18px inner column spacing, vertical separators, and bottom rules; rendered comparison blocked.
+- Colors and visual tokens: existing ink, muted, line, surface, and focus tokens are used; rendered comparison blocked.
+- Image quality and asset fidelity: not applicable; the source contains no raster image, logo, or decorative image asset.
+- Copy and content: Background / Progress / Conclusion labels and recurrence summary/settings copy match the selected design direction; rendered comparison blocked.
+
+### Full-view Comparison Evidence
+
+- Source image was opened and measured directly.
+- Implementation capture could not be produced because local-file browser navigation was blocked.
+
+### Focused Region Comparison Evidence
+
+- Source brief region was inspected directly.
+- A matching implementation crop could not be produced for the same browser-policy reason.
+
+### Interaction and Console Checks
+
+- Browser interaction and console inspection: blocked.
+- Automated renderer tests cover popover markup, open state, weekday selection hooks, future occurrence preview, existing scheduling behavior, and final CSS contracts.
+
+### Comparison History
+
+- Iteration 1: source opened successfully; implementation capture blocked before comparison. No browser workaround was attempted.
+
+### Implementation Checklist
+
+- [x] Preserve daily/weekly recurrence storage and execution semantics.
+- [x] Replace direct controls with compact summary + anchored settings popover.
+- [x] Add future-three-occurrences preview and keyboard/outside-click dismissal.
+- [x] Match the screenshot's equal brief columns, typography hierarchy, separators, and bottom rules in code.
+- [ ] Capture and compare the packaged Electron screen when an allowed visual surface is available.
+
+final result: blocked

@@ -230,6 +230,7 @@ let taskDragState = null;
 let suppressTaskClickUntil = 0;
 let recurrenceScheduleTimer = 0;
 let recurringTodaySignature = "";
+let recurrencePopoverTaskId = "";
 const milkdownEditors = new Map();
 const nodeNoteDrafts = new Map();
 const nodeNoteSaveTimers = new Map();
@@ -783,6 +784,7 @@ function render() {
   document.documentElement.dataset.enFont = state.enFont;
   const task = activeTask();
   if (task) state.activeTaskId = task.id;
+  if (recurrencePopoverTaskId && recurrencePopoverTaskId !== task?.id) recurrencePopoverTaskId = "";
   document.querySelector("#root").innerHTML = `
     <main class="ops-app app" style="--sidebar-width:${normalizeSidebarWidth(state.sidebarWidth)}px">
       ${renderSidebar()}
@@ -1143,31 +1145,80 @@ function renderTaskActiveTagPills(task) {
 
 function renderTaskRecurrenceControls(task) {
   const recurrence = normalizeTaskRecurrence(task.recurrence);
+  const open = recurrencePopoverTaskId === task.id;
+  const upcoming = recurrenceUpcomingLabels(recurrence);
   return `
-    <span class="task-recurrence-controls" aria-label="循环任务设置">
-      <label class="task-context-recurrence">
-        <span>循环</span>
-        <select data-recurrence-field="frequency" data-task-id="${task.id}" aria-label="循环周期">
-          ${Object.entries(recurrenceFrequencyLabels)
-            .map(([value, label]) => `<option value="${value}" ${recurrence.frequency === value ? "selected" : ""}>${label}</option>`)
-            .join("")}
-        </select>
-      </label>
+    <div class="task-recurrence-controls ${recurrence.frequency === "none" ? "is-empty" : "is-active"}" aria-label="循环任务设置">
+      <button
+        class="task-recurrence-trigger"
+        type="button"
+        data-recurrence-toggle
+        data-task-id="${task.id}"
+        aria-expanded="${open}"
+        aria-controls="task-recurrence-popover-${task.id}"
+      >
+        <svg class="task-recurrence-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5"></path><path d="M4 17v-5h5"></path><path d="M6.1 9a7 7 0 0 1 11.5-2L20 9"></path><path d="m4 15 2.4 2A7 7 0 0 0 18 15"></path></svg>
+        <span>${esc(recurrenceSummaryLabel(recurrence))}</span>
+        <svg class="task-recurrence-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4 4 4-4"></path></svg>
+      </button>
       ${
-        recurrence.frequency === "weekly"
-          ? `<select class="task-recurrence-weekday" data-recurrence-field="weekday" data-task-id="${task.id}" aria-label="每周执行日期">
-              ${[1, 2, 3, 4, 5, 6, 0]
-                .map((value) => `<option value="${value}" ${recurrence.weekday === value ? "selected" : ""}>${recurrenceWeekdayLabels[value]}</option>`)
-                .join("")}
-            </select>`
+        open
+          ? `<section class="task-recurrence-popover" id="task-recurrence-popover-${task.id}" role="dialog" aria-label="循环设置">
+              <header class="task-recurrence-popover-head">
+                <strong>循环设置</strong>
+                <span>修改后自动保存</span>
+              </header>
+              <div class="task-recurrence-form">
+                <label class="task-recurrence-field">
+                  <span>重复</span>
+                  <select data-recurrence-field="frequency" data-task-id="${task.id}" aria-label="循环周期">
+                    ${Object.entries(recurrenceFrequencyLabels)
+                      .map(([value, label]) => `<option value="${value}" ${recurrence.frequency === value ? "selected" : ""}>${label}</option>`)
+                      .join("")}
+                  </select>
+                </label>
+                ${
+                  recurrence.frequency !== "none"
+                    ? `<label class="task-recurrence-field">
+                        <span>出现在今日任务</span>
+                        <input type="time" data-recurrence-field="time" data-task-id="${task.id}" value="${escAttr(recurrence.time)}" aria-label="循环任务出现时间" />
+                      </label>`
+                    : ""
+                }
+                ${
+                  recurrence.frequency === "weekly"
+                    ? `<div class="task-recurrence-field task-recurrence-weekdays">
+                        <span>每周执行日</span>
+                        <div class="task-recurrence-weekday-list" aria-label="选择每周执行日期">
+                          ${[1, 2, 3, 4, 5, 6, 0]
+                            .map(
+                              (value) => `<button
+                                class="task-recurrence-weekday ${recurrence.weekday === value ? "active" : ""}"
+                                type="button"
+                                data-recurrence-weekday="${value}"
+                                data-task-id="${task.id}"
+                                aria-pressed="${recurrence.weekday === value}"
+                                aria-label="${recurrenceWeekdayLabels[value]}"
+                              >${recurrenceWeekdayLabels[value].replace("周", "")}</button>`,
+                            )
+                            .join("")}
+                        </div>
+                      </div>`
+                    : ""
+                }
+              </div>
+              <div class="task-recurrence-preview">
+                <span>未来三次</span>
+                ${
+                  upcoming.length
+                    ? `<ol>${upcoming.map((label) => `<li>${esc(label)}</li>`).join("")}</ol>`
+                    : `<p>选择每天或每周后，任务会在对应时间自动进入今日任务。</p>`
+                }
+              </div>
+            </section>`
           : ""
       }
-      ${
-        recurrence.frequency !== "none"
-          ? `<input class="task-recurrence-time" type="time" data-recurrence-field="time" data-task-id="${task.id}" value="${escAttr(recurrence.time)}" aria-label="循环任务出现时间" />`
-          : ""
-      }
-    </span>
+    </div>
   `;
 }
 
@@ -1504,6 +1555,30 @@ function recurrenceLabel(value) {
   if (recurrence.frequency === "daily") return `每天 ${recurrence.time}`;
   if (recurrence.frequency === "weekly") return `每${recurrenceWeekdayLabels[recurrence.weekday]} ${recurrence.time}`;
   return "不循环";
+}
+
+function recurrenceSummaryLabel(value) {
+  const recurrence = normalizeTaskRecurrence(value);
+  if (recurrence.frequency === "daily") return `每天 · ${recurrence.time}`;
+  if (recurrence.frequency === "weekly") return `每${recurrenceWeekdayLabels[recurrence.weekday]} · ${recurrence.time}`;
+  return "不循环";
+}
+
+function recurrenceUpcomingLabels(value, start = new Date(), count = 3) {
+  const recurrence = normalizeTaskRecurrence(value);
+  if (recurrence.frequency === "none" || count < 1) return [];
+  const [hours, minutes] = recurrence.time.split(":").map(Number);
+  const cursor = new Date(start);
+  cursor.setHours(hours, minutes, 0, 0);
+  if (cursor <= start) cursor.setDate(cursor.getDate() + 1);
+  const labels = [];
+  for (let step = 0; step < 32 && labels.length < count; step += 1) {
+    if (recurrence.frequency === "daily" || cursor.getDay() === recurrence.weekday) {
+      labels.push(`${cursor.getMonth() + 1}月${cursor.getDate()}日 ${recurrenceWeekdayLabels[cursor.getDay()]} ${recurrence.time}`);
+    }
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return labels;
 }
 
 function recurringOccurrenceKey(task, at = new Date()) {
@@ -2778,10 +2853,27 @@ function bindTaskRepositoryRows(scope = document) {
     });
   }
 
+  document.querySelectorAll("[data-recurrence-toggle]").forEach((control) => {
+    control.addEventListener("click", (event) => {
+      event.stopPropagation();
+      recurrencePopoverTaskId = recurrencePopoverTaskId === event.currentTarget.dataset.taskId ? "" : event.currentTarget.dataset.taskId;
+      render();
+    });
+  });
+
   document.querySelectorAll("[data-recurrence-field]").forEach((control) => {
     control.addEventListener("click", (event) => event.stopPropagation());
     control.addEventListener("change", (event) => {
       updateTaskRecurrence(event.currentTarget.dataset.taskId, event.currentTarget.dataset.recurrenceField, event.currentTarget.value);
+      syncRecurringTasks(new Date());
+      render();
+    });
+  });
+
+  document.querySelectorAll("[data-recurrence-weekday]").forEach((control) => {
+    control.addEventListener("click", (event) => {
+      event.stopPropagation();
+      updateTaskRecurrence(event.currentTarget.dataset.taskId, "weekday", event.currentTarget.dataset.recurrenceWeekday);
       syncRecurringTasks(new Date());
       render();
     });
@@ -2902,6 +2994,7 @@ function bindTaskRepositoryRows(scope = document) {
       const keepSettings = event.target.closest(".settings-overlay, .settings-trigger, .theme-toggle");
       const keepReview = event.target.closest(".review-overlay, .review-trigger");
       const keepContextMenu = event.target.closest(".context-menu");
+      const keepRecurrence = event.target.closest(".task-recurrence-controls");
 
       if (state.contextMenu && !keepContextMenu) {
         state.contextMenu = null;
@@ -2916,6 +3009,12 @@ function bindTaskRepositoryRows(scope = document) {
       if (state.reviewOpen && !keepReview) {
         state.reviewOpen = false;
         needsRender = true;
+      }
+
+      if (recurrencePopoverTaskId && !keepRecurrence) {
+        recurrencePopoverTaskId = "";
+        document.querySelector(".task-recurrence-popover")?.remove();
+        document.querySelector("[data-recurrence-toggle]")?.setAttribute("aria-expanded", "false");
       }
 
       if (state.selectedNodeId && !keepNodeDetail && exitNodeDetail()) needsRender = true;
@@ -4923,11 +5022,12 @@ window.addEventListener("keydown", (event) => {
       syncContextMenuRoot();
       return;
     }
-    if (state.selectedNodeId || state.settingsOpen || state.reviewOpen || state.feedbackOpen) {
+    if (state.selectedNodeId || state.settingsOpen || state.reviewOpen || state.feedbackOpen || recurrencePopoverTaskId) {
       event.preventDefault();
       exitNodeDetail();
       state.settingsOpen = false;
       state.reviewOpen = false;
+      recurrencePopoverTaskId = "";
       closeBugReport();
       render();
       return;
