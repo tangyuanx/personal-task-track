@@ -8989,11 +8989,6 @@ button:not(:disabled):active,
   border-bottom-color: color-mix(in srgb, var(--focus) 58%, transparent);
 }
 
-.task-context-item.task-tag.recurring {
-  color: var(--handoff-muted, var(--muted));
-  font-weight: 560;
-}
-
 /* The resize hit target shares the row grid, so it always follows the real title/record boundary. */
 @media (min-width: 871px) {
   .flow-list.flow-table {

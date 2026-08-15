@@ -1153,15 +1153,10 @@ function renderTaskTagRow(task) {
 }
 
 function renderTaskActiveTagPills(task) {
-  const tagPills = Object.entries(normalizeTaskTags(task.tags))
+  return Object.entries(normalizeTaskTags(task.tags))
     .filter(([, active]) => active)
     .map(([tag]) => `<span class="task-context-item task-tag">${taskTagLabels[tag]}</span>`)
     .join("");
-  const recurrence = normalizeTaskRecurrence(task.recurrence);
-  const recurrencePill = recurrence.frequency === "none"
-    ? ""
-    : `<span class="task-context-item task-tag recurring">${esc(recurrenceLabel(recurrence))}</span>`;
-  return `${tagPills}${recurrencePill}`;
 }
 
 function renderTaskRecurrenceControls(task) {
@@ -1557,18 +1552,6 @@ function todayFocusItems() {
     })
     .sort((a, b) => b.score - a.score || b.updatedAt - a.updatedAt || a.task.order - b.task.order)
     .slice(0, 3);
-}
-
-function recurrenceLabel(value) {
-  const recurrence = normalizeTaskRecurrence(value);
-  if (recurrence.frequency === "daily") return `每天 ${recurrence.time}`;
-  if (recurrence.frequency === "weekly") {
-    const weekdays = recurrenceWeekdayOrder
-      .filter((weekday) => recurrence.weekdays.includes(weekday))
-      .map((weekday) => recurrenceWeekdayLabels[weekday].replace("周", ""));
-    return weekdays.length ? `每周${weekdays.join("、")} ${recurrence.time}` : "每周 · 请选择日期";
-  }
-  return "不循环";
 }
 
 function recurrenceSummaryLabel(value) {

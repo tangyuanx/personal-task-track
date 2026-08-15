@@ -594,6 +594,8 @@ test("recurrence settings match the selected compact popover and support multipl
     }])[0];
     recurrencePopoverTaskId = task.id;
     const html = renderTaskRecurrenceControls(task);
+    recurrencePopoverTaskId = "";
+    const pageHtml = renderTaskPage(task);
     state.tasks = [task];
     updateTaskRecurrence(task.id, "weekday", "3");
     updateTaskRecurrence(task.id, "weekday", "2");
@@ -601,6 +603,7 @@ test("recurrence settings match the selected compact popover and support multipl
     updateTaskRecurrence(task.id, "frequency", "weekly");
     return {
       html,
+      pageHtml,
       upcoming: recurrenceUpcomingLabels(task.recurrence, new Date(2026, 7, 15, 10, 0), 3),
       weekdays: task.recurrence.weekdays,
     };
@@ -614,6 +617,8 @@ test("recurrence settings match the selected compact popover and support multipl
   assert.match(result.html, /data-recurrence-mode="weekly"/);
   assert.match(result.html, /data-recurrence-weekday="5"/);
   assert.doesNotMatch(result.html, /修改后自动保存|>重复<|出现在今日任务|每周执行日|未来三次/);
+  assert.equal(result.pageHtml.match(/每周一、三、五 · 08:30/g)?.length, 1);
+  assert.doesNotMatch(result.pageHtml, /task-tag recurring/);
   assert.deepEqual(result.upcoming, ["8月17日 周一 08:30", "8月18日 周二 08:30", "8月21日 周五 08:30"]);
   assert.deepEqual(result.weekdays, [1, 2, 5]);
   assert.match(app, /let recurrencePopoverTaskId = "";/);
