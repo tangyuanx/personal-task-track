@@ -22,6 +22,7 @@ const desktopStorage = window.personalTaskTrack?.storage;
 const desktopExport = window.personalTaskTrack?.export;
 const desktopBugReports = window.personalTaskTrack?.bugReports;
 const desktopUpdates = window.personalTaskTrack?.updates;
+const desktopTodayWidget = window.personalTaskTrack?.todayWidget;
 const desktopEnvironment = window.personalTaskTrack?.environment || {};
 const APP_VERSION = window.personalTaskTrack?.appVersion || "";
 
@@ -246,6 +247,10 @@ let appUpdateState = normalizeAppUpdateState({
   currentVersion: APP_VERSION,
 });
 let unsubscribeAppUpdates = null;
+let unsubscribeTodayWidgetState = null;
+let unsubscribeTodayWidgetOpenTask = null;
+let unsubscribeTodayWidgetCompletion = null;
+let todayWidgetWindowState = { visible: Boolean(desktopTodayWidget) };
 
 
 // ============================================================
@@ -817,11 +822,13 @@ function render() {
       ${state.feedbackOpen ? renderBugReportPanel() : ""}
     </main>
     ${renderCompletionNotice()}
+    ${renderTodayWidgetRestore()}
   `;
   restoreCachedKnowledgePane(task);
   bind();
   resizeTaskBriefTextareas();
   focusPendingElement();
+  publishTodayWidgetSnapshot();
   window.requestAnimationFrame(() => mountMilkdownEditors());
 }
 
@@ -829,6 +836,12 @@ function renderCompletionNotice() {
   const task = state.tasks.find((item) => item.id === state.conclusionPromptTaskId);
   return task
     ? `<div class="completion-notice" role="status" aria-live="polite">请先填写结论，再标记完成</div>`
+    : "";
+}
+
+function renderTodayWidgetRestore() {
+  return desktopTodayWidget && !todayWidgetWindowState.visible
+    ? `<button class="restore-widget is-visible" type="button" data-action="show-today-widget">重新显示今日窗口</button>`
     : "";
 }
 
@@ -4035,6 +4048,10 @@ async function pickEditorImageFile() {
 function action(data, event = null) {
   state.contextMenu = null;
   syncContextMenuRoot();
+  if (data.action === "show-today-widget") {
+    void desktopTodayWidget?.show();
+    return;
+  }
   if (data.action === "markdown-tool") {
     applyMarkdownTool(data.tool);
     return;
@@ -5223,6 +5240,71 @@ function localDateKey(value) {
   return `${year}-${month}-${day}`;
 }
 
+function todayWidgetSnapshot() {
+  return {
+    date: localDateKey(new Date()),
+    items: todayFocusItems().map(({ task, kind, nextText }) => ({
+      taskId: task.id,
+      title: task.title || "未命名任务",
+      nextText,
+      kind,
+    })),
+  };
+}
+
+function publishTodayWidgetSnapshot() {
+  desktopTodayWidget?.publish(todayWidgetSnapshot());
+}
+
+function syncTodayWidgetRestoreButton() {
+  const current = document.querySelector(".restore-widget");
+  if (!desktopTodayWidget || todayWidgetWindowState.visible) {
+    current?.remove();
+    return;
+  }
+  if (current) return;
+  const root = document.querySelector("#root");
+  root?.insertAdjacentHTML("beforeend", renderTodayWidgetRestore());
+  root?.querySelector(".restore-widget")?.addEventListener("click", () => void desktopTodayWidget.show());
+}
+
+async function initializeTodayWidgetBridge() {
+  if (!desktopTodayWidget) return;
+  unsubscribeTodayWidgetState?.();
+  unsubscribeTodayWidgetOpenTask?.();
+  unsubscribeTodayWidgetCompletion?.();
+  unsubscribeTodayWidgetState = desktopTodayWidget.onState((nextState) => {
+    todayWidgetWindowState = nextState && typeof nextState === "object" ? nextState : { visible: false };
+    syncTodayWidgetRestoreButton();
+  });
+  unsubscribeTodayWidgetOpenTask = desktopTodayWidget.onOpenTask(({ taskId } = {}) => {
+    if (!taskId) return;
+    openTaskFromGlobalList(taskId);
+    render();
+  });
+  unsubscribeTodayWidgetCompletion = desktopTodayWidget.onCompleteRequest(({ requestId, taskId } = {}) => {
+    const task = state.tasks.find((item) => item.id === taskId);
+    if (!task) {
+      desktopTodayWidget.respondCompletion({ requestId, success: false, code: "TASK_NOT_FOUND" });
+      return;
+    }
+    openTaskFromGlobalList(taskId);
+    toggleTaskDone(taskId);
+    const success = task.status === "done";
+    render();
+    desktopTodayWidget.respondCompletion({
+      requestId,
+      success,
+      code: success ? "COMPLETED" : "CONCLUSION_REQUIRED",
+    });
+  });
+  try {
+    todayWidgetWindowState = await desktopTodayWidget.getState();
+  } catch {
+    todayWidgetWindowState = { visible: false };
+  }
+}
+
 function taskDateFilterLabel(value) {
   const normalized = normalizeTaskDateFilter(value);
   return normalized ? `${normalized.slice(5, 7)}/${normalized.slice(8, 10)}` : "";
@@ -5273,7 +5355,7 @@ function escAttr(value) {
  * Called immediately at the end of the script.
  */
 async function bootstrap() {
-  const [data] = await Promise.all([loadAppData(), initializeAppUpdates()]);
+  const [data] = await Promise.all([loadAppData(), initializeAppUpdates(), initializeTodayWidgetBridge()]);
   state.tasks = data.tasks;
   state.taskGroups = data.taskGroups;
   state.activeGroupId = data.activeGroupId;

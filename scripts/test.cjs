@@ -9,6 +9,12 @@ const {
   readTaskData,
   writeTaskData,
 } = require("../electron/storage.cjs");
+const {
+  cornerWindowBounds,
+  normalizeTodayWidgetPreferences,
+  readTodayWidgetPreferences,
+  writeTodayWidgetPreferences,
+} = require("../electron/today-widget.cjs");
 
 function rendererHarness() {
   const storage = new Map();
@@ -225,6 +231,89 @@ test("release configuration uses deterministic updater artifacts and excludes de
   assert.match(verifier, /references missing artifact/);
 });
 
+test("Today widget preferences normalize safely and retain an intentional custom position", () => {
+  assert.deepEqual(normalizeTodayWidgetPreferences(null), {
+    position: "top-right",
+    alwaysOnTop: true,
+    launchWithApp: true,
+    visible: true,
+    compact: false,
+    customBounds: null,
+  });
+  assert.deepEqual(normalizeTodayWidgetPreferences({
+    position: "custom",
+    alwaysOnTop: false,
+    launchWithApp: false,
+    visible: false,
+    compact: true,
+    customBounds: { x: 321.7, y: 48.2 },
+  }), {
+    position: "custom",
+    alwaysOnTop: false,
+    launchWithApp: false,
+    visible: false,
+    compact: true,
+    customBounds: { x: 322, y: 48 },
+  });
+  assert.equal(normalizeTodayWidgetPreferences({ position: "custom" }).position, "top-right");
+});
+
+test("Today widget corner placement respects each display work area", () => {
+  const workArea = { x: 1440, y: 24, width: 1920, height: 1056 };
+  const size = { width: 420, height: 390 };
+
+  assert.deepEqual(cornerWindowBounds(workArea, size, "top-left"), { x: 1456, y: 40, ...size });
+  assert.deepEqual(cornerWindowBounds(workArea, size, "top-right"), { x: 2924, y: 40, ...size });
+  assert.deepEqual(cornerWindowBounds(workArea, size, "bottom-left"), { x: 1456, y: 674, ...size });
+  assert.deepEqual(cornerWindowBounds(workArea, size, "bottom-right"), { x: 2924, y: 674, ...size });
+});
+
+test("Today widget preferences persist atomically outside task data", async (t) => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "personal-task-track-widget-test-"));
+  t.after(() => fs.rm(directory, { recursive: true, force: true }));
+
+  const written = await writeTodayWidgetPreferences(directory, {
+    position: "bottom-left",
+    alwaysOnTop: false,
+    launchWithApp: true,
+    visible: true,
+    compact: true,
+  });
+  const read = await readTodayWidgetPreferences(directory);
+
+  assert.deepEqual(read, written);
+  assert.equal(read.position, "bottom-left");
+  await assert.rejects(fs.access(path.join(directory, "today-widget-preferences.json.tmp")));
+});
+
+test("production Today widget uses the approved demo frontend and a sandboxed Electron window", async () => {
+  const [demo, runtime, main, preload, packageJson] = await Promise.all([
+    fs.readFile(path.join(__dirname, "..", "today-widget-window-demo.html"), "utf8"),
+    fs.readFile(path.join(__dirname, "..", "src", "today-widget-runtime.js"), "utf8"),
+    fs.readFile(path.join(__dirname, "..", "electron", "today-widget.cjs"), "utf8"),
+    fs.readFile(path.join(__dirname, "..", "electron", "preload.cjs"), "utf8"),
+    fs.readFile(path.join(__dirname, "..", "package.json"), "utf8").then(JSON.parse),
+  ]);
+
+  assert.match(demo, /class="today-widget" id="widget" data-position="top-right"/);
+  assert.match(demo, /按优先级与阻塞状态排序/);
+  assert.match(demo, /data-place="top-left"/);
+  assert.match(demo, /<span>始终置顶<\/span>/);
+  assert.match(demo, /<span>随应用启动<\/span>/);
+  assert.match(demo, /隐藏今日窗口/);
+  assert.match(demo, /body\.widget-runtime \.today-widget/);
+  assert.match(runtime, /bridge\.completeTask/);
+  assert.match(runtime, /bridge\.openMain/);
+  assert.match(runtime, /ResizeObserver/);
+  assert.match(main, /frame: false/);
+  assert.match(main, /transparent: true/);
+  assert.match(main, /sandbox: true/);
+  assert.match(main, /setAlwaysOnTop/);
+  assert.match(main, /getDisplayMatching/);
+  assert.match(preload, /todayWidget:/);
+  assert.ok(packageJson.build.files.includes("today-widget-window-demo.html"));
+});
+
 test("bundled cross-platform fonts are available", async () => {
   const [app, styles, normalized] = await Promise.all([
     fs.readFile(path.join(__dirname, "..", "src", "app.js"), "utf8"),
@@ -420,6 +509,26 @@ test("today focus highlights the active task even when it suggests a different n
   })()`);
 
   assert.match(html, /focus-row normal selected/);
+});
+
+test("Today widget snapshot reuses the main Today ordering and next-step content", async () => {
+  const harness = await rendererHarness();
+  const result = harness.json(`(() => {
+    state.tasks = normalizeTasks([
+      { id: "normal", title: "普通任务", priority: "low", tags: { today: true }, nodes: [] },
+      { id: "high", title: "高优先任务", priority: "high", tags: { today: true }, nodes: [{ id: "high_node", title: "高优先下一步", status: "todo", children: [] }] },
+      { id: "blocked", title: "阻塞任务", priority: "medium", tags: { today: true, blocked: true }, nodes: [{ id: "blocked_node", title: "解除阻塞", status: "blocked", children: [] }] },
+      { id: "fourth", title: "第四项", priority: "low", tags: { today: true }, nodes: [] }
+    ]);
+    const focus = todayFocusItems().map(({ task, kind, nextText }) => ({ taskId: task.id, title: task.title, kind, nextText }));
+    const snapshot = todayWidgetSnapshot();
+    return { focus, snapshot };
+  })()`);
+
+  assert.deepEqual(result.snapshot.items, result.focus);
+  assert.deepEqual(result.snapshot.items.slice(0, 2).map((item) => item.taskId), ["blocked", "high"]);
+  assert.equal(result.snapshot.items.length, 3);
+  assert.equal(result.snapshot.items[0].nextText, "解除阻塞");
 });
 
 test("task Markdown export resolves the task group and includes knowledge notes", async () => {

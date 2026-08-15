@@ -32,4 +32,26 @@ contextBridge.exposeInMainWorld("personalTaskTrack", {
       return () => ipcRenderer.removeListener("app-update:state", listener);
     },
   },
+  todayWidget: {
+    getState: () => ipcRenderer.invoke("today-widget:get-state"),
+    show: () => ipcRenderer.invoke("today-widget:show"),
+    hide: () => ipcRenderer.invoke("today-widget:hide"),
+    setPreferences: (preferences) => ipcRenderer.invoke("today-widget:set-preferences", preferences),
+    resize: (size) => ipcRenderer.invoke("today-widget:resize", size),
+    openMain: (taskId = "") => ipcRenderer.invoke("today-widget:open-main", taskId),
+    completeTask: (taskId) => ipcRenderer.invoke("today-widget:complete-task", taskId),
+    publish: (snapshot) => ipcRenderer.send("today-widget:publish", snapshot),
+    respondCompletion: (result) => ipcRenderer.send("today-widget:complete-result", result),
+    onSnapshot: (callback) => subscribe("today-widget:snapshot", callback),
+    onState: (callback) => subscribe("today-widget:state", callback),
+    onOpenTask: (callback) => subscribe("today-widget:open-task", callback),
+    onCompleteRequest: (callback) => subscribe("today-widget:complete-request", callback),
+  },
 });
+
+function subscribe(channel, callback) {
+  if (typeof callback !== "function") return () => {};
+  const listener = (_event, value) => callback(value);
+  ipcRenderer.on(channel, listener);
+  return () => ipcRenderer.removeListener(channel, listener);
+}

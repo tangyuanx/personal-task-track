@@ -1,0 +1,942 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'" />
+  <title>今日任务置顶窗口 Demo</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --forest: #0b4a3b;
+      --forest-deep: #06362d;
+      --forest-soft: #17604e;
+      --paper: #f7faf7;
+      --mist: #e8efeb;
+      --ink: #183129;
+      --muted: #70867d;
+      --line: #cbd8d1;
+      --amber: #d4a44d;
+      --widget-width: 360px;
+      --screen-gap: 22px;
+    }
+
+    * { box-sizing: border-box; }
+
+    html,
+    body { min-height: 100%; }
+
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: #dfe7e2;
+      color: var(--ink);
+      font-family: Inter, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    }
+
+    button,
+    input { font: inherit; }
+
+    button { color: inherit; }
+
+    button:focus-visible {
+      outline: 2px solid #70b99f;
+      outline-offset: 2px;
+    }
+
+    .desktop {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      min-height: 620px;
+      overflow: hidden;
+      background:
+        linear-gradient(rgba(247, 250, 247, 0.9), rgba(247, 250, 247, 0.9)),
+        linear-gradient(90deg, transparent 0 25%, rgba(42, 76, 64, 0.08) 25% 25.08%, transparent 25.08%),
+        #eef3ef;
+    }
+
+    .desktop::after {
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+      background: rgba(230, 237, 232, 0.28);
+      backdrop-filter: blur(1.4px);
+      content: "";
+      pointer-events: none;
+    }
+
+    .mock-app {
+      display: grid;
+      grid-template-columns: minmax(280px, 26vw) 1fr;
+      min-height: 100%;
+      color: #62766d;
+      user-select: none;
+    }
+
+    .mock-sidebar {
+      padding: 28px 22px;
+      border-right: 1px solid rgba(104, 128, 117, 0.22);
+      background: rgba(238, 244, 240, 0.88);
+    }
+
+    .mock-brand {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+      color: #29463b;
+      font-weight: 730;
+    }
+
+    .mock-brand small {
+      color: #899b93;
+      font: 10px ui-monospace, SFMono-Regular, Consolas, monospace;
+      font-weight: 500;
+    }
+
+    .mock-today {
+      min-height: 160px;
+      padding: 16px;
+      border-radius: 14px;
+      background: #dce8e1;
+    }
+
+    .mock-today strong { color: #50685e; }
+
+    .mock-lines {
+      display: grid;
+      gap: 9px;
+      margin-top: 18px;
+    }
+
+    .mock-lines i {
+      display: block;
+      height: 30px;
+      border-radius: 7px;
+      background: rgba(255, 255, 255, 0.62);
+    }
+
+    .mock-repository { margin-top: 30px; }
+
+    .mock-repository > span {
+      display: block;
+      width: 74px;
+      height: 10px;
+      border-radius: 4px;
+      background: #b9c9c0;
+    }
+
+    .mock-row {
+      display: grid;
+      grid-template-columns: 26px 1fr 48px;
+      gap: 12px;
+      align-items: center;
+      height: 52px;
+      margin-top: 8px;
+      padding: 0 10px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.52);
+    }
+
+    .mock-row::before,
+    .mock-row::after,
+    .mock-row span {
+      height: 8px;
+      border-radius: 4px;
+      background: #c4d2cb;
+      content: "";
+    }
+
+    .mock-main { padding: 64px clamp(42px, 7vw, 120px); }
+
+    .mock-main h1 {
+      margin: 0;
+      color: #6b7f76;
+      font-size: clamp(26px, 3vw, 44px);
+    }
+
+    .mock-main p {
+      width: min(640px, 86%);
+      height: 10px;
+      margin: 22px 0 0;
+      border-radius: 5px;
+      background: #cbd7d1;
+      box-shadow: 0 30px 0 #d7e0db, 0 60px 0 #d7e0db;
+    }
+
+    .screen-note {
+      position: absolute;
+      left: 50%;
+      bottom: 22px;
+      z-index: 5;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      transform: translateX(-50%);
+      padding: 9px 13px;
+      border: 1px solid rgba(127, 149, 138, 0.24);
+      border-radius: 9px;
+      background: rgba(247, 250, 247, 0.92);
+      box-shadow: 0 10px 28px rgba(41, 68, 57, 0.09);
+      color: #63796f;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .screen-note i {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #4d9d7f;
+      box-shadow: 0 0 0 4px rgba(77, 157, 127, 0.12);
+    }
+
+    .today-widget {
+      position: absolute;
+      z-index: 10;
+      width: min(var(--widget-width), calc(100vw - 24px));
+      overflow: visible;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 16px;
+      background: var(--forest-deep);
+      box-shadow:
+        0 25px 60px rgba(13, 49, 39, 0.27),
+        0 4px 14px rgba(13, 49, 39, 0.16);
+      transition: width 180ms ease, height 180ms ease, opacity 160ms ease, transform 180ms ease;
+    }
+
+    .today-widget[data-position="top-left"] { top: var(--screen-gap); left: var(--screen-gap); }
+    .today-widget[data-position="top-right"] { top: var(--screen-gap); right: var(--screen-gap); }
+    .today-widget[data-position="bottom-left"] { bottom: calc(var(--screen-gap) + 40px); left: var(--screen-gap); }
+    .today-widget[data-position="bottom-right"] { right: var(--screen-gap); bottom: calc(var(--screen-gap) + 40px); }
+
+    .today-widget.is-dragging {
+      transition: none;
+      box-shadow: 0 31px 76px rgba(13, 49, 39, 0.32);
+    }
+
+    .today-widget.is-hidden {
+      opacity: 0;
+      transform: scale(0.96);
+      pointer-events: none;
+    }
+
+    .corner-anchor {
+      position: absolute;
+      z-index: 2;
+      width: 11px;
+      height: 11px;
+      border: 2px solid rgba(255, 255, 255, 0.88);
+      border-radius: 50%;
+      background: #70c49e;
+      box-shadow: 0 0 0 5px rgba(112, 196, 158, 0.15), 0 0 18px rgba(112, 196, 158, 0.45);
+      transition: inset 180ms ease;
+      pointer-events: none;
+    }
+
+    [data-position="top-left"] .corner-anchor { top: -5px; left: -5px; }
+    [data-position="top-right"] .corner-anchor { top: -5px; right: -5px; }
+    [data-position="bottom-left"] .corner-anchor { bottom: -5px; left: -5px; }
+    [data-position="bottom-right"] .corner-anchor { right: -5px; bottom: -5px; }
+    [data-position="custom"] .corner-anchor { top: -5px; left: calc(50% - 5px); }
+
+    .widget-header {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      min-height: 49px;
+      padding: 7px 8px 6px 15px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+      cursor: grab;
+      user-select: none;
+    }
+
+    .is-dragging .widget-header { cursor: grabbing; }
+
+    .widget-title {
+      display: flex;
+      min-width: 0;
+      align-items: baseline;
+      gap: 10px;
+    }
+
+    .widget-title strong {
+      color: #fff;
+      font-size: 15px;
+      font-weight: 760;
+      letter-spacing: -0.02em;
+    }
+
+    .widget-title time {
+      color: rgba(232, 245, 238, 0.62);
+      font: 10px ui-monospace, SFMono-Regular, Consolas, monospace;
+    }
+
+    .widget-tools {
+      display: flex;
+      gap: 2px;
+      align-items: center;
+    }
+
+    .icon-button {
+      display: grid;
+      width: 29px;
+      height: 29px;
+      place-items: center;
+      padding: 0;
+      border: 0;
+      border-radius: 7px;
+      background: transparent;
+      color: rgba(239, 249, 244, 0.72);
+      cursor: pointer;
+    }
+
+    .icon-button:hover,
+    .icon-button[aria-expanded="true"] {
+      background: rgba(255, 255, 255, 0.1);
+      color: #fff;
+    }
+
+    .icon-button svg {
+      width: 15px;
+      height: 15px;
+      fill: none;
+      stroke: currentColor;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-width: 1.8;
+    }
+
+    .widget-content { padding: 10px; }
+
+    .widget-summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 5px 8px;
+      color: rgba(230, 243, 236, 0.58);
+      font-size: 10px;
+    }
+
+    .widget-summary b {
+      color: rgba(244, 252, 248, 0.88);
+      font: 690 11px ui-monospace, SFMono-Regular, Consolas, monospace;
+    }
+
+    .task-list {
+      display: grid;
+      gap: 5px;
+    }
+
+    .today-task {
+      position: relative;
+      display: grid;
+      grid-template-columns: 25px minmax(0, 1fr) 18px;
+      gap: 9px;
+      align-items: center;
+      min-height: 60px;
+      padding: 9px 8px;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.065);
+      cursor: pointer;
+      transition: opacity 170ms ease, transform 170ms ease, max-height 190ms ease, padding 190ms ease, border-width 190ms ease;
+    }
+
+    .today-task:hover {
+      border-color: rgba(255, 255, 255, 0.18);
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    .today-task.is-completing {
+      max-height: 0;
+      min-height: 0;
+      padding-top: 0;
+      padding-bottom: 0;
+      border-width: 0;
+      opacity: 0;
+      transform: translateX(18px);
+    }
+
+    .task-check {
+      position: relative;
+      width: 19px;
+      height: 19px;
+      padding: 0;
+      border: 1.5px solid rgba(226, 242, 233, 0.52);
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.035);
+      cursor: pointer;
+    }
+
+    .task-check:hover {
+      border-color: #fff;
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    .task-copy { min-width: 0; }
+
+    .task-copy strong,
+    .task-copy span {
+      display: block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .task-copy strong {
+      color: #f7fcf9;
+      font-size: 12.5px;
+      font-weight: 680;
+      letter-spacing: -0.01em;
+    }
+
+    .task-copy span {
+      margin-top: 4px;
+      color: rgba(226, 241, 233, 0.57);
+      font-size: 10.5px;
+    }
+
+    .task-state {
+      width: 6px;
+      height: 6px;
+      justify-self: center;
+      border-radius: 50%;
+      background: #75bb9d;
+    }
+
+    .today-task.high .task-state { background: #e6b65d; }
+
+    .today-task.blocked .task-state {
+      background: #e2876f;
+      box-shadow: 0 0 0 4px rgba(226, 135, 111, 0.11);
+    }
+
+    .empty-state {
+      display: none;
+      min-height: 118px;
+      place-items: center;
+      padding: 22px;
+      text-align: center;
+    }
+
+    .empty-state.is-visible { display: grid; }
+
+    .empty-state strong {
+      display: block;
+      color: #f6fcf8;
+      font-size: 13px;
+    }
+
+    .empty-state span {
+      display: block;
+      margin-top: 6px;
+      color: rgba(226, 241, 233, 0.56);
+      font-size: 10.5px;
+    }
+
+    .widget-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 35px;
+      padding: 3px 14px 7px;
+      color: rgba(226, 241, 233, 0.43);
+      font: 9.5px ui-monospace, SFMono-Regular, Consolas, monospace;
+    }
+
+    .widget-footer button {
+      padding: 4px 0;
+      border: 0;
+      background: transparent;
+      color: rgba(232, 245, 238, 0.67);
+      font-family: Inter, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+      font-size: 10px;
+      cursor: pointer;
+    }
+
+    .widget-footer button:hover { color: #fff; }
+
+    .widget-menu {
+      position: absolute;
+      top: 43px;
+      right: 8px;
+      z-index: 20;
+      width: 220px;
+      padding: 12px;
+      border: 1px solid #d9e2dd;
+      border-radius: 12px;
+      background: rgba(250, 252, 250, 0.98);
+      box-shadow: 0 18px 44px rgba(22, 50, 40, 0.22);
+      color: var(--ink);
+      transform: translateY(-5px) scale(0.98);
+      opacity: 0;
+      pointer-events: none;
+      transform-origin: top right;
+      transition: opacity 130ms ease, transform 130ms ease;
+    }
+
+    .widget-menu.is-open {
+      transform: translateY(0) scale(1);
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .menu-label {
+      display: block;
+      margin: 0 0 8px;
+      color: #71857c;
+      font-size: 10px;
+      font-weight: 700;
+    }
+
+    .position-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+      margin-bottom: 11px;
+    }
+
+    .position-button {
+      position: relative;
+      height: 38px;
+      padding: 0;
+      border: 1px solid #d5dfda;
+      border-radius: 8px;
+      background: #f4f8f5;
+      cursor: pointer;
+    }
+
+    .position-button::after {
+      position: absolute;
+      width: 10px;
+      height: 8px;
+      border-radius: 2px;
+      background: #7f9e90;
+      content: "";
+    }
+
+    .position-button[data-place="top-left"]::after { top: 6px; left: 6px; }
+    .position-button[data-place="top-right"]::after { top: 6px; right: 6px; }
+    .position-button[data-place="bottom-left"]::after { bottom: 6px; left: 6px; }
+    .position-button[data-place="bottom-right"]::after { right: 6px; bottom: 6px; }
+
+    .position-button.is-active {
+      border-color: #438b70;
+      background: #e6f1eb;
+      box-shadow: inset 0 0 0 1px #438b70;
+    }
+
+    .position-button.is-active::after { background: var(--forest); }
+
+    .menu-switch {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 35px;
+      border-top: 1px solid #e4ebe7;
+      color: #3d584d;
+      font-size: 11px;
+      cursor: pointer;
+    }
+
+    .switch {
+      position: relative;
+      width: 29px;
+      height: 17px;
+      border-radius: 99px;
+      background: #becbc5;
+      transition: background 140ms ease;
+    }
+
+    .switch::after {
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 13px;
+      height: 13px;
+      border-radius: 50%;
+      background: #fff;
+      box-shadow: 0 1px 3px rgba(22, 51, 41, 0.2);
+      content: "";
+      transition: transform 140ms ease;
+    }
+
+    input:checked + .switch { background: #3b8b6d; }
+    input:checked + .switch::after { transform: translateX(12px); }
+    .menu-switch input { position: absolute; opacity: 0; pointer-events: none; }
+
+    .hide-widget {
+      width: 100%;
+      margin-top: 5px;
+      padding: 8px;
+      border: 0;
+      border-radius: 7px;
+      background: transparent;
+      color: #73877e;
+      font-size: 11px;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .hide-widget:hover { background: #edf3ef; color: #344e43; }
+
+    .today-widget.is-compact { width: 296px; }
+    .today-widget.is-compact .widget-content,
+    .today-widget.is-compact .widget-footer,
+    .today-widget.is-compact .widget-menu { display: none; }
+    .today-widget.is-compact .widget-header { border-bottom: 0; }
+    .today-widget.is-compact .widget-title::after {
+      color: rgba(239, 248, 243, 0.64);
+      font: 10px ui-monospace, SFMono-Regular, Consolas, monospace;
+      content: attr(data-count) " 项待办";
+    }
+
+    .today-widget.is-unpinned {
+      box-shadow: 0 10px 28px rgba(13, 49, 39, 0.17);
+    }
+
+    .restore-widget {
+      position: absolute;
+      right: 20px;
+      bottom: 20px;
+      z-index: 7;
+      display: none;
+      padding: 9px 12px;
+      border: 1px solid #c8d6ce;
+      border-radius: 9px;
+      background: rgba(249, 252, 249, 0.95);
+      box-shadow: 0 10px 24px rgba(33, 62, 51, 0.12);
+      color: #38564a;
+      font-size: 11px;
+      cursor: pointer;
+    }
+
+    .restore-widget.is-visible { display: block; }
+
+    .toast {
+      position: absolute;
+      left: 50%;
+      top: 22px;
+      z-index: 30;
+      max-width: calc(100vw - 32px);
+      transform: translate(-50%, -10px);
+      padding: 9px 13px;
+      border: 1px solid #d3ddd7;
+      border-radius: 9px;
+      background: rgba(252, 253, 252, 0.98);
+      box-shadow: 0 12px 32px rgba(27, 56, 45, 0.14);
+      color: #365146;
+      font-size: 11px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 140ms ease, transform 140ms ease;
+    }
+
+    .toast.is-visible {
+      transform: translate(-50%, 0);
+      opacity: 1;
+    }
+
+    @media (max-width: 720px) {
+      :root { --screen-gap: 12px; }
+      .desktop { min-height: 540px; }
+      .mock-app { grid-template-columns: 1fr; }
+      .mock-main { display: none; }
+      .mock-sidebar { padding: 22px 14px; }
+      .screen-note { bottom: 12px; max-width: calc(100vw - 24px); overflow: hidden; text-overflow: ellipsis; }
+      .today-widget[data-position^="bottom"] { bottom: 56px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; }
+    }
+
+    body.widget-runtime {
+      width: 100vw;
+      height: 100vh;
+      min-height: 0;
+      overflow: hidden;
+      background: transparent;
+    }
+
+    body.widget-runtime .desktop {
+      width: 100%;
+      height: 100%;
+      min-height: 0;
+      overflow: visible;
+      background: transparent;
+    }
+
+    body.widget-runtime .desktop::after,
+    body.widget-runtime .mock-app,
+    body.widget-runtime .screen-note,
+    body.widget-runtime .restore-widget { display: none; }
+
+    body.widget-runtime .today-widget {
+      position: relative;
+      inset: auto !important;
+      margin: 30px;
+      -webkit-app-region: no-drag;
+    }
+
+    body.widget-runtime .widget-header {
+      -webkit-app-region: drag;
+    }
+
+    body.widget-runtime button,
+    body.widget-runtime input,
+    body.widget-runtime [data-no-drag],
+    body.widget-runtime .today-task { -webkit-app-region: no-drag; }
+
+    body.widget-runtime .toast {
+      position: fixed;
+      top: 12px;
+    }
+  </style>
+</head>
+<body>
+  <main class="desktop" id="desktop">
+    <div class="mock-app" aria-hidden="true">
+      <aside class="mock-sidebar">
+        <div class="mock-brand"><span>Task Track</span><small>v0.1.113</small></div>
+        <section class="mock-today"><strong>今日任务</strong><div class="mock-lines"><i></i><i></i><i></i></div></section>
+        <section class="mock-repository"><span></span><div class="mock-row"><span></span></div><div class="mock-row"><span></span></div><div class="mock-row"><span></span></div></section>
+      </aside>
+      <section class="mock-main"><h1>完善个人任务管理 app</h1><p></p></section>
+    </div>
+
+    <section class="today-widget" id="widget" data-position="top-right" aria-label="今日任务置顶窗口">
+      <i class="corner-anchor" aria-hidden="true"></i>
+      <header class="widget-header" id="drag-region">
+        <div class="widget-title" id="widget-title" data-count="3">
+          <strong>今日任务</strong>
+          <time id="today-date" datetime="2026-08-16">08/16 周日</time>
+        </div>
+        <div class="widget-tools" data-no-drag>
+          <button class="icon-button" id="open-main" type="button" title="打开主窗口" aria-label="打开主窗口">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 5h5v5M19 5l-8 8"></path><path d="M17 13v5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1h5"></path></svg>
+          </button>
+          <button class="icon-button" id="compact-toggle" type="button" title="收起" aria-label="收起今日窗口">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 12h10"></path></svg>
+          </button>
+          <button class="icon-button" id="menu-toggle" type="button" title="窗口设置" aria-label="窗口设置" aria-expanded="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1"></circle><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle></svg>
+          </button>
+        </div>
+      </header>
+
+      <div class="widget-content">
+        <div class="widget-summary"><span>按优先级与阻塞状态排序</span><span><b id="task-count">3</b> 项待办</span></div>
+        <div class="task-list" id="task-list">
+          <article class="today-task high" data-title="完善个人任务管理 app" tabindex="0" role="button">
+            <button class="task-check" type="button" aria-label="完成：完善个人任务管理 app"></button>
+            <span class="task-copy"><strong>完善个人任务管理 app</strong><span>下一步：确认今日悬浮窗的交互方案</span></span>
+            <i class="task-state" title="高优先级"></i>
+          </article>
+          <article class="today-task" data-title="整理本周工作回顾" tabindex="0" role="button">
+            <button class="task-check" type="button" aria-label="完成：整理本周工作回顾"></button>
+            <span class="task-copy"><strong>整理本周工作回顾</strong><span>下一步：汇总本周完成的关键节点</span></span>
+            <i class="task-state" title="普通"></i>
+          </article>
+          <article class="today-task blocked" data-title="检查应用更新流程" tabindex="0" role="button">
+            <button class="task-check" type="button" aria-label="完成：检查应用更新流程"></button>
+            <span class="task-copy"><strong>检查应用更新流程</strong><span>下一步：验证 Windows 自动更新安装</span></span>
+            <i class="task-state" title="被阻塞"></i>
+          </article>
+        </div>
+        <div class="empty-state" id="empty-state"><div><strong>今天的任务已完成</strong><span>窗口会保留，等待新的今日任务出现</span></div></div>
+      </div>
+
+      <footer class="widget-footer"><span id="sync-state">刚刚同步</span><button id="open-all" type="button">在主窗口查看全部</button></footer>
+
+      <aside class="widget-menu" id="widget-menu" aria-label="今日窗口设置" data-no-drag>
+        <span class="menu-label">窗口位置</span>
+        <div class="position-grid" role="group" aria-label="选择窗口位置">
+          <button class="position-button" data-place="top-left" type="button" title="左上角" aria-label="左上角"></button>
+          <button class="position-button is-active" data-place="top-right" type="button" title="右上角" aria-label="右上角"></button>
+          <button class="position-button" data-place="bottom-left" type="button" title="左下角" aria-label="左下角"></button>
+          <button class="position-button" data-place="bottom-right" type="button" title="右下角" aria-label="右下角"></button>
+        </div>
+        <label class="menu-switch"><span>始终置顶</span><input id="always-on-top" type="checkbox" checked /><i class="switch" aria-hidden="true"></i></label>
+        <label class="menu-switch"><span>随应用启动</span><input id="launch-with-app" type="checkbox" checked /><i class="switch" aria-hidden="true"></i></label>
+        <button class="hide-widget" id="hide-widget" type="button">隐藏今日窗口</button>
+      </aside>
+    </section>
+
+    <p class="screen-note"><i aria-hidden="true"></i><span id="position-note">置于右上角 · 可拖动到任意位置</span></p>
+    <button class="restore-widget" id="restore-widget" type="button">重新显示今日窗口</button>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  </main>
+
+  <script>
+    if (!window.personalTaskTrack?.todayWidget) {
+    const desktop = document.querySelector("#desktop");
+    const widget = document.querySelector("#widget");
+    const menu = document.querySelector("#widget-menu");
+    const menuToggle = document.querySelector("#menu-toggle");
+    const compactToggle = document.querySelector("#compact-toggle");
+    const restoreWidget = document.querySelector("#restore-widget");
+    const taskCount = document.querySelector("#task-count");
+    const titleCount = document.querySelector("#widget-title");
+    const taskList = document.querySelector("#task-list");
+    const emptyState = document.querySelector("#empty-state");
+    const positionNote = document.querySelector("#position-note");
+    const toast = document.querySelector("#toast");
+    let toastTimer = 0;
+    let dragState = null;
+
+    const positionLabels = {
+      "top-left": "左上角",
+      "top-right": "右上角",
+      "bottom-left": "左下角",
+      "bottom-right": "右下角",
+      custom: "自定义位置",
+    };
+
+    function showToast(message) {
+      window.clearTimeout(toastTimer);
+      toast.textContent = message;
+      toast.classList.add("is-visible");
+      toastTimer = window.setTimeout(() => toast.classList.remove("is-visible"), 1800);
+    }
+
+    function setPosition(position) {
+      widget.style.left = "";
+      widget.style.top = "";
+      widget.style.right = "";
+      widget.style.bottom = "";
+      widget.dataset.position = position;
+      document.querySelectorAll("[data-place]").forEach((button) => button.classList.toggle("is-active", button.dataset.place === position));
+      positionNote.textContent = `置于${positionLabels[position]} · 可拖动到任意位置`;
+    }
+
+    function closeMenu() {
+      menu.classList.remove("is-open");
+      menuToggle.setAttribute("aria-expanded", "false");
+    }
+
+    function updateCount() {
+      const count = taskList.querySelectorAll(".today-task:not(.is-completing)").length;
+      taskCount.textContent = String(count);
+      titleCount.dataset.count = String(count);
+      emptyState.classList.toggle("is-visible", count === 0);
+      taskList.hidden = count === 0;
+    }
+
+    const date = new Date(2026, 7, 16);
+    document.querySelector("#today-date").textContent = new Intl.DateTimeFormat("zh-CN", { month: "2-digit", day: "2-digit", weekday: "short" }).format(date).replaceAll("/", "/");
+
+    menuToggle.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const open = !menu.classList.contains("is-open");
+      menu.classList.toggle("is-open", open);
+      menuToggle.setAttribute("aria-expanded", String(open));
+    });
+
+    document.addEventListener("pointerdown", (event) => {
+      if (!event.target.closest("#widget-menu, #menu-toggle")) closeMenu();
+    });
+
+    document.querySelectorAll("[data-place]").forEach((button) => {
+      button.addEventListener("click", () => {
+        setPosition(button.dataset.place);
+        closeMenu();
+        showToast(`今日窗口已移到${positionLabels[button.dataset.place]}`);
+      });
+    });
+
+    compactToggle.addEventListener("click", () => {
+      const compact = widget.classList.toggle("is-compact");
+      compactToggle.title = compact ? "展开" : "收起";
+      compactToggle.setAttribute("aria-label", compact ? "展开今日窗口" : "收起今日窗口");
+      closeMenu();
+    });
+
+    document.querySelector("#always-on-top").addEventListener("change", (event) => {
+      widget.classList.toggle("is-unpinned", !event.target.checked);
+      showToast(event.target.checked ? "已开启始终置顶" : "已关闭始终置顶");
+    });
+
+    document.querySelector("#launch-with-app").addEventListener("change", (event) => {
+      showToast(event.target.checked ? "将随应用启动" : "已取消随应用启动");
+    });
+
+    document.querySelector("#hide-widget").addEventListener("click", () => {
+      closeMenu();
+      widget.classList.add("is-hidden");
+      restoreWidget.classList.add("is-visible");
+    });
+
+    restoreWidget.addEventListener("click", () => {
+      widget.classList.remove("is-hidden");
+      restoreWidget.classList.remove("is-visible");
+      showToast("今日窗口已重新显示");
+    });
+
+    document.querySelectorAll("#open-main, #open-all").forEach((button) => {
+      button.addEventListener("click", () => showToast("正式实现时将在主窗口打开今日任务"));
+    });
+
+    document.querySelectorAll(".today-task").forEach((row) => {
+      row.addEventListener("click", (event) => {
+        if (event.target.closest(".task-check")) return;
+        showToast(`将在主窗口打开「${row.dataset.title}」`);
+      });
+      row.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        showToast(`将在主窗口打开「${row.dataset.title}」`);
+      });
+      row.querySelector(".task-check").addEventListener("click", (event) => {
+        event.stopPropagation();
+        row.classList.add("is-completing");
+        showToast(`已完成「${row.dataset.title}」· 将同步到主窗口`);
+        window.setTimeout(() => {
+          row.remove();
+          updateCount();
+        }, 190);
+      });
+    });
+
+    document.querySelector("#drag-region").addEventListener("pointerdown", (event) => {
+      if (event.button !== 0 || event.target.closest("button, [data-no-drag]")) return;
+      const widgetRect = widget.getBoundingClientRect();
+      const desktopRect = desktop.getBoundingClientRect();
+      dragState = {
+        offsetX: event.clientX - widgetRect.left,
+        offsetY: event.clientY - widgetRect.top,
+        maxX: desktopRect.width - widgetRect.width - 8,
+        maxY: desktopRect.height - widgetRect.height - 8,
+      };
+      widget.style.right = "auto";
+      widget.style.bottom = "auto";
+      widget.style.left = `${widgetRect.left}px`;
+      widget.style.top = `${widgetRect.top}px`;
+      widget.dataset.position = "custom";
+      widget.classList.add("is-dragging");
+      event.currentTarget.setPointerCapture?.(event.pointerId);
+    });
+
+    window.addEventListener("pointermove", (event) => {
+      if (!dragState) return;
+      const left = Math.max(8, Math.min(dragState.maxX, event.clientX - dragState.offsetX));
+      const top = Math.max(8, Math.min(dragState.maxY, event.clientY - dragState.offsetY));
+      widget.style.left = `${left}px`;
+      widget.style.top = `${top}px`;
+    });
+
+    window.addEventListener("pointerup", () => {
+      if (!dragState) return;
+      dragState = null;
+      widget.classList.remove("is-dragging");
+      document.querySelectorAll("[data-place]").forEach((button) => button.classList.remove("is-active"));
+      positionNote.textContent = "自定义位置 · 可从菜单重新吸附到屏幕四角";
+    });
+    }
+  </script>
+  <script src="./src/today-widget-runtime.js"></script>
+</body>
+</html>

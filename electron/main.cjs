@@ -8,13 +8,14 @@
  *   - Manage application menu
  */
 
-const { app, BrowserWindow, Menu, clipboard, dialog, ipcMain, shell } = require("electron");
+const { app, BrowserWindow, Menu, clipboard, dialog, ipcMain, screen, shell } = require("electron");
 const fs = require("node:fs/promises");
 const os = require("node:os");
 const path = require("node:path");
 const { autoUpdater } = require("electron-updater");
 const { BugReportClientError, createBugReportClient } = require("./bug-report-client.cjs");
 const { readTaskData, writeTaskData } = require("./storage.cjs");
+const { createTodayWidgetController } = require("./today-widget.cjs");
 const { createUpdateController } = require("./updater.cjs");
 /**
  * Create the main application window.
@@ -23,8 +24,12 @@ const { createUpdateController } = require("./updater.cjs");
 
 const isMac = process.platform === "darwin";
 let updateController = null;
+let todayWidgetController = null;
+let mainWindow = null;
+let isQuitting = false;
 
 function createWindow() {
+  if (mainWindow && !mainWindow.isDestroyed()) return mainWindow;
   const window = new BrowserWindow({
     width: 1280,
     height: 820,
@@ -41,6 +46,7 @@ function createWindow() {
       sandbox: true,
     },
   });
+  mainWindow = window;
 /**
  * Open external URLs (http/https/mailto) in the system browser.
  * @param {string} url - URL to open
@@ -63,6 +69,11 @@ function createWindow() {
       openExternalUrl(url);
     }
   });
+  window.on("closed", () => {
+    if (mainWindow === window) mainWindow = null;
+    if (!isMac && !isQuitting) app.quit();
+  });
+  return window;
 }
 
 function openExternalUrl(url) {
@@ -343,6 +354,15 @@ function createMenu() {
 app.whenReady().then(async () => {
   app.setName("Personal Task Track");
   registerStorageHandlers();
+  todayWidgetController = createTodayWidgetController({
+    app,
+    BrowserWindow,
+    ipcMain,
+    screen,
+    getMainWindow: () => mainWindow,
+    ensureMainWindow: createWindow,
+  });
+  todayWidgetController.registerIpc();
   updateController = createUpdateController({
     app,
     BrowserWindow,
@@ -353,14 +373,19 @@ app.whenReady().then(async () => {
   updateController.registerIpc();
   createMenu();
   createWindow();
-  await updateController.start();
+  await Promise.all([updateController.start(), todayWidgetController.start()]);
 
   app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    if (!mainWindow || mainWindow.isDestroyed()) createWindow();
+    else mainWindow.show();
   });
 });
 
-app.on("before-quit", () => updateController?.stop());
+app.on("before-quit", () => {
+  isQuitting = true;
+  updateController?.stop();
+  todayWidgetController?.stop();
+});
 
 app.on("window-all-closed", () => {
   if (!isMac) app.quit();

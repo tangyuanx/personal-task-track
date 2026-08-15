@@ -6959,6 +6959,31 @@ body {
   max-height: 153px;
 }
 
+/* Today widget restore control — matches the approved standalone demo. */
+.restore-widget {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 260;
+  display: none;
+  padding: 9px 12px;
+  border: 1px solid #c8d6ce;
+  border-radius: 9px;
+  background: rgba(249, 252, 249, 0.95);
+  box-shadow: 0 10px 24px rgba(33, 62, 51, 0.12);
+  color: #38564a;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.restore-widget.is-visible { display: block; }
+
+:root[data-theme="dark"] .restore-widget {
+  border-color: rgba(182, 205, 194, 0.28);
+  background: rgba(21, 43, 35, 0.96);
+  color: #dcebe3;
+}
+
 /* v0.1.54 — repository layout matched to the approved reference */
 .task-list {
   display: flex;
