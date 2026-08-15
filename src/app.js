@@ -2640,7 +2640,23 @@ function bind() {
 
 function bindTaskRepositoryRows(scope = document) {
   scope.querySelectorAll(".task-item[data-task-id]").forEach((element) => {
-    element.addEventListener("pointerdown", startTaskLongPress);
+    element.addEventListener("pointerdown", (event) => {
+      startTaskLongPress(event);
+      const select = event.target.closest("select");
+      if (event.button !== 0 || !select || !activateRepositoryTask(element.dataset.taskId)) return;
+      syncRepositoryTaskSelection();
+
+      // Do not rebuild the DOM while a native select menu is open. Its change
+      // handler persists the value first; blur also covers dismissing the menu.
+      let rendered = false;
+      const renderSelection = () => {
+        if (rendered) return;
+        rendered = true;
+        window.requestAnimationFrame(() => render());
+      };
+      select.addEventListener("change", renderSelection, { once: true });
+      select.addEventListener("blur", renderSelection, { once: true });
+    });
     element.addEventListener(
       "click",
       (event) => {
@@ -2649,13 +2665,14 @@ function bindTaskRepositoryRows(scope = document) {
           event.stopPropagation();
           return;
         }
-        if (event.target.closest(".task-check, input, textarea, select, button, [contenteditable]")) return;
-        if (state.activeTaskId === element.dataset.taskId) return;
-        state.activeTaskId = element.dataset.taskId;
-        state.selectedNodeId = "";
-        state.recordDraft = "";
-        state.nodeDetailFullscreen = false;
-        state.nodeDetailPosition = null;
+        if (!activateRepositoryTask(element.dataset.taskId)) return;
+        syncRepositoryTaskSelection();
+
+        // Controls inside a repository row keep their original behavior, but
+        // selecting the row must happen first. Action buttons render after
+        // their command runs; title inputs need focus restored after render.
+        if (event.target.closest("[data-action]")) return;
+        if (event.target.closest(".task-title")) state.focusTaskTitleId = element.dataset.taskId;
         window.requestAnimationFrame(() => render());
       },
       true,
@@ -3262,6 +3279,24 @@ function bindTaskRepositoryRows(scope = document) {
   }
 }
 
+function activateRepositoryTask(taskId) {
+  if (!taskId || !state.tasks.some((task) => task.id === taskId) || state.activeTaskId === taskId) return false;
+  state.activeTaskId = taskId;
+  state.selectedNodeId = "";
+  state.recordDraft = "";
+  state.nodeDetailFullscreen = false;
+  state.nodeDetailPosition = null;
+  return true;
+}
+
+function syncRepositoryTaskSelection() {
+  document.querySelectorAll(".task-item[data-task-id]").forEach((element) => {
+    const active = element.dataset.taskId === state.activeTaskId;
+    element.classList.toggle("selected", active);
+    element.classList.toggle("active", active);
+  });
+}
+
 function resizeTaskBriefTextareas() {
   document.querySelectorAll(".task-brief textarea").forEach((element) => resizeTaskBriefTextarea(element));
 }
@@ -3282,6 +3317,9 @@ function applySetting(key, value) {
   if (key === "task-filter") state.taskFilter = normalizeTaskFilter(value);
   if (key === "priority-filter") state.priorityFilter = normalizePriorityFilter(value);
   if (key === "new-task-priority") state.newTaskPriority = normalizePriority(value);
+  if ((key === "task-filter" || key === "priority-filter") && !filteredTasks({ includeQuery: false }).some((task) => task.id === state.activeTaskId)) {
+    state.activeTaskId = "";
+  }
 }
 
 function closeBugReport() {
@@ -4079,11 +4117,7 @@ function action(data, event = null) {
     openTaskFromGlobalList(data.taskId, "");
   }
   if (data.action === "select-task") {
-    state.activeTaskId = data.taskId;
-    state.selectedNodeId = "";
-    state.recordDraft = "";
-    state.nodeDetailFullscreen = false;
-    state.nodeDetailPosition = null;
+    activateRepositoryTask(data.taskId);
   }
   if (data.action === "add-task") addBlankTask();
   if (data.action === "delete-task") deleteTask(data.taskId);
@@ -4095,7 +4129,10 @@ function action(data, event = null) {
     state.nodeDetailFullscreen = false;
     state.nodeDetailPosition = event ? { x: event.clientX + 12, y: event.clientY - 24 } : null;
   }
-  if (data.action === "toggle-task-done") toggleTaskDone(data.taskId);
+  if (data.action === "toggle-task-done") {
+    activateRepositoryTask(data.taskId);
+    toggleTaskDone(data.taskId);
+  }
   if (data.action === "toggle-task-tag") toggleTaskTag(data.taskId, data.tag);
   if (data.action === "add-node") addNode(data.taskId, data.parentId || null);
   if (data.action === "add-root-node") addNode(data.taskId, null);
@@ -4844,8 +4881,11 @@ function deleteNode(taskId, nodeId) {
 }
 
 function activeTask() {
+  const scopedTasks = taskListScopeTasks();
+  const selectedTask = scopedTasks.find((task) => task.id === state.activeTaskId);
+  if (selectedTask) return selectedTask;
   const visibleTasks = filteredTasks({ includeQuery: false });
-  return visibleTasks.find((task) => task.id === state.activeTaskId) || visibleTasks[0] || null;
+  return visibleTasks[0] || null;
 }
 
 /**

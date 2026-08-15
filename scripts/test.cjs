@@ -637,6 +637,82 @@ test("group and node mutations do not steal repository title focus", async () =>
   assert.match(app, /event\.relatedTarget\?\.closest\?\.\("\.task-title, \.page-title"\)/);
 });
 
+test("every repository row click activates its task before nested controls run", async () => {
+  const harness = await rendererHarness();
+  const result = harness.json(`(() => {
+    state.tasks = normalizeTasks([
+      { id: "current", title: "当前任务", nodes: [] },
+      { id: "clicked", title: "点击任务", nodes: [] }
+    ]);
+    state.activeTaskId = "current";
+    state.selectedNodeId = "open_node";
+    state.recordDraft = "draft";
+    const listeners = {};
+    const row = {
+      dataset: { taskId: "clicked" },
+      addEventListener(type, listener, options) {
+        if (type === "click" && options === true) listeners.click = listener;
+      },
+      querySelectorAll() { return []; }
+    };
+    const scope = {
+      querySelectorAll(selector) {
+        return selector === ".task-item[data-task-id]" ? [row] : [];
+      }
+    };
+    bindTaskRepositoryRows(scope);
+    listeners.click({
+      preventDefault() {},
+      stopPropagation() {},
+      target: {
+        closest(selector) {
+          if (selector === "[data-action]") return null;
+          if (selector === ".task-title") return this;
+          return null;
+        }
+      }
+    });
+    return {
+      activeTaskId: state.activeTaskId,
+      selectedNodeId: state.selectedNodeId,
+      recordDraft: state.recordDraft,
+      focusTaskTitleId: state.focusTaskTitleId
+    };
+  })()`);
+
+  assert.deepEqual(result, {
+    activeTaskId: "clicked",
+    selectedNodeId: "",
+    recordDraft: "",
+    focusTaskTitleId: "clicked",
+  });
+});
+
+test("completion keeps the clicked repository task visible when it leaves the current filter", async () => {
+  const harness = await rendererHarness();
+  const result = harness.json(`(() => {
+    state.taskGroups = [{ id: "group_inbox", title: "默认", order: 1 }];
+    state.activeGroupId = "group_inbox";
+    state.taskFilter = "active";
+    state.tasks = normalizeTasks([
+      { id: "current", title: "当前任务", conclusion: "完成", status: "active", nodes: [] },
+      { id: "clicked", title: "点击任务", conclusion: "完成", status: "active", nodes: [] }
+    ]);
+    state.activeTaskId = "current";
+    activateRepositoryTask("clicked");
+    toggleTaskDone("clicked");
+    return {
+      activeTaskId: activeTask().id,
+      visibleRepositoryIds: filteredTasks().map((task) => task.id),
+      clickedStatus: state.tasks.find((task) => task.id === "clicked").status
+    };
+  })()`);
+
+  assert.equal(result.activeTaskId, "clicked");
+  assert.deepEqual(result.visibleRepositoryIds, ["current"]);
+  assert.equal(result.clickedStatus, "done");
+});
+
 test("flow title and record widths share a bounded accessible splitter", async () => {
   const [app, styles] = await Promise.all([
     fs.readFile(path.join(__dirname, "..", "src", "app.js"), "utf8"),
