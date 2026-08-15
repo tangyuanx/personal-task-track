@@ -21,6 +21,7 @@ const DEFAULT_GROUP = { id: "group_inbox", title: "默认", order: 1 };
 const TASK_STATUSES = new Set(["active", "done"]);
 const NODE_STATUSES = new Set(["todo", "done", "blocked", "later"]);
 const PRIORITIES = new Set(["high", "medium", "low"]);
+const RECURRENCE_FREQUENCIES = new Set(["none", "daily", "weekly"]);
 const TASK_FILTERS = new Set(["all", "today", "active", "done", "blocked", "later"]);
 const PRIORITY_FILTERS = new Set(["all", "high", "medium", "low"]);
 const ZH_FONTS = new Set(["system", "noto", "yahei", "pingfang", "songti", "simsun", "fangsong", "heiti", "kaiti"]);
@@ -119,6 +120,7 @@ function normalizeTasks(tasks) {
         status: TASK_STATUSES.has(task.status) ? task.status : "active",
         priority: PRIORITIES.has(task.priority) ? task.priority : "medium",
         tags: normalizeTaskTags(task.tags),
+        recurrence: normalizeTaskRecurrence(task.recurrence),
         notes: normalizeText(task.notes),
         hypothesis,
         hypothesisUpdatedAt: normalizeOptionalDateValue(
@@ -204,6 +206,27 @@ function normalizeTaskTags(tags) {
     later: Boolean(raw.later),
     blocked: Boolean(raw.blocked),
   };
+}
+
+function normalizeTaskRecurrence(value) {
+  const raw = isRecord(value) ? value : {};
+  const weekday = Number(raw.weekday);
+  return {
+    frequency: RECURRENCE_FREQUENCIES.has(raw.frequency) ? raw.frequency : "none",
+    weekday: Number.isInteger(weekday) && weekday >= 0 && weekday <= 6 ? weekday : 1,
+    time: /^([01]\d|2[0-3]):[0-5]\d$/.test(raw.time || "") ? raw.time : "09:00",
+    lastCompletedOccurrence: normalizeLocalDateKey(raw.lastCompletedOccurrence),
+  };
+}
+
+function normalizeLocalDateKey(value) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ""));
+  if (!match) return "";
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(year, month - 1, day);
+  return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day ? String(value) : "";
 }
 
 function normalizeFlowWidths(value) {

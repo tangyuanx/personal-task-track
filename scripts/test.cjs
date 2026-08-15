@@ -472,6 +472,88 @@ test("calendar filter composes with task status and leaves existing preferences 
   assert.match(styles, /anchor-name:\s*--task-calendar-filter;/);
 });
 
+test("recurring tasks normalize, become due at local time, and reactivate for a new occurrence", async () => {
+  const normalized = normalizeTaskData({
+    tasks: [{
+      id: "repeat",
+      recurrence: { frequency: "weekly", weekday: 5, time: "08:30", lastCompletedOccurrence: "invalid" },
+    }],
+  }).tasks[0].recurrence;
+  assert.deepEqual(normalized, {
+    frequency: "weekly",
+    weekday: 5,
+    time: "08:30",
+    lastCompletedOccurrence: "",
+  });
+
+  const harness = await rendererHarness();
+  const result = harness.json(`(() => {
+    const fridayMorning = new Date(2026, 7, 14, 8, 29);
+    const fridayDue = new Date(2026, 7, 14, 8, 30);
+    const saturdayDue = new Date(2026, 7, 15, 9, 0);
+    const weekly = normalizeTasks([{ id: "weekly", recurrence: { frequency: "weekly", weekday: 5, time: "08:30" }, nodes: [] }])[0];
+    const daily = normalizeTasks([{ id: "daily", status: "done", recurrence: { frequency: "daily", time: "09:00", lastCompletedOccurrence: "2026-08-14" }, nodes: [] }])[0];
+    state.tasks = [daily];
+    const changed = syncRecurringTasks(saturdayDue);
+    return {
+      before: isRecurringTaskDue(weekly, fridayMorning),
+      due: isRecurringTaskDue(weekly, fridayDue),
+      wrongDay: isRecurringTaskDue(weekly, saturdayDue),
+      dailyStatus: daily.status,
+      changed,
+      key: recurringOccurrenceKey(daily, saturdayDue),
+    };
+  })()`);
+
+  assert.equal(result.before, false);
+  assert.equal(result.due, true);
+  assert.equal(result.wrongDay, false);
+  assert.equal(result.dailyStatus, "active");
+  assert.equal(result.changed, true);
+  assert.equal(result.key, "2026-08-15");
+});
+
+test("recurrence controls feed every Today surface and refresh while the app stays open", async () => {
+  const app = await fs.readFile(path.join(__dirname, "..", "src", "app.js"), "utf8");
+  assert.match(app, /data-recurrence-field="frequency"/);
+  assert.match(app, /data-recurrence-field="weekday"/);
+  assert.match(app, /data-recurrence-field="time"/);
+  assert.match(app, /state\.taskFilter === "today" && !isTaskScheduledForToday\(task\)/);
+  assert.match(app, /\.filter\(\(task\) => isTaskScheduledForToday\(task\)\)/);
+  assert.match(app, /window\.setInterval\?\.\([\s\S]*?30000/);
+});
+
+test("group and node mutations do not steal repository title focus", async () => {
+  const app = await fs.readFile(path.join(__dirname, "..", "src", "app.js"), "utf8");
+  assert.doesNotMatch(app, /window\.setTimeout\(render, 0\)/);
+  assert.match(app, /\.task-check, input, textarea, select, button, \[contenteditable\]/);
+  assert.match(app, /event\.relatedTarget\?\.closest\?\.\("\.task-title, \.page-title"\)/);
+});
+
+test("flow title and record widths share a bounded accessible splitter", async () => {
+  const [app, styles] = await Promise.all([
+    fs.readFile(path.join(__dirname, "..", "src", "app.js"), "utf8"),
+    fs.readFile(path.join(__dirname, "..", "src", "styles.css"), "utf8"),
+  ]);
+  const harness = await rendererHarness();
+  const widths = harness.json(`(() => {
+    state.flowWidths = { title: 360, note: 330 };
+    setFlowSplitTitleWidth(500, null);
+    const first = { ...state.flowWidths };
+    setFlowSplitTitleWidth(900, null);
+    return { first, clamped: { ...state.flowWidths } };
+  })()`);
+  const finalFlowRules = styles.slice(styles.lastIndexOf("Keep persisted flow split widths authoritative"));
+
+  assert.deepEqual(widths.first, { title: 500, note: 190 });
+  assert.deepEqual(widths.clamped, { title: 510, note: 180 });
+  assert.match(app, /role="separator"[^>]+data-flow-split-resizer/);
+  assert.match(app, /handleFlowSplitKeydown/);
+  assert.match(styles, /\.flow-split-resizer\s*\{[\s\S]*?width:\s*15px;/);
+  assert.match(finalFlowRules, /var\(--flow-title-width, 360px\)/);
+  assert.match(finalFlowRules, /var\(--flow-note-width, 330px\)/);
+});
+
 test("knowledge images keep the caret beside the inline image node", async () => {
   const [entry, styles] = await Promise.all([
     fs.readFile(path.join(__dirname, "..", "src", "milkdown-editor.entry.js"), "utf8"),

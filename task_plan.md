@@ -4,9 +4,20 @@
 Maintain the personal task management app through scoped, low-risk improvements while preserving existing task flow behavior and release discipline.
 
 ## Current Phase
-Phase 26
+Phase 27
 
 ## Phases
+
+### Phase 27: Edit Recovery, Recurring Tasks, and Flow Split Resize
+- [x] Recover repository context, preserve unrelated artifacts, and confirm the latest remote baseline
+- [x] Diagnose group/node mutation side effects that temporarily block task-title editing
+- [x] Design and persist a low-impact recurring-task rule with local date/time evaluation
+- [x] Add a draggable title/record split with bounded, persisted proportions and accessible fallback
+- [x] Implement the three changes and add focused regression coverage
+- [x] Run full validation
+- [x] Package both desktop targets
+- [x] Version, commit, tag, push, and verify the release
+- **Status:** complete
 
 ### Phase 26: Knowledge List Marker Contrast
 - [x] Recover the v0.1.105 release context and confirm the latest remote baseline

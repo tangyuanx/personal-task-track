@@ -120,6 +120,21 @@ const defaultSidebarWidth = 390;
 const sidebarWidthLimits = [370, 560];
 const defaultDetailHeight = 58;
 const detailHeightLimits = [50, 82];
+const recurrenceFrequencies = new Set(["none", "daily", "weekly"]);
+const recurrenceFrequencyLabels = {
+  none: "不循环",
+  daily: "每天",
+  weekly: "每周",
+};
+const recurrenceWeekdayLabels = {
+  1: "周一",
+  2: "周二",
+  3: "周三",
+  4: "周四",
+  5: "周五",
+  6: "周六",
+  0: "周日",
+};
 const taskTagLabels = {
   today: "Today",
   later: "稍后",
@@ -213,6 +228,8 @@ let saveInFlight = false;
 let conclusionNoticeTimer = 0;
 let taskDragState = null;
 let suppressTaskClickUntil = 0;
+let recurrenceScheduleTimer = 0;
+let recurringTodaySignature = "";
 const milkdownEditors = new Map();
 const nodeNoteDrafts = new Map();
 const nodeNoteSaveTimers = new Map();
@@ -327,6 +344,7 @@ function normalizeTasks(tasks) {
         status: taskStatusValues.has(task.status) ? task.status : "active",
         priority: normalizePriority(task.priority),
         tags: normalizeTaskTags(task.tags),
+        recurrence: normalizeTaskRecurrence(task.recurrence),
         notes: normalizeText(task.notes),
         hypothesis,
         hypothesisUpdatedAt: normalizeOptionalDateValue(
@@ -383,6 +401,17 @@ function normalizeTaskTags(tags) {
     today: Boolean(raw.today),
     later: Boolean(raw.later),
     blocked: Boolean(raw.blocked),
+  };
+}
+
+function normalizeTaskRecurrence(value) {
+  const raw = isRecord(value) ? value : {};
+  const weekday = Number(raw.weekday);
+  return {
+    frequency: recurrenceFrequencies.has(raw.frequency) ? raw.frequency : "none",
+    weekday: Number.isInteger(weekday) && weekday >= 0 && weekday <= 6 ? weekday : 1,
+    time: /^([01]\d|2[0-3]):[0-5]\d$/.test(raw.time || "") ? raw.time : "09:00",
+    lastCompletedOccurrence: normalizeTaskDateFilter(raw.lastCompletedOccurrence),
   };
 }
 
@@ -984,6 +1013,7 @@ function renderTaskPage(task) {
             <span class="task-context-item status ${task.status === "done" ? "resolved" : "attention"}">${task.status === "done" ? "已完成" : "处理中"}</span>
             <span class="task-context-progress">${summary.done}/${summary.total || 0} 节点</span>
             <label class="task-context-group"><span>分组</span>${selectHtml("groupId", task.groupId, taskGroupOptions(), task.id)}</label>
+            ${renderTaskRecurrenceControls(task)}
           </div>
         </div>
         <div class="actions">
@@ -1005,7 +1035,7 @@ function renderTaskPage(task) {
         ${state.taskPane === "flow" ? `<section class="flow-section flow" data-context="flow-root" data-task-id="${task.id}">
           ${
             topNodes.length
-              ? `<div class="flow-list flow-table" style="${flowWidthStyle()};--flow-visible-row-count:${visibleFlowRowCount(topNodes)}" data-context="flow-root" data-task-id="${task.id}">${topNodes.map((node, index) => renderFlowNode(task.id, node, 0, index, [], index === topNodes.length - 1)).join("")}</div>`
+              ? `<div class="flow-list flow-table" style="${flowWidthStyle()};--flow-visible-row-count:${visibleFlowRowCount(topNodes)}" data-context="flow-root" data-task-id="${task.id}">${renderFlowSplitResizer()}${topNodes.map((node, index) => renderFlowNode(task.id, node, 0, index, [], index === topNodes.length - 1)).join("")}</div>`
               : `<div class="flow-list flow-table empty-flow" data-context="flow-root" data-task-id="${task.id}"></div>`
           }
         </section>` : state.taskPane === "notes" ? renderTaskKnowledge(task) : renderTaskHistory(task)}
@@ -1079,6 +1109,13 @@ function visibleFlowRowCount(nodes) {
   );
 }
 
+function renderFlowSplitResizer() {
+  const total = normalizeFlowWidth("title", state.flowWidths.title) + normalizeFlowWidth("note", state.flowWidths.note);
+  const bounds = flowSplitBounds(total);
+  const titleWidth = Math.max(bounds.min, Math.min(bounds.max, normalizeFlowWidth("title", state.flowWidths.title)));
+  return `<span class="flow-split-resizer" role="separator" tabindex="0" aria-label="调整处理标题与记录宽度" aria-orientation="vertical" aria-valuemin="${bounds.min}" aria-valuemax="${bounds.max}" aria-valuenow="${titleWidth}" data-flow-split-resizer title="拖拽调整处理标题与记录宽度"></span>`;
+}
+
 function renderTaskTagButton(task, tag, label) {
   const active = normalizeTaskTags(task.tags)[tag];
   return `<button class="task-tag-toggle ${active ? "active" : ""}" type="button" data-action="toggle-task-tag" data-task-id="${task.id}" data-tag="${tag}">${label}</button>`;
@@ -1093,10 +1130,45 @@ function renderTaskTagRow(task) {
 }
 
 function renderTaskActiveTagPills(task) {
-  return Object.entries(normalizeTaskTags(task.tags))
+  const tagPills = Object.entries(normalizeTaskTags(task.tags))
     .filter(([, active]) => active)
     .map(([tag]) => `<span class="task-context-item task-tag">${taskTagLabels[tag]}</span>`)
     .join("");
+  const recurrence = normalizeTaskRecurrence(task.recurrence);
+  const recurrencePill = recurrence.frequency === "none"
+    ? ""
+    : `<span class="task-context-item task-tag recurring">${esc(recurrenceLabel(recurrence))}</span>`;
+  return `${tagPills}${recurrencePill}`;
+}
+
+function renderTaskRecurrenceControls(task) {
+  const recurrence = normalizeTaskRecurrence(task.recurrence);
+  return `
+    <span class="task-recurrence-controls" aria-label="循环任务设置">
+      <label class="task-context-recurrence">
+        <span>循环</span>
+        <select data-recurrence-field="frequency" data-task-id="${task.id}" aria-label="循环周期">
+          ${Object.entries(recurrenceFrequencyLabels)
+            .map(([value, label]) => `<option value="${value}" ${recurrence.frequency === value ? "selected" : ""}>${label}</option>`)
+            .join("")}
+        </select>
+      </label>
+      ${
+        recurrence.frequency === "weekly"
+          ? `<select class="task-recurrence-weekday" data-recurrence-field="weekday" data-task-id="${task.id}" aria-label="每周执行日期">
+              ${[1, 2, 3, 4, 5, 6, 0]
+                .map((value) => `<option value="${value}" ${recurrence.weekday === value ? "selected" : ""}>${recurrenceWeekdayLabels[value]}</option>`)
+                .join("")}
+            </select>`
+          : ""
+      }
+      ${
+        recurrence.frequency !== "none"
+          ? `<input class="task-recurrence-time" type="time" data-recurrence-field="time" data-task-id="${task.id}" value="${escAttr(recurrence.time)}" aria-label="循环任务出现时间" />`
+          : ""
+      }
+    </span>
+  `;
 }
 
 function renderBriefField(label, control, timestamp = "", attention = false, variant = "") {
@@ -1368,7 +1440,7 @@ function filteredTasks({ includeQuery = true } = {}) {
       const tags = normalizeTaskTags(task.tags);
       const hasBlocked = flatten(task.nodes).some((node) => node.status === "blocked");
       const hasLater = flatten(task.nodes).some((node) => node.status === "later");
-      if (state.taskFilter === "today" && !tags.today) return false;
+      if (state.taskFilter === "today" && !isTaskScheduledForToday(task)) return false;
       if (state.taskFilter === "active" && task.status === "done") return false;
       if (state.taskFilter === "done" && task.status !== "done") return false;
       if (state.taskFilter === "blocked" && !tags.blocked && !hasBlocked) return false;
@@ -1391,7 +1463,7 @@ function taskListScopeTasks() {
 
 function taskListStatsTasks() {
   if (state.taskFilter !== "today") return tasksInActiveGroup();
-  return state.tasks.filter((task) => normalizeTaskTags(task.tags).today);
+  return state.tasks.filter((task) => isTaskScheduledForToday(task));
 }
 
 function tasksInActiveGroup() {
@@ -1406,7 +1478,7 @@ function taskGroupOptions() {
 function todayFocusItems() {
   return state.tasks
     .filter((task) => task.status !== "done")
-    .filter((task) => normalizeTaskTags(task.tags).today)
+    .filter((task) => isTaskScheduledForToday(task))
     .map((task) => {
       const tags = normalizeTaskTags(task.tags);
       const nodes = flatten(task.nodes);
@@ -1425,6 +1497,60 @@ function todayFocusItems() {
     })
     .sort((a, b) => b.score - a.score || b.updatedAt - a.updatedAt || a.task.order - b.task.order)
     .slice(0, 3);
+}
+
+function recurrenceLabel(value) {
+  const recurrence = normalizeTaskRecurrence(value);
+  if (recurrence.frequency === "daily") return `每天 ${recurrence.time}`;
+  if (recurrence.frequency === "weekly") return `每${recurrenceWeekdayLabels[recurrence.weekday]} ${recurrence.time}`;
+  return "不循环";
+}
+
+function recurringOccurrenceKey(task, at = new Date()) {
+  const recurrence = normalizeTaskRecurrence(task.recurrence);
+  if (recurrence.frequency === "none") return "";
+  const date = at instanceof Date ? at : new Date(at);
+  if (!Number.isFinite(date.getTime())) return "";
+  const [hours, minutes] = recurrence.time.split(":").map(Number);
+  if (date.getHours() * 60 + date.getMinutes() < hours * 60 + minutes) return "";
+  if (recurrence.frequency === "weekly" && date.getDay() !== recurrence.weekday) return "";
+  return localDateKey(date);
+}
+
+function isRecurringTaskDue(task, at = new Date()) {
+  const occurrence = recurringOccurrenceKey(task, at);
+  return Boolean(occurrence && normalizeTaskRecurrence(task.recurrence).lastCompletedOccurrence !== occurrence);
+}
+
+function isTaskScheduledForToday(task, at = new Date()) {
+  return normalizeTaskTags(task.tags).today || isRecurringTaskDue(task, at);
+}
+
+function syncRecurringTasks(at = new Date()) {
+  let statusChanged = false;
+  state.tasks.forEach((task) => {
+    const occurrence = recurringOccurrenceKey(task, at);
+    const recurrence = normalizeTaskRecurrence(task.recurrence);
+    if (!occurrence || recurrence.lastCompletedOccurrence === occurrence || task.status !== "done") return;
+    task.status = "active";
+    task.resolvedAt = "";
+    task.updatedAt = at.toISOString();
+    statusChanged = true;
+  });
+  const nextSignature = state.tasks
+    .map((task) => `${task.id}:${recurringOccurrenceKey(task, at)}:${isRecurringTaskDue(task, at) ? "due" : "idle"}`)
+    .join("|");
+  const scheduleChanged = nextSignature !== recurringTodaySignature;
+  recurringTodaySignature = nextSignature;
+  if (statusChanged) save();
+  return statusChanged || scheduleChanged;
+}
+
+function startRecurringSchedule() {
+  window.clearInterval?.(recurrenceScheduleTimer);
+  recurrenceScheduleTimer = window.setInterval?.(() => {
+    if (syncRecurringTasks(new Date())) render();
+  }, 30000) || 0;
 }
 
 function isTaskTouchedToday(task) {
@@ -2047,7 +2173,8 @@ function bind() {
     element.addEventListener("input", (event) => renameGroup(event.target.dataset.groupTitle, event.target.value, false));
     element.addEventListener("blur", (event) => {
       renameGroup(event.target.dataset.groupTitle, event.target.value, true);
-      window.setTimeout(render, 0);
+      if (event.relatedTarget?.closest?.(".task-title, .page-title")) return;
+      render();
     });
     element.addEventListener("keydown", (event) => {
       if (event.key === "Enter") {
@@ -2215,7 +2342,7 @@ function bindTaskRepositoryRows(scope = document) {
           event.stopPropagation();
           return;
         }
-        if (event.target.closest(".task-check, select, button")) return;
+        if (event.target.closest(".task-check, input, textarea, select, button, [contenteditable]")) return;
         if (state.activeTaskId === element.dataset.taskId) return;
         state.activeTaskId = element.dataset.taskId;
         state.selectedNodeId = "";
@@ -2367,7 +2494,8 @@ function bindTaskRepositoryRows(scope = document) {
     element.addEventListener("input", (event) => renameGroup(event.target.dataset.groupTitle, event.target.value, false));
     element.addEventListener("blur", (event) => {
       renameGroup(event.target.dataset.groupTitle, event.target.value, true);
-      window.setTimeout(render, 0);
+      if (event.relatedTarget?.closest?.(".task-title, .page-title")) return;
+      render();
     });
     element.addEventListener("keydown", (event) => {
       if (event.key === "Enter") {
@@ -2650,6 +2778,21 @@ function bindTaskRepositoryRows(scope = document) {
     });
   }
 
+  document.querySelectorAll("[data-recurrence-field]").forEach((control) => {
+    control.addEventListener("click", (event) => event.stopPropagation());
+    control.addEventListener("change", (event) => {
+      updateTaskRecurrence(event.currentTarget.dataset.taskId, event.currentTarget.dataset.recurrenceField, event.currentTarget.value);
+      syncRecurringTasks(new Date());
+      render();
+    });
+  });
+
+  document.querySelectorAll("[data-flow-split-resizer]").forEach((handle) => {
+    handle.addEventListener("click", (event) => event.stopPropagation());
+    handle.addEventListener("pointerdown", startFlowSplitResize);
+    handle.addEventListener("keydown", handleFlowSplitKeydown);
+  });
+
   document.querySelectorAll("[data-resize-col]").forEach((handle) => {
     handle.addEventListener("click", (event) => event.stopPropagation());
     handle.addEventListener("pointerdown", (event) => startColumnResize(event, handle.dataset.resizeCol));
@@ -2918,6 +3061,67 @@ function startColumnResize(event, column) {
 
   window.addEventListener("pointermove", move);
   window.addEventListener("pointerup", end);
+}
+
+function flowSplitBounds(total) {
+  return {
+    min: Math.max(flowWidthLimits.title[0], total - flowWidthLimits.note[1]),
+    max: Math.min(flowWidthLimits.title[1], total - flowWidthLimits.note[0]),
+  };
+}
+
+function setFlowSplitTitleWidth(titleWidth, flowList = document.querySelector(".flow-list")) {
+  const total = normalizeFlowWidth("title", state.flowWidths.title) + normalizeFlowWidth("note", state.flowWidths.note);
+  const bounds = flowSplitBounds(total);
+  const nextTitle = Math.max(bounds.min, Math.min(bounds.max, Math.round(titleWidth)));
+  const nextNote = total - nextTitle;
+  state.flowWidths.title = nextTitle;
+  state.flowWidths.note = nextNote;
+  if (flowList) {
+    flowList.style.setProperty("--flow-title-width", `${nextTitle}px`);
+    flowList.style.setProperty("--flow-note-width", `${nextNote}px`);
+    const handle = flowList.querySelector("[data-flow-split-resizer]");
+    handle?.setAttribute("aria-valuenow", String(nextTitle));
+  }
+  return nextTitle;
+}
+
+function startFlowSplitResize(event) {
+  event.preventDefault();
+  event.stopPropagation();
+  const startX = event.clientX;
+  const startTitle = normalizeFlowWidth("title", state.flowWidths.title);
+  const flowList = event.currentTarget.closest(".flow-list");
+  document.body.classList.add("resizing-flow-split");
+  event.currentTarget.setPointerCapture?.(event.pointerId);
+
+  function move(moveEvent) {
+    setFlowSplitTitleWidth(startTitle + moveEvent.clientX - startX, flowList);
+  }
+
+  function end() {
+    document.body.classList.remove("resizing-flow-split");
+    saveFlowWidths();
+    window.removeEventListener("pointermove", move);
+    window.removeEventListener("pointerup", end);
+    window.removeEventListener("pointercancel", end);
+  }
+
+  window.addEventListener("pointermove", move);
+  window.addEventListener("pointerup", end);
+  window.addEventListener("pointercancel", end);
+}
+
+function handleFlowSplitKeydown(event) {
+  if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const total = normalizeFlowWidth("title", state.flowWidths.title) + normalizeFlowWidth("note", state.flowWidths.note);
+  const bounds = flowSplitBounds(total);
+  const current = normalizeFlowWidth("title", state.flowWidths.title);
+  const next = event.key === "Home" ? bounds.min : event.key === "End" ? bounds.max : current + (event.key === "ArrowLeft" ? -12 : 12);
+  setFlowSplitTitleWidth(next, event.currentTarget.closest(".flow-list"));
+  saveFlowWidths();
 }
 
 function startSidebarResize(event) {
@@ -3750,6 +3954,7 @@ function createTask(title, shouldRender = true) {
     status: "active",
     priority: state.newTaskPriority,
     tags: normalizeTaskTags({}),
+    recurrence: normalizeTaskRecurrence({}),
     hypothesis: "",
     hypothesisUpdatedAt: "",
     conclusion: "",
@@ -4112,6 +4317,23 @@ function toggleTaskTag(taskId, tag) {
   task.updatedAt = now();
 }
 
+function updateTaskRecurrence(taskId, field, value) {
+  const task = state.tasks.find((item) => item.id === taskId);
+  if (!task || !["frequency", "weekday", "time"].includes(field)) return;
+  const previous = normalizeTaskRecurrence(task.recurrence);
+  const next = { ...previous };
+  if (field === "frequency") {
+    next.frequency = recurrenceFrequencies.has(value) ? value : "none";
+    if (previous.frequency === "none" && next.frequency === "weekly") next.weekday = new Date().getDay();
+    if (next.frequency === "none") next.lastCompletedOccurrence = "";
+  }
+  if (field === "weekday") next.weekday = Number(value);
+  if (field === "time") next.time = value;
+  task.recurrence = normalizeTaskRecurrence(next);
+  task.updatedAt = now();
+  save();
+}
+
 /**
  * Delete a task and all its nodes.
  * @param {string} taskId - Task ID to delete
@@ -4141,7 +4363,15 @@ function toggleTaskDone(taskId) {
     showConclusionNotice(taskId);
     return;
   }
-  task.status = task.status === "done" ? "active" : "done";
+  const wasDone = task.status === "done";
+  const occurrence = recurringOccurrenceKey(task);
+  task.status = wasDone ? "active" : "done";
+  task.recurrence = normalizeTaskRecurrence(task.recurrence);
+  if (wasDone && occurrence && task.recurrence.lastCompletedOccurrence === occurrence) {
+    task.recurrence.lastCompletedOccurrence = "";
+  } else if (!wasDone && occurrence) {
+    task.recurrence.lastCompletedOccurrence = occurrence;
+  }
   if (task.status === "done") {
     task.resolvedAt = now();
     state.conclusionPromptTaskId = "";
@@ -4672,7 +4902,9 @@ async function bootstrap() {
   state.newTaskPriority = data.newTaskPriority;
   state.installationId = normalizeInstallationId(data.installationId);
   state.activeTaskId = tasksInActiveGroup()[0]?.id || "";
+  syncRecurringTasks(new Date());
   render();
+  startRecurringSchedule();
 }
 
 window.addEventListener("blur", () => {

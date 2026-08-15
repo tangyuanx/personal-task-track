@@ -1,5 +1,36 @@
 # Progress Log
 
+## Session: 2026-08-15 Edit Recovery, Recurring Tasks, and Flow Split Resize
+
+### Phase 27: Baseline and architecture audit
+- **Status:** in progress
+- Actions taken:
+  - Read the project maintenance, persistent planning, and frontend design instructions and recovered the previous release context.
+  - Preserved unrelated user artifacts, fetched remote `main` and tags, and confirmed zero divergence at `4a2c3f2` / `v0.1.106`.
+  - Split the request into mutation/focus diagnosis, recurring-task scheduling and persistence, and a bounded processing-flow split resize.
+  - Chose a compact task-focused direction: reuse existing controls and tokens, avoid duplicated generated tasks, and give the divider a quiet visual line with a forgiving drag target.
+  - Audited renderer normalization, Electron storage normalization, task/sidebar rendering, Today filtering, page binding, resize helpers, group rename, and node deletion.
+  - Identified an early return that makes the main `bind()` body unreachable and confirmed existing column-width persistence lacks a rendered adjustment affordance.
+  - Confirmed the active binding implementation lives in the delegated helper and traced group-rename title loss to a delayed full-root render after blur.
+  - Identified repository capture-phase task activation and uncleared node-context state as compounding title-focus risks after node deletion.
+  - Confirmed node actions clear the context menu at dispatch, and refined the editing fix to remove the delayed group render, exclude all editable controls from capture activation, and cancel transient drag state before deletion render.
+  - Confirmed the final flow CSS currently overrides persisted widths with fixed fractions; chose an inverse title/note split that preserves total width.
+  - Defined daily/weekly local-time recurrence with per-occurrence completion and a 30-second open-app scheduler.
+  - Added matching browser/Electron normalization for the recurrence frequency, weekday, local time, and completed-occurrence key.
+  - Added compact recurrence controls, shared Today predicates, local occurrence evaluation, automatic next-occurrence reactivation, and a 30-second open-app schedule refresh.
+  - Added an accessible flow split separator with inverse title/note resizing, pointer capture, keyboard arrows/Home/End, and persisted widths.
+  - Removed the delayed full-root render when a group rename blurs into a task-title field and excluded all editable controls from task-row capture activation.
+  - Added compact recurrence and divider styling with light/dark token reuse, a one-pixel divider, a 15px pointer target, and responsive hiding below the desktop flow layout breakpoint.
+  - Added four focused regression tests covering storage normalization, daily/weekly due times, new-occurrence reactivation, every Today surface, the title-focus race, and bounded pointer/keyboard split behavior.
+  - Passed all four focused regression tests, JavaScript syntax checks, and `git diff --check`.
+  - Passed the full project check with 35 desktop/client tests and 11 mocked backend tests.
+  - Re-fetched remote main/tags, confirmed v0.1.106 remained latest with zero divergence, and bumped release/cache metadata to v0.1.107.
+  - Removed old release output, passed the final v0.1.107 check, and built the macOS ARM64 DMG/ZIP plus Windows x64 NSIS packages successfully.
+  - Confirmed all six v0.1.107 artifacts are present, no AppleDouble files exist, package/lock/cache versions agree, remote `main` is unchanged, and v0.1.107 is not already present remotely.
+  - Prepared the scoped v0.1.107 release commit and tag for automatic publication.
+- Errors:
+  - Two broad multi-hunk source patches failed because repeated binding and task-construction contexts were not uniquely matched; no partial edits were applied, and the changes were split into focused patches.
+
 ## Session: 2026-08-12 Knowledge List Marker Contrast
 
 ### Phase 26: Contrast audit and scoped correction

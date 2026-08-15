@@ -8708,6 +8708,105 @@ button:not(:disabled):active,
   }
 }
 
+/* Recurrence stays in the task property line: compact, native, and immediately legible. */
+.task-recurrence-controls,
+.task-context-recurrence {
+  display: inline-flex;
+  min-height: 20px;
+  align-items: center;
+  gap: 5px;
+  color: var(--handoff-muted, var(--muted));
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.task-recurrence-controls select,
+.task-recurrence-controls input {
+  width: auto;
+  height: 20px;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  border-radius: 0;
+  padding: 0 16px 0 0;
+  background: transparent;
+  color: var(--handoff-ink, var(--ink));
+  font: inherit;
+  outline: 0;
+}
+
+.task-recurrence-controls input[type="time"] {
+  width: 62px;
+  padding-right: 0;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.task-recurrence-controls select:hover,
+.task-recurrence-controls input:hover,
+.task-recurrence-controls select:focus-visible,
+.task-recurrence-controls input:focus-visible {
+  border-bottom-color: color-mix(in srgb, var(--focus) 58%, transparent);
+}
+
+.task-context-item.task-tag.recurring {
+  color: var(--handoff-muted, var(--muted));
+  font-weight: 560;
+}
+
+/* One quiet divider reallocates title/record width while preserving the table footprint. */
+@media (min-width: 871px) {
+  .flow-list.flow-table {
+    position: relative;
+  }
+
+  .flow-split-resizer {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: calc(30px + var(--flow-title-width, 360px));
+    z-index: 4;
+    width: 15px;
+    border: 0;
+    background: transparent;
+    cursor: col-resize;
+    transform: translateX(-7px);
+    touch-action: none;
+  }
+
+  .flow-split-resizer::before {
+    position: absolute;
+    top: 4px;
+    bottom: 4px;
+    left: 7px;
+    width: 1px;
+    background: color-mix(in srgb, var(--handoff-line-strong, var(--line)) 72%, transparent);
+    content: "";
+    transition: background 120ms ease;
+  }
+
+  .flow-split-resizer:hover::before,
+  .flow-split-resizer:focus-visible::before,
+  body.resizing-flow-split .flow-split-resizer::before {
+    background: color-mix(in srgb, var(--focus) 64%, var(--handoff-line-strong, var(--line)));
+  }
+
+  .flow-split-resizer:focus-visible {
+    outline: 1px solid color-mix(in srgb, var(--focus) 42%, transparent);
+    outline-offset: -4px;
+  }
+}
+
+body.resizing-flow-split {
+  cursor: col-resize;
+  user-select: none;
+}
+
+@media (max-width: 870px) {
+  .flow-split-resizer {
+    display: none;
+  }
+}
+
 /* Final, demo-matched processing-flow layout. Keep this last: legacy flow rules above are intentionally overridden. */
 .flow-list.flow-table .flow-line.flow-row,
 .flow-list.flow-table .flow-line.flow-row.sub {
@@ -9128,5 +9227,18 @@ button:not(:disabled):active,
   .task-row.task-item .task-priority-control,
   .task-row.task-item .task-priority-control select {
     font-size: 11px;
+  }
+}
+
+/* Keep persisted flow split widths authoritative after all legacy/demo overrides. */
+@media (min-width: 871px) {
+  .flow-list.flow-table .flow-line.flow-row,
+  .flow-list.flow-table .flow-line.flow-row.sub {
+    grid-template-columns:
+      30px
+      minmax(0, var(--flow-title-width, 360px))
+      minmax(180px, var(--flow-note-width, 330px))
+      72px
+      118px;
   }
 }
