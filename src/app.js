@@ -771,7 +771,10 @@ function normalizeDetailHeight(value) {
 
 function flowWidthStyle() {
   return Object.entries(defaultFlowWidths)
-    .map(([key]) => `--flow-${key}-width:${normalizeFlowWidth(key, state.flowWidths[key])}px`)
+    .flatMap(([key]) => {
+      const width = normalizeFlowWidth(key, state.flowWidths[key]);
+      return [`--flow-${key}-width:${width}px`, `--flow-${key}-track:${width}fr`];
+    })
     .join(";");
 }
 
@@ -1132,7 +1135,8 @@ function renderFlowSplitResizer() {
   const total = normalizeFlowWidth("title", state.flowWidths.title) + normalizeFlowWidth("note", state.flowWidths.note);
   const bounds = flowSplitBounds(total);
   const titleWidth = Math.max(bounds.min, Math.min(bounds.max, normalizeFlowWidth("title", state.flowWidths.title)));
-  return `<span class="flow-split-resizer" role="separator" tabindex="0" aria-label="调整处理标题与记录宽度" aria-orientation="vertical" aria-valuemin="${bounds.min}" aria-valuemax="${bounds.max}" aria-valuenow="${titleWidth}" data-flow-split-resizer title="拖拽调整处理标题与记录宽度"></span>`;
+  const percentage = Math.round((titleWidth / total) * 100);
+  return `<span class="flow-split-layer"><span class="flow-split-resizer" role="separator" tabindex="0" aria-label="调整处理标题与记录宽度" aria-orientation="vertical" aria-valuemin="${Math.round((bounds.min / total) * 100)}" aria-valuemax="${Math.round((bounds.max / total) * 100)}" aria-valuenow="${percentage}" aria-valuetext="标题 ${percentage}% · 记录 ${100 - percentage}%" data-flow-split-resizer title="拖拽调整处理标题与记录宽度"></span></span>`;
 }
 
 function renderTaskTagButton(task, tag, label) {
@@ -1299,11 +1303,10 @@ function nodeNoteSummary(value) {
   };
 }
 
-function renderFlowHeadCell(key, label) {
+function renderFlowHeadCell(_key, label) {
   return `
     <span class="flow-head-cell">
       <span>${label}</span>
-      ${key ? `<span class="col-resizer" data-resize-col="${key}"></span>` : ""}
     </span>
   `;
 }
@@ -3142,11 +3145,6 @@ function bindTaskRepositoryRows(scope = document) {
     handle.addEventListener("keydown", handleFlowSplitKeydown);
   });
 
-  document.querySelectorAll("[data-resize-col]").forEach((handle) => {
-    handle.addEventListener("click", (event) => event.stopPropagation());
-    handle.addEventListener("pointerdown", (event) => startColumnResize(event, handle.dataset.resizeCol));
-  });
-
   document.querySelectorAll("[data-sidebar-resizer]").forEach((handle) => {
     handle.addEventListener("click", (event) => event.stopPropagation());
     handle.addEventListener("pointerdown", startSidebarResize);
@@ -3392,33 +3390,6 @@ async function submitBugReport() {
   }
 }
 
-function startColumnResize(event, column) {
-  event.preventDefault();
-  event.stopPropagation();
-  if (!flowWidthLimits[column]) return;
-
-  const startX = event.clientX;
-  const startWidth = normalizeFlowWidth(column, state.flowWidths[column]);
-  const flowList = event.target.closest(".flow-list");
-  document.body.classList.add("resizing-column");
-
-  function move(moveEvent) {
-    const nextWidth = normalizeFlowWidth(column, startWidth + moveEvent.clientX - startX);
-    state.flowWidths[column] = nextWidth;
-    if (flowList) flowList.style.setProperty(`--flow-${column}-width`, `${nextWidth}px`);
-  }
-
-  function end() {
-    document.body.classList.remove("resizing-column");
-    saveFlowWidths();
-    window.removeEventListener("pointermove", move);
-    window.removeEventListener("pointerup", end);
-  }
-
-  window.addEventListener("pointermove", move);
-  window.addEventListener("pointerup", end);
-}
-
 function flowSplitBounds(total) {
   return {
     min: Math.max(flowWidthLimits.title[0], total - flowWidthLimits.note[1]),
@@ -3436,23 +3407,54 @@ function setFlowSplitTitleWidth(titleWidth, flowList = document.querySelector(".
   if (flowList) {
     flowList.style.setProperty("--flow-title-width", `${nextTitle}px`);
     flowList.style.setProperty("--flow-note-width", `${nextNote}px`);
+    flowList.style.setProperty("--flow-title-track", `${nextTitle}fr`);
+    flowList.style.setProperty("--flow-note-track", `${nextNote}fr`);
     const handle = flowList.querySelector("[data-flow-split-resizer]");
-    handle?.setAttribute("aria-valuenow", String(nextTitle));
+    const percentage = Math.round((nextTitle / total) * 100);
+    handle?.setAttribute("aria-valuenow", String(percentage));
+    handle?.setAttribute("aria-valuetext", `标题 ${percentage}% · 记录 ${100 - percentage}%`);
   }
   return nextTitle;
+}
+
+function flowSplitGeometry(flowList) {
+  const row = flowList?.querySelector(".flow-line.flow-row:not(.header)");
+  const titleCell = row?.querySelector(".flow-title-cell");
+  const recordCell = row?.querySelector(".flow-record-input");
+  if (!titleCell || !recordCell) return null;
+  const titleRect = titleCell.getBoundingClientRect();
+  const recordRect = recordCell.getBoundingClientRect();
+  const left = titleRect.left;
+  const right = recordRect.right;
+  if (!Number.isFinite(left) || !Number.isFinite(right) || right <= left) return null;
+  return { left, right, boundary: titleRect.right, width: right - left };
+}
+
+function setFlowSplitFromClientX(clientX, flowList) {
+  const geometry = flowSplitGeometry(flowList);
+  if (!geometry) return null;
+  const minimumTitle = Math.min(flowWidthLimits.title[0], Math.max(0, geometry.width - flowWidthLimits.note[0]));
+  const minimumNote = Math.min(flowWidthLimits.note[0], Math.max(0, geometry.width - minimumTitle));
+  const boundary = Math.max(
+    geometry.left + minimumTitle,
+    Math.min(geometry.right - minimumNote, clientX),
+  );
+  const total = normalizeFlowWidth("title", state.flowWidths.title) + normalizeFlowWidth("note", state.flowWidths.note);
+  return setFlowSplitTitleWidth((total * (boundary - geometry.left)) / geometry.width, flowList);
 }
 
 function startFlowSplitResize(event) {
   event.preventDefault();
   event.stopPropagation();
-  const startX = event.clientX;
-  const startTitle = normalizeFlowWidth("title", state.flowWidths.title);
   const flowList = event.currentTarget.closest(".flow-list");
+  const geometry = flowSplitGeometry(flowList);
+  if (!flowList || !geometry) return;
+  const grabOffset = event.clientX - geometry.boundary;
   document.body.classList.add("resizing-flow-split");
   event.currentTarget.setPointerCapture?.(event.pointerId);
 
   function move(moveEvent) {
-    setFlowSplitTitleWidth(startTitle + moveEvent.clientX - startX, flowList);
+    setFlowSplitFromClientX(moveEvent.clientX - grabOffset, flowList);
   }
 
   function end() {

@@ -645,15 +645,38 @@ test("flow title and record widths share a bounded accessible splitter", async (
     setFlowSplitTitleWidth(900, null);
     return { first, clamped: { ...state.flowWidths } };
   })()`);
-  const finalFlowRules = styles.slice(styles.lastIndexOf("Keep persisted flow split widths authoritative"));
+  const renderedDrag = harness.json(`(() => {
+    state.flowWidths = { title: 360, note: 330 };
+    const properties = {};
+    const attributes = {};
+    const titleCell = { getBoundingClientRect: () => ({ left: 100, right: 460 }) };
+    const recordCell = { getBoundingClientRect: () => ({ left: 460, right: 800 }) };
+    const row = { querySelector: (selector) => selector === ".flow-title-cell" ? titleCell : recordCell };
+    const handle = { setAttribute: (name, value) => { attributes[name] = value; } };
+    const flowList = {
+      querySelector: (selector) => selector === ".flow-line.flow-row:not(.header)" ? row : handle,
+      style: { setProperty: (name, value) => { properties[name] = value; } }
+    };
+    setFlowSplitFromClientX(450, flowList);
+    return { widths: { ...state.flowWidths }, properties, attributes };
+  })()`);
+  const finalFlowRules = styles.slice(styles.lastIndexOf("Persisted values are relative weights"));
 
   assert.deepEqual(widths.first, { title: 500, note: 190 });
   assert.deepEqual(widths.clamped, { title: 510, note: 180 });
+  assert.deepEqual(renderedDrag.widths, { title: 345, note: 345 });
+  assert.equal(renderedDrag.properties["--flow-title-track"], "345fr");
+  assert.equal(renderedDrag.properties["--flow-note-track"], "345fr");
+  assert.equal(renderedDrag.attributes["aria-valuenow"], "50");
   assert.match(app, /role="separator"[^>]+data-flow-split-resizer/);
   assert.match(app, /handleFlowSplitKeydown/);
+  assert.match(app, /function flowSplitGeometry/);
+  assert.match(app, /function setFlowSplitFromClientX/);
+  assert.doesNotMatch(app, /data-resize-col/);
+  assert.match(styles, /\.flow-split-layer\s*\{[\s\S]*?height:\s*calc\(var\(--flow-visible-row-count, 1\) \* 40px\);/);
   assert.match(styles, /\.flow-split-resizer\s*\{[\s\S]*?width:\s*15px;/);
-  assert.match(finalFlowRules, /var\(--flow-title-width, 360px\)/);
-  assert.match(finalFlowRules, /var\(--flow-note-width, 330px\)/);
+  assert.match(finalFlowRules, /var\(--flow-title-track, 360fr\)/);
+  assert.match(finalFlowRules, /var\(--flow-note-track, 330fr\)/);
 });
 
 test("knowledge images keep the caret beside the inline image node", async () => {

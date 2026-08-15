@@ -8994,41 +8994,80 @@ button:not(:disabled):active,
   font-weight: 560;
 }
 
-/* One quiet divider reallocates title/record width while preserving the table footprint. */
+/* The resize hit target shares the row grid, so it always follows the real title/record boundary. */
 @media (min-width: 871px) {
   .flow-list.flow-table {
     position: relative;
   }
 
-  .flow-split-resizer {
+  .flow-split-layer {
     position: absolute;
     top: 0;
-    bottom: 0;
-    left: calc(30px + var(--flow-title-width, 360px));
+    right: 0;
+    left: 0;
     z-index: 4;
+    display: grid;
+    grid-template-columns:
+      30px
+      minmax(190px, var(--flow-title-track, 360fr))
+      minmax(180px, var(--flow-note-track, 330fr))
+      72px
+      118px;
+    height: calc(var(--flow-visible-row-count, 1) * 40px);
+    max-height: 100%;
+    pointer-events: none;
+  }
+
+  .flow-split-resizer {
+    position: relative;
+    grid-column: 2;
     width: 15px;
+    height: 100%;
+    justify-self: end;
     border: 0;
     background: transparent;
     cursor: col-resize;
-    transform: translateX(-7px);
+    pointer-events: auto;
+    transform: translateX(7px);
     touch-action: none;
   }
 
   .flow-split-resizer::before {
     position: absolute;
-    top: 4px;
-    bottom: 4px;
+    top: 2px;
+    bottom: 2px;
     left: 7px;
     width: 1px;
-    background: color-mix(in srgb, var(--handoff-line-strong, var(--line)) 72%, transparent);
+    background: color-mix(in srgb, var(--focus) 52%, transparent);
     content: "";
-    transition: background 120ms ease;
+    opacity: 0;
+    transition: opacity 120ms ease, background 120ms ease;
+  }
+
+  .flow-split-resizer::after {
+    position: absolute;
+    top: 50%;
+    left: 6px;
+    width: 3px;
+    height: 22px;
+    border-radius: 99px;
+    background: color-mix(in srgb, var(--handoff-muted, var(--muted)) 42%, transparent);
+    content: "";
+    transform: translateY(-50%);
+    transition: background 120ms ease, height 120ms ease;
   }
 
   .flow-split-resizer:hover::before,
   .flow-split-resizer:focus-visible::before,
   body.resizing-flow-split .flow-split-resizer::before {
-    background: color-mix(in srgb, var(--focus) 64%, var(--handoff-line-strong, var(--line)));
+    opacity: 1;
+  }
+
+  .flow-split-resizer:hover::after,
+  .flow-split-resizer:focus-visible::after,
+  body.resizing-flow-split .flow-split-resizer::after {
+    height: 30px;
+    background: var(--focus);
   }
 
   .flow-split-resizer:focus-visible {
@@ -9375,7 +9414,7 @@ body.resizing-flow-split {
 }
 
 @media (max-width: 870px) {
-  .flow-split-resizer {
+  .flow-split-layer {
     display: none;
   }
 }
@@ -9803,14 +9842,14 @@ body.resizing-flow-split {
   }
 }
 
-/* Keep persisted flow split widths authoritative after all legacy/demo overrides. */
+/* Persisted values are relative weights; both rows and the handle consume this exact grid. */
 @media (min-width: 871px) {
   .flow-list.flow-table .flow-line.flow-row,
   .flow-list.flow-table .flow-line.flow-row.sub {
     grid-template-columns:
       30px
-      minmax(0, var(--flow-title-width, 360px))
-      minmax(180px, var(--flow-note-width, 330px))
+      minmax(190px, var(--flow-title-track, 360fr))
+      minmax(180px, var(--flow-note-track, 330fr))
       72px
       118px;
   }
