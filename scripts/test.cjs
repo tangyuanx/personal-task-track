@@ -481,7 +481,7 @@ test("recurring tasks normalize, become due at local time, and reactivate for a 
   }).tasks[0].recurrence;
   assert.deepEqual(normalized, {
     frequency: "weekly",
-    weekday: 5,
+    weekdays: [5],
     time: "08:30",
     lastCompletedOccurrence: "",
   });
@@ -491,7 +491,7 @@ test("recurring tasks normalize, become due at local time, and reactivate for a 
     const fridayMorning = new Date(2026, 7, 14, 8, 29);
     const fridayDue = new Date(2026, 7, 14, 8, 30);
     const saturdayDue = new Date(2026, 7, 15, 9, 0);
-    const weekly = normalizeTasks([{ id: "weekly", recurrence: { frequency: "weekly", weekday: 5, time: "08:30" }, nodes: [] }])[0];
+    const weekly = normalizeTasks([{ id: "weekly", recurrence: { frequency: "weekly", weekdays: [1, 3, 5], time: "08:30" }, nodes: [] }])[0];
     const daily = normalizeTasks([{ id: "daily", status: "done", recurrence: { frequency: "daily", time: "09:00", lastCompletedOccurrence: "2026-08-14" }, nodes: [] }])[0];
     state.tasks = [daily];
     const changed = syncRecurringTasks(saturdayDue);
@@ -499,6 +499,7 @@ test("recurring tasks normalize, become due at local time, and reactivate for a 
       before: isRecurringTaskDue(weekly, fridayMorning),
       due: isRecurringTaskDue(weekly, fridayDue),
       wrongDay: isRecurringTaskDue(weekly, saturdayDue),
+      multipleDays: isRecurringTaskDue(weekly, new Date(2026, 7, 12, 8, 30)),
       dailyStatus: daily.status,
       changed,
       key: recurringOccurrenceKey(daily, saturdayDue),
@@ -508,6 +509,7 @@ test("recurring tasks normalize, become due at local time, and reactivate for a 
   assert.equal(result.before, false);
   assert.equal(result.due, true);
   assert.equal(result.wrongDay, false);
+  assert.equal(result.multipleDays, true);
   assert.equal(result.dailyStatus, "active");
   assert.equal(result.changed, true);
   assert.equal(result.key, "2026-08-15");
@@ -515,7 +517,7 @@ test("recurring tasks normalize, become due at local time, and reactivate for a 
 
 test("recurrence controls feed every Today surface and refresh while the app stays open", async () => {
   const app = await fs.readFile(path.join(__dirname, "..", "src", "app.js"), "utf8");
-  assert.match(app, /data-recurrence-field="frequency"/);
+  assert.match(app, /data-recurrence-mode=/);
   assert.match(app, /data-recurrence-weekday=/);
   assert.match(app, /data-recurrence-field="time"/);
   assert.match(app, /state\.taskFilter === "today" && !isTaskScheduledForToday\(task\)/);
@@ -523,7 +525,7 @@ test("recurrence controls feed every Today surface and refresh while the app sta
   assert.match(app, /window\.setInterval\?\.\([\s\S]*?30000/);
 });
 
-test("recurrence settings use the selected summary popover and preview future occurrences", async () => {
+test("recurrence settings match the selected compact popover and support multiple weekdays", async () => {
   const [app, styles] = await Promise.all([
     fs.readFile(path.join(__dirname, "..", "src", "app.js"), "utf8"),
     fs.readFile(path.join(__dirname, "..", "src", "styles.css"), "utf8"),
@@ -532,26 +534,37 @@ test("recurrence settings use the selected summary popover and preview future oc
   const result = harness.json(`(() => {
     const task = normalizeTasks([{
       id: "weekly",
-      recurrence: { frequency: "weekly", weekday: 5, time: "08:30" },
+      recurrence: { frequency: "weekly", weekdays: [1, 3, 5], time: "08:30" },
       nodes: []
     }])[0];
     recurrencePopoverTaskId = task.id;
+    const html = renderTaskRecurrenceControls(task);
+    state.tasks = [task];
+    updateTaskRecurrence(task.id, "weekday", "3");
+    updateTaskRecurrence(task.id, "weekday", "2");
+    updateTaskRecurrence(task.id, "frequency", "none");
+    updateTaskRecurrence(task.id, "frequency", "weekly");
     return {
-      html: renderTaskRecurrenceControls(task),
+      html,
       upcoming: recurrenceUpcomingLabels(task.recurrence, new Date(2026, 7, 15, 10, 0), 3),
+      weekdays: task.recurrence.weekdays,
     };
   })()`);
-  const finalRules = styles.slice(styles.lastIndexOf("v0.1.108 — scheme-B recurrence popover"));
+  const finalRules = styles.slice(styles.lastIndexOf("v0.1.109 — demo-matched recurrence popover"));
 
   assert.match(result.html, /class="task-recurrence-trigger"/);
   assert.match(result.html, /aria-expanded="true"/);
-  assert.match(result.html, /每周五 · 08:30/);
+  assert.match(result.html, /每周一、三、五 · 08:30/);
   assert.match(result.html, /role="dialog" aria-label="循环设置"/);
+  assert.match(result.html, /data-recurrence-mode="weekly"/);
   assert.match(result.html, /data-recurrence-weekday="5"/);
-  assert.match(result.html, /未来三次/);
-  assert.deepEqual(result.upcoming, ["8月21日 周五 08:30", "8月28日 周五 08:30", "9月4日 周五 08:30"]);
+  assert.doesNotMatch(result.html, /修改后自动保存|>重复<|出现在今日任务|每周执行日|未来三次/);
+  assert.deepEqual(result.upcoming, ["8月17日 周一 08:30", "8月18日 周二 08:30", "8月21日 周五 08:30"]);
+  assert.deepEqual(result.weekdays, [1, 2, 5]);
   assert.match(app, /let recurrencePopoverTaskId = "";/);
-  assert.match(finalRules, /\.task-recurrence-popover\s*\{[\s\S]*width:\s*min\(360px,/);
+  assert.match(finalRules, /\.task-recurrence-popover\s*\{[\s\S]*width:\s*min\(372px,/);
+  assert.match(finalRules, /\.task-recurrence-mode-switch\s*\{[\s\S]*grid-template-columns:\s*repeat\(3,/);
+  assert.match(finalRules, /\.task-recurrence-weekday-list\s*\{[\s\S]*grid-template-columns:\s*repeat\(7,/);
   assert.match(finalRules, /\.brief-strip\.task-brief\s*\{[\s\S]*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\);[\s\S]*min-height:\s*94px;/);
   assert.match(finalRules, /\.brief-cell\.brief-field,[\s\S]*border-bottom:\s*1px solid/);
   assert.match(finalRules, /\.brief-label \.brief-stamp\s*\{[\s\S]*display:\s*none;/);

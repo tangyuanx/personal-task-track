@@ -210,10 +210,17 @@ function normalizeTaskTags(tags) {
 
 function normalizeTaskRecurrence(value) {
   const raw = isRecord(value) ? value : {};
-  const weekday = Number(raw.weekday);
+  const weekdayOrder = [1, 2, 3, 4, 5, 6, 0];
+  const legacyWeekday = Number(raw.weekday);
+  const legacyWeekdays = Number.isInteger(legacyWeekday) && legacyWeekday >= 0 && legacyWeekday <= 6
+    ? [legacyWeekday]
+    : [];
+  const weekdays = Array.isArray(raw.weekdays)
+    ? weekdayOrder.filter((weekday) => raw.weekdays.some((entry) => Number(entry) === weekday))
+    : legacyWeekdays;
   return {
     frequency: RECURRENCE_FREQUENCIES.has(raw.frequency) ? raw.frequency : "none",
-    weekday: Number.isInteger(weekday) && weekday >= 0 && weekday <= 6 ? weekday : 1,
+    weekdays,
     time: /^([01]\d|2[0-3]):[0-5]\d$/.test(raw.time || "") ? raw.time : "09:00",
     lastCompletedOccurrence: normalizeLocalDateKey(raw.lastCompletedOccurrence),
   };

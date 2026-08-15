@@ -8796,7 +8796,7 @@ button:not(:disabled):active,
   }
 }
 
-/* v0.1.108 — scheme-B recurrence popover and screenshot-aligned task brief. */
+/* v0.1.109 — demo-matched recurrence popover and screenshot-aligned task brief. */
 .task-recurrence-controls {
   position: relative;
   z-index: 12;
@@ -8875,9 +8875,9 @@ button:not(:disabled):active,
   top: calc(100% + 8px);
   left: 14px;
   z-index: 40;
-  width: min(360px, calc(100vw - 64px));
+  width: min(372px, calc(100vw - 64px));
   border: 1px solid var(--handoff-line-strong, var(--line-strong));
-  border-radius: 12px;
+  border-radius: 14px;
   padding: 16px;
   background: var(--handoff-surface, var(--panel));
   box-shadow: 0 18px 42px rgba(28, 48, 39, 0.18);
@@ -8887,10 +8887,8 @@ button:not(:disabled):active,
 
 .task-recurrence-popover-head {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 13px;
+  align-items: center;
+  margin-bottom: 14px;
 }
 
 .task-recurrence-popover-head strong {
@@ -8898,67 +8896,93 @@ button:not(:disabled):active,
   font-weight: 720;
 }
 
-.task-recurrence-popover-head span {
-  color: var(--handoff-muted, var(--muted));
-  font-size: 10px;
+.task-recurrence-mode-time {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 92px;
+  align-items: center;
+  gap: 10px;
 }
 
-.task-recurrence-form {
+.task-recurrence-mode-switch {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 3px;
+  border: 1px solid var(--handoff-line, var(--line));
+  border-radius: 10px;
+  padding: 3px;
+  background: var(--handoff-surface-soft, var(--surface-soft));
 }
 
-.task-recurrence-field {
-  display: grid;
-  min-width: 0;
-  gap: 6px;
+.task-recurrence-mode {
+  min-height: 31px;
+  border: 0;
+  border-radius: 7px;
+  padding: 0 8px;
+  background: transparent;
   color: var(--handoff-muted, var(--muted));
   font-size: 11px;
-  font-weight: 620;
+  font-weight: 650;
 }
 
-.task-recurrence-popover .task-recurrence-field select,
-.task-recurrence-popover .task-recurrence-field input {
-  width: 100%;
-  height: 36px;
-  border: 1px solid var(--handoff-line, var(--line));
-  border-radius: 8px;
-  padding: 0 10px;
-  background: var(--handoff-surface-soft, var(--surface-soft));
+.task-recurrence-mode:hover,
+.task-recurrence-mode:focus-visible {
   color: var(--handoff-ink, var(--ink));
-  font: 12px var(--app-font);
   outline: 0;
 }
 
-.task-recurrence-popover .task-recurrence-field select:focus-visible,
-.task-recurrence-popover .task-recurrence-field input:focus-visible {
-  border-color: color-mix(in srgb, var(--focus) 58%, var(--handoff-line, var(--line)));
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 13%, transparent);
+.task-recurrence-mode.active {
+  background: var(--handoff-surface, var(--panel));
+  color: var(--focus);
+  box-shadow: 0 1px 4px rgba(33, 75, 61, 0.11);
 }
 
-.task-recurrence-weekdays {
-  grid-column: 1 / -1;
+.task-recurrence-time {
+  display: inline-flex;
+  min-height: 39px;
+  align-items: center;
+  border: 1px solid var(--handoff-line, var(--line));
+  border-radius: 10px;
+  padding: 0 8px;
+  background: var(--handoff-surface-soft, var(--surface-soft));
+}
+
+.task-recurrence-popover .task-recurrence-time input {
+  width: 100%;
+  height: auto;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--handoff-ink-soft, var(--ink-soft));
+  font: 650 11px var(--app-font);
+  outline: 0;
+}
+
+.task-recurrence-time:focus-within {
+  border-color: color-mix(in srgb, var(--focus) 58%, var(--handoff-line, var(--line)));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 13%, transparent);
 }
 
 .task-recurrence-weekday-list {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 5px;
+  gap: 6px;
+  margin-top: 12px;
 }
 
 .task-recurrence-weekday {
   display: grid;
   min-width: 0;
-  aspect-ratio: 1;
+  min-height: 36px;
   place-items: center;
   border: 1px solid var(--handoff-line, var(--line));
-  border-radius: 8px;
+  border-radius: 9px;
   padding: 0;
   background: var(--handoff-surface-soft, var(--surface-soft));
   color: var(--handoff-muted, var(--muted));
   font-size: 11px;
   font-weight: 650;
+  transition: border-color 120ms ease, background 120ms ease, color 120ms ease, transform 120ms ease;
 }
 
 .task-recurrence-weekday:hover,
@@ -8966,48 +8990,14 @@ button:not(:disabled):active,
   border-color: color-mix(in srgb, var(--focus) 48%, var(--handoff-line, var(--line)));
   color: var(--focus);
   outline: 0;
+  transform: translateY(-1px);
 }
 
 .task-recurrence-weekday.active {
   border-color: var(--focus);
   background: var(--focus);
   color: #ffffff;
-}
-
-.task-recurrence-preview {
-  margin-top: 14px;
-  border-top: 1px solid var(--handoff-line, var(--line));
-  padding-top: 11px;
-}
-
-.task-recurrence-preview > span {
-  display: block;
-  margin-bottom: 7px;
-  color: var(--handoff-muted, var(--muted));
-  font-size: 10px;
-  font-weight: 680;
-  letter-spacing: 0.04em;
-}
-
-.task-recurrence-preview ol {
-  display: grid;
-  gap: 5px;
-  margin: 0;
-  padding-left: 17px;
-  color: var(--handoff-ink, var(--ink));
-  font-size: 11px;
-  line-height: 1.45;
-}
-
-.task-recurrence-preview li::marker {
-  color: var(--focus);
-}
-
-.task-recurrence-preview p {
-  margin: 0;
-  color: var(--handoff-muted, var(--muted));
-  font-size: 11px;
-  line-height: 1.55;
+  box-shadow: 0 4px 10px rgba(46, 102, 81, 0.16);
 }
 
 .brief-strip.task-brief {
@@ -9125,6 +9115,16 @@ button:not(:disabled):active,
   .brief-strip.task-brief {
     margin-right: 22px;
     margin-left: 22px;
+  }
+}
+
+@media (max-width: 390px) {
+  .task-recurrence-mode-time {
+    grid-template-columns: 1fr;
+  }
+
+  .task-recurrence-time {
+    width: 100%;
   }
 }
 

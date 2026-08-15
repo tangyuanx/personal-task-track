@@ -126,6 +126,7 @@ const recurrenceFrequencyLabels = {
   daily: "每天",
   weekly: "每周",
 };
+const recurrenceWeekdayOrder = [1, 2, 3, 4, 5, 6, 0];
 const recurrenceWeekdayLabels = {
   1: "周一",
   2: "周二",
@@ -407,10 +408,16 @@ function normalizeTaskTags(tags) {
 
 function normalizeTaskRecurrence(value) {
   const raw = isRecord(value) ? value : {};
-  const weekday = Number(raw.weekday);
+  const legacyWeekday = Number(raw.weekday);
+  const legacyWeekdays = Number.isInteger(legacyWeekday) && legacyWeekday >= 0 && legacyWeekday <= 6
+    ? [legacyWeekday]
+    : [];
+  const weekdays = Array.isArray(raw.weekdays)
+    ? recurrenceWeekdayOrder.filter((weekday) => raw.weekdays.some((value) => Number(value) === weekday))
+    : legacyWeekdays;
   return {
     frequency: recurrenceFrequencies.has(raw.frequency) ? raw.frequency : "none",
-    weekday: Number.isInteger(weekday) && weekday >= 0 && weekday <= 6 ? weekday : 1,
+    weekdays,
     time: /^([01]\d|2[0-3]):[0-5]\d$/.test(raw.time || "") ? raw.time : "09:00",
     lastCompletedOccurrence: normalizeTaskDateFilter(raw.lastCompletedOccurrence),
   };
@@ -1146,7 +1153,6 @@ function renderTaskActiveTagPills(task) {
 function renderTaskRecurrenceControls(task) {
   const recurrence = normalizeTaskRecurrence(task.recurrence);
   const open = recurrencePopoverTaskId === task.id;
-  const upcoming = recurrenceUpcomingLabels(recurrence);
   return `
     <div class="task-recurrence-controls ${recurrence.frequency === "none" ? "is-empty" : "is-active"}" aria-label="循环任务设置">
       <button
@@ -1166,55 +1172,45 @@ function renderTaskRecurrenceControls(task) {
           ? `<section class="task-recurrence-popover" id="task-recurrence-popover-${task.id}" role="dialog" aria-label="循环设置">
               <header class="task-recurrence-popover-head">
                 <strong>循环设置</strong>
-                <span>修改后自动保存</span>
               </header>
-              <div class="task-recurrence-form">
-                <label class="task-recurrence-field">
-                  <span>重复</span>
-                  <select data-recurrence-field="frequency" data-task-id="${task.id}" aria-label="循环周期">
-                    ${Object.entries(recurrenceFrequencyLabels)
-                      .map(([value, label]) => `<option value="${value}" ${recurrence.frequency === value ? "selected" : ""}>${label}</option>`)
-                      .join("")}
-                  </select>
-                </label>
+              <div class="task-recurrence-mode-time">
+                <div class="task-recurrence-mode-switch" role="group" aria-label="循环周期">
+                  ${Object.entries(recurrenceFrequencyLabels)
+                    .map(([value, label]) => `<button
+                      class="task-recurrence-mode ${recurrence.frequency === value ? "active" : ""}"
+                      type="button"
+                      data-recurrence-mode="${value}"
+                      data-task-id="${task.id}"
+                      aria-pressed="${recurrence.frequency === value}"
+                    >${label}</button>`)
+                    .join("")}
+                </div>
                 ${
                   recurrence.frequency !== "none"
-                    ? `<label class="task-recurrence-field">
-                        <span>出现在今日任务</span>
-                        <input type="time" data-recurrence-field="time" data-task-id="${task.id}" value="${escAttr(recurrence.time)}" aria-label="循环任务出现时间" />
+                    ? `<label class="task-recurrence-time">
+                        <input type="time" data-recurrence-field="time" data-task-id="${task.id}" value="${escAttr(recurrence.time)}" aria-label="循环时间" />
                       </label>`
                     : ""
                 }
-                ${
-                  recurrence.frequency === "weekly"
-                    ? `<div class="task-recurrence-field task-recurrence-weekdays">
-                        <span>每周执行日</span>
-                        <div class="task-recurrence-weekday-list" aria-label="选择每周执行日期">
-                          ${[1, 2, 3, 4, 5, 6, 0]
-                            .map(
-                              (value) => `<button
-                                class="task-recurrence-weekday ${recurrence.weekday === value ? "active" : ""}"
-                                type="button"
-                                data-recurrence-weekday="${value}"
-                                data-task-id="${task.id}"
-                                aria-pressed="${recurrence.weekday === value}"
-                                aria-label="${recurrenceWeekdayLabels[value]}"
-                              >${recurrenceWeekdayLabels[value].replace("周", "")}</button>`,
-                            )
-                            .join("")}
-                        </div>
-                      </div>`
-                    : ""
-                }
               </div>
-              <div class="task-recurrence-preview">
-                <span>未来三次</span>
-                ${
-                  upcoming.length
-                    ? `<ol>${upcoming.map((label) => `<li>${esc(label)}</li>`).join("")}</ol>`
-                    : `<p>选择每天或每周后，任务会在对应时间自动进入今日任务。</p>`
-                }
-              </div>
+              ${
+                recurrence.frequency === "weekly"
+                  ? `<div class="task-recurrence-weekday-list" role="group" aria-label="选择每周日期，可多选">
+                      ${recurrenceWeekdayOrder
+                        .map(
+                          (value) => `<button
+                            class="task-recurrence-weekday ${recurrence.weekdays.includes(value) ? "active" : ""}"
+                            type="button"
+                            data-recurrence-weekday="${value}"
+                            data-task-id="${task.id}"
+                            aria-pressed="${recurrence.weekdays.includes(value)}"
+                            aria-label="${recurrenceWeekdayLabels[value]}"
+                          >${recurrenceWeekdayLabels[value].replace("周", "")}</button>`,
+                        )
+                        .join("")}
+                    </div>`
+                  : ""
+              }
             </section>`
           : ""
       }
@@ -1553,14 +1549,24 @@ function todayFocusItems() {
 function recurrenceLabel(value) {
   const recurrence = normalizeTaskRecurrence(value);
   if (recurrence.frequency === "daily") return `每天 ${recurrence.time}`;
-  if (recurrence.frequency === "weekly") return `每${recurrenceWeekdayLabels[recurrence.weekday]} ${recurrence.time}`;
+  if (recurrence.frequency === "weekly") {
+    const weekdays = recurrenceWeekdayOrder
+      .filter((weekday) => recurrence.weekdays.includes(weekday))
+      .map((weekday) => recurrenceWeekdayLabels[weekday].replace("周", ""));
+    return weekdays.length ? `每周${weekdays.join("、")} ${recurrence.time}` : "每周 · 请选择日期";
+  }
   return "不循环";
 }
 
 function recurrenceSummaryLabel(value) {
   const recurrence = normalizeTaskRecurrence(value);
   if (recurrence.frequency === "daily") return `每天 · ${recurrence.time}`;
-  if (recurrence.frequency === "weekly") return `每${recurrenceWeekdayLabels[recurrence.weekday]} · ${recurrence.time}`;
+  if (recurrence.frequency === "weekly") {
+    const weekdays = recurrenceWeekdayOrder
+      .filter((weekday) => recurrence.weekdays.includes(weekday))
+      .map((weekday) => recurrenceWeekdayLabels[weekday].replace("周", ""));
+    return weekdays.length ? `每周${weekdays.join("、")} · ${recurrence.time}` : "每周 · 请选择日期";
+  }
   return "不循环";
 }
 
@@ -1573,7 +1579,7 @@ function recurrenceUpcomingLabels(value, start = new Date(), count = 3) {
   if (cursor <= start) cursor.setDate(cursor.getDate() + 1);
   const labels = [];
   for (let step = 0; step < 32 && labels.length < count; step += 1) {
-    if (recurrence.frequency === "daily" || cursor.getDay() === recurrence.weekday) {
+    if (recurrence.frequency === "daily" || recurrence.weekdays.includes(cursor.getDay())) {
       labels.push(`${cursor.getMonth() + 1}月${cursor.getDate()}日 ${recurrenceWeekdayLabels[cursor.getDay()]} ${recurrence.time}`);
     }
     cursor.setDate(cursor.getDate() + 1);
@@ -1588,7 +1594,7 @@ function recurringOccurrenceKey(task, at = new Date()) {
   if (!Number.isFinite(date.getTime())) return "";
   const [hours, minutes] = recurrence.time.split(":").map(Number);
   if (date.getHours() * 60 + date.getMinutes() < hours * 60 + minutes) return "";
-  if (recurrence.frequency === "weekly" && date.getDay() !== recurrence.weekday) return "";
+  if (recurrence.frequency === "weekly" && !recurrence.weekdays.includes(date.getDay())) return "";
   return localDateKey(date);
 }
 
@@ -2865,6 +2871,15 @@ function bindTaskRepositoryRows(scope = document) {
     control.addEventListener("click", (event) => event.stopPropagation());
     control.addEventListener("change", (event) => {
       updateTaskRecurrence(event.currentTarget.dataset.taskId, event.currentTarget.dataset.recurrenceField, event.currentTarget.value);
+      syncRecurringTasks(new Date());
+      render();
+    });
+  });
+
+  document.querySelectorAll("[data-recurrence-mode]").forEach((control) => {
+    control.addEventListener("click", (event) => {
+      event.stopPropagation();
+      updateTaskRecurrence(event.currentTarget.dataset.taskId, "frequency", event.currentTarget.dataset.recurrenceMode);
       syncRecurringTasks(new Date());
       render();
     });
@@ -4423,10 +4438,16 @@ function updateTaskRecurrence(taskId, field, value) {
   const next = { ...previous };
   if (field === "frequency") {
     next.frequency = recurrenceFrequencies.has(value) ? value : "none";
-    if (previous.frequency === "none" && next.frequency === "weekly") next.weekday = new Date().getDay();
+    if (next.frequency === "weekly" && previous.weekdays.length === 0) next.weekdays = [new Date().getDay()];
     if (next.frequency === "none") next.lastCompletedOccurrence = "";
   }
-  if (field === "weekday") next.weekday = Number(value);
+  if (field === "weekday") {
+    const weekday = Number(value);
+    if (!recurrenceWeekdayOrder.includes(weekday)) return;
+    next.weekdays = previous.weekdays.includes(weekday)
+      ? previous.weekdays.filter((value) => value !== weekday)
+      : recurrenceWeekdayOrder.filter((value) => previous.weekdays.includes(value) || value === weekday);
+  }
   if (field === "time") next.time = value;
   task.recurrence = normalizeTaskRecurrence(next);
   task.updatedAt = now();
