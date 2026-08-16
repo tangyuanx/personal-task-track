@@ -54,6 +54,20 @@ function cornerWindowBounds(workArea, size, position, gap = WIDGET_GAP) {
   };
 }
 
+function applyTodayWidgetTopmost(window, enabled, platform = process.platform) {
+  if (!window || window.isDestroyed()) return;
+  const topmost = enabled === true;
+  if (platform === "darwin") {
+    window.setVisibleOnAllWorkspaces(topmost, {
+      visibleOnFullScreen: topmost,
+      skipTransformProcessType: false,
+    });
+    window.setHiddenInMissionControl(topmost);
+  }
+  window.setAlwaysOnTop(topmost, topmost ? "screen-saver" : "normal", topmost && platform === "darwin" ? 1 : 0);
+  if (topmost && window.isVisible()) window.moveTop();
+}
+
 async function readTodayWidgetPreferences(userDataPath) {
   try {
     const raw = await fs.readFile(path.join(userDataPath, PREFERENCES_FILE), "utf8");
@@ -130,12 +144,7 @@ function createTodayWidgetController({ app, BrowserWindow, ipcMain, screen, getM
   }
 
   function applyAlwaysOnTop() {
-    if (!widgetWindow || widgetWindow.isDestroyed()) return;
-    widgetWindow.setAlwaysOnTop(preferences.alwaysOnTop, preferences.alwaysOnTop ? "screen-saver" : "normal");
-    if (process.platform === "darwin") {
-      widgetWindow.setVisibleOnAllWorkspaces(preferences.alwaysOnTop, { visibleOnFullScreen: preferences.alwaysOnTop });
-    }
-    if (preferences.alwaysOnTop && widgetWindow.isVisible()) widgetWindow.moveTop();
+    applyTodayWidgetTopmost(widgetWindow, preferences.alwaysOnTop);
   }
 
   function createWidgetWindow() {
@@ -155,6 +164,8 @@ function createTodayWidgetController({ app, BrowserWindow, ipcMain, screen, getM
       maximizable: false,
       fullscreenable: false,
       skipTaskbar: true,
+      type: process.platform === "darwin" ? "panel" : undefined,
+      alwaysOnTop: preferences.alwaysOnTop,
       title: "今日任务",
       webPreferences: {
         preload: path.join(__dirname, "preload.cjs"),
@@ -164,17 +175,17 @@ function createTodayWidgetController({ app, BrowserWindow, ipcMain, screen, getM
         backgroundThrottling: false,
       },
     });
-    applyAlwaysOnTop();
     positionWidget();
     widgetWindow.loadFile(path.join(__dirname, "..", "today-widget-window-demo.html"));
     widgetWindow.once("ready-to-show", () => {
       if (preferences.visible) widgetWindow.showInactive();
-      if (preferences.alwaysOnTop) widgetWindow.moveTop();
+      applyAlwaysOnTop();
       widgetWindow.webContents.send("today-widget:snapshot", snapshot);
       widgetWindow.webContents.send("today-widget:state", widgetState());
       broadcastState();
     });
     widgetWindow.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+    widgetWindow.on("show", applyAlwaysOnTop);
     widgetWindow.on("move", () => {
       if (Date.now() < suppressMoveUntil || !widgetWindow || widgetWindow.isDestroyed()) return;
       const { x, y } = widgetWindow.getBounds();
@@ -211,10 +222,9 @@ function createTodayWidgetController({ app, BrowserWindow, ipcMain, screen, getM
   async function showWidget() {
     preferences = { ...preferences, visible: true };
     const window = createWidgetWindow();
-    applyAlwaysOnTop();
     positionWidget();
     window.showInactive();
-    if (preferences.alwaysOnTop) window.moveTop();
+    applyAlwaysOnTop();
     await persistPreferences();
     broadcastState();
     return widgetState();
@@ -318,9 +328,11 @@ function createTodayWidgetController({ app, BrowserWindow, ipcMain, screen, getM
       resolve({ success: false, code: "APP_QUITTING" });
     });
     pendingCompletions.clear();
+    if (widgetWindow && !widgetWindow.isDestroyed()) widgetWindow.destroy();
+    widgetWindow = null;
   }
 
-  return { registerIpc, start, stop };
+  return { applyAlwaysOnTop, registerIpc, start, stop };
 }
 
 function normalizeTaskId(value) {
@@ -343,6 +355,7 @@ function normalizeSnapshot(value) {
 
 module.exports = {
   DEFAULT_PREFERENCES,
+  applyTodayWidgetTopmost,
   cornerWindowBounds,
   createTodayWidgetController,
   normalizeTodayWidgetPreferences,

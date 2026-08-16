@@ -10,6 +10,7 @@ const {
   writeTaskData,
 } = require("../electron/storage.cjs");
 const {
+  applyTodayWidgetTopmost,
   cornerWindowBounds,
   normalizeTodayWidgetPreferences,
   readTodayWidgetPreferences,
@@ -268,6 +269,34 @@ test("Today widget corner placement respects each display work area", () => {
   assert.deepEqual(cornerWindowBounds(workArea, size, "bottom-right"), { x: 2984, y: 804, ...size });
 });
 
+test("Today widget topmost policy joins macOS fullscreen Spaces before raising z-order", () => {
+  const calls = [];
+  const window = {
+    isDestroyed: () => false,
+    isVisible: () => true,
+    setVisibleOnAllWorkspaces: (...args) => calls.push(["workspaces", ...args]),
+    setHiddenInMissionControl: (...args) => calls.push(["mission-control", ...args]),
+    setAlwaysOnTop: (...args) => calls.push(["always-on-top", ...args]),
+    moveTop: () => calls.push(["move-top"]),
+  };
+
+  applyTodayWidgetTopmost(window, true, "darwin");
+  assert.deepEqual(calls, [
+    ["workspaces", true, { visibleOnFullScreen: true, skipTransformProcessType: false }],
+    ["mission-control", true],
+    ["always-on-top", true, "screen-saver", 1],
+    ["move-top"],
+  ]);
+
+  calls.length = 0;
+  applyTodayWidgetTopmost(window, false, "darwin");
+  assert.deepEqual(calls, [
+    ["workspaces", false, { visibleOnFullScreen: false, skipTransformProcessType: false }],
+    ["mission-control", false],
+    ["always-on-top", false, "normal", 0],
+  ]);
+});
+
 test("Today widget preferences persist atomically outside task data", async (t) => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "personal-task-track-widget-test-"));
   t.after(() => fs.rm(directory, { recursive: true, force: true }));
@@ -287,10 +316,11 @@ test("Today widget preferences persist atomically outside task data", async (t) 
 });
 
 test("production Today widget uses the approved demo frontend and a sandboxed Electron window", async () => {
-  const [demo, runtime, main, preload, packageJson] = await Promise.all([
+  const [demo, runtime, widgetMain, appMain, preload, packageJson] = await Promise.all([
     fs.readFile(path.join(__dirname, "..", "today-widget-window-demo.html"), "utf8"),
     fs.readFile(path.join(__dirname, "..", "src", "today-widget-runtime.js"), "utf8"),
     fs.readFile(path.join(__dirname, "..", "electron", "today-widget.cjs"), "utf8"),
+    fs.readFile(path.join(__dirname, "..", "electron", "main.cjs"), "utf8"),
     fs.readFile(path.join(__dirname, "..", "electron", "preload.cjs"), "utf8"),
     fs.readFile(path.join(__dirname, "..", "package.json"), "utf8").then(JSON.parse),
   ]);
@@ -307,14 +337,19 @@ test("production Today widget uses the approved demo frontend and a sandboxed El
   assert.match(runtime, /ResizeObserver/);
   assert.doesNotMatch(runtime, /\+ 60/);
   assert.match(runtime, /width: widget\.offsetWidth/);
-  assert.match(main, /frame: false/);
-  assert.match(main, /transparent: true/);
-  assert.match(main, /hasShadow: false/);
-  assert.match(main, /sandbox: true/);
-  assert.match(main, /setAlwaysOnTop[\s\S]*"screen-saver"/);
-  assert.match(main, /visibleOnFullScreen: preferences\.alwaysOnTop/);
-  assert.match(main, /moveTop\(\)/);
-  assert.match(main, /getDisplayMatching/);
+  assert.match(widgetMain, /frame: false/);
+  assert.match(widgetMain, /transparent: true/);
+  assert.match(widgetMain, /hasShadow: false/);
+  assert.match(widgetMain, /sandbox: true/);
+  assert.match(widgetMain, /type: process\.platform === "darwin" \? "panel" : undefined/);
+  assert.match(widgetMain, /visibleOnFullScreen: topmost/);
+  assert.match(widgetMain, /setAlwaysOnTop[\s\S]*"screen-saver"/);
+  assert.match(widgetMain, /moveTop\(\)/);
+  assert.match(widgetMain, /getDisplayMatching/);
+  assert.match(widgetMain, /function stop\(\)[\s\S]*widgetWindow\.destroy\(\)/);
+  assert.match(appMain, /if \(!isQuitting\) app\.quit\(\)/);
+  assert.doesNotMatch(appMain, /!isMac && !isQuitting/);
+  assert.match(appMain, /app\.on\("did-resign-active"[\s\S]*fullscreenTransitionRefresh/);
   assert.match(preload, /todayWidget:/);
   assert.ok(packageJson.build.files.includes("today-widget-window-demo.html"));
 });

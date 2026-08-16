@@ -70,8 +70,9 @@ function createWindow() {
     }
   });
   window.on("closed", () => {
-    if (mainWindow === window) mainWindow = null;
-    if (!isMac && !isQuitting) app.quit();
+    if (mainWindow !== window) return;
+    mainWindow = null;
+    if (!isQuitting) app.quit();
   });
   return window;
 }
@@ -378,7 +379,16 @@ app.whenReady().then(async () => {
   app.on("activate", () => {
     if (!mainWindow || mainWindow.isDestroyed()) createWindow();
     else mainWindow.show();
+    todayWidgetController?.applyAlwaysOnTop();
   });
+  if (isMac) {
+    app.on("did-become-active", () => todayWidgetController?.applyAlwaysOnTop());
+    app.on("did-resign-active", () => {
+      todayWidgetController?.applyAlwaysOnTop();
+      const fullscreenTransitionRefresh = setTimeout(() => todayWidgetController?.applyAlwaysOnTop(), 1200);
+      fullscreenTransitionRefresh.unref();
+    });
+  }
 });
 
 app.on("before-quit", () => {
