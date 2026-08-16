@@ -45,7 +45,7 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: false
 
       - name: Verify update metadata
-        run: node scripts/verify-update-artifacts.cjs release
+        run: node tools/verify-update-artifacts.cjs release
 
       - name: Upload release assets
         uses: softprops/action-gh-release@v2

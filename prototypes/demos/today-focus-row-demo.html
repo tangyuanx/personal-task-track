@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>今日任务行布局 Demo</title>
+  <style>
+    :root { --paper:#edf2ee; --panel:#fbfdf9; --ink:#20302a; --muted:#7f968c; --green:#0d5b49; --line:#d5e0d9; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; background:var(--paper); color:var(--ink); font-family:Inter,"PingFang SC","Microsoft YaHei",system-ui,sans-serif; }
+    .demo { display:grid; grid-template-columns:340px 1fr; min-height:100vh; }
+    aside { padding:22px 16px; border-right:1px solid var(--line); background:rgba(251,253,249,.7); }
+    .brand { display:flex; justify-content:space-between; align-items:flex-start; padding:0 3px 14px; }
+    .brand strong { display:block; font-size:18px; }
+    .brand small { display:block; margin-top:4px; color:var(--muted); font-size:11px; }
+    .version { padding:4px 7px; border:1px solid var(--line); border-radius:6px; color:var(--muted); font:10px ui-monospace,monospace; }
+    .today { margin:0 0 16px; padding:14px 15px 13px; border-radius:14px; color:#fff; background:linear-gradient(145deg,#145f4a,#0b4235); box-shadow:0 12px 26px rgba(8,61,47,.17); }
+    .today-meta { display:flex; justify-content:flex-start; align-items:center; gap:12px; color:rgba(255,255,255,.68); font:11px ui-monospace,monospace; letter-spacing:.06em; }
+    .today-meta b { margin-left:auto; color:#fff; font:600 12px Inter,"PingFang SC",sans-serif; letter-spacing:0; }
+    .today-meta .today-label { color:#fff; font:650 16px/1.2 Inter,"PingFang SC","Microsoft YaHei",sans-serif; letter-spacing:-.02em; }
+    .today-empty { margin-top:16px; color:rgba(255,255,255,.62); font-size:12px; }
+    .repo { padding-top:3px; }
+    .repo-head { display:flex; justify-content:space-between; align-items:center; margin:0 3px 10px; }
+    .repo-head strong { font-size:13px; }
+    .repo-head span { color:var(--muted); font-size:11px; }
+    .task { display:grid; grid-template-columns:18px minmax(0,1fr) auto; gap:8px; align-items:center; padding:12px 4px; border-bottom:1px solid var(--line); }
+    .check { width:15px; height:15px; border:1.5px solid #bfd0c7; border-radius:50%; }
+    .task strong { display:block; font-size:13px; }
+    .task small { display:block; margin-top:4px; color:var(--muted); font-size:11px; }
+    .priority { color:#a4762d; font-size:11px; }
+    main { padding:52px clamp(30px,6vw,92px); }
+    .main-note { max-width:780px; color:var(--muted); font-size:13px; }
+    .main-note h1 { margin:8px 0 12px; color:var(--ink); font-size:34px; }
+    .main-note p { line-height:1.8; }
+    @media (max-width:760px) { .demo { display:block; } aside { min-height:450px; } main { padding:28px 22px; } }
+  </style>
+</head>
+<body>
+  <div class="demo">
+    <aside>
+      <header class="brand"><div><strong>Task Track</strong><small>个人任务工作台</small></div><span class="version">v0.1.70</span></header>
+      <section class="today" aria-label="今日任务">
+        <div class="today-meta"><span class="today-label">今日任务</span><span>07/17</span><b>0 项待推进</b></div>
+        <div class="today-empty">今日暂无重点任务</div>
+      </section>
+      <section class="repo"><div class="repo-head"><strong>任务仓库</strong><span>1 / 1 项</span></div>
+        <div class="task"><span class="check"></span><div><strong>左上右上角置顶显示今日任务</strong><small>下一步 等待补充处理流</small></div><span class="priority">中优先</span></div>
+      </section>
+    </aside>
+    <main><div class="main-note"><div>工作台 / 当前任务</div><h1>处理节点仍是工作台主视线</h1><p>左侧今日任务卡片仅承担日期、数量和今日任务入口，信息在两行内完成，不再把日期和数量拆散到不同层级。</p></div></main>
+  </div>
+</body>
+</html>

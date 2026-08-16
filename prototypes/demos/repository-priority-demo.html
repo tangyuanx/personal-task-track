@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>任务仓库优先级 Demo</title>
+  <style>
+    :root { --page:#eef3ef; --surface:#fbfdf9; --ink:#25332d; --muted:#819089; --line:#d7e1db; --accent:#176449; --high:#b2574d; --medium:#aa7d32; --low:#8b9991; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; background:var(--page); color:var(--ink); font-family:Inter,"PingFang SC","Microsoft YaHei",system-ui,sans-serif; }
+    .frame { width:min(760px,calc(100vw - 32px)); margin:40px auto; padding:24px 24px 30px; border:1px solid var(--line); border-radius:16px; background:var(--surface); }
+    .repo-head { display:flex; align-items:baseline; gap:12px; padding-bottom:17px; border-bottom:1px solid var(--line); }
+    .repo-head h1 { margin:0; font-size:22px; letter-spacing:-.03em; }
+    .repo-head span { color:var(--muted); font-size:12px; }
+    .toolbar { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:14px 0 8px; }
+    .filters { display:flex; gap:18px; color:var(--muted); font-size:13px; }
+    .filters button { padding:0 0 7px; border:0; border-bottom:2px solid transparent; color:inherit; background:transparent; cursor:pointer; }
+    .filters button.active { border-bottom-color:var(--accent); color:var(--ink); }
+    .priority-filter { color:var(--muted); font-size:12px; }
+    .rows { border-top:1px solid var(--line); }
+    .row { display:grid; grid-template-columns:18px minmax(0,1fr) 88px; align-items:center; gap:12px; min-height:74px; border-bottom:1px solid var(--line); }
+    .check { width:17px; height:17px; border:1.5px solid #9eb1a7; border-radius:50%; }
+    .row.done .check { display:grid; place-items:center; border-color:var(--accent); color:var(--accent); font-size:11px; }
+    .row.done .title { color:var(--muted); text-decoration:line-through; }
+    .title { display:block; overflow:hidden; font-size:14px; font-weight:670; text-overflow:ellipsis; white-space:nowrap; }
+    .next { display:block; margin-top:6px; overflow:hidden; color:var(--muted); font-size:12px; text-overflow:ellipsis; white-space:nowrap; }
+    .next b { margin-right:6px; color:var(--ink); font-weight:600; }
+    .meta { display:grid; justify-items:end; align-content:center; gap:7px; min-width:0; }
+    .priority { display:inline-flex; align-items:center; gap:5px; color:var(--muted); font-size:11px; white-space:nowrap; }
+    .priority::before { content:""; width:7px; height:7px; border-radius:50%; background:currentColor; }
+    .priority.high { color:var(--high); }
+    .priority.medium { color:var(--medium); }
+    .priority.low { color:var(--low); }
+    time { color:var(--muted); font:11px ui-monospace,monospace; white-space:nowrap; }
+    .note { margin:22px 0 0; color:var(--muted); font-size:12px; line-height:1.7; }
+    @media (max-width:560px) { .frame { margin:16px auto; padding:18px 14px; } .toolbar { align-items:flex-start; } .priority-filter { display:none; } .row { grid-template-columns:18px minmax(0,1fr) 68px; gap:8px; } }
+  </style>
+</head>
+<body>
+  <main class="frame">
+    <header class="repo-head"><h1>任务仓库</h1><span>6 / 6 项</span></header>
+    <div class="toolbar"><nav class="filters"><button class="active" type="button">全部</button><button type="button">未完成</button><button type="button">已完成</button></nav><span class="priority-filter">优先级 · 全部⌄</span></div>
+    <section class="rows" aria-label="任务列表">
+      <article class="row"><span class="check"></span><div><span class="title">整理 DB 地址转换规则</span><span class="next"><b>下一步</b>区分内存、栈和寄存器变量的转换路径</span></div><div class="meta"><span class="priority high">高</span><time>19:42</time></div></article>
+      <article class="row"><span class="check"></span><div><span class="title">修复 Obsidian Git 同步</span><span class="next"><b>下一步</b>检查远程仓库与 HTTPS 凭据</span></div><div class="meta"><span class="priority medium">中</span><time>18:25</time></div></article>
+      <article class="row"><span class="check"></span><div><span class="title">完成 target_sources 练习</span><span class="next"><b>下一步</b>独立完成 CMakeLists.txt 验证</span></div><div class="meta"><span class="priority low">低</span><time>15:30</time></div></article>
+      <article class="row done"><span class="check">✓</span><div><span class="title">整理昨日遗留问题</span><span class="next"><b>下一步</b>已完成</span></div><div class="meta"><span class="priority low">低</span><time>昨天</time></div></article>
+    </section>
+    <p class="note">优先级只显示“高 / 中 / 低”，并与时间放在同一列右对齐；任务标题和下一步保持原有主视线。</p>
+  </main>
+  <script>
+    document.querySelectorAll('.filters button').forEach((button) => button.addEventListener('click', () => {
+      document.querySelectorAll('.filters button').forEach((item) => item.classList.remove('active'));
+      button.classList.add('active');
+    }));
+  </script>
+</body>
+</html>

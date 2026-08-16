@@ -1,0 +1,762 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Personal Task Track · 应用更新 Demo</title>
+  <style>
+    :root {
+      --forest: #2e6651;
+      --forest-deep: #214b3d;
+      --forest-soft: #e6f0eb;
+      --canvas: #edf1ee;
+      --surface: #fff;
+      --ink: #17251f;
+      --muted: #748078;
+      --line: #d9e1dc;
+      --line-strong: #bdcbc3;
+      --amber: #9a6b24;
+      --amber-soft: #fbf3e5;
+      --danger: #a54e46;
+      --danger-soft: #faecea;
+      --shadow: 0 22px 70px rgb(23 37 31 / 18%);
+      --radius: 12px;
+      font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont,
+        "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      color: var(--ink);
+      background: var(--canvas);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-width: 320px;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at 78% 14%, rgb(255 255 255 / 82%), transparent 31rem),
+        var(--canvas);
+    }
+
+    button { font: inherit; }
+
+    button:focus-visible {
+      outline: 3px solid rgb(46 102 81 / 24%);
+      outline-offset: 2px;
+    }
+
+    .demo-header {
+      position: relative;
+      z-index: 4;
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 24px;
+      padding: 30px clamp(22px, 5vw, 72px) 22px;
+      background: rgb(246 248 246 / 88%);
+      border-bottom: 1px solid var(--line);
+      backdrop-filter: blur(16px);
+    }
+
+    .eyebrow {
+      margin: 0 0 7px;
+      color: var(--forest);
+      font-size: 11px;
+      font-weight: 750;
+      letter-spacing: .16em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(23px, 3vw, 34px);
+      line-height: 1.15;
+      letter-spacing: -.04em;
+    }
+
+    .demo-intro {
+      margin: 9px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .scenario-panel { min-width: min(100%, 490px); }
+
+    .scenario-label {
+      display: block;
+      margin-bottom: 8px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .08em;
+    }
+
+    .scenario-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .scenario-button {
+      padding: 7px 10px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      color: #58655e;
+      background: #fff;
+      cursor: pointer;
+      transition: border-color .16s ease, background .16s ease, color .16s ease;
+    }
+
+    .scenario-button:hover { border-color: #9eb5a9; }
+
+    .scenario-button[aria-pressed="true"] {
+      color: #fff;
+      border-color: var(--forest-deep);
+      background: var(--forest-deep);
+    }
+
+    .stage {
+      position: relative;
+      min-height: calc(100vh - 132px);
+      padding: clamp(28px, 6vw, 80px) 22px;
+      overflow: hidden;
+    }
+
+    .app-shell {
+      position: absolute;
+      inset: 26px 4vw 36px;
+      display: grid;
+      grid-template-columns: minmax(260px, 34%) 1fr;
+      border: 1px solid #d2dcd6;
+      border-radius: 18px;
+      background: #f8faf8;
+      box-shadow: 0 15px 40px rgb(41 61 51 / 8%);
+      overflow: hidden;
+      opacity: .72;
+    }
+
+    .mock-sidebar {
+      padding: 30px;
+      border-right: 1px solid var(--line);
+      background: #f0f3f1;
+    }
+
+    .mock-brand { font-size: 20px; font-weight: 750; }
+
+    .mock-today {
+      height: 125px;
+      margin-top: 24px;
+      padding: 20px;
+      border-radius: 13px;
+      color: #fff;
+      background: var(--forest-deep);
+    }
+
+    .mock-today strong { font-size: 15px; }
+
+    .mock-line {
+      width: var(--w, 75%);
+      height: 7px;
+      margin-top: 14px;
+      border-radius: 10px;
+      background: currentColor;
+      opacity: .18;
+    }
+
+    .mock-tasks { margin-top: 28px; }
+
+    .mock-task {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 0;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .mock-index { color: var(--muted); font: 600 12px ui-monospace, monospace; }
+
+    .mock-main { padding: 42px 5vw; background: #fff; }
+
+    .mock-title { font-size: clamp(24px, 4vw, 38px); font-weight: 760; }
+
+    .mock-columns {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 28px;
+      margin-top: 46px;
+    }
+
+    .mock-column { min-height: 190px; border-bottom: 1px solid var(--line); }
+
+    .scrim {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      background: rgb(234 239 236 / 65%);
+      backdrop-filter: blur(2px);
+    }
+
+    .settings-dialog {
+      position: relative;
+      z-index: 2;
+      width: min(760px, calc(100vw - 32px));
+      margin: 0 auto;
+      border: 1px solid var(--line-strong);
+      border-radius: 14px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .dialog-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 23px 26px 19px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .dialog-kicker {
+      display: block;
+      margin-bottom: 3px;
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+
+    .dialog-title { margin: 0; font-size: 19px; letter-spacing: -.02em; }
+
+    .close-button {
+      display: grid;
+      width: 32px;
+      height: 32px;
+      place-items: center;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      color: var(--muted);
+      background: #fff;
+    }
+
+    .settings-body { padding: 4px 26px 18px; }
+
+    .setting-group {
+      display: grid;
+      grid-template-columns: minmax(150px, .78fr) minmax(280px, 1.22fr);
+      gap: 30px;
+      padding: 21px 0;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .setting-group:last-child { border-bottom: 0; }
+
+    .setting-heading { margin: 1px 0 6px; font-size: 13px; }
+
+    .setting-description {
+      max-width: 230px;
+      margin: 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.65;
+    }
+
+    .segmented {
+      display: inline-grid;
+      grid-template-columns: repeat(3, 1fr);
+      padding: 3px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #f3f6f4;
+    }
+
+    .segment {
+      padding: 7px 15px;
+      border: 0;
+      border-radius: 6px;
+      color: var(--muted);
+      background: transparent;
+    }
+
+    .segment.active { color: var(--ink); background: #fff; box-shadow: 0 1px 4px rgb(30 49 40 / 11%); }
+
+    .view-options { display: flex; gap: 8px; }
+
+    .view-option {
+      padding: 8px 13px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      color: var(--muted);
+      background: #fff;
+    }
+
+    .view-option.active { color: var(--forest-deep); border-color: #8eb3a3; background: var(--forest-soft); }
+
+    .update-controls { min-width: 0; }
+
+    .preference-row,
+    .action-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+    }
+
+    .preference-row { padding-bottom: 15px; border-bottom: 1px solid #e7ece9; }
+
+    .row-label { font-size: 12px; font-weight: 650; }
+
+    .row-note { display: block; margin-top: 3px; color: var(--muted); font-size: 11px; }
+
+    .switch {
+      position: relative;
+      flex: 0 0 auto;
+      width: 36px;
+      height: 21px;
+      padding: 0;
+      border: 0;
+      border-radius: 99px;
+      background: #c7d0cb;
+      cursor: pointer;
+      transition: background .18s ease;
+    }
+
+    .switch::after {
+      content: "";
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 15px;
+      height: 15px;
+      border-radius: 50%;
+      background: #fff;
+      box-shadow: 0 1px 3px rgb(0 0 0 / 20%);
+      transition: transform .18s ease;
+    }
+
+    .switch[aria-checked="true"] { background: var(--forest); }
+    .switch[aria-checked="true"]::after { transform: translateX(15px); }
+
+    .action-row { padding-top: 15px; }
+
+    .version {
+      color: var(--forest-deep);
+      font: 680 12px ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+
+    .button {
+      min-height: 32px;
+      padding: 7px 13px;
+      border: 1px solid var(--line-strong);
+      border-radius: 8px;
+      color: var(--ink);
+      background: #fff;
+      cursor: pointer;
+      transition: border-color .15s ease, background .15s ease, color .15s ease;
+    }
+
+    .button:hover { border-color: #92aa9e; background: #f8faf9; }
+
+    .button.primary { color: #fff; border-color: var(--forest-deep); background: var(--forest-deep); }
+    .button.primary:hover { background: #193d31; }
+
+    .button.ghost { color: var(--muted); border-color: transparent; background: transparent; }
+    .button:disabled { opacity: .48; cursor: default; }
+
+    .status-sheet {
+      position: relative;
+      margin-top: 14px;
+      padding: 13px 14px;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      background: #f8faf9;
+      overflow: hidden;
+    }
+
+    .status-sheet[data-tone="available"] { border-color: #eadabd; background: var(--amber-soft); }
+    .status-sheet[data-tone="error"] { border-color: #eccbc7; background: var(--danger-soft); }
+
+    .status-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .status-copy { display: flex; min-width: 0; gap: 10px; }
+
+    .status-icon {
+      display: grid;
+      flex: 0 0 auto;
+      width: 20px;
+      height: 20px;
+      place-items: center;
+      border-radius: 50%;
+      color: #fff;
+      background: var(--forest);
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    [data-tone="available"] .status-icon { background: var(--amber); }
+    [data-tone="error"] .status-icon { background: var(--danger); }
+
+    .status-title { margin: 1px 0 3px; font-size: 12px; font-weight: 720; }
+
+    .status-detail { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.55; }
+
+    .release-notes {
+      margin: 10px 0 0 30px;
+      padding-left: 15px;
+      color: #5d6862;
+      font-size: 11px;
+      line-height: 1.7;
+    }
+
+    .status-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 11px; }
+
+    .progress-track {
+      height: 3px;
+      margin: 13px -14px -13px;
+      background: #dbe5df;
+    }
+
+    .progress-bar {
+      width: 0;
+      height: 100%;
+      background: var(--forest);
+      transition: width .22s ease;
+    }
+
+    .spinner {
+      border: 2px solid #bad0c6;
+      border-right-color: var(--forest);
+      background: transparent;
+      animation: spin .8s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .toast {
+      position: fixed;
+      z-index: 10;
+      left: 50%;
+      bottom: 28px;
+      max-width: calc(100vw - 32px);
+      padding: 11px 16px;
+      border-radius: 8px;
+      color: #fff;
+      background: #17251f;
+      box-shadow: 0 8px 30px rgb(0 0 0 / 20%);
+      font-size: 12px;
+      opacity: 0;
+      transform: translate(-50%, 12px);
+      pointer-events: none;
+      transition: opacity .2s ease, transform .2s ease;
+    }
+
+    .toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+    @media (max-width: 760px) {
+      .demo-header { align-items: flex-start; flex-direction: column; }
+      .scenario-panel { min-width: 0; }
+      .app-shell { grid-template-columns: 1fr; }
+      .mock-sidebar { display: none; }
+      .stage { padding-inline: 10px; }
+      .settings-dialog { width: min(100%, 610px); }
+      .setting-group { grid-template-columns: 1fr; gap: 13px; }
+      .setting-description { max-width: none; }
+    }
+
+    @media (max-width: 480px) {
+      .demo-header { padding-inline: 18px; }
+      .stage { padding-top: 18px; }
+      .dialog-header, .settings-body { padding-left: 18px; padding-right: 18px; }
+      .action-row { align-items: flex-start; flex-direction: column; }
+      .action-row .button { width: 100%; }
+      .status-top { flex-direction: column; }
+      .status-actions { flex-wrap: wrap; }
+      .status-actions .button { flex: 1 1 auto; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .001ms !important; transition-duration: .001ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <header class="demo-header">
+    <div>
+      <p class="eyebrow">Interaction prototype</p>
+      <h1>应用更新 · 设置界面 Demo</h1>
+      <p class="demo-intro">独立演示文件，不会检查网络、安装更新或修改正式项目功能。</p>
+    </div>
+    <div class="scenario-panel" aria-label="演示状态">
+      <span class="scenario-label">演示状态（仅 Demo 可见）</span>
+      <div class="scenario-list" id="scenario-list">
+        <button class="scenario-button" data-state="idle" aria-pressed="true">默认</button>
+        <button class="scenario-button" data-state="latest" aria-pressed="false">已是最新</button>
+        <button class="scenario-button" data-state="available" aria-pressed="false">有更新</button>
+        <button class="scenario-button" data-state="downloading" aria-pressed="false">下载中</button>
+        <button class="scenario-button" data-state="ready" aria-pressed="false">可重启</button>
+        <button class="scenario-button" data-state="error" aria-pressed="false">失败</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="stage">
+    <div class="app-shell" aria-hidden="true">
+      <aside class="mock-sidebar">
+        <div class="mock-brand">Task Track</div>
+        <div class="mock-today">
+          <strong>今日任务</strong>
+          <div class="mock-line" style="--w: 82%"></div>
+          <div class="mock-line" style="--w: 59%"></div>
+        </div>
+        <div class="mock-tasks">
+          <div class="mock-task"><span class="mock-index">01</span><div class="mock-line" style="--w: 64%"></div></div>
+          <div class="mock-task"><span class="mock-index">02</span><div class="mock-line" style="--w: 78%"></div></div>
+          <div class="mock-task"><span class="mock-index">03</span><div class="mock-line" style="--w: 53%"></div></div>
+        </div>
+      </aside>
+      <section class="mock-main">
+        <div class="mock-title">完善个人任务管理 app</div>
+        <div class="mock-line" style="--w: 34%"></div>
+        <div class="mock-columns">
+          <div class="mock-column"><strong>背景</strong><div class="mock-line"></div></div>
+          <div class="mock-column"><strong>进展</strong><div class="mock-line"></div></div>
+          <div class="mock-column"><strong>结论</strong><div class="mock-line"></div></div>
+        </div>
+      </section>
+    </div>
+    <div class="scrim"></div>
+
+    <section class="settings-dialog" aria-labelledby="settings-title">
+      <header class="dialog-header">
+        <div>
+          <span class="dialog-kicker">Preferences</span>
+          <h2 class="dialog-title" id="settings-title">界面设置</h2>
+        </div>
+        <button class="close-button" aria-label="关闭设置" type="button">×</button>
+      </header>
+
+      <div class="settings-body">
+        <section class="setting-group">
+          <div>
+            <h3 class="setting-heading">显示模式</h3>
+            <p class="setting-description">选择与环境和专注习惯相匹配的界面。</p>
+          </div>
+          <div>
+            <div class="segmented" aria-label="显示模式">
+              <button class="segment" type="button">浅色</button>
+              <button class="segment active" type="button">跟随系统</button>
+              <button class="segment" type="button">深色</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="setting-group">
+          <div>
+            <h3 class="setting-heading">任务视图</h3>
+            <p class="setting-description">控制左侧任务列表默认呈现的信息密度。</p>
+          </div>
+          <div class="view-options">
+            <button class="view-option active" type="button">舒适</button>
+            <button class="view-option" type="button">紧凑</button>
+          </div>
+        </section>
+
+        <section class="setting-group" aria-labelledby="update-heading">
+          <div>
+            <h3 class="setting-heading" id="update-heading">软件更新</h3>
+            <p class="setting-description">从 GitHub Release 检查新版本。下载和安装都由你决定。</p>
+          </div>
+          <div class="update-controls">
+            <div class="preference-row">
+              <div>
+                <span class="row-label">自动检查更新</span>
+                <span class="row-note" id="auto-note">应用启动后定期检查</span>
+              </div>
+              <button class="switch" id="auto-toggle" type="button" role="switch" aria-checked="true" aria-label="自动检查更新"></button>
+            </div>
+
+            <div class="action-row">
+              <div>
+                <span class="row-label">当前版本</span>
+                <span class="row-note"><span class="version">v0.1.109</span> · Windows x64</span>
+              </div>
+              <button class="button" id="check-button" type="button">检查更新</button>
+            </div>
+
+            <div id="status-region" aria-live="polite"></div>
+          </div>
+        </section>
+
+        <section class="setting-group">
+          <div>
+            <h3 class="setting-heading">帮助与反馈</h3>
+            <p class="setting-description">遇到问题时查看说明，或提交一条反馈。</p>
+          </div>
+          <div class="view-options">
+            <button class="view-option" type="button">使用说明</button>
+            <button class="view-option" type="button">反馈问题</button>
+          </div>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <div class="toast" id="toast" role="status"></div>
+
+  <script>
+    const statusRegion = document.querySelector('#status-region');
+    const checkButton = document.querySelector('#check-button');
+    const autoToggle = document.querySelector('#auto-toggle');
+    const autoNote = document.querySelector('#auto-note');
+    const scenarioButtons = [...document.querySelectorAll('.scenario-button')];
+    const toast = document.querySelector('#toast');
+    let currentState = 'idle';
+    let progressTimer;
+    let transitionTimer;
+
+    const stateMarkup = {
+      idle: '',
+      checking: `
+        <div class="status-sheet">
+          <div class="status-copy">
+            <span class="status-icon spinner" aria-hidden="true"></span>
+            <div><p class="status-title">正在检查更新…</p><p class="status-detail">正在连接 GitHub Release。</p></div>
+          </div>
+        </div>`,
+      latest: `
+        <div class="status-sheet">
+          <div class="status-copy">
+            <span class="status-icon" aria-hidden="true">✓</span>
+            <div><p class="status-title">已是最新版本</p><p class="status-detail">刚刚检查 · 当前为 v0.1.109</p></div>
+          </div>
+        </div>`,
+      available: `
+        <div class="status-sheet" data-tone="available">
+          <div class="status-top">
+            <div class="status-copy">
+              <span class="status-icon" aria-hidden="true">↑</span>
+              <div><p class="status-title">v0.1.110 可用</p><p class="status-detail">28.6 MB · 发布于 2026-08-15</p></div>
+            </div>
+          </div>
+          <ul class="release-notes"><li>支持应用内检查与下载更新</li><li>修复已知的界面与编辑问题</li></ul>
+          <div class="status-actions"><button class="button ghost" data-action="later">稍后</button><button class="button primary" data-action="download">下载更新</button></div>
+        </div>`,
+      downloading: `
+        <div class="status-sheet">
+          <div class="status-top">
+            <div class="status-copy">
+              <span class="status-icon" aria-hidden="true">↓</span>
+              <div><p class="status-title">正在下载 v0.1.110</p><p class="status-detail"><span id="progress-label">38%</span> · 下载期间可以继续使用</p></div>
+            </div>
+          </div>
+          <div class="progress-track" aria-hidden="true"><div class="progress-bar" id="progress-bar" style="width: 38%"></div></div>
+        </div>`,
+      ready: `
+        <div class="status-sheet">
+          <div class="status-top">
+            <div class="status-copy">
+              <span class="status-icon" aria-hidden="true">✓</span>
+              <div><p class="status-title">v0.1.110 已准备好</p><p class="status-detail">重启应用后完成安装，未保存内容会先正常保存。</p></div>
+            </div>
+          </div>
+          <div class="status-actions"><button class="button ghost" data-action="later">稍后</button><button class="button primary" data-action="restart">重启并更新</button></div>
+        </div>`,
+      error: `
+        <div class="status-sheet" data-tone="error">
+          <div class="status-top">
+            <div class="status-copy">
+              <span class="status-icon" aria-hidden="true">!</span>
+              <div><p class="status-title">暂时无法检查更新</p><p class="status-detail">请检查网络连接，当前版本仍可正常使用。</p></div>
+            </div>
+          </div>
+          <div class="status-actions"><button class="button" data-action="retry">重试</button></div>
+        </div>`
+    };
+
+    function clearTimers() {
+      window.clearInterval(progressTimer);
+      window.clearTimeout(transitionTimer);
+    }
+
+    function selectScenario(state) {
+      const scenarioState = state === 'checking' ? 'idle' : state;
+      scenarioButtons.forEach((button) => {
+        button.setAttribute('aria-pressed', String(button.dataset.state === scenarioState));
+      });
+    }
+
+    function renderState(state, options = {}) {
+      clearTimers();
+      currentState = state;
+      statusRegion.innerHTML = stateMarkup[state];
+      checkButton.disabled = state === 'checking' || state === 'downloading';
+      checkButton.textContent = state === 'checking' ? '检查中…' : '检查更新';
+      if (!options.keepScenario) selectScenario(state);
+
+      statusRegion.querySelector('[data-action="download"]')?.addEventListener('click', startDownload);
+      statusRegion.querySelector('[data-action="retry"]')?.addEventListener('click', startCheck);
+      statusRegion.querySelector('[data-action="restart"]')?.addEventListener('click', () => {
+        showToast('Demo：正式版本将在这里安全重启并安装更新');
+      });
+      statusRegion.querySelector('[data-action="later"]')?.addEventListener('click', () => {
+        showToast('已稍后处理；下次仍可从这里继续');
+      });
+    }
+
+    function startCheck() {
+      renderState('checking', { keepScenario: true });
+      transitionTimer = window.setTimeout(() => renderState('available'), 900);
+    }
+
+    function startDownload() {
+      renderState('downloading');
+      let progress = 8;
+      const bar = document.querySelector('#progress-bar');
+      const label = document.querySelector('#progress-label');
+      bar.style.width = `${progress}%`;
+      label.textContent = `${progress}%`;
+      progressTimer = window.setInterval(() => {
+        progress = Math.min(100, progress + Math.ceil(Math.random() * 10));
+        bar.style.width = `${progress}%`;
+        label.textContent = `${progress}%`;
+        if (progress === 100) {
+          window.clearInterval(progressTimer);
+          transitionTimer = window.setTimeout(() => renderState('ready'), 450);
+        }
+      }, 260);
+    }
+
+    function showToast(message) {
+      toast.textContent = message;
+      toast.classList.add('show');
+      window.setTimeout(() => toast.classList.remove('show'), 2200);
+    }
+
+    scenarioButtons.forEach((button) => {
+      button.addEventListener('click', () => {
+        if (button.dataset.state === 'downloading') {
+          renderState('downloading');
+          return;
+        }
+        renderState(button.dataset.state);
+      });
+    });
+
+    checkButton.addEventListener('click', startCheck);
+
+    autoToggle.addEventListener('click', () => {
+      const next = autoToggle.getAttribute('aria-checked') !== 'true';
+      autoToggle.setAttribute('aria-checked', String(next));
+      autoNote.textContent = next ? '应用启动后定期检查' : '仅在手动操作时检查';
+      showToast(next ? '已开启自动检查更新' : '已关闭自动检查更新');
+    });
+
+    renderState(currentState);
+  </script>
+</body>
+</html>

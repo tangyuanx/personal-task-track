@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>循环任务设置 · 方案 B 修订 Demo</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --canvas: #edf1ee;
+      --sidebar: #f3f6f3;
+      --surface: #fff;
+      --soft: #f6f8f6;
+      --ink: #17251f;
+      --ink-soft: #405048;
+      --muted: #748078;
+      --faint: #a0aaa4;
+      --line: #dce3de;
+      --line-strong: #cbd5cf;
+      --moss: #2e6651;
+      --moss-dark: #214b3d;
+      --moss-soft: #e6f0ea;
+      --sand: #9a7335;
+      --sans: Inter, "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+      --mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+    }
+
+    * { box-sizing: border-box; }
+    html { min-width: 320px; background: var(--canvas); }
+    body {
+      min-width: 320px;
+      min-height: 100vh;
+      margin: 0;
+      background: radial-gradient(circle at 14% -8%, rgba(255,255,255,.96), transparent 35rem), var(--canvas);
+      color: var(--ink);
+      font-family: var(--sans);
+      -webkit-font-smoothing: antialiased;
+    }
+    button, input { font: inherit; }
+    button { cursor: pointer; }
+    svg { display: block; }
+    button:focus-visible, input:focus-visible { outline: 3px solid rgba(78,128,103,.2); outline-offset: 2px; }
+
+    .demo-page { width: min(1420px, calc(100% - 32px)); margin: 0 auto; padding: 22px 0 34px; }
+    .demo-head { display: flex; align-items: end; justify-content: space-between; gap: 28px; margin-bottom: 16px; padding: 0 4px; }
+    .eyebrow { margin: 0 0 7px; color: var(--moss); font: 700 11px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; }
+    h1 { margin: 0; font-size: clamp(25px, 2.7vw, 36px); font-weight: 720; letter-spacing: -.04em; line-height: 1.15; }
+    .intro-copy { max-width: 720px; margin: 9px 0 0; color: var(--muted); font-size: 14px; line-height: 1.7; }
+    .demo-note { display: inline-flex; min-height: 34px; align-items: center; gap: 8px; flex: 0 0 auto; border: 1px solid var(--line); border-radius: 999px; padding: 0 13px; background: rgba(255,255,255,.72); color: var(--muted); font-size: 12px; white-space: nowrap; }
+    .demo-note::before { width: 7px; height: 7px; border-radius: 50%; background: #83b59f; content: ""; }
+
+    .app-shell { display: grid; min-height: 690px; grid-template-columns: 390px minmax(0,1fr); overflow: hidden; border: 1px solid var(--line); border-radius: 20px; background: var(--surface); box-shadow: 0 18px 52px rgba(35,57,47,.11); }
+    .sidebar { display: flex; min-width: 0; flex-direction: column; border-right: 1px solid var(--line); padding: 24px 17px 17px; background: var(--sidebar); }
+    .brand-row { display: flex; align-items: baseline; justify-content: space-between; padding: 0 3px; }
+    .brand { margin: 0; font-size: 21px; font-weight: 720; letter-spacing: -.035em; }
+    .version { color: var(--faint); font: 500 9px/1 var(--mono); }
+    .today-card { margin-top: 14px; border-radius: 14px; padding: 17px 15px 18px; background: var(--moss-dark); color: #fff; box-shadow: 0 13px 26px rgba(30,65,52,.16); }
+    .today-head { display: flex; justify-content: space-between; font-size: 16px; font-weight: 700; }
+    .today-count { color: rgba(255,255,255,.68); font: 500 11px/1 var(--mono); }
+    .today-task { margin-top: 18px; padding-left: 8px; }
+    .today-task + .today-task { margin-top: 15px; }
+    .today-task strong { display: block; font-size: 13px; font-weight: 650; }
+    .today-task span { display: block; margin-top: 4px; color: rgba(255,255,255,.62); font-size: 11px; }
+    .repository-tools { display: flex; align-items: center; justify-content: space-between; margin-top: 20px; padding: 0 2px 10px; border-bottom: 1px solid var(--line); }
+    .repo-count { color: var(--muted); font: 500 10px/1 var(--mono); }
+    .icon-button { display: grid; width: 30px; height: 30px; place-items: center; border: 0; border-radius: 8px; background: transparent; color: var(--muted); }
+    .icon-button:hover { background: var(--moss-soft); color: var(--moss); }
+    .icon-button svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-width: 1.7; }
+    .filter-row { display: flex; min-height: 42px; align-items: center; gap: 18px; padding: 0 2px; color: var(--muted); font-size: 11px; }
+    .filter-row strong { position: relative; color: var(--ink); font-weight: 650; }
+    .filter-row strong::after { position: absolute; right: 0; bottom: -13px; left: 0; height: 2px; background: #83b59f; content: ""; }
+    .task-list { display: grid; gap: 3px; }
+    .task-row { display: grid; min-height: 48px; grid-template-columns: 27px minmax(0,1fr) auto; align-items: center; gap: 8px; border-radius: 8px; padding: 6px 9px; }
+    .task-row.active { background: #e6ece8; }
+    .task-number { color: var(--muted); font: 600 11px/1 var(--mono); }
+    .task-copy { min-width: 0; }
+    .task-copy strong, .task-copy span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .task-copy strong { font-size: 13px; font-weight: 650; }
+    .task-copy span { margin-top: 4px; color: var(--faint); font-size: 10px; }
+    .priority { color: var(--sand); font-size: 11px; font-weight: 700; }
+    .sidebar-footer { margin-top: auto; padding: 14px 3px 0; border-top: 1px solid var(--line); color: var(--muted); font-size: 11px; }
+
+    .workspace { min-width: 0; overflow: hidden; padding: 45px clamp(30px,4.8vw,72px) 50px; background: var(--surface); }
+    .title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; }
+    .task-title { margin: 0; font-size: clamp(25px,2.4vw,32px); font-weight: 720; letter-spacing: -.045em; line-height: 1.15; }
+    .complete-button { display: inline-flex; min-height: 34px; align-items: center; gap: 7px; flex: 0 0 auto; border: 1px solid var(--line-strong); border-radius: 9px; padding: 0 12px; background: transparent; color: var(--ink-soft); font-size: 12px; font-weight: 650; }
+    .complete-button svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; }
+    .task-meta { display: flex; min-height: 40px; align-items: center; flex-wrap: wrap; gap: 8px 13px; margin-top: 8px; color: var(--muted); font-size: 12px; }
+    .meta-item { display: inline-flex; gap: 5px; white-space: nowrap; }
+    .meta-item strong { color: var(--ink-soft); font-weight: 650; }
+    .meta-item.priority-meta strong { color: var(--sand); }
+    .meta-separator { width: 1px; height: 14px; background: var(--line); }
+
+    .recurrence-stage { position: relative; display: inline-flex; min-height: 34px; align-items: center; }
+    .recurrence-trigger { display: inline-flex; min-height: 31px; align-items: center; gap: 7px; border: 1px solid #cfe0d7; border-radius: 8px; padding: 0 8px; background: var(--moss-soft); color: var(--moss); font-size: 12px; font-weight: 650; }
+    .recurrence-trigger svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.7; }
+    .chevron { transition: transform 160ms ease; }
+    [aria-expanded="true"] .chevron { transform: rotate(180deg); }
+    .popover { position: absolute; z-index: 10; top: calc(100% + 8px); left: 0; display: none; width: min(372px,calc(100vw - 48px)); border: 1px solid var(--line-strong); border-radius: 14px; padding: 16px; background: var(--surface); box-shadow: 0 18px 44px rgba(29,50,40,.18); }
+    .popover.open { display: block; animation: pop-in 150ms ease-out; }
+    @keyframes pop-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+    .popover-head { display: flex; align-items: center; margin-bottom: 14px; }
+    .popover-head strong { font-size: 13px; }
+
+    .mode-time-row { display: grid; grid-template-columns: minmax(0,1fr) 92px; gap: 10px; align-items: center; }
+    .mode-switch { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 3px; border: 1px solid var(--line); border-radius: 10px; padding: 3px; background: var(--soft); }
+    .mode-button { min-height: 31px; border: 0; border-radius: 7px; padding: 0 8px; background: transparent; color: var(--muted); font-size: 11px; font-weight: 650; }
+    .mode-button:hover { color: var(--ink); }
+    .mode-button.active { background: var(--surface); color: var(--moss); box-shadow: 0 1px 4px rgba(33,75,61,.11); }
+    .time-control { display: inline-flex; min-height: 39px; align-items: center; gap: 5px; border: 1px solid var(--line); border-radius: 10px; padding: 0 8px; background: var(--soft); color: var(--muted); }
+    .time-control[hidden] { display: none; }
+    .time-control input { width: 100%; border: 0; padding: 0; background: transparent; color: var(--ink-soft); font-size: 11px; font-weight: 650; }
+    .time-control input:focus { outline: 0; }
+    .weekday-picker { display: grid; grid-template-columns: repeat(7,minmax(0,1fr)); gap: 6px; margin-top: 12px; }
+    .weekday-picker[hidden] { display: none; }
+    .weekday-button { display: grid; min-height: 36px; place-items: center; border: 1px solid var(--line); border-radius: 9px; background: var(--soft); color: var(--muted); font-size: 11px; font-weight: 650; transition: border-color 120ms ease, background 120ms ease, color 120ms ease, transform 120ms ease; }
+    .weekday-button:hover { border-color: #a9c4b6; color: var(--moss); transform: translateY(-1px); }
+    .weekday-button.active { border-color: var(--moss); background: var(--moss); color: #fff; box-shadow: 0 4px 10px rgba(46,102,81,.16); }
+
+    .brief-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 18px; margin-top: 28px; }
+    .brief-field { min-height: 92px; border-bottom: 1px solid var(--line); padding-bottom: 12px; }
+    .brief-field + .brief-field { border-left: 1px solid var(--line); padding-left: 18px; }
+    .brief-field strong { display: block; color: var(--ink-soft); font-size: 11px; }
+    .brief-field span { display: block; margin-top: 13px; color: var(--faint); font-size: 12px; line-height: 1.55; }
+    .pane-tabs { display: flex; gap: 26px; margin-top: 28px; border-bottom: 1px solid var(--line); }
+    .pane-tab { position: relative; min-height: 42px; border: 0; padding: 0; background: transparent; color: var(--muted); font-size: 13px; font-weight: 650; }
+    .pane-tab.active { color: var(--ink); }
+    .pane-tab.active::after { position: absolute; right: 0; bottom: -1px; left: 0; height: 2px; background: var(--moss); content: ""; }
+    .flow-placeholder { display: grid; gap: 10px; margin-top: 26px; }
+    .flow-line { display: grid; min-height: 46px; grid-template-columns: 36px minmax(0,1fr) 88px; align-items: center; gap: 12px; border-bottom: 1px solid #edf0ed; color: var(--muted); font-size: 11px; }
+    .flow-line b { color: var(--muted); font: 600 11px/1 var(--mono); }
+    .flow-line strong { color: var(--ink-soft); font-size: 12px; }
+    .flow-state { justify-self: end; color: var(--moss); font-weight: 650; }
+    .demo-caption { margin: 14px 4px 0; color: var(--muted); font-size: 12px; line-height: 1.6; }
+
+    @media (max-width: 880px) {
+      .app-shell { grid-template-columns: 300px minmax(0,1fr); }
+      .workspace { padding-right: 28px; padding-left: 28px; }
+    }
+    @media (max-width: 700px) {
+      .demo-page { width: min(100% - 18px,680px); padding-top: 13px; }
+      .demo-head { align-items: flex-start; flex-direction: column; gap: 10px; }
+      .app-shell { min-height: 650px; grid-template-columns: 1fr; }
+      .sidebar { display: none; }
+      .workspace { padding: 34px 22px 44px; }
+      .meta-separator { display: none; }
+      .recurrence-stage { width: 100%; }
+      .popover { position: fixed; top: auto; right: 10px; bottom: 10px; left: 10px; width: auto; }
+      .brief-grid { grid-template-columns: 1fr; }
+      .brief-field { min-height: 66px; }
+      .brief-field + .brief-field { border-left: 0; padding-left: 0; }
+    }
+    @media (max-width: 390px) {
+      .mode-time-row { grid-template-columns: 1fr; }
+      .time-control { width: 100%; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <main class="demo-page">
+    <header class="demo-head">
+      <div>
+        <p class="eyebrow">Scheme B · Revised demo</p>
+        <h1>更轻的循环设置</h1>
+        <p class="intro-copy">去掉解释性标签和未来任务列表，只保留真正需要操作的周期、星期与时间。每周可同时选择任意多个日期。</p>
+      </div>
+      <div class="demo-note">独立 Demo，尚未合并正式功能</div>
+    </header>
+
+    <section class="app-shell" aria-label="循环设置效果预览">
+      <aside class="sidebar" aria-label="任务列表预览">
+        <div class="brand-row"><h2 class="brand">Task Track</h2><span class="version">DEMO</span></div>
+        <section class="today-card">
+          <div class="today-head"><span>今日任务</span><span class="today-count">02 / 04</span></div>
+          <div class="today-task"><strong>整理本周项目复盘</strong><span>下一步：补充关键决策</span></div>
+          <div class="today-task"><strong>完善个人任务管理 app</strong><span>下一步：确定循环设置方式</span></div>
+        </section>
+        <div class="repository-tools">
+          <span class="repo-count">3 / 3 项</span>
+          <button class="icon-button" type="button" aria-label="搜索任务"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"></circle><path d="m16 16 4 4"></path></svg></button>
+        </div>
+        <div class="filter-row"><strong>全部</strong><span>未完成</span><span>已完成</span></div>
+        <div class="task-list">
+          <div class="task-row active"><span class="task-number">01</span><span class="task-copy"><strong>完善个人任务管理 app</strong><span>下一步：确定循环设置方式</span></span><span class="priority">中</span></div>
+          <div class="task-row"><span class="task-number">02</span><span class="task-copy"><strong>整理本周项目复盘</strong><span>下一步：补充关键决策</span></span><span class="priority">中</span></div>
+          <div class="task-row"><span class="task-number">03</span><span class="task-copy"><strong>阅读设计系统文档</strong><span>下一步：记录可复用原则</span></span><span class="priority">低</span></div>
+        </div>
+        <footer class="sidebar-footer">personal task</footer>
+      </aside>
+
+      <article class="workspace">
+        <div class="title-row">
+          <h2 class="task-title">完善个人任务管理 app</h2>
+          <button class="complete-button" type="button"><svg viewBox="0 0 20 20"><path d="m4 10 4 4 8-9"></path></svg>完成</button>
+        </div>
+        <div class="task-meta">
+          <span class="meta-item priority-meta"><strong>中优先</strong></span>
+          <span class="meta-item"><strong>处理中</strong></span>
+          <span class="meta-item"><strong>0 / 3 节点</strong></span>
+          <span class="meta-item">分组 <strong>personal task</strong></span>
+          <span class="meta-separator"></span>
+
+          <div class="recurrence-stage">
+            <button class="recurrence-trigger" id="recurrence-trigger" type="button" aria-expanded="true" aria-controls="recurrence-popover">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5"></path><path d="M4 17v-5h5"></path><path d="M6.1 9a7 7 0 0 1 11.5-2L20 9"></path><path d="m4 15 2.4 2A7 7 0 0 0 18 15"></path></svg>
+              <span id="recurrence-summary">每周一、三、五 · 09:00</span>
+              <svg class="chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4 4 4-4"></path></svg>
+            </button>
+
+            <section class="popover open" id="recurrence-popover" role="dialog" aria-label="循环设置">
+              <header class="popover-head"><strong>循环设置</strong></header>
+              <div class="mode-time-row">
+                <div class="mode-switch" role="group" aria-label="循环周期">
+                  <button class="mode-button" type="button" data-mode="none">不循环</button>
+                  <button class="mode-button" type="button" data-mode="daily">每天</button>
+                  <button class="mode-button active" type="button" data-mode="weekly">每周</button>
+                </div>
+                <label class="time-control" id="time-control"><input id="recurrence-time" type="time" value="09:00" aria-label="循环时间" /></label>
+              </div>
+              <div class="weekday-picker" id="weekday-picker" role="group" aria-label="选择每周日期，可多选">
+                <button class="weekday-button active" type="button" data-day="1" aria-pressed="true" aria-label="周一">一</button>
+                <button class="weekday-button" type="button" data-day="2" aria-pressed="false" aria-label="周二">二</button>
+                <button class="weekday-button active" type="button" data-day="3" aria-pressed="true" aria-label="周三">三</button>
+                <button class="weekday-button" type="button" data-day="4" aria-pressed="false" aria-label="周四">四</button>
+                <button class="weekday-button active" type="button" data-day="5" aria-pressed="true" aria-label="周五">五</button>
+                <button class="weekday-button" type="button" data-day="6" aria-pressed="false" aria-label="周六">六</button>
+                <button class="weekday-button" type="button" data-day="0" aria-pressed="false" aria-label="周日">日</button>
+              </div>
+            </section>
+          </div>
+        </div>
+
+        <section class="brief-grid" aria-label="任务概览">
+          <div class="brief-field"><strong>背景</strong><span>让日常任务更自然地按计划出现，避免重复创建。</span></div>
+          <div class="brief-field"><strong>进展</strong><span>循环设置已收敛为紧凑浮层。</span></div>
+          <div class="brief-field"><strong>结论</strong><span>等待确认多日期选择方式。</span></div>
+        </section>
+        <nav class="pane-tabs"><button class="pane-tab active" type="button">处理流</button><button class="pane-tab" type="button">知识笔记</button><button class="pane-tab" type="button">历史处理</button></nav>
+        <div class="flow-placeholder">
+          <div class="flow-line"><b>01</b><strong>确认循环设置界面</strong><span class="flow-state">处理中</span></div>
+          <div class="flow-line"><b>02</b><strong>按确认稿实现正式功能</strong><span class="flow-state">等待</span></div>
+          <div class="flow-line"><b>03</b><strong>验证多日期循环</strong><span class="flow-state">等待</span></div>
+        </div>
+      </article>
+    </section>
+    <p class="demo-caption">交互提示：切换“不循环 / 每天 / 每周”，点击多个星期按钮，或修改时间；任务信息行中的摘要会同步更新。</p>
+  </main>
+
+  <script>
+    (() => {
+      const state = { mode: "weekly", weekdays: new Set([1, 3, 5]), time: "09:00" };
+      const trigger = document.getElementById("recurrence-trigger");
+      const popover = document.getElementById("recurrence-popover");
+      const summary = document.getElementById("recurrence-summary");
+      const weekdayPicker = document.getElementById("weekday-picker");
+      const timeControl = document.getElementById("time-control");
+      const timeInput = document.getElementById("recurrence-time");
+      const modeButtons = [...document.querySelectorAll("[data-mode]")];
+      const weekdayButtons = [...document.querySelectorAll("[data-day]")];
+      const dayOrder = [1, 2, 3, 4, 5, 6, 0];
+      const dayLabels = { 0: "日", 1: "一", 2: "二", 3: "三", 4: "四", 5: "五", 6: "六" };
+
+      function summaryText() {
+        if (state.mode === "none") return "不循环";
+        if (state.mode === "daily") return `每天 · ${state.time}`;
+        const selected = dayOrder.filter((day) => state.weekdays.has(day)).map((day) => dayLabels[day]);
+        return selected.length ? `每周${selected.join("、")} · ${state.time}` : "每周 · 请选择日期";
+      }
+
+      function render() {
+        modeButtons.forEach((button) => {
+          const active = button.dataset.mode === state.mode;
+          button.classList.toggle("active", active);
+          button.setAttribute("aria-pressed", String(active));
+        });
+        weekdayButtons.forEach((button) => {
+          const active = state.weekdays.has(Number(button.dataset.day));
+          button.classList.toggle("active", active);
+          button.setAttribute("aria-pressed", String(active));
+        });
+        weekdayPicker.hidden = state.mode !== "weekly";
+        timeControl.hidden = state.mode === "none";
+        timeInput.value = state.time;
+        summary.textContent = summaryText();
+      }
+
+      function closePopover() {
+        popover.classList.remove("open");
+        trigger.setAttribute("aria-expanded", "false");
+      }
+
+      trigger.addEventListener("click", () => {
+        const open = !popover.classList.contains("open");
+        popover.classList.toggle("open", open);
+        trigger.setAttribute("aria-expanded", String(open));
+      });
+      modeButtons.forEach((button) => button.addEventListener("click", () => {
+        state.mode = button.dataset.mode;
+        render();
+      }));
+      weekdayButtons.forEach((button) => button.addEventListener("click", () => {
+        const day = Number(button.dataset.day);
+        if (state.weekdays.has(day)) state.weekdays.delete(day);
+        else state.weekdays.add(day);
+        render();
+      }));
+      timeInput.addEventListener("change", () => {
+        state.time = timeInput.value || "09:00";
+        render();
+      });
+      document.addEventListener("click", (event) => {
+        if (!popover.classList.contains("open")) return;
+        if (popover.contains(event.target) || trigger.contains(event.target)) return;
+        closePopover();
+      });
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") closePopover();
+      });
+      render();
+    })();
+  </script>
+</body>
+</html>

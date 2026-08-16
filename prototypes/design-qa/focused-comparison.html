@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Task Track Focused Design QA</title>
+    <style>
+      * { box-sizing: border-box; }
+      body { margin: 0; background: #202522; color: #fff; font: 13px system-ui, sans-serif; }
+      main { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 8px; }
+      figure { margin: 0; overflow: hidden; background: #111; }
+      figcaption { height: 32px; display: flex; align-items: center; padding: 0 10px; background: #26312b; font-weight: 700; }
+      .crop { position: relative; height: 430px; overflow: hidden; background: #fff; }
+      img { position: absolute; top: -285px; left: -370px; width: 1280px; max-width: none; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <figure>
+        <figcaption>Source · workflow and task context</figcaption>
+        <div class="crop"><img src="./source-v1.3.1.png" alt="Source workflow crop" /></div>
+      </figure>
+      <figure>
+        <figcaption>Implementation · workflow and task context</figcaption>
+        <div class="crop"><img src="./implementation-final-desktop.png?final=3" alt="Implementation workflow crop" /></div>
+      </figure>
+    </main>
+  </body>
+</html>

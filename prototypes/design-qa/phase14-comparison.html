@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Phase 14 Design QA Comparison</title>
+    <style>
+      * { box-sizing: border-box; }
+      body { margin: 0; padding: 24px; color: #17201c; background: #eef1ee; font: 14px system-ui, sans-serif; }
+      h1 { margin: 0 0 20px; font-size: 22px; }
+      h2 { margin: 0 0 10px; font-size: 15px; }
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+      figure { margin: 0; padding: 14px; border: 1px solid #d3d9d5; border-radius: 10px; background: #fff; }
+      img { display: block; width: 100%; height: 520px; object-fit: contain; object-position: top center; background: #f8faf8; }
+      figcaption { margin-top: 9px; color: #65716b; font-size: 12px; }
+    </style>
+  </head>
+  <body>
+    <h1>Phase 14：问题截图与修复后实现</h1>
+    <div class="grid">
+      <figure><h2>来源：知识笔记列表与图片问题</h2><img src="phase14-source-knowledge.png" alt="知识笔记问题截图" /><figcaption>列表缩进/行距过大，图片语法显示为普通文本。</figcaption></figure>
+      <figure><h2>实现：Milkdown 紧凑列表与真实图片</h2><img src="phase14-knowledge-final.png" alt="知识笔记修复截图" /><figcaption>列表项约 27px 高；真实 PNG 通过 Milkdown 插入并显示。</figcaption></figure>
+      <figure><h2>来源：折叠主轴与错误提示样式</h2><img src="phase14-source-flow.png" alt="流程问题截图" /><figcaption>主轴延伸到空白区，提示使用额外徽标和非目标文案。</figcaption></figure>
+      <figure><h2>实现：主轴终止与 HTML 原型提示</h2><img src="phase14-flow-collapsed-final.png" alt="流程修复截图" /><figcaption>主轴终止于最后根节点中心；采用原型的居中虚线提示。</figcaption></figure>
+      <figure><h2>来源：左侧大型新建任务卡</h2><img src="phase14-source-sidebar.png" alt="侧栏问题截图" /><figcaption>持续占据较大垂直空间。</figcaption></figure>
+      <figure><h2>实现：紧凑提示入口</h2><img src="phase14-flow-collapsed-final.png" alt="侧栏修复截图" /><figcaption>移除卡片，仅保留双击空白/右键操作提示。</figcaption></figure>
+    </div>
+  </body>
+</html>

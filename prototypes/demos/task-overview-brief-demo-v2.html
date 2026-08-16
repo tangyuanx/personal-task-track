@@ -1,0 +1,453 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>任务介绍三栏 Demo V2</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --canvas: #eef2ef;
+      --surface: #fbfcfa;
+      --surface-soft: #f5f8f5;
+      --ink: #15231d;
+      --muted: #718078;
+      --faint: #98a49e;
+      --line: #d8e0db;
+      --line-strong: #c8d2cc;
+      --moss: #2f6c56;
+      --mint: #c6ded3;
+      --sand: #a77a36;
+      --sans: Inter, "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+      --mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      min-width: 320px;
+      min-height: 100vh;
+      margin: 0;
+      background:
+        radial-gradient(circle at 12% 0%, rgba(255, 255, 255, 0.92), transparent 34rem),
+        var(--canvas);
+      color: var(--ink);
+      font-family: var(--sans);
+    }
+
+    button,
+    textarea,
+    select {
+      font: inherit;
+    }
+
+    button,
+    select {
+      cursor: pointer;
+    }
+
+    .demo-shell {
+      width: min(1500px, calc(100% - 36px));
+      margin: 0 auto;
+      padding: 16px 0 26px;
+    }
+
+    .work-surface {
+      overflow: hidden;
+      border: 1px solid rgba(66, 94, 81, 0.11);
+      border-radius: 20px;
+      background: var(--surface);
+      box-shadow: 0 18px 48px rgba(38, 61, 51, 0.1);
+    }
+
+    .page-header {
+      padding: clamp(20px, 2.6vw, 30px) clamp(24px, 3.8vw, 48px) 0;
+    }
+
+    .header-topline {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+    }
+
+    .breadcrumb {
+      display: flex;
+      min-width: 0;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .breadcrumb span:last-child {
+      overflow: hidden;
+      color: var(--faint);
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .share-button {
+      display: inline-flex;
+      min-height: 34px;
+      align-items: center;
+      gap: 7px;
+      border: 0;
+      padding: 0 5px;
+      background: transparent;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 650;
+    }
+
+    .share-button svg {
+      width: 15px;
+      height: 15px;
+      fill: none;
+      stroke: currentColor;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-width: 1.7;
+    }
+
+    .share-button:hover {
+      color: var(--ink);
+    }
+
+    .title-cluster {
+      margin-top: clamp(14px, 1.9vw, 20px);
+    }
+
+    .task-title {
+      display: block;
+      width: 100%;
+      min-height: 1.08em;
+      margin: 0;
+      overflow: hidden;
+      border: 0;
+      padding: 0;
+      background: transparent;
+      color: var(--ink);
+      font-size: clamp(24px, 2.4vw, 32px);
+      font-weight: 700;
+      letter-spacing: -0.045em;
+      line-height: 1.14;
+      outline: 0;
+      resize: none;
+    }
+
+    .task-title:focus {
+      box-shadow: inset 0 -2px var(--mint);
+    }
+
+    .task-context {
+      display: flex;
+      min-width: 0;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 6px 12px;
+      margin-top: 9px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .title-meta {
+      display: flex;
+      min-width: 0;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 7px 12px;
+    }
+
+    .context-divider {
+      width: 1px;
+      height: 14px;
+      background: var(--line-strong);
+    }
+
+    .inline-progress {
+      color: var(--ink);
+      font: 700 12px/1 var(--mono);
+      white-space: nowrap;
+    }
+
+    .inline-group {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .inline-group select {
+      max-width: 138px;
+      border: 0;
+      padding: 2px 18px 2px 2px;
+      background: transparent;
+      color: var(--ink);
+      font: inherit;
+      outline: 0;
+    }
+
+    .state-value {
+      position: relative;
+      color: var(--ink);
+      font-size: 13px;
+      font-weight: 650;
+    }
+
+    .state-value + .state-value::before {
+      position: absolute;
+      top: 50%;
+      left: -7px;
+      width: 3px;
+      height: 3px;
+      border-radius: 50%;
+      background: var(--line-strong);
+      content: "";
+    }
+
+    .state-value.today {
+      color: var(--moss);
+    }
+
+    .state-value.priority {
+      color: var(--sand);
+    }
+
+    .intro-section {
+      margin: clamp(22px, 2.8vw, 32px) clamp(20px, 4vw, 48px) clamp(18px, 2.6vw, 28px);
+    }
+
+    .intro-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .intro-field {
+      position: relative;
+      display: block;
+      min-width: 0;
+      padding: 0 18px;
+      cursor: text;
+      transition: background-color 140ms ease;
+    }
+
+    .intro-field:first-child {
+      padding-left: 0;
+    }
+
+    .intro-field + .intro-field {
+      border-left: 1px solid rgba(200, 210, 204, 0.72);
+    }
+
+    .field-label {
+      display: flex;
+      min-width: 0;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 9px;
+      padding-bottom: 7px;
+      border-bottom: 1px solid rgba(200, 210, 204, 0.56);
+    }
+
+    .field-name {
+      color: var(--ink);
+      font-size: 11px;
+      font-weight: 720;
+      letter-spacing: 0.04em;
+    }
+
+    .progress-updated {
+      color: #829089;
+      font: 9px/1.35 var(--mono);
+      white-space: nowrap;
+    }
+
+    .intro-field textarea {
+      width: 100%;
+      height: 5.12em;
+      min-height: 5.12em;
+      max-height: 8.54em;
+      border: 0;
+      padding: 0;
+      background: transparent;
+      color: #27362e;
+      font-size: 12px;
+      font-weight: 450;
+      letter-spacing: 0.01em;
+      line-height: 1.71;
+      outline: 0;
+      resize: none;
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(93, 124, 108, 0.28) transparent;
+      transition:
+        box-shadow 140ms ease,
+        color 140ms ease;
+    }
+
+    .intro-field textarea:focus {
+      box-shadow: inset 0 -1px var(--moss);
+      color: var(--ink);
+    }
+
+    button:focus-visible,
+    select:focus-visible {
+      outline: 2px solid var(--moss);
+      outline-offset: 3px;
+    }
+
+    @media (max-width: 760px) {
+      .demo-shell {
+        width: min(100% - 22px, 1500px);
+        padding-top: 12px;
+      }
+
+      .work-surface {
+        border-radius: 16px;
+      }
+
+      .page-header {
+        padding-right: 20px;
+        padding-left: 20px;
+      }
+
+      .intro-section {
+        margin-right: 20px;
+        margin-left: 20px;
+        overflow-x: auto;
+      }
+
+      .intro-grid {
+        min-width: 660px;
+      }
+
+      .intro-field {
+        padding-right: 14px;
+        padding-left: 14px;
+      }
+
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *,
+      *::before,
+      *::after {
+        scroll-behavior: auto !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="demo-shell">
+    <section class="work-surface" aria-label="任务工作台 Demo">
+      <header class="page-header">
+        <div class="header-topline">
+          <nav class="breadcrumb" aria-label="当前位置">
+            <span>工作台</span>
+            <span aria-hidden="true">/</span>
+            <span>待实现功能</span>
+          </nav>
+          <button class="share-button" type="button" aria-label="分享任务">
+            <svg viewBox="0 0 20 20" aria-hidden="true">
+              <path d="M10 13V3m0 0 4 4m-4-4L6 7"></path>
+              <path d="M4 10v5.5A1.5 1.5 0 0 0 5.5 17h9a1.5 1.5 0 0 0 1.5-1.5V10"></path>
+            </svg>
+            分享
+          </button>
+        </div>
+
+        <div class="title-cluster">
+          <textarea class="task-title" aria-label="任务标题" rows="1">左上右上角置顶显示今日任务</textarea>
+          <div class="task-context" aria-label="任务上下文">
+            <div class="title-meta" aria-label="任务标签">
+              <span class="state-value today">Today</span>
+              <span class="state-value priority">中优先</span>
+              <span class="state-value">处理中</span>
+            </div>
+            <span class="context-divider" aria-hidden="true"></span>
+            <span class="inline-progress" aria-label="进度 0 / 0">0 / 0 节点</span>
+            <label class="inline-group">
+              <span>分组</span>
+              <select aria-label="任务分组">
+                <option selected>待实现功能</option>
+                <option>进行中</option>
+                <option>已完成</option>
+              </select>
+            </label>
+          </div>
+        </div>
+      </header>
+
+      <section class="intro-section" aria-label="任务介绍">
+        <div class="intro-grid">
+          <label class="intro-field">
+            <span class="field-label">
+              <span class="field-name">背景</span>
+            </span>
+            <textarea
+              data-field="background"
+              aria-label="背景"
+              rows="3"
+            >需要让今日任务在进入工作台后及时出现，并把待处理重点保留在一眼可见的位置。</textarea>
+          </label>
+
+          <label class="intro-field">
+            <span class="field-label">
+              <span class="field-name">进展</span>
+              <time class="progress-updated" datetime="2026-07-17T00:41" aria-label="最后一次更新进展：07月17日 00:41">07/17 00:41</time>
+            </span>
+            <textarea
+              data-field="hypothesis"
+              aria-label="进展"
+              rows="3"
+            >已完成连续任务笔记的结构探索，正在收敛任务信息的视觉层级与输入体验。</textarea>
+          </label>
+
+          <label class="intro-field">
+            <span class="field-label">
+              <span class="field-name">结论</span>
+            </span>
+            <textarea
+              data-field="conclusion"
+              aria-label="结论"
+              rows="3"
+            >采用左上与右上组合置顶展示，让今日任务与进度都能快速识别。</textarea>
+          </label>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <script>
+    const taskTitle = document.querySelector(".task-title");
+    const noteFields = [...document.querySelectorAll(".intro-field textarea")];
+
+    function resizeTaskTitle() {
+      taskTitle.style.height = "auto";
+      taskTitle.style.height = `${taskTitle.scrollHeight}px`;
+    }
+
+    function resizeNoteField(field) {
+      field.style.height = "auto";
+      const lineHeight = Number.parseFloat(window.getComputedStyle(field).lineHeight);
+      const maxHeight = lineHeight * 5;
+      field.style.height = `${Math.min(field.scrollHeight, maxHeight)}px`;
+      field.style.overflowY = field.scrollHeight > maxHeight ? "auto" : "hidden";
+    }
+
+    taskTitle.addEventListener("input", resizeTaskTitle);
+    window.addEventListener("resize", resizeTaskTitle);
+    noteFields.forEach((field) => {
+      field.addEventListener("input", () => resizeNoteField(field));
+      resizeNoteField(field);
+    });
+    resizeTaskTitle();
+  </script>
+</body>
+</html>

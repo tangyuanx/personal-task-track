@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>处理流 · 极简输入 Demo</title>
+<style>
+  :root { --ink:#26352e; --muted:#87938d; --line:#dce4df; --soft:#f4f7f5; --mint:#68a98e; --paper:#fcfdfc; }
+  * { box-sizing:border-box } body { margin:0; background:#f4f6f4; color:var(--ink); font:15px/1.45 -apple-system,BlinkMacSystemFont,"Noto Sans CJK SC","Microsoft YaHei",sans-serif; }
+  .page { max-width:1180px; margin:34px auto; padding:0 30px; }
+  .tabs { display:flex; gap:30px; height:50px; align-items:flex-start; }
+  .tabs button { appearance:none; border:0; padding:2px 0 16px; color:#89938e; background:transparent; font:650 18px/1.6 inherit; cursor:pointer; }
+  .tabs button.active { color:var(--ink); border-bottom:2px solid var(--mint); }
+  .flow { margin-top:28px; }
+  .row { display:grid; grid-template-columns:30px minmax(0,1.35fr) minmax(180px,.8fr) 72px 118px; align-items:center; min-height:40px; }
+  .row:hover { background:rgba(104,169,142,.035); }
+  .number { color:#95a19a; font:600 12px ui-monospace,SFMono-Regular,Menlo,monospace; text-align:center; }
+  .step { display:flex; min-width:0; align-items:center; padding-right:22px; }
+  .row.level-2 .number { visibility:hidden; }
+  .row.level-2 .step { position:relative; padding-left:26px; }
+  .row.level-2 .step::before { position:absolute; top:50%; left:7px; width:12px; height:13px; transform:translateY(-100%); border-bottom:1px solid #d8e1dc; border-left:1px solid #d8e1dc; content:""; }
+  .row.level-3 .number,.row.level-4 .number { visibility:hidden; }
+  .row.level-3 .step,.row.level-4 .step { position:relative; padding-left:48px; }
+  input[type=text] { width:100%; min-width:0; border:0; outline:0; padding:7px 0; color:var(--ink); background:transparent; font:600 16px/1.35 inherit; }
+  input[type=text]::placeholder { color:#a4aea9; font-weight:500; }
+  input[type=text]:focus { border-bottom:0; }
+  .record { min-width:0; padding:7px 12px; color:#89948e; font-size:14px; }
+  .record-input-row { width:100%; min-width:0; padding:6px 8px; border:0; border-left:1px solid #edf1ee; outline:0; color:#7e8a84; background:transparent; font:13px/1.35 inherit; cursor:text; text-overflow:ellipsis; }
+  .record-input-row::placeholder { color:#a7b0ab; }
+  .record.has-note { color:#52645b; }
+  .record:focus { outline:1px solid var(--mint); outline-offset:-3px; }
+  .state { color:#98a39d; text-align:right; font-size:13px; }
+  .state.done { color:#4e8a70; }
+  .time { display:flex; flex:0 0 118px; flex-wrap:nowrap; gap:3px; justify-content:flex-end; padding-left:18px; color:#9aa59f; font:12px ui-monospace,SFMono-Regular,Menlo,monospace; text-align:right; white-space:nowrap; }
+  .time span { flex:0 0 auto; }
+  dialog { width:min(560px,calc(100vw - 32px)); padding:0; border:1px solid var(--line); border-radius:12px; color:var(--ink); box-shadow:0 18px 54px rgba(30,48,39,.2); }
+  dialog::backdrop { background:rgba(25,38,31,.18); backdrop-filter:blur(2px); }
+  .record-dialog { padding:20px; } .record-dialog header { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; } .record-dialog h3 { margin:0; font-size:16px; } .close { border:0; background:transparent; color:var(--muted); font-size:18px; cursor:pointer; }
+  .record-input { width:100%; min-height:150px; resize:vertical; padding:10px 0; border:0; border-top:1px solid var(--line); border-bottom:1px solid var(--line); outline:0; color:var(--ink); background:transparent; font:14px/1.65 inherit; }
+  .record-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:14px; } .record-actions button { padding:7px 12px; border:0; border-radius:6px; color:var(--ink); background:#edf2ee; cursor:pointer; } .record-actions .save { color:white; background:#5d987d; }
+  @media(max-width:720px){ .page{padding:0 18px}.row{grid-template-columns:28px minmax(110px,1fr) minmax(70px,.7fr) 48px 76px}.record-input-row{padding-left:5px;font-size:12px}.time{flex-basis:76px;padding-left:5px;font-size:11px}.tabs{gap:20px}.tabs button{font-size:16px} }
+</style>
+<main class="page">
+  <nav class="tabs" aria-label="任务内容"><button class="active">处理流</button><button>知识笔记</button><button>历史处理</button></nav>
+  <section class="flow">
+    <div class="rows">
+      <div class="row"><span class="number">1</span><label class="step"><input type="text" value="确认问题范围" /></label><button class="record" type="button">记录…</button><span class="state done">已完成</span><time class="time"><span>07/22</span><span>18:08</span></time></div>
+      <div class="row level-2"><span class="number">·</span><label class="step"><input type="text" value="收集界面反馈" /></label><button class="record" type="button">记录…</button><span class="state">进行中</span><time class="time"><span>07/22</span><span>18:16</span></time></div>
+      <div class="row level-3"><span class="number">·</span><label class="step"><input type="text" value="整理输入问题" /></label><button class="record" type="button">记录…</button><span class="state">未完成</span><time class="time"><span>07/22</span><span>18:24</span></time></div>
+      <div class="row level-4"><span class="number">·</span><label class="step"><input type="text" value="核对边界情况" /></label><button class="record" type="button">记录…</button><span class="state">未完成</span><time class="time"><span>07/22</span><span>18:31</span></time></div>
+      <div class="row"><span class="number">2</span><label class="step"><input type="text" value="梳理现有处理流" /></label><button class="record" type="button">记录…</button><span class="state done">已完成</span><time class="time"><span>07/22</span><span>18:42</span></time></div>
+      <div class="row level-2"><span class="number">·</span><label class="step"><input type="text" value="删减非必要标签" /></label><button class="record" type="button">记录…</button><span class="state">进行中</span><time class="time"><span>07/22</span><span>18:48</span></time></div>
+      <div class="row level-2"><span class="number">·</span><label class="step"><input type="text" value="压缩输入框样式" /></label><button class="record" type="button">记录…</button><span class="state">未完成</span><time class="time"><span>07/22</span><span>18:53</span></time></div>
+      <div class="row"><span class="number">3</span><label class="step"><input type="text" value="验证紧凑展示" /></label><button class="record" type="button">记录…</button><span class="state">进行中</span><time class="time"><span>07/22</span><span>19:02</span></time></div>
+      <div class="row level-2"><span class="number">·</span><label class="step"><input type="text" value="检查十个以上节点" /></label><button class="record" type="button">记录…</button><span class="state done">已完成</span><time class="time"><span>07/22</span><span>19:11</span></time></div>
+      <div class="row"><span class="number">4</span><label class="step"><input type="text" value="同步设计结果" /></label><button class="record" type="button">记录…</button><span class="state">未完成</span><time class="time"><span>07/22</span><span>19:18</span></time></div>
+      <div class="row"><span class="number">5</span><label class="step"><input type="text" value="准备实际修改" /></label><button class="record" type="button">记录…</button><span class="state">未完成</span><time class="time"><span>07/22</span><span>19:26</span></time></div>
+      <div class="row"><span class="number">6</span><label class="step"><input type="text" value="回归检查" /></label><button class="record" type="button">记录…</button><span class="state">未完成</span><time class="time"><span>07/22</span><span>19:34</span></time></div>
+    </div>
+  </section>
+</main>
+<dialog id="record-dialog"><form method="dialog" class="record-dialog"><header><h3>记录</h3><button class="close" value="cancel" aria-label="关闭">×</button></header><textarea class="record-input" placeholder="补充本节点的过程、发现或结论…"></textarea><footer class="record-actions"><button value="cancel">取消</button><button class="save" value="default">保存记录</button></footer></form></dialog>
+<script>
+  const dialog = document.querySelector('#record-dialog');
+  let activeRecordInput = null;
+  document.querySelectorAll('.record').forEach(button => {
+    const input = document.createElement('input');
+    input.className = 'record-input-row';
+    input.placeholder = '记录';
+    input.readOnly = true;
+    button.replaceWith(input);
+    input.addEventListener('click', () => {
+    activeRecordInput = input;
+    dialog.querySelector('.record-input').value = input.value;
+    dialog.showModal();
+    dialog.querySelector('.record-input').focus();
+    });
+  });
+  dialog.addEventListener('close', () => {
+    if (dialog.returnValue === 'default' && activeRecordInput) {
+      activeRecordInput.value = dialog.querySelector('.record-input').value.trim();
+    }
+    activeRecordInput = null;
+  });
+</script>
+</html>

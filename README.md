@@ -34,7 +34,7 @@ npm run dev
 Bug 反馈联调需要另开一个终端启动后端：
 
 ```bash
-cd bug-report-server
+cd services/bug-report
 npm install
 cp .env.example .env.local
 # 在 .env.local 中设置服务端 GITHUB_TOKEN
@@ -59,6 +59,21 @@ npm run check
 ```bash
 npm test
 ```
+
+## 项目结构
+
+```text
+app/            桌面应用本体：Electron 主进程、渲染器和应用资源
+services/       可独立部署的配套服务，目前包含 Bug 反馈服务
+tests/          桌面应用回归测试
+tools/          构建、打包、图标和发布校验工具
+docs/           正式架构、交接、需求来源和历史记录文档
+prototypes/     不参与生产打包的 Demo、设计系统、截图和 QA 报告
+.agents/        项目专用的 Codex/代理技能配置
+.github/        持续集成和 GitHub Release 工作流
+```
+
+生产应用只从 `app/` 打包；`prototypes/` 中的 HTML 和设计文件仅用于方案回看，不会进入安装包。文档索引见 [`docs/README.md`](docs/README.md)，原型说明见 [`prototypes/README.md`](prototypes/README.md)。
 
 ## 构建
 
@@ -107,6 +122,6 @@ git push origin v0.1.0
 
 客户端不包含 GitHub Token，不直接调用 GitHub API，也不会将任务数据库、任务标题/内容、笔记、本地文件、Cookie、密码、Token、完整用户目录、日志或附件自动上传。用户允许时只附带软件版本、操作系统、架构、当前模块、提交时间和首次运行生成的随机 UUID 安装标识。
 
-后端位于 `bug-report-server/`，包含本地启动、环境变量、Fine-grained Token 最小权限和 Node/Docker 部署说明。创建 Issue 所需的最小权限是只针对 `personal-task-track` 仓库的 `Issues: Read and write`；详情以 [GitHub Create an issue 文档](https://docs.github.com/en/rest/issues/issues?apiVersion=2022-11-28#create-an-issue) 和 [Fine-grained Token 管理文档](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens) 为准。
+后端位于 `services/bug-report/`，包含本地启动、环境变量、Fine-grained Token 最小权限和 Node/Docker 部署说明。创建 Issue 所需的最小权限是只针对 `personal-task-track` 仓库的 `Issues: Read and write`；详情以 [GitHub Create an issue 文档](https://docs.github.com/en/rest/issues/issues?apiVersion=2022-11-28#create-an-issue) 和 [Fine-grained Token 管理文档](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens) 为准。
 
 服务端安全边界包括 100KB 请求体、字段长度校验、单 IP 每小时 5 次、CORS 白名单、安全响应头、GitHub 超时/错误转换和统一 JSON 错误；日志不输出 Token、Authorization 请求头或完整联系方式。`.env` 与 `.env.*` 已加入 `.gitignore`，`.env.example` 不含真实凭据。

@@ -1,6 +1,7 @@
 node_modules/
 release/
 dist/
+.planning/
 build/*.iconset/
 .DS_Store
 ._*

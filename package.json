@@ -1,6 +1,6 @@
 {
   "name": "personal-task-track",
-  "version": "0.1.116",
+  "version": "0.1.117",
   "description": "A local-first personal task flow tracker for programmer daily work.",
   "private": true,
   "license": "UNLICENSED",
@@ -13,33 +13,33 @@
     "url": "https://github.com/tangyuanx/personal-task-track/issues"
   },
   "homepage": "https://github.com/tangyuanx/personal-task-track#readme",
-  "main": "electron/main.cjs",
+  "main": "app/main/main.cjs",
   "scripts": {
     "dev": "electron .",
     "start": "electron .",
-    "postinstall": "npm --prefix bug-report-server ci",
-    "build:milkdown": "node scripts/build-milkdown.cjs",
-    "test": "node --test scripts/test.cjs scripts/bug-report-client.test.cjs scripts/updater.test.cjs && npm --prefix bug-report-server test",
-    "check": "npm run build:milkdown && node --check src/app.js && node --check src/today-widget-runtime.js && node --check electron/main.cjs && node --check electron/preload.cjs && node --check electron/storage.cjs && node --check electron/today-widget.cjs && node --check electron/updater.cjs && node --check electron/bug-report-client.cjs && node --check scripts/after-pack.cjs && node --check scripts/build.cjs && node --check scripts/build-milkdown.cjs && node --check scripts/make-ico.cjs && node --check scripts/verify-update-artifacts.cjs && node --check scripts/test.cjs && node --check scripts/bug-report-client.test.cjs && node --check scripts/updater.test.cjs && npm --prefix bug-report-server run build && npm test",
-    "dist": "node scripts/build.cjs",
-    "dist:mac": "node scripts/build.cjs --mac",
-    "dist:win": "node scripts/build.cjs --win"
+    "postinstall": "npm --prefix services/bug-report ci",
+    "build:milkdown": "node tools/build-milkdown.cjs",
+    "test": "node --test tests/desktop.test.cjs tests/bug-report-client.test.cjs tests/updater.test.cjs && npm --prefix services/bug-report test",
+    "check": "npm run build:milkdown && node --check app/renderer/src/app.js && node --check app/renderer/src/today-widget-runtime.js && node --check app/main/main.cjs && node --check app/main/preload.cjs && node --check app/main/storage.cjs && node --check app/main/today-widget.cjs && node --check app/main/updater.cjs && node --check app/main/bug-report-client.cjs && node --check tools/after-pack.cjs && node --check tools/build.cjs && node --check tools/build-milkdown.cjs && node --check tools/make-ico.cjs && node --check tools/verify-update-artifacts.cjs && node --check tests/desktop.test.cjs && node --check tests/bug-report-client.test.cjs && node --check tests/updater.test.cjs && npm --prefix services/bug-report run build && npm test",
+    "dist": "node tools/build.cjs",
+    "dist:mac": "node tools/build.cjs --mac",
+    "dist:win": "node tools/build.cjs --win"
   },
   "build": {
     "appId": "io.github.tangyuanx.personal-task-track",
     "productName": "Personal Task Track",
-    "icon": "build/icon",
+    "icon": "app/resources/icon",
     "asar": true,
-    "afterPack": "scripts/after-pack.cjs",
+    "afterPack": "tools/after-pack.cjs",
     "directories": {
       "output": "release"
     },
     "files": [
-      "index.html",
-      "today-widget-window-demo.html",
-      "src/**/*",
-      "electron/**/*",
-      "build/icon.*",
+      "app/renderer/index.html",
+      "app/renderer/today-widget.html",
+      "app/renderer/src/**/*",
+      "app/main/**/*",
+      "app/resources/icon.*",
       "package.json",
       "!**/._*",
       "!**/.DS_Store"

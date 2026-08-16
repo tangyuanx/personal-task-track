@@ -1,0 +1,1023 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Task Track</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --canvas: #f1ede4;
+        --surface: #fbfaf7;
+        --surface-raised: #ffffff;
+        --surface-hover: #f5f1e8;
+        --surface-active: #edf6f2;
+        --ink: #24272f;
+        --muted: #656d7b;
+        --quiet: #9aa1ad;
+        --line: #ddd4c4;
+        --line-strong: #cfc5b4;
+        --accent: #2f7d68;
+        --accent-strong: #246452;
+        --accent-soft: #e1f2eb;
+        --danger: #b4493d;
+        --display: "Avenir Next", "SF Pro Display", "PingFang SC", "Microsoft YaHei", sans-serif;
+        --font: "PingFang SC", "Microsoft YaHei", "Avenir Next", "Segoe UI", sans-serif;
+        --mono: "SFMono-Regular", "Cascadia Mono", ui-monospace, monospace;
+        --control-radius: 8px;
+      }
+
+      :root[data-theme="dark"] {
+        color-scheme: dark;
+        --canvas: #151713;
+        --surface: #1c1f1a;
+        --surface-raised: #24271f;
+        --surface-hover: #2a2d25;
+        --surface-active: #263229;
+        --ink: #d9ddd7;
+        --muted: #a6aca4;
+        --quiet: #737a73;
+        --line: #383b31;
+        --line-strong: #4b5045;
+        --accent: #88bca3;
+        --accent-strong: #b7d9c6;
+        --accent-soft: #263229;
+        --danger: #ee8e7d;
+      }
+
+      * { box-sizing: border-box; }
+      html, body { min-height: 100%; margin: 0; }
+      body {
+        min-height: 100dvh;
+        overflow: hidden;
+        background: var(--canvas);
+        color: var(--ink);
+        font: 14px/1.5 var(--font);
+        -webkit-font-smoothing: antialiased;
+      }
+
+      button, input, textarea { font: inherit; color: inherit; }
+      button { border: 0; cursor: pointer; }
+      button:active { transform: translateY(1px); }
+      button:focus-visible, input:focus-visible, textarea:focus-visible {
+        outline: 2px solid color-mix(in srgb, var(--accent) 52%, transparent);
+        outline-offset: 2px;
+      }
+      [hidden] { display: none !important; }
+
+      .app {
+        display: grid;
+        grid-template-rows: 56px minmax(0, 1fr);
+        min-height: 100dvh;
+        background: var(--surface);
+      }
+
+      .app-bar {
+        display: grid;
+        grid-template-columns: 288px minmax(0, 1fr);
+        align-items: center;
+        border-bottom: 1px solid var(--line);
+        background: var(--surface-raised);
+      }
+
+      .brand {
+        padding: 0 20px;
+        font: 700 15px/1 var(--display);
+        letter-spacing: .015em;
+        text-transform: none;
+      }
+
+      .repo-search {
+        display: flex;
+        align-items: center;
+        height: 28px;
+        margin-top: 9px;
+        padding: 0 8px;
+        border: 1px solid var(--line);
+        border-radius: var(--control-radius);
+        background: var(--surface);
+      }
+      .repo-search:focus-within {
+        border-color: var(--line-strong);
+        background: var(--surface-raised);
+      }
+      .repo-search input {
+        min-width: 0;
+        width: 100%;
+        border: 0;
+        outline: 0;
+        background: transparent;
+        font-size: 12px;
+      }
+      .repo-search input::placeholder { color: var(--quiet); }
+
+      .app-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 6px;
+        padding-right: 14px;
+      }
+      .text-button, .primary-button, .quiet-button {
+        min-height: 34px;
+        padding: 0 12px;
+        border-radius: var(--control-radius);
+        white-space: nowrap;
+        font-size: 12px;
+      }
+      .text-button {
+        border: 1px solid var(--line);
+        background: var(--surface-raised);
+        color: var(--muted);
+      }
+      .text-button:hover { border-color: var(--line-strong); color: var(--ink); }
+      .primary-button { background: var(--accent); color: #f8fbff; }
+      .primary-button:hover { background: var(--accent-strong); }
+      .quiet-button { padding-inline: 6px; background: transparent; color: var(--muted); }
+      .quiet-button:hover { color: var(--ink); background: var(--surface-hover); }
+
+      .workspace {
+        display: grid;
+        grid-template-columns: 288px minmax(500px, 1fr) 336px;
+        min-height: 0;
+      }
+
+      .task-sidebar, .task-main, .inspector {
+        min-width: 0;
+        min-height: 0;
+        background: var(--surface);
+      }
+      .task-sidebar, .task-main { border-right: 1px solid var(--line); }
+
+      .task-sidebar {
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+
+      .sidebar-section {
+        padding: 18px 16px 14px;
+      }
+      .sidebar-section + .sidebar-section { border-top: 1px solid var(--line); }
+      .section-line {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        min-height: 28px;
+        margin-bottom: 9px;
+      }
+      .section-line strong { font-size: 12px; font-weight: 720; }
+      .section-line span { color: var(--quiet); font: 11px var(--mono); }
+
+      .today-list, .task-list { display: grid; gap: 2px; }
+      .today-row, .task-row {
+        display: grid;
+        align-items: center;
+        width: 100%;
+        border-radius: var(--control-radius);
+        text-align: left;
+        background: transparent;
+      }
+      .today-row {
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 10px;
+        min-height: 46px;
+        padding: 8px 10px;
+      }
+      .today-row:hover, .task-row:hover { background: var(--surface-hover); }
+      .today-row strong, .today-row span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .today-row strong { font-size: 12px; }
+      .today-row span { margin-top: 3px; color: var(--muted); font-size: 11px; }
+      .today-row time { color: var(--quiet); font: 10px var(--mono); }
+
+      .repository {
+        display: flex;
+        flex: 1 1 auto;
+        min-height: 0;
+        flex-direction: column;
+        padding-bottom: 8px;
+      }
+      .repository-head { padding: 15px 16px 9px; }
+      .repository-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+      .repository-title strong { font-size: 12px; }
+      .repository-title button {
+        padding: 3px 5px;
+        border-radius: 5px;
+        color: var(--muted);
+        background: transparent;
+        font-size: 11px;
+      }
+      .repository-title button:hover { color: var(--ink); background: var(--surface-hover); }
+
+      .filters {
+        display: flex;
+        gap: 12px;
+        margin-top: 9px;
+      }
+      .filters button {
+        position: relative;
+        padding: 0 0 5px;
+        color: var(--quiet);
+        background: transparent;
+        font-size: 11px;
+      }
+      .filters button.active { color: var(--ink); }
+      .filters button.active::after {
+        content: "";
+        position: absolute;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        height: 2px;
+        background: var(--accent);
+      }
+
+      .task-list {
+        min-height: 0;
+        padding: 0 10px;
+        overflow: auto;
+      }
+      .task-row {
+        position: relative;
+        grid-template-columns: 18px minmax(0, 1fr) auto;
+        gap: 9px;
+        min-height: 56px;
+        padding: 8px 10px;
+      }
+      .task-row.active { background: var(--surface-active); }
+      .task-row.active::before {
+        content: "";
+        position: absolute;
+        inset: 10px auto 10px 0;
+        width: 2px;
+        background: var(--accent);
+      }
+      .task-check {
+        width: 16px;
+        height: 16px;
+        padding: 0;
+        border: 1px solid var(--line-strong);
+        border-radius: 4px;
+        background: var(--surface-raised);
+      }
+      .task-check.done {
+        border-color: var(--accent);
+        background: var(--accent);
+      }
+      .task-check.done::after { content: "✓"; display: block; color: #f8fbff; font-size: 10px; line-height: 14px; text-align: center; }
+      .task-copy { min-width: 0; }
+      .task-copy strong, .task-copy span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .task-copy strong { font-size: 13px; font-weight: 650; }
+      .task-copy span { margin-top: 3px; color: var(--muted); font-size: 11px; }
+      .task-row.done .task-copy { opacity: .55; }
+      .task-row.done .task-copy strong { text-decoration: line-through; }
+      .priority {
+        color: var(--quiet);
+        font: 10px var(--mono);
+      }
+      .empty-list {
+        padding: 28px 18px;
+        color: var(--quiet);
+        text-align: center;
+        font-size: 11px;
+      }
+
+      .sidebar-foot {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        min-height: 46px;
+        padding: 0 16px;
+        border-top: 1px solid var(--line);
+        color: var(--quiet);
+        font-size: 10px;
+      }
+
+      .task-main {
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      .task-header {
+        padding: 24px 28px 18px;
+        border-bottom: 1px solid var(--line);
+        background: var(--surface-raised);
+      }
+      .task-header-top {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 20px;
+      }
+      .task-heading { min-width: 0; }
+      .task-heading h1 {
+        margin: 0;
+        font: 680 25px/1.18 var(--display);
+        letter-spacing: -0.035em;
+      }
+      .task-heading p {
+        max-width: 650px;
+        margin: 8px 0 0;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .task-actions { display: flex; flex: 0 0 auto; gap: 6px; }
+      .task-meta {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 0;
+        margin-top: 16px;
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .task-meta span { padding: 0 10px; }
+      .task-meta span:first-child { padding-left: 0; }
+      .task-meta span + span { border-left: 1px solid var(--line-strong); }
+      .task-meta b { color: var(--accent-strong); font-weight: 650; }
+      .task-meta time { font-family: var(--mono); }
+
+      .view-tabs {
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        min-height: 44px;
+        padding: 0 28px;
+        border-bottom: 1px solid var(--line);
+        background: var(--surface);
+      }
+      .view-tabs button {
+        position: relative;
+        align-self: stretch;
+        padding: 0;
+        color: var(--muted);
+        background: transparent;
+        font-size: 12px;
+      }
+      .view-tabs button.active { color: var(--ink); font-weight: 650; }
+      .view-tabs button.active::after {
+        content: "";
+        position: absolute;
+        right: 0;
+        bottom: -1px;
+        left: 0;
+        height: 2px;
+        background: var(--accent);
+      }
+      .view-tabs .collapse-all { margin-left: auto; color: var(--quiet); font-size: 11px; }
+
+      .main-pane {
+        min-height: 0;
+        overflow: auto;
+      }
+      .flow-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        min-height: 56px;
+        padding: 0 28px;
+      }
+      .flow-toolbar strong { font: 680 15px/1 var(--display); letter-spacing: -.01em; }
+      .flow-toolbar span { margin-left: 8px; color: var(--quiet); font: 11px var(--mono); }
+
+      .flow-list {
+        position: relative;
+        padding: 0 20px 34px;
+      }
+      .flow-list::before {
+        content: "";
+        position: absolute;
+        top: 34px;
+        bottom: 36px;
+        left: 40px;
+        width: 1px;
+        background: var(--line-strong);
+        pointer-events: none;
+      }
+      .flow-row {
+        display: grid;
+        grid-template-columns: minmax(240px, 1fr) 86px 72px;
+        gap: 16px;
+        align-items: center;
+      }
+      .flow-row {
+        position: relative;
+        min-height: 70px;
+        padding: 9px 12px;
+        border-bottom: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+      }
+      .flow-row:hover { background: var(--surface-hover); }
+      .flow-row.selected { background: var(--surface-active); }
+      .flow-row.selected::after {
+        content: "";
+        position: absolute;
+        inset: 12px auto 12px 0;
+        width: 3px;
+        background: var(--accent);
+      }
+      .node {
+        display: flex;
+        align-items: center;
+        min-width: 0;
+        gap: 11px;
+      }
+      .node.level-1 { position: relative; padding-left: 28px; }
+      .node.level-1::before {
+        content: "";
+        position: absolute;
+        top: 50%;
+        left: 0;
+        width: 28px;
+        border-top: 1px solid var(--line-strong);
+      }
+      .node.level-2 { padding-left: 48px; }
+      .node-check {
+        position: relative;
+        z-index: 1;
+        flex: 0 0 auto;
+        width: 18px;
+        height: 18px;
+        border: 1px solid var(--line-strong);
+        border-radius: 4px;
+        background: var(--surface-raised);
+      }
+      .node-check.done {
+        border-color: var(--accent);
+        background: var(--accent);
+      }
+      .node-check.done::after { content: "✓"; display: block; color: #f8fbff; font-size: 11px; line-height: 16px; text-align: center; }
+      .node-copy { min-width: 0; }
+      .node-copy strong, .node-copy span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .node-copy strong { font-size: 13px; }
+      .node-copy span { margin-top: 4px; color: var(--quiet); font-size: 11px; }
+      .node-status { color: var(--muted); font-size: 11px; }
+      .node-status.doing { color: var(--accent-strong); font-weight: 650; }
+      .updated { color: var(--quiet); font: 10px var(--mono); text-align: right; }
+
+      .notes-pane, .history-pane {
+        max-width: 760px;
+        padding: 28px;
+      }
+      .notes-pane h2, .history-pane h2 { margin: 0 0 16px; font-size: 17px; }
+      .note-editor {
+        min-height: 300px;
+        width: 100%;
+        resize: vertical;
+        padding: 16px 0;
+        border: 0;
+        border-top: 1px solid var(--line);
+        border-bottom: 1px solid var(--line);
+        outline: 0;
+        background: transparent;
+        line-height: 1.75;
+      }
+      .history-row {
+        display: grid;
+        grid-template-columns: 100px minmax(0, 1fr) 76px;
+        gap: 16px;
+        min-height: 52px;
+        align-items: center;
+        border-bottom: 1px solid var(--line);
+        font-size: 12px;
+      }
+      .history-row time { color: var(--quiet); font: 10px var(--mono); }
+      .history-row b { color: var(--muted); text-align: right; }
+
+      .inspector {
+        display: flex;
+        flex-direction: column;
+        width: auto;
+        overflow: hidden;
+        background: var(--surface-raised);
+      }
+      .inspector-tabs {
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        min-height: 48px;
+        padding: 0 20px;
+        border-bottom: 1px solid var(--line);
+      }
+      .inspector-tabs button {
+        position: relative;
+        align-self: stretch;
+        padding: 0;
+        background: transparent;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .inspector-tabs button.active { color: var(--ink); font-weight: 650; }
+      .inspector-tabs button.active::after {
+        content: "";
+        position: absolute;
+        right: 0;
+        bottom: -1px;
+        left: 0;
+        height: 2px;
+        background: var(--accent);
+      }
+      .inspector-close { display: none; margin-left: auto; color: var(--quiet) !important; }
+      .inspector-content {
+        min-height: 0;
+        padding: 24px 20px 32px;
+        overflow: auto;
+      }
+      .inspector-title {
+        margin: 0;
+        font-size: 18px;
+        line-height: 1.35;
+        letter-spacing: -0.02em;
+      }
+      .inspector-meta {
+        display: flex;
+        gap: 8px;
+        margin-top: 9px;
+        color: var(--quiet);
+        font-size: 10px;
+      }
+      .field {
+        margin-top: 24px;
+      }
+      .field label {
+        display: block;
+        margin-bottom: 8px;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 650;
+      }
+      .field p {
+        margin: 0;
+        color: var(--ink);
+        font-size: 13px;
+        line-height: 1.65;
+      }
+      .record-editor {
+        min-height: 210px;
+        width: 100%;
+        resize: vertical;
+        padding: 12px;
+        border: 1px solid var(--line);
+        border-radius: var(--control-radius);
+        outline: 0;
+        background: var(--surface);
+        color: var(--ink);
+        font: 11px/1.65 var(--mono);
+      }
+      .record-editor:focus { border-color: var(--accent); }
+      .inspector-actions {
+        display: flex;
+        gap: 6px;
+        margin-top: 16px;
+      }
+      .brief-field {
+        padding: 0 0 20px;
+        margin-bottom: 20px;
+        border-bottom: 1px solid var(--line);
+      }
+      .brief-field:last-child { border-bottom: 0; }
+      .brief-field strong { display: block; margin-bottom: 8px; font-size: 12px; }
+      .brief-field p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.7; }
+
+      .toast {
+        position: fixed;
+        right: 16px;
+        bottom: 16px;
+        padding: 11px 14px;
+        border: 1px solid var(--line-strong);
+        border-radius: var(--control-radius);
+        background: var(--surface-raised);
+        box-shadow: 0 10px 28px rgba(26, 32, 42, .14);
+        font-size: 12px;
+        opacity: 0;
+        transform: translateY(6px);
+        pointer-events: none;
+        transition: opacity 140ms ease, transform 140ms ease;
+      }
+      .toast.show { opacity: 1; transform: translateY(0); }
+
+      button, .task-row, .today-row, .flow-row {
+        transition: color 130ms ease, background-color 130ms ease, border-color 130ms ease, transform 80ms ease;
+      }
+
+      @media (max-width: 1050px) {
+        .workspace { grid-template-columns: 264px minmax(0, 1fr) 308px; }
+      }
+
+      @media (max-width: 760px) {
+        body { overflow: auto; }
+        .app { display: block; min-height: 100dvh; }
+        .app-bar { position: sticky; z-index: 3; top: 0; grid-template-columns: 1fr auto; min-height: 48px; }
+        .brand { padding-left: 14px; }
+        .app-actions { padding-right: 10px; }
+        .workspace { display: block; }
+        .task-sidebar { max-height: 390px; border-right: 0; border-bottom: 1px solid var(--line); }
+        .task-main { min-height: 680px; border-right: 0; }
+        .task-header { padding: 16px; }
+        .task-header-top { display: block; }
+        .task-actions { margin-top: 13px; }
+        .task-heading h1 { font-size: 22px; }
+        .view-tabs { padding: 0 16px; }
+        .flow-toolbar { padding: 0 16px; }
+        .flow-list { padding: 0 8px 30px; }
+        .flow-list::before { left: 29px; }
+        .flow-row { grid-template-columns: minmax(0, 1fr) auto; gap: 10px; padding-block: 10px; }
+        .node-status { grid-column: 2; grid-row: 1; }
+        .updated { grid-column: 2; grid-row: 2; }
+        .inspector {
+          position: fixed;
+          z-index: 2;
+          top: 48px;
+          right: 0;
+          bottom: 0;
+          width: min(340px, 88vw);
+          border-left: 1px solid var(--line);
+          box-shadow: -14px 0 32px rgba(45, 53, 43, .12);
+        }
+        .inspector.closed { display: none; }
+        .inspector-close { display: block; }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after {
+          animation-duration: .01ms !important;
+          transition-duration: .01ms !important;
+          scroll-behavior: auto !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <header class="app-bar">
+        <div class="brand">Task Track</div>
+        <div class="app-actions">
+          <button class="quiet-button" id="themeButton" type="button">深色</button>
+          <button class="primary-button" id="newTaskButton" type="button">新任务</button>
+        </div>
+      </header>
+
+      <div class="workspace">
+        <aside class="task-sidebar" aria-label="任务导航">
+          <section class="sidebar-section">
+            <div class="section-line"><strong>今天</strong><span>2</span></div>
+            <div class="today-list">
+              <button class="today-row" type="button" data-task="firmware">
+                <span><strong>固件调试工具</strong><span>确认 ELF 地址偏移</span></span>
+                <time>01:25</time>
+              </button>
+              <button class="today-row" type="button" data-task="repository">
+                <span><strong>整理任务仓库</strong><span>确定新的分组结构</span></span>
+                <time>昨天</time>
+              </button>
+            </div>
+          </section>
+
+          <section class="repository">
+            <div class="repository-head">
+              <div class="repository-title"><strong>任务仓库</strong><button id="addGroupButton" type="button">管理分组</button></div>
+              <label class="repo-search" aria-label="搜索任务"><input id="search" type="search" placeholder="搜索任务" /></label>
+              <div class="filters" role="group" aria-label="筛选任务">
+                <button class="active" type="button" data-filter="all">全部</button>
+                <button type="button" data-filter="open">未完成</button>
+                <button type="button" data-filter="done">已完成</button>
+              </div>
+            </div>
+            <div class="task-list" id="taskList">
+              <button class="task-row active" type="button" data-task="firmware" data-status="open">
+                <span class="task-check" aria-hidden="true"></span>
+                <span class="task-copy"><strong>固件调试工具</strong><span>确认 ELF 地址偏移</span></span>
+                <span class="priority">高</span>
+              </button>
+              <button class="task-row" type="button" data-task="repository" data-status="open">
+                <span class="task-check" aria-hidden="true"></span>
+                <span class="task-copy"><strong>整理任务仓库</strong><span>确定新的分组结构</span></span>
+                <span class="priority">中</span>
+              </button>
+              <button class="task-row" type="button" data-task="release" data-status="open">
+                <span class="task-check" aria-hidden="true"></span>
+                <span class="task-copy"><strong>发布桌面版本</strong><span>核对构建与发布记录</span></span>
+                <span class="priority">中</span>
+              </button>
+              <button class="task-row done" type="button" data-task="editor" data-status="done">
+                <span class="task-check done" aria-hidden="true"></span>
+                <span class="task-copy"><strong>编辑器验证</strong><span>Milkdown 集成检查完成</span></span>
+                <span class="priority">低</span>
+              </button>
+              <div class="empty-list" id="emptyList" hidden>没有匹配的任务</div>
+            </div>
+          </section>
+
+          <footer class="sidebar-foot"><span id="taskCount">4 项任务</span><span>已保存到本机</span></footer>
+        </aside>
+
+        <main class="task-main">
+          <header class="task-header">
+            <div class="task-header-top">
+              <div class="task-heading">
+                <h1 id="taskTitle">固件调试工具</h1>
+                <p id="taskDescription">定位变量地址不一致的原因，完成可复现的校验过程。</p>
+              </div>
+              <div class="task-actions">
+                <button class="text-button" id="shareButton" type="button">分享</button>
+                <button class="primary-button" id="completeTaskButton" type="button">完成任务</button>
+              </div>
+            </div>
+            <div class="task-meta">
+              <span><b id="priorityText">高优先</b></span>
+              <span id="progressText">2 / 4 节点</span>
+              <span>更新于 <time>07/18 01:25</time></span>
+            </div>
+          </header>
+
+          <nav class="view-tabs" aria-label="任务内容">
+            <button class="active" type="button" data-view="flow">处理流</button>
+            <button type="button" data-view="notes">知识笔记</button>
+            <button type="button" data-view="history">历史</button>
+            <button class="collapse-all" id="collapseButton" type="button">收起子节点</button>
+          </nav>
+
+          <section class="main-pane" id="flowPane">
+            <div class="flow-toolbar">
+              <div><strong>执行轨迹</strong><span>4 个节点</span></div>
+              <button class="text-button" id="newNodeButton" type="button">新增节点</button>
+            </div>
+            <div class="flow-list" id="flowList">
+              <button class="flow-row selected" type="button" data-node="phenomenon">
+                <span class="node"><span class="node-check"></span><span class="node-copy"><strong>确认问题现象</strong><span>变量读取地址与运行地址不同</span></span></span>
+                <span class="node-status doing">处理中</span>
+                <time class="updated">01:10</time>
+              </button>
+              <button class="flow-row child-row" type="button" data-node="logs">
+                <span class="node level-1"><span class="node-check"></span><span class="node-copy"><strong>收集错误信息</strong><span>确认问题现象的下级节点</span></span></span>
+                <span class="node-status">未完成</span>
+                <time class="updated">01:25</time>
+              </button>
+              <button class="flow-row" type="button" data-node="mapping">
+                <span class="node"><span class="node-check"></span><span class="node-copy"><strong>验证地址映射</strong><span>比较 ELF 符号与目标运行地址</span></span></span>
+                <span class="node-status">未完成</span>
+                <time class="updated">昨天</time>
+              </button>
+              <button class="flow-row" type="button" data-node="environment">
+                <span class="node"><span class="node-check done"></span><span class="node-copy"><strong>固定复现环境</strong><span>开发板、固件和脚本版本已锁定</span></span></span>
+                <span class="node-status">已完成</span>
+                <time class="updated">周一</time>
+              </button>
+            </div>
+          </section>
+
+          <section class="main-pane notes-pane" id="notesPane" hidden>
+            <h2>知识笔记</h2>
+            <textarea class="note-editor" aria-label="任务知识笔记">## 地址映射
+
+ELF 符号地址与目标运行地址存在固定偏移，当前判断是链接脚本中的加载地址和运行地址配置不同。
+
+## 待验证
+
+- 对比 map 文件
+- 核对调试工具的地址换算
+- 记录最终结论</textarea>
+          </section>
+
+          <section class="main-pane history-pane" id="historyPane" hidden>
+            <h2>历史</h2>
+            <div class="history-row"><time>07/18 01:25</time><span>更新“收集错误信息”的记录</span><b>节点</b></div>
+            <div class="history-row"><time>07/17 22:40</time><span>将任务优先级调整为高</span><b>任务</b></div>
+            <div class="history-row"><time>07/16 18:20</time><span>创建任务并添加处理流</span><b>任务</b></div>
+          </section>
+        </main>
+
+        <aside class="inspector closed" id="inspector" aria-label="详情">
+          <nav class="inspector-tabs" aria-label="详情内容">
+            <button type="button" data-inspector-view="record">节点记录</button>
+            <button class="active" type="button" data-inspector-view="brief">任务简报</button>
+            <button class="inspector-close" id="closeInspectorButton" type="button">关闭</button>
+          </nav>
+          <section class="inspector-content" id="recordInspector" hidden>
+            <h2 class="inspector-title" id="nodeTitle">确认问题现象</h2>
+            <div class="inspector-meta"><span id="nodeStatus">处理中</span><span>更新于 01:10</span></div>
+            <div class="field">
+              <label for="nextAction">下一步</label>
+              <p id="nextAction">补充目标板日志，再对比 ELF 符号地址。</p>
+            </div>
+            <div class="field">
+              <label for="recordEditor">Markdown 记录</label>
+              <textarea class="record-editor" id="recordEditor">## 复现条件
+
+- 固件：debug build
+- 调试器：本地调试工具
+- 现象：变量读取地址与目标运行地址不一致
+
+下一步核对链接脚本中的加载地址。</textarea>
+            </div>
+            <div class="inspector-actions">
+              <button class="primary-button" id="saveRecordButton" type="button">保存记录</button>
+              <button class="text-button" id="completeNodeButton" type="button">完成节点</button>
+            </div>
+          </section>
+          <section class="inspector-content" id="briefInspector">
+            <div class="brief-field"><strong>背景 / 目标</strong><p>调试工具读取变量时出现地址不一致，需要明确 ELF 地址与目标运行地址之间的关系。</p></div>
+            <div class="brief-field"><strong>当前判断</strong><p>偏移可能来自链接脚本中的加载地址与运行地址配置。</p></div>
+            <div class="brief-field"><strong>结果 / 总结</strong><p>待完成地址映射验证后补充。</p></div>
+          </section>
+        </aside>
+      </div>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <script>
+      const root = document.documentElement;
+      const toast = document.querySelector('#toast');
+      const taskRows = [...document.querySelectorAll('.task-row')];
+      const taskData = {
+        firmware: {
+          title: '固件调试工具',
+          description: '定位变量地址不一致的原因，完成可复现的校验过程。',
+          priority: '高优先',
+          progress: '2 / 4 节点'
+        },
+        repository: {
+          title: '整理任务仓库',
+          description: '重整分组和筛选方式，让当前任务更容易被找到。',
+          priority: '中优先',
+          progress: '1 / 3 节点'
+        },
+        release: {
+          title: '发布桌面版本',
+          description: '核对构建产物、版本标签和发布记录。',
+          priority: '中优先',
+          progress: '3 / 5 节点'
+        },
+        editor: {
+          title: '编辑器验证',
+          description: 'Milkdown 集成与基础编辑能力已经完成检查。',
+          priority: '低优先',
+          progress: '4 / 4 节点'
+        }
+      };
+      const nodeData = {
+        phenomenon: {
+          title: '确认问题现象',
+          status: '处理中',
+          next: '补充目标板日志，再对比 ELF 符号地址。',
+          record: '## 复现条件\n\n- 固件：debug build\n- 调试器：本地调试工具\n- 现象：变量读取地址与目标运行地址不一致\n\n下一步核对链接脚本中的加载地址。'
+        },
+        logs: {
+          title: '收集错误信息',
+          status: '未完成',
+          next: '导出目标板日志，保留报错前后的完整上下文。',
+          record: '## 待收集\n\n- 目标板日志\n- 调试工具输出\n- 触发问题的操作顺序'
+        },
+        mapping: {
+          title: '验证地址映射',
+          status: '未完成',
+          next: '对比 map 文件和链接脚本中的地址配置。',
+          record: '## 当前判断\n\n链接脚本可能引入固定偏移，尚未完成验证。'
+        },
+        environment: {
+          title: '固定复现环境',
+          status: '已完成',
+          next: '环境已固定，无需继续处理。',
+          record: '## 环境\n\n开发板、固件版本和调试脚本已经锁定。'
+        }
+      };
+      let activeTask = 'firmware';
+      let activeNode = 'phenomenon';
+      let activeFilter = 'all';
+      let childrenCollapsed = false;
+      let toastTimer;
+
+      function showToast(message) {
+        toast.textContent = message;
+        toast.classList.add('show');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => toast.classList.remove('show'), 1600);
+      }
+
+      function selectTask(id) {
+        const data = taskData[id];
+        if (!data) return;
+        activeTask = id;
+        document.querySelectorAll('[data-task]').forEach((item) => item.classList.toggle('active', item.dataset.task === id));
+        document.querySelector('#taskTitle').textContent = data.title;
+        document.querySelector('#taskDescription').textContent = data.description;
+        document.querySelector('#priorityText').textContent = data.priority;
+        document.querySelector('#progressText').textContent = data.progress;
+        const row = document.querySelector(`.task-row[data-task="${id}"]`);
+        document.querySelector('#completeTaskButton').textContent = row?.classList.contains('done') ? '重新打开' : '完成任务';
+      }
+
+      function selectNode(id) {
+        const data = nodeData[id];
+        if (!data) return;
+        activeNode = id;
+        document.querySelectorAll('.flow-row[data-node]').forEach((row) => row.classList.toggle('selected', row.dataset.node === id));
+        document.querySelector('#nodeTitle').textContent = data.title;
+        document.querySelector('#nodeStatus').textContent = data.status;
+        document.querySelector('#nextAction').textContent = data.next;
+        document.querySelector('#recordEditor').value = data.record;
+        document.querySelector('#completeNodeButton').textContent = data.status === '已完成' ? '重新打开' : '完成节点';
+        setInspectorView('record');
+        document.querySelector('#inspector').classList.remove('closed');
+      }
+
+      function setInspectorView(view) {
+        document.querySelectorAll('[data-inspector-view]').forEach((item) => item.classList.toggle('active', item.dataset.inspectorView === view));
+        document.querySelector('#recordInspector').hidden = view !== 'record';
+        document.querySelector('#briefInspector').hidden = view !== 'brief';
+      }
+
+      function applyTaskFilter() {
+        const query = document.querySelector('#search').value.trim().toLowerCase();
+        let visible = 0;
+        taskRows.forEach((row) => {
+          const statusMatches = activeFilter === 'all' || row.dataset.status === activeFilter;
+          const queryMatches = !query || row.textContent.toLowerCase().includes(query);
+          row.hidden = !(statusMatches && queryMatches);
+          if (!row.hidden) visible += 1;
+        });
+        document.querySelector('#emptyList').hidden = visible !== 0;
+        document.querySelector('#taskCount').textContent = `${visible} 项任务`;
+      }
+
+      document.querySelectorAll('[data-task]').forEach((item) => item.addEventListener('click', () => selectTask(item.dataset.task)));
+      document.querySelectorAll('.flow-row[data-node]').forEach((row) => row.addEventListener('click', () => selectNode(row.dataset.node)));
+      document.querySelector('#search').addEventListener('input', applyTaskFilter);
+      document.querySelectorAll('[data-filter]').forEach((button) => button.addEventListener('click', () => {
+        activeFilter = button.dataset.filter;
+        document.querySelectorAll('[data-filter]').forEach((item) => item.classList.toggle('active', item === button));
+        applyTaskFilter();
+      }));
+
+      document.querySelectorAll('[data-view]').forEach((button) => button.addEventListener('click', () => {
+        const view = button.dataset.view;
+        document.querySelectorAll('[data-view]').forEach((item) => item.classList.toggle('active', item === button));
+        document.querySelector('#flowPane').hidden = view !== 'flow';
+        document.querySelector('#notesPane').hidden = view !== 'notes';
+        document.querySelector('#historyPane').hidden = view !== 'history';
+        document.querySelector('#collapseButton').hidden = view !== 'flow';
+      }));
+
+      document.querySelectorAll('[data-inspector-view]').forEach((button) => button.addEventListener('click', () => setInspectorView(button.dataset.inspectorView)));
+
+      document.querySelector('#themeButton').addEventListener('click', (event) => {
+        const dark = root.dataset.theme !== 'dark';
+        root.dataset.theme = dark ? 'dark' : 'light';
+        event.currentTarget.textContent = dark ? '浅色' : '深色';
+      });
+
+      document.querySelector('#completeTaskButton').addEventListener('click', (event) => {
+        const row = document.querySelector(`.task-row[data-task="${activeTask}"]`);
+        if (!row) return;
+        const done = row.classList.toggle('done');
+        row.dataset.status = done ? 'done' : 'open';
+        row.querySelector('.task-check').classList.toggle('done', done);
+        event.currentTarget.textContent = done ? '重新打开' : '完成任务';
+        applyTaskFilter();
+        showToast(done ? '任务已完成' : '任务已重新打开');
+      });
+
+      document.querySelector('#completeNodeButton').addEventListener('click', (event) => {
+        const data = nodeData[activeNode];
+        const row = document.querySelector(`.flow-row[data-node="${activeNode}"]`);
+        const done = data.status !== '已完成';
+        data.status = done ? '已完成' : '未完成';
+        data.next = done ? '该节点已经完成。' : '补充下一步处理计划。';
+        row.querySelector('.node-check').classList.toggle('done', done);
+        row.querySelector('.node-status').textContent = data.status;
+        document.querySelector('#nodeStatus').textContent = data.status;
+        document.querySelector('#nextAction').textContent = data.next;
+        event.currentTarget.textContent = done ? '重新打开' : '完成节点';
+        showToast(done ? '节点已完成' : '节点已重新打开');
+      });
+
+      document.querySelector('#collapseButton').addEventListener('click', (event) => {
+        childrenCollapsed = !childrenCollapsed;
+        document.querySelectorAll('.child-row').forEach((row) => row.hidden = childrenCollapsed);
+        event.currentTarget.textContent = childrenCollapsed ? '展开子节点' : '收起子节点';
+      });
+
+      document.querySelector('#saveRecordButton').addEventListener('click', () => {
+        nodeData[activeNode].record = document.querySelector('#recordEditor').value;
+        showToast('节点记录已保存');
+      });
+      document.querySelector('#closeInspectorButton').addEventListener('click', () => document.querySelector('#inspector').classList.add('closed'));
+      document.querySelector('#shareButton').addEventListener('click', () => showToast('任务摘要已复制'));
+      document.querySelector('#newTaskButton').addEventListener('click', () => showToast('已准备创建新任务'));
+      document.querySelector('#newNodeButton').addEventListener('click', () => showToast('已准备新增节点'));
+      document.querySelector('#addGroupButton').addEventListener('click', () => showToast('分组管理将在正式版本中打开'));
+
+      document.addEventListener('keydown', (event) => {
+        if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+          event.preventDefault();
+          document.querySelector('#search').focus();
+        }
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>今日任务弱强调 Demo</title>
+  <style>
+    :root { --page:#edf2ee; --ink:#20302a; --muted:#91aaa0; --line:rgba(255,255,255,.12); --focus:#0d5b49; --selected:rgba(255,255,255,.11); }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; background:var(--page); color:var(--ink); font-family:Inter,"PingFang SC","Microsoft YaHei",system-ui,sans-serif; }
+    .stage { width:min(370px,calc(100vw - 30px)); margin:36px auto; padding:16px 12px 12px; border-radius:15px; background:linear-gradient(145deg,#155f4a,#0b4235); box-shadow:0 18px 42px rgba(8,42,34,.18); }
+    .meta { display:flex; align-items:center; justify-content:space-between; padding:0 3px 4px; color:rgba(255,255,255,.68); font:10px ui-monospace,monospace; letter-spacing:.08em; }
+    .meta b { color:#fff; font:600 11px Inter,"PingFang SC","Microsoft YaHei",sans-serif; letter-spacing:0; }
+    .headline { display:flex; align-items:baseline; gap:10px; padding:6px 3px 12px; }
+    .headline strong { color:#fff; font-size:17px; font-weight:650; }
+    .headline span { margin-left:auto; color:rgba(255,255,255,.72); font-size:11px; }
+    .focus-list { display:grid; gap:3px; }
+    .focus-item { display:grid; grid-template-columns:minmax(0,1fr); align-items:center; min-height:57px; padding:9px 11px; border:1px solid transparent; border-radius:9px; background:transparent; cursor:pointer; }
+    .focus-item:hover { background:rgba(255,255,255,.06); }
+    .focus-item.selected { background:var(--selected); border-color:rgba(255,255,255,.12); }
+    .row-title { min-width:0; }
+    .row-title strong, .row-title span { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .row-title strong { color:#fff; font-size:12px; font-weight:650; }
+    .row-title span { margin-top:4px; color:rgba(255,255,255,.62); font-size:10px; }
+    .hint { width:min(370px,calc(100vw - 30px)); margin:0 auto; color:#789087; font-size:12px; line-height:1.7; }
+  </style>
+</head>
+<body>
+  <section class="stage" aria-label="今日任务">
+    <div class="meta"><span>07/17</span><b>0 项待推进</b></div>
+    <div class="headline"><strong>今日任务</strong><span>低干扰聚焦</span></div>
+    <div class="focus-list">
+      <article class="focus-item selected"><span class="row-title"><strong>整理 DB 地址转换规则</strong><span>下一步：区分内存、栈和寄存器变量</span></span></article>
+      <article class="focus-item"><span class="row-title"><strong>修复 Obsidian Git 同步</strong><span>下一步：检查远程仓库与 HTTPS 凭据</span></span></article>
+      <article class="focus-item"><span class="row-title"><strong>完成 target_sources 练习</strong><span>下一步：独立完成 CMakeLists.txt 验证</span></span></article>
+    </div>
+  </section>
+  <p class="hint">每项只保留任务标题和下一步；选中态只使用轻微底色与细边框。</p>
+  <script>
+    document.querySelectorAll('.focus-item').forEach((item) => item.addEventListener('click', () => {
+      document.querySelectorAll('.focus-item').forEach((row) => row.classList.remove('selected'));
+      item.classList.add('selected');
+    }));
+  </script>
+</body>
+</html>

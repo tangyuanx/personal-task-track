@@ -1,0 +1,830 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>任务概况与三栏简报 Demo</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --canvas: #eef2ef;
+      --surface: #fbfcfa;
+      --surface-soft: #f5f8f5;
+      --ink: #15231d;
+      --muted: #718078;
+      --faint: #98a49e;
+      --line: #d8e0db;
+      --line-strong: #c8d2cc;
+      --moss: #2f6c56;
+      --moss-deep: #245442;
+      --mint: #c6ded3;
+      --mint-soft: #e8f1ed;
+      --sand: #a77a36;
+      --sans: Inter, "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+      --mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      min-width: 320px;
+      min-height: 100vh;
+      margin: 0;
+      background:
+        radial-gradient(circle at 12% 0%, rgba(255, 255, 255, 0.92), transparent 34rem),
+        var(--canvas);
+      color: var(--ink);
+      font-family: var(--sans);
+    }
+
+    button,
+    input,
+    select,
+    textarea {
+      font: inherit;
+    }
+
+    button,
+    select {
+      cursor: pointer;
+    }
+
+    .demo-shell {
+      width: min(1500px, calc(100% - 36px));
+      margin: 0 auto;
+      padding: 28px 0 42px;
+    }
+
+    .demo-toolbar {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 24px;
+      margin: 0 6px 16px;
+    }
+
+    .demo-title span {
+      display: block;
+      margin-bottom: 7px;
+      color: var(--muted);
+      font: 650 10px/1 var(--mono);
+      letter-spacing: 0.09em;
+      text-transform: uppercase;
+    }
+
+    .demo-title h1 {
+      margin: 0;
+      font-size: clamp(19px, 2vw, 24px);
+      font-weight: 720;
+      letter-spacing: -0.025em;
+    }
+
+    .demo-switch {
+      display: inline-flex;
+      gap: 3px;
+      padding: 3px;
+      border: 1px solid rgba(37, 70, 56, 0.12);
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.62);
+      box-shadow: 0 8px 20px rgba(35, 66, 53, 0.05);
+    }
+
+    .demo-switch button {
+      min-height: 32px;
+      border: 0;
+      border-radius: 7px;
+      padding: 0 12px;
+      background: transparent;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 660;
+    }
+
+    .demo-switch button[aria-pressed="true"] {
+      background: #fff;
+      color: var(--ink);
+      box-shadow: 0 2px 8px rgba(34, 65, 52, 0.11);
+    }
+
+    .work-surface {
+      overflow: hidden;
+      border: 1px solid rgba(66, 94, 81, 0.11);
+      border-radius: 24px;
+      background: var(--surface);
+      box-shadow: 0 28px 72px rgba(38, 61, 51, 0.12);
+    }
+
+    .page-header {
+      padding: clamp(24px, 3.4vw, 42px) clamp(24px, 4.5vw, 60px) 0;
+    }
+
+    .header-topline {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+    }
+
+    .breadcrumb {
+      display: flex;
+      align-items: center;
+      min-width: 0;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .breadcrumb span:last-child {
+      overflow: hidden;
+      color: var(--faint);
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .share-button {
+      display: inline-flex;
+      min-height: 34px;
+      align-items: center;
+      gap: 7px;
+      border: 0;
+      border-radius: 8px;
+      padding: 0 5px;
+      background: transparent;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 650;
+    }
+
+    .share-button svg {
+      width: 15px;
+      height: 15px;
+      fill: none;
+      stroke: currentColor;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-width: 1.7;
+    }
+
+    .share-button:hover {
+      color: var(--ink);
+    }
+
+    .task-title {
+      display: block;
+      width: 100%;
+      min-height: 1.08em;
+      margin: clamp(18px, 2.6vw, 28px) 0 0;
+      overflow: hidden;
+      border: 0;
+      padding: 0;
+      background: transparent;
+      color: var(--ink);
+      font-size: clamp(30px, 4.2vw, 52px);
+      font-weight: 760;
+      letter-spacing: -0.055em;
+      line-height: 1.08;
+      outline: 0;
+      resize: none;
+    }
+
+    .task-title:focus {
+      box-shadow: inset 0 -2px var(--mint);
+    }
+
+    .summary-rail {
+      display: grid;
+      grid-template-columns: minmax(250px, 1.1fr) minmax(180px, 0.72fr) minmax(310px, 1.3fr);
+      margin-top: clamp(24px, 3.6vw, 38px);
+      border-top: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .summary-group {
+      display: grid;
+      grid-template-columns: minmax(86px, 0.42fr) minmax(0, 1fr);
+      min-width: 0;
+      align-items: center;
+      gap: 14px;
+      padding: 15px 22px;
+      border-left: 1px solid var(--line);
+    }
+
+    .summary-group:first-child {
+      padding-left: 0;
+      border-left: 0;
+    }
+
+    .summary-label {
+      color: var(--faint);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .state-values {
+      display: flex;
+      min-width: 0;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 7px 12px;
+    }
+
+    .state-value {
+      position: relative;
+      color: var(--ink);
+      font-size: 13px;
+      font-weight: 650;
+    }
+
+    .state-value + .state-value::before {
+      position: absolute;
+      top: 50%;
+      left: -7px;
+      width: 3px;
+      height: 3px;
+      border-radius: 50%;
+      background: var(--line-strong);
+      content: "";
+    }
+
+    .state-value.today {
+      color: var(--moss);
+    }
+
+    .state-value.priority {
+      color: var(--sand);
+    }
+
+    .progress-value {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .progress-value strong {
+      color: var(--ink);
+      font: 700 16px/1 var(--mono);
+    }
+
+    .progress-track {
+      height: 3px;
+      overflow: hidden;
+      border-radius: 99px;
+      background: #e4eae6;
+    }
+
+    .progress-track span {
+      display: block;
+      width: var(--progress, 0%);
+      height: 100%;
+      border-radius: inherit;
+      background: var(--moss);
+      transition: width 180ms ease;
+    }
+
+    .maintenance-values {
+      display: flex;
+      min-width: 0;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+    }
+
+    .updated-at {
+      min-width: 0;
+      color: var(--muted);
+      font: 12px/1.3 var(--mono);
+      white-space: nowrap;
+    }
+
+    .group-select {
+      display: inline-flex;
+      min-width: 0;
+      align-items: center;
+      gap: 7px;
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .group-select select {
+      max-width: 150px;
+      border: 0;
+      padding: 2px 18px 2px 2px;
+      background: transparent;
+      color: var(--ink);
+      outline: 0;
+    }
+
+    .brief-section {
+      margin: clamp(28px, 4vw, 46px) clamp(24px, 5vw, 68px) clamp(28px, 4vw, 50px);
+      overflow: hidden;
+      border: 1px solid var(--line-strong);
+      border-radius: 18px;
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(248, 250, 248, 0.92)),
+        var(--surface-soft);
+    }
+
+    .brief-heading {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      padding: 18px 22px 16px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .brief-heading-text {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+    }
+
+    .brief-heading h2 {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 740;
+    }
+
+    .brief-heading p {
+      margin: 0;
+      color: var(--faint);
+      font-size: 11px;
+    }
+
+    .brief-count {
+      color: var(--muted);
+      font: 11px/1 var(--mono);
+      white-space: nowrap;
+    }
+
+    .brief-count strong {
+      color: var(--moss);
+      font-size: 13px;
+    }
+
+    .brief-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .brief-field {
+      position: relative;
+      display: grid;
+      min-width: 0;
+      grid-template-rows: auto auto minmax(96px, auto);
+      gap: 10px;
+      padding: 22px;
+      border-left: 1px solid var(--line);
+      cursor: text;
+    }
+
+    .brief-field:first-child {
+      border-left: 0;
+    }
+
+    .brief-step {
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      z-index: 1;
+    }
+
+    .brief-field:not(:last-child) .brief-step::after {
+      position: absolute;
+      top: 50%;
+      right: -32px;
+      left: 27px;
+      height: 1px;
+      background: var(--line);
+      content: "";
+      z-index: -1;
+    }
+
+    .step-number {
+      display: grid;
+      width: 28px;
+      height: 28px;
+      flex: 0 0 auto;
+      place-items: center;
+      border: 1px solid var(--line-strong);
+      border-radius: 50%;
+      background: var(--surface);
+      color: var(--muted);
+      font: 650 9px/1 var(--mono);
+      transition:
+        border-color 160ms ease,
+        background-color 160ms ease,
+        color 160ms ease;
+    }
+
+    .brief-name {
+      padding-right: 8px;
+      background: var(--surface);
+      color: var(--ink);
+      font-size: 13px;
+      font-weight: 710;
+    }
+
+    .brief-field[data-filled="true"] .step-number {
+      border-color: var(--moss);
+      background: var(--moss);
+      color: #fff;
+    }
+
+    .brief-helper {
+      margin: 0;
+      color: var(--faint);
+      font-size: 11px;
+      line-height: 1.45;
+    }
+
+    .brief-field textarea {
+      width: 100%;
+      min-height: 96px;
+      border: 1px solid transparent;
+      border-radius: 10px;
+      padding: 10px 11px;
+      background: rgba(237, 243, 239, 0.68);
+      color: var(--ink);
+      font-size: 13px;
+      line-height: 1.58;
+      outline: 0;
+      resize: vertical;
+      transition:
+        border-color 160ms ease,
+        background-color 160ms ease,
+        box-shadow 160ms ease;
+    }
+
+    .brief-field textarea::placeholder {
+      color: #8d9b94;
+      opacity: 1;
+    }
+
+    .brief-field:hover textarea {
+      background: rgba(232, 241, 236, 0.86);
+    }
+
+    .brief-field textarea:focus {
+      border-color: #91b7a6;
+      background: #fff;
+      box-shadow: 0 0 0 3px rgba(47, 108, 86, 0.1);
+    }
+
+    .demo-note {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      margin: 14px 8px 0;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.6;
+    }
+
+    .demo-note::before {
+      width: 16px;
+      height: 1px;
+      flex: 0 0 auto;
+      background: #9eb2a8;
+      content: "";
+    }
+
+    button:focus-visible,
+    select:focus-visible {
+      outline: 2px solid var(--moss);
+      outline-offset: 3px;
+    }
+
+    @media (max-width: 980px) {
+      .summary-rail {
+        grid-template-columns: 1fr 0.72fr;
+      }
+
+      .summary-group.maintenance {
+        grid-column: 1 / -1;
+        border-top: 1px solid var(--line);
+        border-left: 0;
+        padding-left: 0;
+      }
+    }
+
+    @media (max-width: 760px) {
+      .demo-shell {
+        width: min(100% - 22px, 1500px);
+        padding-top: 18px;
+      }
+
+      .demo-toolbar {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .work-surface {
+        border-radius: 18px;
+      }
+
+      .page-header {
+        padding-right: 20px;
+        padding-left: 20px;
+      }
+
+      .task-title {
+        letter-spacing: -0.04em;
+      }
+
+      .summary-rail {
+        grid-template-columns: 1fr;
+      }
+
+      .summary-group,
+      .summary-group:first-child,
+      .summary-group.maintenance {
+        grid-column: auto;
+        border-top: 1px solid var(--line);
+        border-left: 0;
+        padding: 13px 0;
+      }
+
+      .summary-group:first-child {
+        border-top: 0;
+      }
+
+      .brief-section {
+        margin-right: 20px;
+        margin-left: 20px;
+      }
+
+      .brief-heading {
+        align-items: flex-start;
+      }
+
+      .brief-heading-text {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      .brief-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .brief-field,
+      .brief-field:first-child {
+        grid-template-columns: 34px minmax(0, 1fr);
+        grid-template-rows: auto auto minmax(92px, auto);
+        padding: 18px;
+        border-top: 1px solid var(--line);
+        border-left: 0;
+      }
+
+      .brief-field:first-child {
+        border-top: 0;
+      }
+
+      .brief-step {
+        display: contents;
+      }
+
+      .step-number {
+        grid-row: 1 / 4;
+        align-self: start;
+      }
+
+      .brief-name {
+        grid-column: 2;
+      }
+
+      .brief-helper,
+      .brief-field textarea {
+        grid-column: 2;
+      }
+
+      .brief-field:not(:last-child)::after {
+        position: absolute;
+        top: 46px;
+        bottom: -19px;
+        left: 31px;
+        width: 1px;
+        background: var(--line);
+        content: "";
+      }
+
+      .brief-field:not(:last-child) .brief-step::after {
+        display: none;
+      }
+    }
+
+    @media (max-width: 430px) {
+      .maintenance-values {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .summary-group {
+        grid-template-columns: 78px minmax(0, 1fr);
+      }
+
+      .brief-heading p {
+        display: none;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *,
+      *::before,
+      *::after {
+        scroll-behavior: auto !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="demo-shell">
+    <header class="demo-toolbar">
+      <div class="demo-title">
+        <span>Task Overview / Brief Study</span>
+        <h1>让任务概况和推理记录各自成组</h1>
+      </div>
+      <div class="demo-switch" role="group" aria-label="简报演示状态">
+        <button type="button" data-demo-state="empty" aria-pressed="true">空状态</button>
+        <button type="button" data-demo-state="filled" aria-pressed="false">填写示例</button>
+      </div>
+    </header>
+
+    <section class="work-surface" aria-label="任务工作台 Demo">
+      <header class="page-header">
+        <div class="header-topline">
+          <nav class="breadcrumb" aria-label="当前位置">
+            <span>工作台</span>
+            <span aria-hidden="true">/</span>
+            <span>待实现功能</span>
+          </nav>
+          <button class="share-button" type="button" aria-label="分享任务">
+            <svg viewBox="0 0 20 20" aria-hidden="true">
+              <path d="M10 13V3m0 0 4 4m-4-4L6 7"></path>
+              <path d="M4 10v5.5A1.5 1.5 0 0 0 5.5 17h9a1.5 1.5 0 0 0 1.5-1.5V10"></path>
+            </svg>
+            分享
+          </button>
+        </div>
+
+        <textarea
+          class="task-title"
+          aria-label="任务标题"
+          rows="1"
+        >左上右上角置顶显示今日任务</textarea>
+
+        <section class="summary-rail" aria-label="任务概况">
+          <div class="summary-group">
+            <span class="summary-label">任务状态</span>
+            <div class="state-values">
+              <span class="state-value today">Today</span>
+              <span class="state-value priority">中优先</span>
+              <span class="state-value">处理中</span>
+            </div>
+          </div>
+          <div class="summary-group">
+            <span class="summary-label">处理进度</span>
+            <div class="progress-value">
+              <strong>0 / 0</strong>
+              <span class="progress-track" aria-label="节点完成进度 0%">
+                <span></span>
+              </span>
+            </div>
+          </div>
+          <div class="summary-group maintenance">
+            <span class="summary-label">最近维护</span>
+            <div class="maintenance-values">
+              <time class="updated-at" datetime="2026-07-17T00:41">07/17&nbsp;&nbsp;00:41</time>
+              <label class="group-select">
+                分组
+                <select aria-label="任务分组">
+                  <option selected>待实现功能</option>
+                  <option>进行中</option>
+                  <option>已完成</option>
+                </select>
+              </label>
+            </div>
+          </div>
+        </section>
+      </header>
+
+      <section class="brief-section" aria-label="任务简报">
+        <header class="brief-heading">
+          <div class="brief-heading-text">
+            <h2>任务简报</h2>
+            <p>背景 → 判断 → 结论，记录任务从问题到结果的路径</p>
+          </div>
+          <span class="brief-count"><strong>0</strong> / 3 已填写</span>
+        </header>
+
+        <div class="brief-grid">
+          <label class="brief-field" data-field="background" data-filled="false">
+            <span class="brief-step">
+              <span class="step-number">01</span>
+              <span class="brief-name">背景 / 目标</span>
+            </span>
+            <span class="brief-helper">任务为什么存在，最终希望达到什么状态</span>
+            <textarea
+              aria-label="背景 / 目标"
+              placeholder="例如：进入工作台后，希望无需查找就能看到今日要推进的任务。"
+            ></textarea>
+          </label>
+
+          <label class="brief-field" data-field="hypothesis" data-filled="false">
+            <span class="brief-step">
+              <span class="step-number">02</span>
+              <span class="brief-name">当前判断 / 进展</span>
+            </span>
+            <span class="brief-helper">已经确认什么、卡在哪里、下一步准备怎么做</span>
+            <textarea
+              aria-label="当前判断 / 进展"
+              placeholder="例如：今日任务已集中展示，正在调整选中态和任务头部的信息层级。"
+            ></textarea>
+          </label>
+
+          <label class="brief-field" data-field="conclusion" data-filled="false">
+            <span class="brief-step">
+              <span class="step-number">03</span>
+              <span class="brief-name">结果 / 总结</span>
+            </span>
+            <span class="brief-helper">记录阶段成果、最终结论或后续需要延续的事项</span>
+            <textarea
+              aria-label="结果 / 总结"
+              placeholder="任务完成后，在这里留下结果和仍需跟进的事项。"
+            ></textarea>
+          </label>
+        </div>
+      </section>
+    </section>
+
+    <p class="demo-note">
+      Demo 保留现有三个编辑字段；点击即可输入，填写数量会同步更新。正式落地时继续沿用应用自动保存。
+    </p>
+  </main>
+
+  <script>
+    const fields = [...document.querySelectorAll(".brief-field")];
+    const textareas = fields.map((field) => field.querySelector("textarea"));
+    const count = document.querySelector(".brief-count strong");
+    const stateButtons = [...document.querySelectorAll("[data-demo-state]")];
+    const examples = {
+      background: "进入工作台后，希望无需查找就能看到今日需要推进的任务。",
+      hypothesis: "今日任务已经集中在左侧，正在收敛选中态和任务详情头部的信息层级。",
+      conclusion: "保留紧凑任务流，只强化今日入口；确认后再落入生产样式。"
+    };
+
+    const taskTitle = document.querySelector(".task-title");
+
+    function resizeTaskTitle() {
+      taskTitle.style.height = "auto";
+      taskTitle.style.height = `${taskTitle.scrollHeight}px`;
+    }
+
+    function updateBriefState() {
+      let filled = 0;
+      fields.forEach((field) => {
+        const hasContent = field.querySelector("textarea").value.trim().length > 0;
+        field.dataset.filled = String(hasContent);
+        if (hasContent) filled += 1;
+      });
+      count.textContent = String(filled);
+    }
+
+    function setDemoState(state) {
+      fields.forEach((field) => {
+        const textarea = field.querySelector("textarea");
+        textarea.value = state === "filled" ? examples[field.dataset.field] : "";
+      });
+      stateButtons.forEach((button) => {
+        button.setAttribute("aria-pressed", String(button.dataset.demoState === state));
+      });
+      updateBriefState();
+    }
+
+    textareas.forEach((textarea) => {
+      textarea.addEventListener("input", () => {
+        stateButtons.forEach((button) => button.setAttribute("aria-pressed", "false"));
+        updateBriefState();
+      });
+    });
+
+    stateButtons.forEach((button) => {
+      button.addEventListener("click", () => setDemoState(button.dataset.demoState));
+    });
+
+    taskTitle.addEventListener("input", resizeTaskTitle);
+    window.addEventListener("resize", resizeTaskTitle);
+    resizeTaskTitle();
+  </script>
+</body>
+</html>

@@ -1,0 +1,2518 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="light dark" />
+  <title>Personal Task Track · Route Desk Demo</title>
+  <style>
+    @font-face {
+      font-family: "Track Inter";
+      src: url("../../app/renderer/src/assets/fonts/InterVariable.woff2") format("woff2");
+      font-display: swap;
+      font-weight: 100 900;
+    }
+
+    @font-face {
+      font-family: "Track CJK";
+      src: url("../../app/renderer/src/assets/fonts/NotoSansCJKsc-Regular.otf") format("opentype");
+      font-display: swap;
+      font-weight: 400;
+    }
+
+    @font-face {
+      font-family: "Track CJK";
+      src: url("../../app/renderer/src/assets/fonts/NotoSansCJKsc-Bold.otf") format("opentype");
+      font-display: swap;
+      font-weight: 700;
+    }
+
+    :root {
+      color-scheme: light;
+      --paper: #f7f8f5;
+      --paper-raised: #ffffff;
+      --mist: #e9ede8;
+      --mist-strong: #dfe5df;
+      --ink: #17221c;
+      --ink-soft: #344139;
+      --muted: #68756d;
+      --faint: #8d9891;
+      --line: #d7ddd6;
+      --line-strong: #c4cec6;
+      --spruce: #1e4d3b;
+      --spruce-2: #2f6851;
+      --spruce-soft: #dfece5;
+      --moss: #8fb9a2;
+      --amber: #a66d27;
+      --amber-soft: #f2e8d7;
+      --error: #a64b46;
+      --shadow: 0 16px 44px rgba(31, 51, 41, 0.1);
+      --focus-panel: #1e4d3b;
+      --focus-text: #f6fbf8;
+      --focus-muted: #bdd0c5;
+      --sans: "Track Inter", "Track CJK", Inter, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+      --mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      --ease: 180ms cubic-bezier(.2, .8, .2, 1);
+    }
+
+    [data-theme="mist-blue"] {
+      color-scheme: light;
+      --paper: #f5f7f8;
+      --paper-raised: #ffffff;
+      --mist: #e7ecef;
+      --mist-strong: #dbe3e8;
+      --ink: #17232a;
+      --ink-soft: #34454f;
+      --muted: #63747e;
+      --faint: #88979f;
+      --line: #d3dde2;
+      --line-strong: #c0cdd4;
+      --spruce: #294e5f;
+      --spruce-2: #3d697b;
+      --spruce-soft: #dde9ee;
+      --moss: #8faebb;
+      --amber: #9a6a2f;
+      --amber-soft: #f1e8da;
+      --error: #a64b46;
+      --focus-panel: #294e5f;
+      --focus-text: #f7fbfd;
+      --focus-muted: #c6d8e0;
+      --shadow: 0 16px 44px rgba(36, 59, 70, 0.1);
+    }
+
+    [data-theme="graphite"] {
+      color-scheme: light;
+      --paper: #f6f6f4;
+      --paper-raised: #ffffff;
+      --mist: #e9e9e6;
+      --mist-strong: #dfdfdb;
+      --ink: #20231f;
+      --ink-soft: #41463f;
+      --muted: #666c65;
+      --faint: #929790;
+      --line: #d9dbd6;
+      --line-strong: #c8cbc5;
+      --spruce: #454c46;
+      --spruce-2: #5e675f;
+      --spruce-soft: #e3e6e2;
+      --moss: #9da9a0;
+      --amber: #98702e;
+      --amber-soft: #f0e8da;
+      --error: #9f514c;
+      --focus-panel: #343b36;
+      --focus-text: #f8faf8;
+      --focus-muted: #cbd1cc;
+      --shadow: 0 16px 44px rgba(38, 42, 38, 0.1);
+    }
+
+    [data-theme="night"] {
+      color-scheme: dark;
+      --paper: #151a17;
+      --paper-raised: #1b211d;
+      --mist: #111613;
+      --mist-strong: #222a25;
+      --ink: #eef3ef;
+      --ink-soft: #c8d2cb;
+      --muted: #98a49c;
+      --faint: #748078;
+      --line: #303a33;
+      --line-strong: #3d4941;
+      --spruce: #9bc9af;
+      --spruce-2: #b8dcc8;
+      --spruce-soft: #25392f;
+      --moss: #76aa8c;
+      --amber: #d3a45f;
+      --amber-soft: #3b3020;
+      --error: #d88982;
+      --shadow: 0 18px 50px rgba(0, 0, 0, 0.26);
+      --focus-panel: #17362b;
+      --focus-text: #f4faf6;
+      --focus-muted: #b7cdc1;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      min-width: 320px;
+      background: var(--mist);
+    }
+
+    body {
+      min-width: 320px;
+      min-height: 100vh;
+      margin: 0;
+      overflow: hidden;
+      background: var(--mist);
+      color: var(--ink);
+      font-family: var(--sans);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    button,
+    input,
+    select,
+    textarea {
+      font: inherit;
+    }
+
+    button,
+    select {
+      cursor: pointer;
+    }
+
+    button,
+    input,
+    select,
+    textarea {
+      color: inherit;
+    }
+
+    button:focus-visible,
+    input:focus-visible,
+    select:focus-visible,
+    textarea:focus-visible,
+    [tabindex]:focus-visible {
+      outline: 2px solid var(--spruce-2);
+      outline-offset: 2px;
+    }
+
+    .skip-link {
+      position: fixed;
+      z-index: 100;
+      top: 8px;
+      left: 8px;
+      translate: 0 -160%;
+      border-radius: 6px;
+      padding: 9px 12px;
+      background: var(--ink);
+      color: var(--paper);
+      font-weight: 700;
+      transition: translate var(--ease);
+    }
+
+    .skip-link:focus {
+      translate: 0;
+    }
+
+    .icon {
+      width: 17px;
+      height: 17px;
+      flex: 0 0 auto;
+      fill: none;
+      stroke: currentColor;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-width: 1.7;
+    }
+
+    .app-shell {
+      display: grid;
+      grid-template-columns: 360px minmax(0, 1fr);
+      width: 100vw;
+      height: 100dvh;
+      overflow: hidden;
+      background: var(--paper);
+    }
+
+    .sidebar {
+      display: flex;
+      min-width: 0;
+      min-height: 0;
+      flex-direction: column;
+      border-right: 1px solid var(--line-strong);
+      background: var(--mist);
+    }
+
+    .sidebar-top {
+      padding: 17px 17px 0;
+    }
+
+    .brand-row,
+    .section-heading,
+    .repo-toolbar,
+    .sidebar-footer,
+    .workspace-toolbar,
+    .task-meta,
+    .flow-title-row,
+    .modal-heading {
+      display: flex;
+      align-items: center;
+    }
+
+    .brand-row {
+      min-height: 42px;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .brand {
+      display: flex;
+      min-width: 0;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .brand-mark {
+      position: relative;
+      display: grid;
+      width: 30px;
+      height: 30px;
+      flex: 0 0 auto;
+      place-items: center;
+      border-radius: 8px;
+      background: var(--spruce);
+      color: var(--paper-raised);
+    }
+
+    [data-theme="night"] .brand-mark {
+      background: #d7e8de;
+      color: #173a2c;
+    }
+
+    .brand-mark::before,
+    .brand-mark::after {
+      position: absolute;
+      content: "";
+    }
+
+    .brand-mark::before {
+      width: 3px;
+      height: 15px;
+      border-radius: 4px;
+      background: currentColor;
+    }
+
+    .brand-mark::after {
+      width: 10px;
+      height: 10px;
+      border: 2px solid currentColor;
+      border-left: 0;
+      border-bottom: 0;
+      border-radius: 0 5px 0 0;
+      translate: 3px -4px;
+    }
+
+    .brand-copy strong {
+      display: block;
+      font-size: 16px;
+      font-weight: 780;
+      letter-spacing: -0.035em;
+      line-height: 1.2;
+    }
+
+    .brand-copy span {
+      display: block;
+      margin-top: 2px;
+      color: var(--muted);
+      font-size: 10px;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .demo-badge {
+      border: 1px solid var(--line-strong);
+      border-radius: 5px;
+      padding: 3px 6px;
+      background: var(--paper);
+      color: var(--muted);
+      font: 700 9px/1.4 var(--mono);
+      letter-spacing: .08em;
+    }
+
+    .section-heading-tools {
+      display: flex;
+      min-width: 0;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 12px;
+    }
+
+    .search-wrap {
+      display: flex;
+      width: 142px;
+      min-height: 30px;
+      flex: 0 0 142px;
+      align-items: center;
+      gap: 7px;
+      border-bottom: 1px solid var(--line-strong);
+      padding: 0 2px;
+      background: transparent;
+      transition: border-color var(--ease), background var(--ease);
+    }
+
+    .search-wrap:focus-within {
+      border-bottom-color: var(--spruce);
+      background: color-mix(in srgb, var(--spruce) 5%, transparent);
+    }
+
+    .search-wrap .icon {
+      width: 15px;
+      height: 15px;
+      flex: 0 0 auto;
+      color: var(--muted);
+      stroke-width: 1.8;
+      pointer-events: none;
+    }
+
+    .search-input {
+      width: 100%;
+      min-width: 0;
+      min-height: 28px;
+      border: 0;
+      padding: 0;
+      background: transparent;
+      color: var(--ink);
+      font-size: 12px;
+    }
+
+    .search-input::placeholder {
+      color: var(--faint);
+    }
+
+    .search-shortcut {
+      flex: 0 0 auto;
+      color: var(--faint);
+      font: 9px/1 var(--mono);
+      white-space: nowrap;
+    }
+
+    .today-panel {
+      margin: 12px 17px 0;
+      border: 1px solid rgba(255, 255, 255, .12);
+      border-radius: 12px;
+      padding: 14px;
+      background: var(--focus-panel);
+      color: var(--focus-text);
+      box-shadow: 0 10px 24px rgba(26, 62, 48, .14);
+    }
+
+    [data-theme="night"] .today-panel {
+      border-color: #406354;
+      background: #17362b;
+      box-shadow: none;
+    }
+
+    .today-title-row {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .today-title-row h2 {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 760;
+      letter-spacing: -.035em;
+    }
+
+    .today-title-row time {
+      color: var(--focus-muted);
+      font-family: var(--mono);
+      font-size: 10px;
+      white-space: nowrap;
+    }
+
+    .today-list {
+      display: grid;
+      gap: 5px;
+      margin-top: 11px;
+    }
+
+    .today-item {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      min-height: 49px;
+      align-items: center;
+      width: 100%;
+      border: 1px solid transparent;
+      border-radius: 8px;
+      padding: 7px 9px;
+      background: rgba(255, 255, 255, .055);
+      color: inherit;
+      text-align: left;
+      transition: background var(--ease), border-color var(--ease), translate var(--ease);
+    }
+
+    .today-item:hover {
+      background: rgba(255, 255, 255, .1);
+    }
+
+    .today-item[aria-current="true"] {
+      border-color: rgba(255, 255, 255, .26);
+      background: rgba(255, 255, 255, .12);
+    }
+
+    .today-item:active {
+      translate: 0 1px;
+    }
+
+    .today-item strong,
+    .today-item small {
+      display: block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .today-item strong {
+      font-size: 12px;
+      font-weight: 680;
+    }
+
+    .today-item small {
+      margin-top: 2px;
+      color: var(--focus-muted);
+      font-size: 10px;
+    }
+
+    .today-arrow {
+      display: grid;
+      width: 26px;
+      height: 26px;
+      place-items: center;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, .1);
+      color: #dceae2;
+    }
+
+    .today-arrow .icon {
+      width: 13px;
+      height: 13px;
+    }
+
+    .repository {
+      display: flex;
+      min-height: 0;
+      flex: 1 1 auto;
+      flex-direction: column;
+      padding: 13px 0 0;
+    }
+
+    .section-heading {
+      justify-content: space-between;
+      gap: 12px;
+      padding: 0 17px 8px;
+    }
+
+    .section-heading h2 {
+      margin: 0;
+      font-size: 12px;
+      font-weight: 760;
+      letter-spacing: .01em;
+    }
+
+    .section-heading span {
+      color: var(--muted);
+      font: 10px/1.4 var(--mono);
+    }
+
+    .repo-toolbar {
+      min-height: 38px;
+      justify-content: space-between;
+      gap: 10px;
+      border-block: 1px solid var(--line);
+      padding: 0 12px 0 17px;
+      background: color-mix(in srgb, var(--paper) 58%, transparent);
+    }
+
+    .status-filters {
+      display: flex;
+      align-self: stretch;
+      gap: 14px;
+    }
+
+    .status-filter {
+      position: relative;
+      min-height: 37px;
+      border: 0;
+      padding: 0;
+      background: transparent;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .status-filter::after {
+      position: absolute;
+      right: 0;
+      bottom: -1px;
+      left: 0;
+      height: 2px;
+      border-radius: 2px 2px 0 0;
+      background: var(--spruce);
+      content: "";
+      scale: 0 1;
+      transition: scale var(--ease);
+    }
+
+    .status-filter[aria-selected="true"] {
+      color: var(--ink);
+      font-weight: 700;
+    }
+
+    .status-filter[aria-selected="true"]::after {
+      scale: 1;
+    }
+
+    .priority-select {
+      min-height: 30px;
+      max-width: 86px;
+      border: 0;
+      padding: 0 18px 0 4px;
+      background: transparent;
+      color: var(--muted);
+      font-size: 10px;
+    }
+
+    .task-list {
+      min-height: 0;
+      overflow-y: auto;
+      scrollbar-color: var(--line-strong) transparent;
+      scrollbar-width: thin;
+    }
+
+    .task-row {
+      position: relative;
+      display: grid;
+      grid-template-columns: 42px minmax(0, 1fr) 62px;
+      min-height: 60px;
+      align-items: center;
+      width: 100%;
+      border: 0;
+      border-bottom: 1px solid var(--line);
+      padding: 0 12px 0 7px;
+      background: transparent;
+      color: var(--ink);
+      text-align: left;
+      transition: background var(--ease);
+    }
+
+    .task-row::before {
+      position: absolute;
+      top: 9px;
+      bottom: 9px;
+      left: 0;
+      width: 3px;
+      border-radius: 0 4px 4px 0;
+      background: var(--spruce);
+      content: "";
+      opacity: 0;
+      transition: opacity var(--ease);
+    }
+
+    .task-row:hover {
+      background: color-mix(in srgb, var(--spruce-soft) 46%, transparent);
+    }
+
+    .task-row[aria-current="true"] {
+      background: var(--spruce-soft);
+    }
+
+    .task-row[aria-current="true"]::before {
+      opacity: 1;
+    }
+
+    .task-check-hit {
+      display: grid;
+      width: 42px;
+      height: 44px;
+      place-items: center;
+      border: 0;
+      padding: 0;
+      background: transparent;
+    }
+
+    .task-check-visual {
+      display: grid;
+      width: 16px;
+      height: 16px;
+      place-items: center;
+      border: 1px solid var(--line-strong);
+      border-radius: 5px;
+      background: var(--paper-raised);
+      color: transparent;
+      font-size: 10px;
+      line-height: 1;
+    }
+
+    .task-check-hit[aria-pressed="true"] .task-check-visual {
+      border-color: var(--spruce-2);
+      background: var(--spruce-2);
+      color: var(--paper-raised);
+    }
+
+    .task-copy {
+      min-width: 0;
+      padding: 8px 0;
+    }
+
+    .task-name,
+    .task-next {
+      display: block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .task-name {
+      font-size: 12px;
+      font-weight: 680;
+    }
+
+    .task-next {
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 10px;
+    }
+
+    .task-row[data-done="true"] .task-name {
+      color: var(--muted);
+      text-decoration: line-through;
+      text-decoration-thickness: 1px;
+    }
+
+    .task-row-meta {
+      display: grid;
+      justify-items: end;
+      gap: 4px;
+      color: var(--muted);
+      font-size: 9px;
+    }
+
+    .priority-word {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-weight: 650;
+    }
+
+    .priority-word::before {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: currentColor;
+      content: "";
+    }
+
+    .priority-word.high { color: var(--error); }
+    .priority-word.medium { color: var(--amber); }
+    .priority-word.low { color: var(--muted); }
+
+    .task-row time {
+      font-family: var(--mono);
+    }
+
+    .repo-empty {
+      margin: 0;
+      padding: 24px 17px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .group-section {
+      border-top: 1px solid var(--line-strong);
+      padding: 10px 12px 9px 17px;
+    }
+
+    .group-label {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 7px;
+      color: var(--muted);
+      font-size: 9px;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .group-list {
+      display: flex;
+      gap: 5px;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+
+    .group-list::-webkit-scrollbar {
+      display: none;
+    }
+
+    .group-button {
+      min-height: 32px;
+      flex: 0 0 auto;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 0 9px;
+      background: var(--paper);
+      color: var(--muted);
+      font-size: 10px;
+      transition: border-color var(--ease), background var(--ease), color var(--ease);
+    }
+
+    .group-button[aria-pressed="true"] {
+      border-color: var(--line-strong);
+      background: var(--paper-raised);
+      color: var(--ink);
+      font-weight: 700;
+    }
+
+    .sidebar-footer {
+      position: relative;
+      min-height: 49px;
+      gap: 3px;
+      border-top: 1px solid var(--line-strong);
+      padding: 4px 10px;
+    }
+
+    .utility-button {
+      display: inline-flex;
+      min-width: 40px;
+      min-height: 40px;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      border: 0;
+      border-radius: 7px;
+      padding: 0 10px;
+      background: transparent;
+      color: var(--muted);
+      font-size: 10px;
+      transition: background var(--ease), color var(--ease);
+    }
+
+    .utility-button:hover {
+      background: var(--paper-raised);
+      color: var(--ink);
+    }
+
+    .utility-button.review {
+      margin-left: auto;
+    }
+
+    .theme-control {
+      position: relative;
+    }
+
+    .theme-popover,
+    .calendar-popover {
+      position: absolute;
+      z-index: 30;
+      border: 1px solid var(--line-strong);
+      border-radius: 10px;
+      background: var(--paper-raised);
+      box-shadow: var(--shadow);
+    }
+
+    .theme-popover[hidden],
+    .calendar-popover[hidden] {
+      display: none;
+    }
+
+    .theme-popover {
+      bottom: 45px;
+      left: 0;
+      width: 188px;
+      padding: 7px;
+    }
+
+    .theme-option {
+      display: flex;
+      width: 100%;
+      min-height: 38px;
+      align-items: center;
+      gap: 9px;
+      border: 0;
+      border-radius: 6px;
+      padding: 0 8px;
+      background: transparent;
+      color: var(--muted);
+      font-size: 11px;
+      text-align: left;
+    }
+
+    .theme-option:hover,
+    .theme-option[aria-pressed="true"] {
+      background: var(--mist);
+      color: var(--ink);
+    }
+
+    .theme-option[aria-pressed="true"] {
+      font-weight: 700;
+    }
+
+    .theme-swatch {
+      width: 17px;
+      height: 17px;
+      flex: 0 0 auto;
+      border: 3px solid var(--swatch-bg);
+      border-radius: 50%;
+      background: var(--swatch-accent);
+      box-shadow: 0 0 0 1px var(--line-strong);
+    }
+
+    .workspace {
+      min-width: 0;
+      min-height: 0;
+      overflow: auto;
+      background: var(--paper);
+      scrollbar-color: var(--line-strong) transparent;
+      scrollbar-width: thin;
+    }
+
+    .workspace-inner {
+      width: 100%;
+      min-height: 100%;
+      margin: 0;
+      padding: 20px clamp(22px, 3.2vw, 46px) 34px;
+    }
+
+    .workspace-toolbar {
+      min-height: 40px;
+      justify-content: space-between;
+      gap: 18px;
+    }
+
+    .breadcrumb {
+      display: flex;
+      min-width: 0;
+      align-items: center;
+      gap: 7px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .breadcrumb span:last-child {
+      overflow: hidden;
+      color: var(--faint);
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .toolbar-actions {
+      display: flex;
+      gap: 2px;
+    }
+
+    .calendar-control {
+      position: relative;
+    }
+
+    .calendar-popover {
+      top: 44px;
+      right: 0;
+      width: min(308px, calc(100vw - 28px));
+      padding: 12px;
+    }
+
+    .calendar-head {
+      display: flex;
+      min-height: 36px;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .calendar-head strong {
+      font-size: 12px;
+    }
+
+    .calendar-nav {
+      display: grid;
+      width: 36px;
+      height: 36px;
+      place-items: center;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--muted);
+    }
+
+    .calendar-nav:hover {
+      background: var(--mist);
+      color: var(--ink);
+    }
+
+    .calendar-weekdays,
+    .calendar-grid {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+      gap: 2px;
+    }
+
+    .calendar-weekdays {
+      margin-top: 6px;
+      color: var(--faint);
+      font: 9px/28px var(--mono);
+      text-align: center;
+    }
+
+    .calendar-day,
+    .calendar-blank {
+      position: relative;
+      min-width: 0;
+      height: 34px;
+    }
+
+    .calendar-day {
+      border: 0;
+      border-radius: 7px;
+      background: transparent;
+      color: var(--ink-soft);
+      font: 10px var(--mono);
+    }
+
+    .calendar-day:hover {
+      background: var(--mist);
+    }
+
+    .calendar-day[aria-selected="true"] {
+      background: var(--spruce);
+      color: #fff;
+      font-weight: 700;
+    }
+
+    [data-theme="night"] .calendar-day[aria-selected="true"] {
+      color: #173a2c;
+    }
+
+    .calendar-day.has-task::after {
+      position: absolute;
+      right: 50%;
+      bottom: 3px;
+      width: 3px;
+      height: 3px;
+      border-radius: 50%;
+      background: var(--amber);
+      content: "";
+      translate: 50% 0;
+    }
+
+    .calendar-day[aria-selected="true"]::after {
+      background: currentColor;
+    }
+
+    .calendar-agenda {
+      margin-top: 10px;
+      border-top: 1px solid var(--line);
+      padding-top: 10px;
+    }
+
+    .calendar-agenda-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 5px;
+    }
+
+    .calendar-agenda-head strong {
+      font-size: 11px;
+    }
+
+    .calendar-agenda-head span {
+      color: var(--faint);
+      font-size: 9px;
+    }
+
+    .calendar-task {
+      display: flex;
+      width: 100%;
+      min-height: 40px;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      border: 0;
+      border-radius: 6px;
+      padding: 0 8px;
+      background: transparent;
+      color: var(--ink-soft);
+      font-size: 10px;
+      text-align: left;
+    }
+
+    .calendar-task:hover {
+      background: var(--mist);
+    }
+
+    .calendar-task time {
+      color: var(--faint);
+      font: 9px var(--mono);
+    }
+
+    .calendar-empty {
+      margin: 0;
+      padding: 7px 8px;
+      color: var(--muted);
+      font-size: 10px;
+    }
+
+    .toolbar-button {
+      display: inline-flex;
+      min-width: 40px;
+      min-height: 40px;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      border: 0;
+      border-radius: 7px;
+      padding: 0 9px;
+      background: transparent;
+      color: var(--muted);
+      font-size: 10px;
+      transition: background var(--ease), color var(--ease);
+    }
+
+    .toolbar-button:hover {
+      background: var(--mist);
+      color: var(--ink);
+    }
+
+    .task-header {
+      padding: 14px 0 18px;
+    }
+
+    .task-title {
+      max-width: none;
+      margin: 0;
+      font-size: clamp(24px, 3vw, 34px);
+      font-weight: 760;
+      letter-spacing: -.045em;
+      line-height: 1.15;
+    }
+
+    .task-meta {
+      min-width: 0;
+      flex-wrap: wrap;
+      gap: 7px 13px;
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .meta-state {
+      position: relative;
+      color: var(--ink-soft);
+      font-weight: 640;
+    }
+
+    .meta-state + .meta-state::before {
+      position: absolute;
+      top: 50%;
+      left: -8px;
+      width: 3px;
+      height: 3px;
+      border-radius: 50%;
+      background: var(--line-strong);
+      content: "";
+    }
+
+    .meta-state.today { color: var(--spruce-2); }
+    .meta-state.priority { color: var(--amber); }
+
+    .meta-separator {
+      width: 1px;
+      height: 13px;
+      background: var(--line-strong);
+    }
+
+    .progress-count {
+      color: var(--ink-soft);
+      font: 700 10px/1 var(--mono);
+    }
+
+    .brief-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      border-block: 1px solid var(--line-strong);
+      background: var(--paper-raised);
+    }
+
+    .brief-field {
+      min-width: 0;
+      padding: 15px 17px 17px;
+    }
+
+    .brief-field + .brief-field {
+      border-left: 1px solid var(--line);
+    }
+
+    .brief-label {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 8px;
+      color: var(--muted);
+      font-size: 9px;
+      font-weight: 720;
+      letter-spacing: .09em;
+      text-transform: uppercase;
+    }
+
+    .brief-label time {
+      color: var(--faint);
+      font: 9px/1 var(--mono);
+      letter-spacing: 0;
+    }
+
+    .brief-field textarea {
+      width: 100%;
+      height: 58px;
+      border: 0;
+      padding: 0;
+      resize: none;
+      background: transparent;
+      color: var(--ink-soft);
+      font-size: 12px;
+      line-height: 1.7;
+    }
+
+    .brief-field textarea:hover {
+      color: var(--ink);
+    }
+
+    .tab-bar {
+      display: flex;
+      min-height: 51px;
+      align-items: stretch;
+      gap: 23px;
+      border-bottom: 1px solid var(--line-strong);
+    }
+
+    .tab-button {
+      position: relative;
+      border: 0;
+      padding: 0;
+      background: transparent;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 620;
+    }
+
+    .tab-button::after {
+      position: absolute;
+      right: 0;
+      bottom: -1px;
+      left: 0;
+      height: 2px;
+      background: var(--spruce);
+      content: "";
+      scale: 0 1;
+      transition: scale var(--ease);
+    }
+
+    .tab-button[aria-selected="true"] {
+      color: var(--ink);
+      font-weight: 740;
+    }
+
+    .tab-button[aria-selected="true"]::after {
+      scale: 1;
+    }
+
+    .pane[hidden] {
+      display: none;
+    }
+
+    .flow-pane {
+      padding-top: 14px;
+    }
+
+    .flow-title-row {
+      min-height: 52px;
+      justify-content: space-between;
+      gap: 18px;
+    }
+
+    .flow-title-copy h2 {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 760;
+      letter-spacing: -.02em;
+    }
+
+    .flow-summary {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      color: var(--muted);
+      font: 10px/1 var(--mono);
+      white-space: nowrap;
+    }
+
+    .summary-track {
+      width: 64px;
+      height: 4px;
+      overflow: hidden;
+      border-radius: 99px;
+      background: var(--mist-strong);
+    }
+
+    .summary-track span {
+      display: block;
+      width: 43%;
+      height: 100%;
+      border-radius: inherit;
+      background: var(--spruce-2);
+      transition: width var(--ease);
+    }
+
+    .flow-table {
+      border-top: 1px solid var(--line-strong);
+    }
+
+    .flow-head,
+    .flow-row {
+      display: grid;
+      grid-template-columns: 46px minmax(250px, 1.25fr) minmax(190px, .85fr) 92px 88px;
+      column-gap: 0;
+    }
+
+    .flow-head {
+      min-height: 36px;
+      align-items: center;
+      border-bottom: 1px solid var(--line);
+      color: var(--faint);
+      font-size: 9px;
+      font-weight: 720;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .flow-head span {
+      padding: 0 12px;
+    }
+
+    .flow-head span:first-child {
+      padding: 0;
+    }
+
+    .flow-head span:nth-child(3) {
+      border-left: 1px solid var(--line);
+    }
+
+    .flow-row {
+      position: relative;
+      min-height: 61px;
+      align-items: stretch;
+      border-bottom: 1px solid var(--line);
+      background: transparent;
+      transition: background var(--ease);
+    }
+
+    .flow-row:hover {
+      background: color-mix(in srgb, var(--spruce-soft) 34%, transparent);
+    }
+
+    .flow-row.root {
+      background: color-mix(in srgb, var(--mist) 35%, var(--paper-raised));
+    }
+
+    .flow-row.root:hover {
+      background: color-mix(in srgb, var(--spruce-soft) 54%, var(--paper-raised));
+    }
+
+    .flow-row.active {
+      background: color-mix(in srgb, var(--spruce-soft) 72%, var(--paper-raised));
+    }
+
+    .sequence-cell {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--faint);
+      font: 700 9px/1 var(--mono);
+    }
+
+    .sequence-cell::after {
+      position: absolute;
+      z-index: 0;
+      top: 0;
+      bottom: 0;
+      left: 50%;
+      width: 1px;
+      background: var(--line-strong);
+      content: "";
+    }
+
+    .flow-row:first-of-type .sequence-cell::after {
+      top: 50%;
+    }
+
+    .flow-row:last-of-type .sequence-cell::after {
+      bottom: 50%;
+    }
+
+    .checkpoint {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      width: 22px;
+      height: 22px;
+      place-items: center;
+      border: 1px solid var(--line-strong);
+      border-radius: 50%;
+      background: var(--paper-raised);
+    }
+
+    .flow-row.done .checkpoint {
+      border-color: var(--moss);
+      background: var(--spruce-soft);
+      color: var(--spruce-2);
+    }
+
+    .flow-row.active .checkpoint {
+      border-color: var(--spruce-2);
+      background: var(--spruce-2);
+      color: var(--paper-raised);
+      box-shadow: 0 0 0 4px color-mix(in srgb, var(--spruce) 14%, transparent);
+    }
+
+    .flow-row.active .checkpoint::after {
+      position: absolute;
+      right: -9px;
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: var(--spruce-2);
+      content: "";
+    }
+
+    .node-cell,
+    .record-cell,
+    .state-cell,
+    .updated-cell {
+      display: flex;
+      min-width: 0;
+      align-items: center;
+    }
+
+    .node-cell {
+      position: relative;
+      gap: 8px;
+      padding: 9px 13px 9px calc(13px + var(--depth, 0) * 24px);
+    }
+
+    .flow-row.child .node-cell::before {
+      position: absolute;
+      top: 0;
+      bottom: 50%;
+      left: calc(2px + var(--depth, 1) * 24px);
+      width: 17px;
+      border-bottom: 1px solid var(--line-strong);
+      border-left: 1px solid var(--line-strong);
+      content: "";
+    }
+
+    .collapse-button {
+      display: grid;
+      width: 32px;
+      height: 40px;
+      flex: 0 0 auto;
+      place-items: center;
+      border: 0;
+      padding: 0;
+      background: transparent;
+      color: var(--muted);
+    }
+
+    .collapse-button .icon {
+      width: 12px;
+      height: 12px;
+      transition: rotate var(--ease);
+    }
+
+    .collapse-button[aria-expanded="false"] .icon {
+      rotate: -90deg;
+    }
+
+    .collapse-spacer {
+      width: 32px;
+      flex: 0 0 auto;
+    }
+
+    .node-copy {
+      min-width: 0;
+    }
+
+    .node-copy strong,
+    .node-copy small {
+      display: block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .node-copy strong {
+      color: var(--ink-soft);
+      font-size: 12px;
+      font-weight: 670;
+    }
+
+    .root .node-copy strong {
+      color: var(--ink);
+      font-weight: 760;
+    }
+
+    .done .node-copy strong {
+      color: var(--muted);
+      text-decoration: line-through;
+      text-decoration-color: var(--moss);
+    }
+
+    .node-copy small {
+      margin-top: 2px;
+      color: var(--faint);
+      font-size: 9px;
+    }
+
+    .record-cell {
+      border-left: 1px solid var(--line);
+      padding: 8px 10px;
+    }
+
+    .record-button {
+      display: flex;
+      width: 100%;
+      min-height: 40px;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      border: 0;
+      border-radius: 6px;
+      padding: 5px 7px;
+      background: transparent;
+      color: var(--muted);
+      text-align: left;
+      transition: background var(--ease), color var(--ease);
+    }
+
+    .record-button:hover {
+      background: var(--paper-raised);
+      color: var(--ink-soft);
+    }
+
+    .record-button span {
+      overflow: hidden;
+      font-size: 10px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .record-button .icon {
+      width: 13px;
+      height: 13px;
+      flex: 0 0 auto;
+    }
+
+    .state-cell {
+      padding: 8px 9px;
+    }
+
+    .node-status {
+      width: 100%;
+      min-height: 36px;
+      border: 0;
+      padding: 0 13px 0 3px;
+      background: transparent;
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 650;
+    }
+
+    .active .node-status { color: var(--amber); }
+    .done .node-status { color: var(--spruce-2); }
+
+    .updated-cell {
+      justify-content: flex-end;
+      padding: 8px 2px 8px 8px;
+      color: var(--faint);
+      font: 9px/1.35 var(--mono);
+      white-space: nowrap;
+    }
+
+    .flow-footer {
+      display: flex;
+      min-height: 52px;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 14px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .add-node {
+      display: inline-flex;
+      min-height: 40px;
+      align-items: center;
+      gap: 7px;
+      border: 0;
+      border-radius: 7px;
+      padding: 0 10px;
+      background: transparent;
+      color: var(--spruce-2);
+      font-size: 10px;
+      font-weight: 700;
+    }
+
+    .add-node:hover {
+      background: var(--spruce-soft);
+    }
+
+    .notes-pane,
+    .history-pane {
+      padding-top: 20px;
+    }
+
+    .pane-heading {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 14px;
+    }
+
+    .pane-heading h2 {
+      margin: 0;
+      font-size: 15px;
+      letter-spacing: -.02em;
+    }
+
+    .pane-heading span {
+      color: var(--faint);
+      font: 9px/1 var(--mono);
+    }
+
+    .note-editor {
+      min-height: 360px;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      background: var(--paper-raised);
+    }
+
+    .editor-toolbar {
+      display: flex;
+      min-height: 42px;
+      align-items: center;
+      gap: 3px;
+      border-bottom: 1px solid var(--line);
+      padding: 4px 7px;
+    }
+
+    .editor-tool {
+      min-width: 34px;
+      min-height: 32px;
+      border: 0;
+      border-radius: 5px;
+      background: transparent;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .editor-tool:hover { background: var(--mist); color: var(--ink); }
+
+    .editor-content {
+      max-width: 760px;
+      padding: 24px clamp(20px, 4vw, 52px) 48px;
+      color: var(--ink-soft);
+      font-size: 13px;
+      line-height: 1.75;
+    }
+
+    .editor-content h3 {
+      margin: 0 0 10px;
+      color: var(--ink);
+      font-size: 17px;
+    }
+
+    .editor-content p { margin: 8px 0; }
+    .editor-content ul { margin: 8px 0; padding-left: 19px; }
+    .editor-content code { border-radius: 4px; padding: 2px 5px; background: var(--mist); font: 11px var(--mono); }
+
+    .history-list {
+      border-top: 1px solid var(--line-strong);
+    }
+
+    .history-item {
+      display: grid;
+      grid-template-columns: 120px 14px minmax(0, 1fr);
+      min-height: 70px;
+      border-bottom: 1px solid var(--line);
+      padding: 14px 0;
+    }
+
+    .history-item time {
+      color: var(--faint);
+      font: 9px/1.5 var(--mono);
+    }
+
+    .history-dot {
+      position: relative;
+      width: 7px;
+      height: 7px;
+      margin-top: 3px;
+      border: 1px solid var(--spruce-2);
+      border-radius: 50%;
+      background: var(--paper);
+    }
+
+    .history-copy strong,
+    .history-copy span {
+      display: block;
+    }
+
+    .history-copy strong { font-size: 12px; }
+    .history-copy span { margin-top: 3px; color: var(--muted); font-size: 11px; }
+
+    .modal-backdrop {
+      position: fixed;
+      z-index: 50;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      padding: 20px;
+      background: rgba(11, 18, 14, .42);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity var(--ease);
+    }
+
+    .modal-backdrop.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .record-modal {
+      width: min(560px, 100%);
+      border: 1px solid var(--line-strong);
+      border-radius: 12px;
+      background: var(--paper-raised);
+      box-shadow: var(--shadow);
+      translate: 0 8px;
+      transition: translate var(--ease);
+    }
+
+    .modal-backdrop.open .record-modal {
+      translate: 0;
+    }
+
+    .modal-heading {
+      min-height: 57px;
+      justify-content: space-between;
+      gap: 16px;
+      border-bottom: 1px solid var(--line);
+      padding: 0 11px 0 18px;
+    }
+
+    .modal-heading h2 {
+      margin: 0;
+      font-size: 14px;
+    }
+
+    .modal-close {
+      display: grid;
+      width: 40px;
+      height: 40px;
+      place-items: center;
+      border: 0;
+      border-radius: 7px;
+      background: transparent;
+      color: var(--muted);
+    }
+
+    .modal-close:hover { background: var(--mist); color: var(--ink); }
+
+    .modal-body {
+      padding: 17px 18px 18px;
+    }
+
+    .modal-context {
+      margin: 0 0 10px;
+      color: var(--muted);
+      font-size: 10px;
+    }
+
+    .record-textarea {
+      width: 100%;
+      min-height: 180px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px 13px;
+      resize: vertical;
+      background: var(--paper);
+      font-size: 12px;
+      line-height: 1.7;
+    }
+
+    .modal-actions {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-top: 13px;
+    }
+
+    .modal-shortcut {
+      color: var(--faint);
+      font: 9px/1 var(--mono);
+    }
+
+    .modal-buttons {
+      display: flex;
+      gap: 7px;
+    }
+
+    .modal-button {
+      min-height: 38px;
+      border: 1px solid var(--line-strong);
+      border-radius: 7px;
+      padding: 0 13px;
+      background: var(--paper);
+      font-size: 11px;
+      font-weight: 680;
+    }
+
+    .modal-button.primary {
+      border-color: var(--spruce);
+      background: var(--spruce);
+      color: #fff;
+    }
+
+    [data-theme="night"] .modal-button.primary {
+      border-color: #b8dcc8;
+      background: #b8dcc8;
+      color: #173a2c;
+    }
+
+    .toast {
+      position: fixed;
+      z-index: 40;
+      right: 18px;
+      bottom: 18px;
+      max-width: min(340px, calc(100vw - 36px));
+      border: 1px solid var(--line-strong);
+      border-radius: 8px;
+      padding: 10px 13px;
+      background: var(--ink);
+      color: var(--paper);
+      box-shadow: var(--shadow);
+      font-size: 11px;
+      opacity: 0;
+      translate: 0 8px;
+      pointer-events: none;
+      transition: opacity var(--ease), translate var(--ease);
+    }
+
+    .toast.show {
+      opacity: 1;
+      translate: 0;
+    }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+
+    @media (max-width: 1120px) {
+      .app-shell { grid-template-columns: 330px minmax(0, 1fr); }
+      .flow-head,
+      .flow-row { grid-template-columns: 42px minmax(205px, 1fr) minmax(145px, .72fr) 82px 72px; }
+      .workspace-inner { padding-inline: 24px; }
+    }
+
+    @media (max-width: 900px) {
+      body { overflow: auto; }
+      .app-shell {
+        display: block;
+        width: 100%;
+        height: auto;
+        min-height: 100dvh;
+        overflow: visible;
+      }
+      .sidebar {
+        min-height: 620px;
+        max-height: 760px;
+        border-right: 0;
+        border-bottom: 1px solid var(--line-strong);
+      }
+      .workspace { overflow: visible; }
+      .workspace-inner { min-height: 720px; }
+      .repository { min-height: 260px; }
+      .today-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 680px) {
+      .sidebar { min-height: 690px; }
+      .today-list { grid-template-columns: 1fr; }
+      .today-item:nth-child(2) { display: none; }
+      .workspace-inner { padding: 14px 14px 30px; }
+      .toolbar-button span { display: none; }
+      .task-header { padding-top: 9px; }
+      .task-title { font-size: 25px; }
+      .brief-grid { grid-template-columns: 1fr; }
+      .brief-field + .brief-field { border-top: 1px solid var(--line); border-left: 0; }
+      .brief-field textarea { height: 48px; }
+      .tab-bar { gap: 18px; overflow-x: auto; }
+      .tab-button { flex: 0 0 auto; min-height: 50px; }
+      .flow-title-row { align-items: flex-start; }
+      .flow-head { display: none; }
+      .flow-row {
+        grid-template-columns: 40px minmax(0, 1fr) 76px;
+        min-height: 72px;
+      }
+      .sequence-cell { grid-column: 1; grid-row: 1 / 3; }
+      .node-cell { grid-column: 2; grid-row: 1; padding-right: 7px; }
+      .state-cell { grid-column: 3; grid-row: 1; padding-right: 0; }
+      .record-cell {
+        grid-column: 2 / 4;
+        grid-row: 2;
+        min-height: 42px;
+        border-top: 1px solid color-mix(in srgb, var(--line) 55%, transparent);
+        border-left: 0;
+        padding: 2px 0 4px 10px;
+      }
+      .record-button { min-height: 36px; }
+      .updated-cell { display: none; }
+      .flow-row.child .node-cell::before { left: calc(-2px + var(--depth, 1) * 20px); width: 14px; }
+      .node-cell { padding-left: calc(7px + var(--depth, 0) * 20px); }
+      .history-item { grid-template-columns: 90px 14px minmax(0, 1fr); }
+    }
+
+    @media (max-width: 420px) {
+      .sidebar-top { padding-inline: 13px; }
+      .today-panel { margin-inline: 13px; }
+      .section-heading { padding-inline: 13px; }
+      .section-heading-tools { gap: 7px; }
+      .section-heading-tools > span { display: none; }
+      .search-wrap { width: 126px; flex-basis: 126px; }
+      .repo-toolbar { padding-left: 13px; }
+      .status-filters { gap: 11px; }
+      .group-section { padding-left: 13px; }
+      .workspace-toolbar { align-items: flex-start; }
+      .toolbar-actions { margin-top: -3px; }
+      .breadcrumb span:first-child,
+      .breadcrumb span:nth-child(2) { display: none; }
+      .flow-summary .summary-track { display: none; }
+      .calendar-popover {
+        position: fixed;
+        top: 58px;
+        right: 14px;
+      }
+      .record-modal {
+        position: absolute;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        border-radius: 14px 14px 0 0;
+      }
+      .modal-backdrop { align-items: end; padding: 0; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *,
+      *::before,
+      *::after {
+        scroll-behavior: auto !important;
+        transition-duration: .01ms !important;
+        animation-duration: .01ms !important;
+      }
+    }
+  </style>
+</head>
+<body data-theme="forest">
+  <a class="skip-link" href="#workspace">跳到当前任务</a>
+
+  <div class="app-shell" id="appShell">
+    <aside class="sidebar" aria-label="任务导航">
+      <div class="sidebar-top">
+        <div class="brand-row">
+          <div class="brand">
+            <span class="brand-mark" aria-hidden="true"></span>
+            <span class="brand-copy"><strong>Task Track</strong></span>
+          </div>
+          <span class="demo-badge">UI DEMO</span>
+        </div>
+      </div>
+
+      <section class="today-panel" aria-labelledby="todayTitle">
+        <div class="today-title-row"><h2 id="todayTitle">今日任务</h2><time datetime="2026-08-12">08/12</time></div>
+        <div class="today-list">
+          <button class="today-item" type="button" data-task-id="firmware" aria-current="true">
+            <span><strong>固件调试工具</strong><small>下一步 · 验证地址映射边界</small></span>
+            <span class="today-arrow"><svg class="icon" viewBox="0 0 20 20" aria-hidden="true"><path d="M5 10h10m-4-4 4 4-4 4"></path></svg></span>
+          </button>
+          <button class="today-item" type="button" data-task-id="obsidian" aria-current="false">
+            <span><strong>修复 Obsidian Git 同步</strong><small>下一步 · 重建 HTTPS 凭据</small></span>
+            <span class="today-arrow"><svg class="icon" viewBox="0 0 20 20" aria-hidden="true"><path d="M5 10h10m-4-4 4 4-4 4"></path></svg></span>
+          </button>
+        </div>
+      </section>
+
+      <section class="repository" aria-labelledby="repoTitle">
+        <div class="section-heading">
+          <h2 id="repoTitle">任务仓库</h2>
+          <div class="section-heading-tools">
+            <span id="taskCount">6 / 6 项</span>
+            <label class="search-wrap">
+              <svg class="icon" viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5"></circle><path d="m13 13 4 4"></path></svg>
+              <input class="search-input" id="taskSearch" type="search" placeholder="" autocomplete="off" aria-label="搜索任务、节点或内容" />
+              <span class="search-shortcut" aria-hidden="true">⌘ K</span>
+            </label>
+          </div>
+        </div>
+        <div class="repo-toolbar">
+          <div class="status-filters" role="tablist" aria-label="任务状态筛选">
+            <button class="status-filter" type="button" role="tab" data-filter="all" aria-selected="true">全部</button>
+            <button class="status-filter" type="button" role="tab" data-filter="open" aria-selected="false">未完成</button>
+            <button class="status-filter" type="button" role="tab" data-filter="done" aria-selected="false">已完成</button>
+          </div>
+          <label class="sr-only" for="priorityFilter">按优先级筛选</label>
+          <select class="priority-select" id="priorityFilter">
+            <option value="all">优先级 · 全部</option>
+            <option value="high">高优先</option>
+            <option value="medium">中优先</option>
+            <option value="low">低优先</option>
+          </select>
+        </div>
+        <div class="task-list" id="taskList" aria-live="polite"></div>
+      </section>
+
+      <nav class="group-section" aria-label="任务分组">
+        <div class="group-label"><span>任务分组</span></div>
+        <div class="group-list">
+          <button class="group-button" type="button" data-group="all" aria-pressed="true">全部任务 · 6</button>
+          <button class="group-button" type="button" data-group="work" aria-pressed="false">工作 · 3</button>
+          <button class="group-button" type="button" data-group="learn" aria-pressed="false">学习 · 2</button>
+          <button class="group-button" type="button" data-group="personal" aria-pressed="false">个人 · 1</button>
+          <button class="group-button" type="button" aria-label="新建任务分组">＋</button>
+        </div>
+      </nav>
+
+      <footer class="sidebar-footer">
+        <button class="utility-button" type="button" data-action="settings" aria-label="打开设置"><svg class="icon" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="3"></circle><path d="M10 2.5v2m0 11v2M2.5 10h2m11 0h2M4.7 4.7l1.4 1.4m7.8 7.8 1.4 1.4m0-10.6-1.4 1.4m-7.8 7.8-1.4 1.4"></path></svg></button>
+        <div class="theme-control">
+          <button class="utility-button" id="themeToggle" type="button" aria-label="选择界面主题" aria-expanded="false" aria-controls="themeMenu"><svg class="icon" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7"></circle><path d="M10 3a7 7 0 0 0 0 14c1.2 0 1.8-.7 1.4-1.5-.4-.8.2-1.5 1.1-1.5h1.2A3.3 3.3 0 0 0 17 10.7 7.7 7.7 0 0 0 10 3Z"></path><circle cx="7" cy="7" r=".7"></circle><circle cx="11" cy="6" r=".7"></circle><circle cx="6" cy="11" r=".7"></circle></svg></button>
+          <div class="theme-popover" id="themeMenu" aria-label="界面主题" hidden>
+            <button class="theme-option" type="button" data-theme-option="forest" aria-pressed="true"><span class="theme-swatch" style="--swatch-bg:#e9ede8;--swatch-accent:#1e4d3b"></span>松林</button>
+            <button class="theme-option" type="button" data-theme-option="mist-blue" aria-pressed="false"><span class="theme-swatch" style="--swatch-bg:#e7ecef;--swatch-accent:#294e5f"></span>雾蓝</button>
+            <button class="theme-option" type="button" data-theme-option="graphite" aria-pressed="false"><span class="theme-swatch" style="--swatch-bg:#e9e9e6;--swatch-accent:#454c46"></span>岩灰</button>
+            <button class="theme-option" type="button" data-theme-option="night" aria-pressed="false"><span class="theme-swatch" style="--swatch-bg:#111613;--swatch-accent:#9bc9af"></span>夜墨</button>
+          </div>
+        </div>
+        <span class="utility-button" aria-label="自动保存已开启"><svg class="icon" viewBox="0 0 20 20" aria-hidden="true"><path d="m4 10 3.5 3.5L16 5"></path></svg><span>已保存</span></span>
+        <button class="utility-button review" type="button" data-action="review"><svg class="icon" viewBox="0 0 20 20" aria-hidden="true"><path d="M4 4h12v12H4zM4 8h12M8 2v4m4-4v4"></path></svg><span>任务回顾</span></button>
+      </footer>
+    </aside>
+
+    <main class="workspace" id="workspace" tabindex="-1">
+      <div class="workspace-inner">
+        <div class="workspace-toolbar">
+          <nav class="breadcrumb" aria-label="当前位置"><span>工作台</span><span aria-hidden="true">/</span><span id="breadcrumbTask">固件调试工具</span></nav>
+          <div class="toolbar-actions">
+            <button class="toolbar-button" type="button" data-action="complete-task"><svg class="icon" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7"></circle><path d="m6.5 10 2.2 2.2 4.8-5"></path></svg><span>完成任务</span></button>
+            <div class="calendar-control">
+              <button class="toolbar-button" id="calendarToggle" type="button" aria-label="按日期查看任务" aria-expanded="false" aria-controls="calendarPopover"><svg class="icon" viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="4.5" width="14" height="12" rx="2"></rect><path d="M3 8h14M7 2.5v4m6-4v4"></path></svg><span>日历</span></button>
+              <section class="calendar-popover" id="calendarPopover" aria-label="任务日历" hidden>
+                <header class="calendar-head"><button class="calendar-nav" id="calendarPrev" type="button" aria-label="上个月"><svg class="icon" viewBox="0 0 20 20" aria-hidden="true"><path d="m12 5-5 5 5 5"></path></svg></button><strong id="calendarMonth">2026年8月</strong><button class="calendar-nav" id="calendarNext" type="button" aria-label="下个月"><svg class="icon" viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5"></path></svg></button></header>
+                <div class="calendar-weekdays" aria-hidden="true"><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span></div>
+                <div class="calendar-grid" id="calendarGrid" role="grid" aria-label="日期"></div>
+                <div class="calendar-agenda"><div class="calendar-agenda-head"><strong id="calendarSelectedDate">8月12日</strong><span id="calendarTaskCount">2 项</span></div><div id="calendarAgenda"></div></div>
+              </section>
+            </div>
+            <button class="toolbar-button" type="button" data-action="share"><svg class="icon" viewBox="0 0 20 20" aria-hidden="true"><path d="M10 13V3m0 0 4 4m-4-4L6 7"></path><path d="M4 10v5.5A1.5 1.5 0 0 0 5.5 17h9a1.5 1.5 0 0 0 1.5-1.5V10"></path></svg><span>分享</span></button>
+            <button class="toolbar-button" type="button" data-action="more" aria-label="更多任务操作"><svg class="icon" viewBox="0 0 20 20" aria-hidden="true"><circle cx="4" cy="10" r="1"></circle><circle cx="10" cy="10" r="1"></circle><circle cx="16" cy="10" r="1"></circle></svg></button>
+          </div>
+        </div>
+
+        <header class="task-header">
+          <h1 class="task-title" id="taskTitle">固件调试工具</h1>
+          <div class="task-meta" aria-label="任务元信息">
+            <span class="meta-state today">Today</span>
+            <span class="meta-state priority">高优先</span>
+            <span class="meta-state" id="taskState">处理中</span>
+            <span class="meta-separator" aria-hidden="true"></span>
+            <span class="progress-count" id="progressCount">3 / 7 节点</span>
+            <span id="taskGroupMeta">分组 · 工作</span>
+            <span>更新 · 08/12 10:42</span>
+          </div>
+        </header>
+
+        <section class="brief-grid" aria-label="任务简报">
+          <label class="brief-field"><span class="brief-label"><span>背景 / 目标</span></span><textarea rows="3">调试工具读取变量时地址不一致，需要明确 ELF 地址、镜像加载地址与目标运行地址之间的关系。</textarea></label>
+          <label class="brief-field"><span class="brief-label"><span>当前判断 / 进展</span><time datetime="2026-08-12T10:42">10:42</time></span><textarea rows="3">符号表偏移不是唯一因素，当前优先核对加载段与重定位后的运行基址。</textarea></label>
+          <label class="brief-field"><span class="brief-label"><span>结果 / 总结</span></span><textarea rows="3" placeholder="完成任务前补充结论">待验证地址转换规则后，补充可复用的边界判断和测试记录。</textarea></label>
+        </section>
+
+        <nav class="tab-bar" role="tablist" aria-label="任务内容">
+          <button class="tab-button" id="flowTab" type="button" role="tab" data-pane="flowPane" aria-controls="flowPane" aria-selected="true">处理流</button>
+          <button class="tab-button" id="notesTab" type="button" role="tab" data-pane="notesPane" aria-controls="notesPane" aria-selected="false">知识笔记</button>
+          <button class="tab-button" id="historyTab" type="button" role="tab" data-pane="historyPane" aria-controls="historyPane" aria-selected="false">历史处理</button>
+        </nav>
+
+        <section class="pane flow-pane" id="flowPane" role="tabpanel" aria-labelledby="flowTab">
+          <div class="flow-title-row">
+            <div class="flow-title-copy"><h2>处理路线</h2></div>
+            <div class="flow-summary"><span id="flowSummaryText">3 / 7 完成</span><span class="summary-track" aria-hidden="true"><span id="summaryFill"></span></span></div>
+          </div>
+
+          <div class="flow-table" role="table" aria-label="任务处理流">
+            <div class="flow-head" role="row"><span></span><span>处理</span><span>记录</span><span>状态</span><span>更新</span></div>
+
+            <div class="flow-row root done" role="row" data-node-id="observe">
+              <div class="sequence-cell" role="cell"><span class="checkpoint">01</span></div>
+              <div class="node-cell" role="cell" style="--depth:0"><button class="collapse-button" type="button" aria-expanded="true" aria-label="收起确认问题现象的子节点" data-collapse="observe"><svg class="icon" viewBox="0 0 20 20" aria-hidden="true"><path d="m5 7 5 5 5-5"></path></svg></button><span class="node-copy"><strong>确认问题现象</strong></span></div>
+              <div class="record-cell" role="cell"><button class="record-button" type="button" data-record="重复读取同一全局变量，记录符号地址与实际访问地址。" data-node-name="确认问题现象"><span>已记录复现条件与样本</span><svg class="icon" viewBox="0 0 20 20" aria-hidden="true"><path d="m7 13 6-6m-4 0h4v4"></path></svg></button></div>
+              <div class="state-cell" role="cell"><select class="node-status" aria-label="确认问题现象状态"><option>未完成</option><option>进行中</option><option selected>已完成</option><option>稍后</option></select></div>
+              <time class="updated-cell" role="cell">08/12 09:18</time>
+            </div>
+
+            <div class="flow-row child done" role="row" data-parent="observe" data-node-id="logs">
+              <div class="sequence-cell" role="cell"></div>
+              <div class="node-cell" role="cell" style="--depth:1"><span class="collapse-spacer" aria-hidden="true"></span><span class="node-copy"><strong>收集错误信息</strong></span></div>
+              <div class="record-cell" role="cell"><button class="record-button" type="button" data-record="已保存三组日志与镜像版本，错误稳定出现。" data-node-name="收集错误信息"><span>3 组日志已归档</span><svg class="icon" viewBox="0 0 20 20" aria-hidden="true"><path d="m7 13 6-6m-4 0h4v4"></path></svg></button></div>
+              <div class="state-cell" role="cell"><select class="node-status" aria-label="收集错误信息状态"><option>未完成</option><option>进行中</option><option selected>已完成</option><option>稍后</option></select></div>
+              <time class="updated-cell" role="cell">08/12 09:32</time>
+            </div>
+
+            <div class="flow-row child done" role="row" data-parent="observe" data-node-id="stable">
+              <div class="sequence-cell" role="cell"></div>
+              <div class="node-cell" role="cell" style="--depth:1"><span class="collapse-spacer" aria-hidden="true"></span><span class="node-copy"><strong>稳定复现问题</strong></span></div>
+              <div class="record-cell" role="cell"><button class="record-button" type="button" data-record="固定固件和编译参数后，地址偏差保持一致。" data-node-name="稳定复现问题"><span>复现路径已固定</span><svg class="icon" viewBox="0 0 20 20" aria-hidden="true"><path d="m7 13 6-6m-4 0h4v4"></path></svg></button></div>
+              <div class="state-cell" role="cell"><select class="node-status" aria-label="稳定复现问题状态"><option>未完成</option><option>进行中</option><option selected>已完成</option><option>稍后</option></select></div>
+              <time class="updated-cell" role="cell">08/12 09:51</time>
+            </div>
+
+            <div class="flow-row root active" role="row" data-node-id="analyze">
+              <div class="sequence-cell" role="cell"><span class="checkpoint">02</span></div>
+              <div class="node-cell" role="cell" style="--depth:0"><button class="collapse-button" type="button" aria-expanded="true" aria-label="收起分析地址链路的子节点" data-collapse="analyze"><svg class="icon" viewBox="0 0 20 20" aria-hidden="true"><path d="m5 7 5 5 5-5"></path></svg></button><span class="node-copy"><strong>分析地址链路</strong></span></div>
+              <div class="record-cell" role="cell"><button class="record-button" type="button" data-record="ELF 符号地址与加载基址的换算已确认，仍需核对重定位段。" data-node-name="分析地址链路"><span>待核对重定位段</span><svg class="icon" viewBox="0 0 20 20" aria-hidden="true"><path d="m7 13 6-6m-4 0h4v4"></path></svg></button></div>
+              <div class="state-cell" role="cell"><select class="node-status" aria-label="分析地址链路状态"><option>未完成</option><option selected>进行中</option><option>已完成</option><option>稍后</option></select></div>
+              <time class="updated-cell" role="cell">08/12 10:42</time>
+            </div>
+
+            <div class="flow-row child" role="row" data-parent="analyze" data-node-id="elf">
+              <div class="sequence-cell" role="cell"></div>
+              <div class="node-cell" role="cell" style="--depth:1"><span class="collapse-spacer" aria-hidden="true"></span><span class="node-copy"><strong>核对 ELF Program Header</strong></span></div>
+              <div class="record-cell" role="cell"><button class="record-button" type="button" data-record="" data-node-name="核对 ELF Program Header"><span>点击补充记录</span><svg class="icon" viewBox="0 0 20 20" aria-hidden="true"><path d="m7 13 6-6m-4 0h4v4"></path></svg></button></div>
+              <div class="state-cell" role="cell"><select class="node-status" aria-label="核对 ELF Program Header 状态"><option selected>未完成</option><option>进行中</option><option>已完成</option><option>稍后</option></select></div>
+              <time class="updated-cell" role="cell">—</time>
+            </div>
+
+            <div class="flow-row child" role="row" data-parent="analyze" data-node-id="reloc">
+              <div class="sequence-cell" role="cell"></div>
+              <div class="node-cell" role="cell" style="--depth:1"><span class="collapse-spacer" aria-hidden="true"></span><span class="node-copy"><strong>确认重定位计算</strong></span></div>
+              <div class="record-cell" role="cell"><button class="record-button" type="button" data-record="" data-node-name="确认重定位计算"><span>点击补充记录</span><svg class="icon" viewBox="0 0 20 20" aria-hidden="true"><path d="m7 13 6-6m-4 0h4v4"></path></svg></button></div>
+              <div class="state-cell" role="cell"><select class="node-status" aria-label="确认重定位计算状态"><option selected>未完成</option><option>进行中</option><option>已完成</option><option>稍后</option></select></div>
+              <time class="updated-cell" role="cell">—</time>
+            </div>
+
+            <div class="flow-row root" role="row" data-node-id="verify">
+              <div class="sequence-cell" role="cell"><span class="checkpoint">03</span></div>
+              <div class="node-cell" role="cell" style="--depth:0"><span class="collapse-spacer" aria-hidden="true"></span><span class="node-copy"><strong>验证地址转换判断</strong></span></div>
+              <div class="record-cell" role="cell"><button class="record-button" type="button" data-record="" data-node-name="验证地址转换判断"><span>点击补充记录</span><svg class="icon" viewBox="0 0 20 20" aria-hidden="true"><path d="m7 13 6-6m-4 0h4v4"></path></svg></button></div>
+              <div class="state-cell" role="cell"><select class="node-status" aria-label="验证地址转换判断状态"><option selected>未完成</option><option>进行中</option><option>已完成</option><option>稍后</option></select></div>
+              <time class="updated-cell" role="cell">—</time>
+            </div>
+          </div>
+
+          <div class="flow-footer"><button class="add-node" type="button" data-action="add-node"><svg class="icon" viewBox="0 0 20 20" aria-hidden="true"><path d="M10 4v12M4 10h12"></path></svg>新增主节点</button></div>
+        </section>
+
+        <section class="pane notes-pane" id="notesPane" role="tabpanel" aria-labelledby="notesTab" hidden>
+          <div class="pane-heading"><h2>任务知识笔记</h2><span>AUTOSAVED · 10:44</span></div>
+          <div class="note-editor" aria-label="Milkdown 知识笔记预览">
+            <div class="editor-toolbar" aria-label="编辑器工具栏"><button class="editor-tool" type="button" aria-label="一级标题">H1</button><button class="editor-tool" type="button" aria-label="粗体">B</button><button class="editor-tool" type="button" aria-label="行内代码">&lt;/&gt;</button><button class="editor-tool" type="button" aria-label="项目列表">•</button></div>
+            <article class="editor-content" contenteditable="true" aria-label="任务级知识笔记"><h3>地址换算笔记</h3><p>整理 ELF 符号地址、加载基址与目标运行地址之间的换算规则。</p><ul><li><code>st_value</code> 是符号值，不等于目标运行时的最终地址。</li><li>优先检查 ELF 加载段、镜像基址和重定位表。</li><li>验证时保留全局、栈、寄存器三类变量样本。</li></ul></article>
+          </div>
+        </section>
+
+        <section class="pane history-pane" id="historyPane" role="tabpanel" aria-labelledby="historyTab" hidden>
+          <div class="pane-heading"><h2>历史处理</h2></div>
+          <div class="history-list">
+            <article class="history-item"><time datetime="2026-08-12T10:42">08/12<br />10:42</time><span class="history-dot" aria-hidden="true"></span><span class="history-copy"><strong>推进「分析地址链路」</strong><span>更新当前判断，并将下一步收敛为核对重定位段。</span></span></article>
+            <article class="history-item"><time datetime="2026-08-12T09:51">08/12<br />09:51</time><span class="history-dot" aria-hidden="true"></span><span class="history-copy"><strong>完成「确认问题现象」</strong><span>三组样本均能稳定复现同一地址偏差。</span></span></article>
+            <article class="history-item"><time datetime="2026-08-11T18:20">08/11<br />18:20</time><span class="history-dot" aria-hidden="true"></span><span class="history-copy"><strong>任务加入 Today</strong><span>优先级设为高，进入今日处理队列。</span></span></article>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <div class="modal-backdrop" id="recordBackdrop" aria-hidden="true">
+    <section class="record-modal" role="dialog" aria-modal="true" aria-labelledby="recordTitle">
+      <header class="modal-heading"><h2 id="recordTitle">节点记录</h2><button class="modal-close" id="recordClose" type="button" aria-label="关闭节点记录"><svg class="icon" viewBox="0 0 20 20" aria-hidden="true"><path d="m5 5 10 10M15 5 5 15"></path></svg></button></header>
+      <div class="modal-body">
+        <p class="modal-context" id="recordContext">分析地址链路</p>
+        <label class="sr-only" for="recordText">节点记录内容</label>
+        <textarea class="record-textarea" id="recordText" placeholder="记录这一步做了什么、发现了什么，以及下一步。"></textarea>
+        <div class="modal-actions"><span class="modal-shortcut">⌘ / Ctrl + Enter 保存</span><span class="modal-buttons"><button class="modal-button" id="recordCancel" type="button">取消</button><button class="modal-button primary" id="recordSave" type="button">保存记录</button></span></div>
+      </div>
+    </section>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    const tasks = [
+      { id: "firmware", title: "固件调试工具", next: "验证地址映射边界", priority: "high", priorityText: "高", time: "10:42", group: "work", done: false, today: true },
+      { id: "obsidian", title: "修复 Obsidian Git 同步", next: "重建 HTTPS 凭据", priority: "medium", priorityText: "中", time: "09:28", group: "personal", done: false, today: true },
+      { id: "riscv", title: "RISC-V 指令笔记", next: "补充 JAL 指令图示", priority: "medium", priorityText: "中", time: "昨天", group: "learn", done: false, today: false },
+      { id: "cmake", title: "完成 target_sources 练习", next: "独立写一次接口库示例", priority: "low", priorityText: "低", time: "周一", group: "learn", done: false, today: false },
+      { id: "report", title: "整理调试周报", next: "归纳三个可复用检查点", priority: "low", priorityText: "低", time: "周日", group: "work", done: true, today: false },
+      { id: "release", title: "验证 Windows 发布包", next: "已完成", priority: "high", priorityText: "高", time: "08/09", group: "work", done: true, today: false }
+    ];
+
+    const taskDetails = {
+      firmware: { title: "固件调试工具", priority: "高优先", group: "工作", progress: "3 / 7 节点" },
+      obsidian: { title: "修复 Obsidian Git 同步", priority: "中优先", group: "个人", progress: "1 / 4 节点" },
+      riscv: { title: "RISC-V 指令笔记", priority: "中优先", group: "学习", progress: "5 / 8 节点" },
+      cmake: { title: "完成 target_sources 练习", priority: "低优先", group: "学习", progress: "2 / 5 节点" },
+      report: { title: "整理调试周报", priority: "低优先", group: "工作", progress: "6 / 6 节点" },
+      release: { title: "验证 Windows 发布包", priority: "高优先", group: "工作", progress: "4 / 4 节点" }
+    };
+
+    const calendarTaskMap = {
+      "2026-08-09": ["release"],
+      "2026-08-10": ["report"],
+      "2026-08-12": ["firmware", "obsidian"],
+      "2026-08-17": ["riscv"],
+      "2026-08-20": ["cmake"]
+    };
+
+    const themeNames = { forest: "松林", "mist-blue": "雾蓝", graphite: "岩灰", night: "夜墨" };
+    const calendarState = { year: 2026, month: 7, selected: "2026-08-12" };
+
+    const state = { filter: "all", priority: "all", group: "all", query: "", activeTask: "firmware", activeRecordButton: null };
+    const taskList = document.getElementById("taskList");
+    const taskCount = document.getElementById("taskCount");
+    const toast = document.getElementById("toast");
+    let toastTimer;
+
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>'"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[character]);
+    }
+
+    function filteredTasks() {
+      const query = state.query.trim().toLowerCase();
+      return tasks.filter((task) => {
+        const matchesStatus = state.filter === "all" || (state.filter === "done" ? task.done : !task.done);
+        const matchesPriority = state.priority === "all" || task.priority === state.priority;
+        const matchesGroup = state.group === "all" || task.group === state.group;
+        const matchesQuery = !query || `${task.title} ${task.next}`.toLowerCase().includes(query);
+        return matchesStatus && matchesPriority && matchesGroup && matchesQuery;
+      });
+    }
+
+    function renderTasks() {
+      const visible = filteredTasks();
+      taskCount.textContent = `${visible.length} / ${tasks.length} 项`;
+      if (!visible.length) {
+        taskList.innerHTML = '<p class="repo-empty">没有符合当前筛选的任务。</p>';
+        return;
+      }
+      taskList.innerHTML = visible.map((task) => `
+        <div class="task-row" role="button" tabindex="0" data-task-id="${task.id}" data-done="${task.done}" aria-current="${task.id === state.activeTask}">
+          <button class="task-check-hit" type="button" data-complete-id="${task.id}" aria-label="${task.done ? "标记为未完成" : "标记为完成"}" aria-pressed="${task.done}"><span class="task-check-visual">✓</span></button>
+          <span class="task-copy"><span class="task-name">${escapeHtml(task.title)}</span><span class="task-next">下一步 · ${escapeHtml(task.next)}</span></span>
+          <span class="task-row-meta"><span class="priority-word ${task.priority}">${task.priorityText}</span><time>${task.time}</time></span>
+        </div>`).join("");
+    }
+
+    function selectTask(taskId) {
+      const detail = taskDetails[taskId];
+      if (!detail) return;
+      state.activeTask = taskId;
+      document.getElementById("taskTitle").textContent = detail.title;
+      document.getElementById("breadcrumbTask").textContent = detail.title;
+      document.querySelector(".meta-state.priority").textContent = detail.priority;
+      document.getElementById("progressCount").textContent = detail.progress;
+      const task = tasks.find((item) => item.id === taskId);
+      document.getElementById("taskState").textContent = task?.done ? "已完成" : "处理中";
+      document.getElementById("taskGroupMeta").textContent = `分组 · ${detail.group}`;
+      document.querySelectorAll(".today-item").forEach((button) => button.setAttribute("aria-current", String(button.dataset.taskId === taskId)));
+      renderTasks();
+    }
+
+    function showToast(message) {
+      toast.textContent = message;
+      toast.classList.add("show");
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toast.classList.remove("show"), 2200);
+    }
+
+    function setPopover(popover, toggle, open) {
+      popover.hidden = !open;
+      toggle.setAttribute("aria-expanded", String(open));
+    }
+
+    function dateKey(year, month, day) {
+      return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    }
+
+    function renderCalendar() {
+      const monthDate = new Date(calendarState.year, calendarState.month, 1);
+      const totalDays = new Date(calendarState.year, calendarState.month + 1, 0).getDate();
+      const leadingDays = (monthDate.getDay() + 6) % 7;
+      document.getElementById("calendarMonth").textContent = new Intl.DateTimeFormat("zh-CN", { year: "numeric", month: "long" }).format(monthDate);
+
+      const blanks = Array.from({ length: leadingDays }, () => '<span class="calendar-day-spacer" aria-hidden="true"></span>');
+      const days = Array.from({ length: totalDays }, (_, index) => {
+        const day = index + 1;
+        const key = dateKey(calendarState.year, calendarState.month, day);
+        const count = calendarTaskMap[key]?.length || 0;
+        const taskLabel = count ? `，${count} 项任务` : "";
+        return `<button class="calendar-day${count ? " has-task" : ""}" type="button" role="gridcell" data-calendar-date="${key}" aria-label="${day}日${taskLabel}" aria-selected="${key === calendarState.selected}">${day}</button>`;
+      });
+      document.getElementById("calendarGrid").innerHTML = [...blanks, ...days].join("");
+
+      const [selectedYear, selectedMonth, selectedDay] = calendarState.selected.split("-").map(Number);
+      const selectedTaskIds = calendarTaskMap[calendarState.selected] || [];
+      document.getElementById("calendarSelectedDate").textContent = `${selectedMonth}月${selectedDay}日`;
+      document.getElementById("calendarTaskCount").textContent = `${selectedTaskIds.length} 项`;
+      document.getElementById("calendarAgenda").innerHTML = selectedTaskIds.length
+        ? selectedTaskIds.map((taskId) => {
+            const task = tasks.find((item) => item.id === taskId);
+            if (!task) return "";
+            return `<button class="calendar-task" type="button" data-calendar-task="${task.id}"><span>${escapeHtml(task.title)}</span><time>${escapeHtml(task.time)}</time></button>`;
+          }).join("")
+        : `<p class="calendar-empty">${selectedYear}年这一天暂无任务</p>`;
+    }
+
+    taskList.addEventListener("click", (event) => {
+      const completeButton = event.target.closest("[data-complete-id]");
+      if (completeButton) {
+        event.stopPropagation();
+        const task = tasks.find((item) => item.id === completeButton.dataset.completeId);
+        if (task) {
+          task.done = !task.done;
+          task.next = task.done ? "已完成" : task.next === "已完成" ? "补充下一步" : task.next;
+          renderTasks();
+          if (task.id === state.activeTask) document.getElementById("taskState").textContent = task.done ? "已完成" : "处理中";
+          showToast(task.done ? "任务已完成" : "任务已恢复");
+        }
+        return;
+      }
+      const row = event.target.closest("[data-task-id]");
+      if (row) selectTask(row.dataset.taskId);
+    });
+
+    taskList.addEventListener("keydown", (event) => {
+      const row = event.target.closest(".task-row");
+      if (row && (event.key === "Enter" || event.key === " ") && event.target === row) {
+        event.preventDefault();
+        selectTask(row.dataset.taskId);
+      }
+    });
+
+    document.querySelectorAll(".status-filter").forEach((button) => button.addEventListener("click", () => {
+      state.filter = button.dataset.filter;
+      document.querySelectorAll(".status-filter").forEach((item) => item.setAttribute("aria-selected", String(item === button)));
+      renderTasks();
+    }));
+
+    document.getElementById("priorityFilter").addEventListener("change", (event) => { state.priority = event.target.value; renderTasks(); });
+    document.getElementById("taskSearch").addEventListener("input", (event) => { state.query = event.target.value; renderTasks(); });
+    document.addEventListener("keydown", (event) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        document.getElementById("taskSearch").focus();
+      }
+    });
+
+    document.querySelectorAll(".group-button[data-group]").forEach((button) => button.addEventListener("click", () => {
+      state.group = button.dataset.group;
+      document.querySelectorAll(".group-button[data-group]").forEach((item) => item.setAttribute("aria-pressed", String(item === button)));
+      renderTasks();
+    }));
+
+    document.querySelectorAll(".today-item").forEach((button) => button.addEventListener("click", () => selectTask(button.dataset.taskId)));
+
+    document.querySelectorAll(".tab-button").forEach((button) => button.addEventListener("click", () => {
+      document.querySelectorAll(".tab-button").forEach((item) => item.setAttribute("aria-selected", String(item === button)));
+      document.querySelectorAll(".pane").forEach((pane) => { pane.hidden = pane.id !== button.dataset.pane; });
+    }));
+
+    document.querySelectorAll("[data-collapse]").forEach((button) => button.addEventListener("click", () => {
+      const collapsed = button.getAttribute("aria-expanded") === "true";
+      button.setAttribute("aria-expanded", String(!collapsed));
+      document.querySelectorAll(`[data-parent="${button.dataset.collapse}"]`).forEach((row) => { row.hidden = collapsed; });
+    }));
+
+    const recordBackdrop = document.getElementById("recordBackdrop");
+    const recordText = document.getElementById("recordText");
+    const recordContext = document.getElementById("recordContext");
+
+    function openRecord(button) {
+      state.activeRecordButton = button;
+      recordContext.textContent = button.dataset.nodeName;
+      recordText.value = button.dataset.record || "";
+      recordBackdrop.classList.add("open");
+      recordBackdrop.setAttribute("aria-hidden", "false");
+      setTimeout(() => recordText.focus(), 30);
+    }
+
+    function closeRecord() {
+      recordBackdrop.classList.remove("open");
+      recordBackdrop.setAttribute("aria-hidden", "true");
+      state.activeRecordButton?.focus();
+      state.activeRecordButton = null;
+    }
+
+    document.querySelectorAll(".record-button").forEach((button) => button.addEventListener("click", () => openRecord(button)));
+    document.getElementById("recordClose").addEventListener("click", closeRecord);
+    document.getElementById("recordCancel").addEventListener("click", closeRecord);
+    recordBackdrop.addEventListener("click", (event) => { if (event.target === recordBackdrop) closeRecord(); });
+    document.getElementById("recordSave").addEventListener("click", () => {
+      if (!state.activeRecordButton) return;
+      const value = recordText.value.trim();
+      state.activeRecordButton.dataset.record = value;
+      state.activeRecordButton.querySelector("span").textContent = value || "点击补充记录";
+      closeRecord();
+      showToast("记录已保存");
+    });
+
+    recordText.addEventListener("keydown", (event) => {
+      if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+        event.preventDefault();
+        document.getElementById("recordSave").click();
+      }
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (!recordBackdrop.classList.contains("open")) return;
+      if (event.key === "Escape") {
+        closeRecord();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const focusable = [...recordBackdrop.querySelectorAll("button, textarea")].filter((element) => !element.disabled);
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    });
+
+    document.querySelectorAll(".node-status").forEach((select) => select.addEventListener("change", () => {
+      const row = select.closest(".flow-row");
+      row.classList.remove("done", "active");
+      if (select.value === "已完成") row.classList.add("done");
+      if (select.value === "进行中") row.classList.add("active");
+      const rows = [...document.querySelectorAll(".flow-row")];
+      const completed = rows.filter((item) => item.classList.contains("done")).length;
+      document.getElementById("flowSummaryText").textContent = `${completed} / ${rows.length} 完成`;
+      document.getElementById("summaryFill").style.width = `${Math.round(completed / rows.length * 100)}%`;
+      document.getElementById("progressCount").textContent = `${completed} / ${rows.length} 节点`;
+      showToast("节点状态已更新");
+    }));
+
+    const themeToggle = document.getElementById("themeToggle");
+    const themeMenu = document.getElementById("themeMenu");
+    const calendarToggle = document.getElementById("calendarToggle");
+    const calendarPopover = document.getElementById("calendarPopover");
+
+    themeToggle.addEventListener("click", (event) => {
+      event.stopPropagation();
+      setPopover(calendarPopover, calendarToggle, false);
+      setPopover(themeMenu, themeToggle, themeMenu.hidden);
+    });
+
+    document.querySelectorAll("[data-theme-option]").forEach((button) => button.addEventListener("click", () => {
+      const theme = button.dataset.themeOption;
+      document.body.dataset.theme = theme;
+      document.querySelectorAll("[data-theme-option]").forEach((item) => item.setAttribute("aria-pressed", String(item === button)));
+      themeToggle.setAttribute("aria-label", `界面主题：${themeNames[theme]}`);
+      setPopover(themeMenu, themeToggle, false);
+      themeToggle.focus();
+    }));
+
+    calendarToggle.addEventListener("click", (event) => {
+      event.stopPropagation();
+      setPopover(themeMenu, themeToggle, false);
+      setPopover(calendarPopover, calendarToggle, calendarPopover.hidden);
+      if (!calendarPopover.hidden) renderCalendar();
+    });
+
+    document.getElementById("calendarPrev").addEventListener("click", () => {
+      calendarState.month -= 1;
+      if (calendarState.month < 0) { calendarState.month = 11; calendarState.year -= 1; }
+      calendarState.selected = dateKey(calendarState.year, calendarState.month, 1);
+      renderCalendar();
+    });
+
+    document.getElementById("calendarNext").addEventListener("click", () => {
+      calendarState.month += 1;
+      if (calendarState.month > 11) { calendarState.month = 0; calendarState.year += 1; }
+      calendarState.selected = dateKey(calendarState.year, calendarState.month, 1);
+      renderCalendar();
+    });
+
+    document.getElementById("calendarGrid").addEventListener("click", (event) => {
+      const day = event.target.closest("[data-calendar-date]");
+      if (!day) return;
+      calendarState.selected = day.dataset.calendarDate;
+      renderCalendar();
+    });
+
+    document.getElementById("calendarAgenda").addEventListener("click", (event) => {
+      const taskButton = event.target.closest("[data-calendar-task]");
+      if (!taskButton) return;
+      selectTask(taskButton.dataset.calendarTask);
+      setPopover(calendarPopover, calendarToggle, false);
+      calendarToggle.focus();
+    });
+
+    document.addEventListener("click", (event) => {
+      if (!event.target.closest(".theme-control")) setPopover(themeMenu, themeToggle, false);
+      if (!event.target.closest(".calendar-control")) setPopover(calendarPopover, calendarToggle, false);
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape") return;
+      if (!themeMenu.hidden) {
+        setPopover(themeMenu, themeToggle, false);
+        themeToggle.focus();
+      }
+      if (!calendarPopover.hidden) {
+        setPopover(calendarPopover, calendarToggle, false);
+        calendarToggle.focus();
+      }
+    });
+
+    document.querySelectorAll("[data-action]").forEach((button) => button.addEventListener("click", () => {
+      if (button.dataset.action === "share") showToast("任务分享预览已准备");
+      if (button.dataset.action === "settings") showToast("设置入口保留在侧栏底部");
+      if (button.dataset.action === "review") showToast("任务回顾将按日期范围打开");
+      if (button.dataset.action === "more") showToast("更多操作：导出、移动与删除");
+      if (button.dataset.action === "complete-task") {
+        const task = tasks.find((item) => item.id === state.activeTask);
+        if (task) {
+          task.done = !task.done;
+          document.getElementById("taskState").textContent = task.done ? "已完成" : "处理中";
+          renderTasks();
+          showToast(task.done ? "任务已完成" : "任务已恢复");
+        }
+      }
+      if (button.dataset.action === "add-node") showToast("已创建新主节点并聚焦标题");
+    }));
+
+    renderTasks();
+    renderCalendar();
+  </script>
+</body>
+</html>
