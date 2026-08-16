@@ -60,7 +60,9 @@ function applyTodayWidgetTopmost(window, enabled, platform = process.platform) {
   if (platform === "darwin") {
     window.setVisibleOnAllWorkspaces(topmost, {
       visibleOnFullScreen: topmost,
-      skipTransformProcessType: false,
+      // The widget is already an NSPanel. Keep the host application a regular
+      // foreground app so macOS does not remove its icon from the Dock.
+      skipTransformProcessType: true,
     });
     window.setHiddenInMissionControl(topmost);
   }

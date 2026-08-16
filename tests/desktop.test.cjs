@@ -300,7 +300,7 @@ test("Today widget corner placement respects each display work area", () => {
   assert.deepEqual(cornerWindowBounds(workArea, size, "bottom-right"), { x: 2984, y: 804, ...size });
 });
 
-test("Today widget topmost policy joins macOS fullscreen Spaces before raising z-order", () => {
+test("Today widget topmost policy joins macOS fullscreen Spaces without hiding the host app from the Dock", () => {
   const calls = [];
   const window = {
     isDestroyed: () => false,
@@ -313,7 +313,7 @@ test("Today widget topmost policy joins macOS fullscreen Spaces before raising z
 
   applyTodayWidgetTopmost(window, true, "darwin");
   assert.deepEqual(calls, [
-    ["workspaces", true, { visibleOnFullScreen: true, skipTransformProcessType: false }],
+    ["workspaces", true, { visibleOnFullScreen: true, skipTransformProcessType: true }],
     ["mission-control", true],
     ["always-on-top", true, "screen-saver", 1],
     ["move-top"],
@@ -322,7 +322,7 @@ test("Today widget topmost policy joins macOS fullscreen Spaces before raising z
   calls.length = 0;
   applyTodayWidgetTopmost(window, false, "darwin");
   assert.deepEqual(calls, [
-    ["workspaces", false, { visibleOnFullScreen: false, skipTransformProcessType: false }],
+    ["workspaces", false, { visibleOnFullScreen: false, skipTransformProcessType: true }],
     ["mission-control", false],
     ["always-on-top", false, "normal", 0],
   ]);
@@ -374,12 +374,15 @@ test("production Today widget uses its dedicated frontend and a sandboxed Electr
   assert.match(widgetMain, /sandbox: true/);
   assert.match(widgetMain, /type: process\.platform === "darwin" \? "panel" : undefined/);
   assert.match(widgetMain, /visibleOnFullScreen: topmost/);
+  assert.match(widgetMain, /skipTransformProcessType: true/);
   assert.match(widgetMain, /setAlwaysOnTop[\s\S]*"screen-saver"/);
   assert.match(widgetMain, /moveTop\(\)/);
   assert.match(widgetMain, /getDisplayMatching/);
   assert.match(widgetMain, /function stop\(\)[\s\S]*widgetWindow\.destroy\(\)/);
   assert.match(appMain, /if \(!isQuitting\) app\.quit\(\)/);
   assert.doesNotMatch(appMain, /!isMac && !isQuitting/);
+  assert.match(appMain, /app\.setActivationPolicy\("regular"\)/);
+  assert.match(appMain, /await app\.dock\.show\(\)/);
   assert.match(appMain, /app\.on\("did-resign-active"[\s\S]*fullscreenTransitionRefresh/);
   assert.match(preload, /todayWidget:/);
   assert.ok(packageJson.build.files.includes("app/renderer/today-widget.html"));

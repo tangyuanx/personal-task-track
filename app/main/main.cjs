@@ -354,6 +354,10 @@ function createMenu() {
 
 app.whenReady().then(async () => {
   app.setName("Personal Task Track");
+  if (isMac) {
+    app.setActivationPolicy("regular");
+    await app.dock.show();
+  }
   registerStorageHandlers();
   todayWidgetController = createTodayWidgetController({
     app,
