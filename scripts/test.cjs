@@ -260,12 +260,12 @@ test("Today widget preferences normalize safely and retain an intentional custom
 
 test("Today widget corner placement respects each display work area", () => {
   const workArea = { x: 1440, y: 24, width: 1920, height: 1056 };
-  const size = { width: 420, height: 390 };
+  const size = { width: 360, height: 260 };
 
   assert.deepEqual(cornerWindowBounds(workArea, size, "top-left"), { x: 1456, y: 40, ...size });
-  assert.deepEqual(cornerWindowBounds(workArea, size, "top-right"), { x: 2924, y: 40, ...size });
-  assert.deepEqual(cornerWindowBounds(workArea, size, "bottom-left"), { x: 1456, y: 674, ...size });
-  assert.deepEqual(cornerWindowBounds(workArea, size, "bottom-right"), { x: 2924, y: 674, ...size });
+  assert.deepEqual(cornerWindowBounds(workArea, size, "top-right"), { x: 2984, y: 40, ...size });
+  assert.deepEqual(cornerWindowBounds(workArea, size, "bottom-left"), { x: 1456, y: 804, ...size });
+  assert.deepEqual(cornerWindowBounds(workArea, size, "bottom-right"), { x: 2984, y: 804, ...size });
 });
 
 test("Today widget preferences persist atomically outside task data", async (t) => {
@@ -296,19 +296,24 @@ test("production Today widget uses the approved demo frontend and a sandboxed El
   ]);
 
   assert.match(demo, /class="today-widget" id="widget" data-position="top-right"/);
-  assert.match(demo, /按优先级与阻塞状态排序/);
+  assert.doesNotMatch(demo, /按优先级与阻塞状态排序|项待办|刚刚同步|在主窗口查看全部|corner-anchor/);
   assert.match(demo, /data-place="top-left"/);
-  assert.match(demo, /<span>始终置顶<\/span>/);
+  assert.match(demo, /<span>始终显示在最上层<\/span>/);
   assert.match(demo, /<span>随应用启动<\/span>/);
   assert.match(demo, /隐藏今日窗口/);
   assert.match(demo, /body\.widget-runtime \.today-widget/);
   assert.match(runtime, /bridge\.completeTask/);
   assert.match(runtime, /bridge\.openMain/);
   assert.match(runtime, /ResizeObserver/);
+  assert.doesNotMatch(runtime, /\+ 60/);
+  assert.match(runtime, /width: widget\.offsetWidth/);
   assert.match(main, /frame: false/);
   assert.match(main, /transparent: true/);
+  assert.match(main, /hasShadow: false/);
   assert.match(main, /sandbox: true/);
-  assert.match(main, /setAlwaysOnTop/);
+  assert.match(main, /setAlwaysOnTop[\s\S]*"screen-saver"/);
+  assert.match(main, /visibleOnFullScreen: preferences\.alwaysOnTop/);
+  assert.match(main, /moveTop\(\)/);
   assert.match(main, /getDisplayMatching/);
   assert.match(preload, /todayWidget:/);
   assert.ok(packageJson.build.files.includes("today-widget-window-demo.html"));

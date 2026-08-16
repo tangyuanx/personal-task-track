@@ -40,8 +40,8 @@ function normalizeCustomBounds(value) {
 
 function cornerWindowBounds(workArea, size, position, gap = WIDGET_GAP) {
   const safeArea = workArea && typeof workArea === "object" ? workArea : { x: 0, y: 0, width: 1280, height: 800 };
-  const width = Math.max(1, Math.round(Number(size?.width) || 420));
-  const height = Math.max(1, Math.round(Number(size?.height) || 390));
+  const width = Math.max(1, Math.round(Number(size?.width) || 360));
+  const height = Math.max(1, Math.round(Number(size?.height) || 260));
   const left = Math.round(Number(safeArea.x) || 0) + gap;
   const top = Math.round(Number(safeArea.y) || 0) + gap;
   const right = Math.round(Number(safeArea.x) || 0) + Math.round(Number(safeArea.width) || width) - width - gap;
@@ -78,7 +78,7 @@ function createTodayWidgetController({ app, BrowserWindow, ipcMain, screen, getM
   let preferences = { ...DEFAULT_PREFERENCES };
   let widgetWindow = null;
   let snapshot = { date: "", items: [] };
-  let currentSize = { width: 420, height: 390 };
+  let currentSize = { width: 360, height: 260 };
   let moveSaveTimer = null;
   let suppressMoveUntil = 0;
   const pendingCompletions = new Map();
@@ -131,10 +131,11 @@ function createTodayWidgetController({ app, BrowserWindow, ipcMain, screen, getM
 
   function applyAlwaysOnTop() {
     if (!widgetWindow || widgetWindow.isDestroyed()) return;
-    widgetWindow.setAlwaysOnTop(preferences.alwaysOnTop, preferences.alwaysOnTop ? "floating" : "normal");
+    widgetWindow.setAlwaysOnTop(preferences.alwaysOnTop, preferences.alwaysOnTop ? "screen-saver" : "normal");
     if (process.platform === "darwin") {
       widgetWindow.setVisibleOnAllWorkspaces(preferences.alwaysOnTop, { visibleOnFullScreen: preferences.alwaysOnTop });
     }
+    if (preferences.alwaysOnTop && widgetWindow.isVisible()) widgetWindow.moveTop();
   }
 
   function createWidgetWindow() {
@@ -142,10 +143,11 @@ function createTodayWidgetController({ app, BrowserWindow, ipcMain, screen, getM
     widgetWindow = new BrowserWindow({
       width: currentSize.width,
       height: currentSize.height,
-      minWidth: 320,
-      minHeight: 80,
+      minWidth: 296,
+      minHeight: 49,
       frame: false,
       transparent: true,
+      hasShadow: false,
       backgroundColor: "#00000000",
       show: false,
       resizable: false,
@@ -167,6 +169,7 @@ function createTodayWidgetController({ app, BrowserWindow, ipcMain, screen, getM
     widgetWindow.loadFile(path.join(__dirname, "..", "today-widget-window-demo.html"));
     widgetWindow.once("ready-to-show", () => {
       if (preferences.visible) widgetWindow.showInactive();
+      if (preferences.alwaysOnTop) widgetWindow.moveTop();
       widgetWindow.webContents.send("today-widget:snapshot", snapshot);
       widgetWindow.webContents.send("today-widget:state", widgetState());
       broadcastState();
@@ -211,6 +214,7 @@ function createTodayWidgetController({ app, BrowserWindow, ipcMain, screen, getM
     applyAlwaysOnTop();
     positionWidget();
     window.showInactive();
+    if (preferences.alwaysOnTop) window.moveTop();
     await persistPreferences();
     broadcastState();
     return widgetState();
@@ -238,8 +242,8 @@ function createTodayWidgetController({ app, BrowserWindow, ipcMain, screen, getM
   async function resizeWidget(size) {
     if (!widgetWindow || widgetWindow.isDestroyed()) return widgetState();
     currentSize = {
-      width: Math.max(320, Math.min(500, Math.round(Number(size?.width) || currentSize.width))),
-      height: Math.max(80, Math.min(520, Math.round(Number(size?.height) || currentSize.height))),
+      width: Math.max(296, Math.min(420, Math.round(Number(size?.width) || currentSize.width))),
+      height: Math.max(49, Math.min(420, Math.round(Number(size?.height) || currentSize.height))),
     };
     positionWidget();
     return widgetState();

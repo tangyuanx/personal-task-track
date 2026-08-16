@@ -200,9 +200,7 @@
       border: 1px solid rgba(255, 255, 255, 0.15);
       border-radius: 16px;
       background: var(--forest-deep);
-      box-shadow:
-        0 25px 60px rgba(13, 49, 39, 0.27),
-        0 4px 14px rgba(13, 49, 39, 0.16);
+      box-shadow: none;
       transition: width 180ms ease, height 180ms ease, opacity 160ms ease, transform 180ms ease;
     }
 
@@ -213,7 +211,6 @@
 
     .today-widget.is-dragging {
       transition: none;
-      box-shadow: 0 31px 76px rgba(13, 49, 39, 0.32);
     }
 
     .today-widget.is-hidden {
@@ -221,25 +218,6 @@
       transform: scale(0.96);
       pointer-events: none;
     }
-
-    .corner-anchor {
-      position: absolute;
-      z-index: 2;
-      width: 11px;
-      height: 11px;
-      border: 2px solid rgba(255, 255, 255, 0.88);
-      border-radius: 50%;
-      background: #70c49e;
-      box-shadow: 0 0 0 5px rgba(112, 196, 158, 0.15), 0 0 18px rgba(112, 196, 158, 0.45);
-      transition: inset 180ms ease;
-      pointer-events: none;
-    }
-
-    [data-position="top-left"] .corner-anchor { top: -5px; left: -5px; }
-    [data-position="top-right"] .corner-anchor { top: -5px; right: -5px; }
-    [data-position="bottom-left"] .corner-anchor { bottom: -5px; left: -5px; }
-    [data-position="bottom-right"] .corner-anchor { right: -5px; bottom: -5px; }
-    [data-position="custom"] .corner-anchor { top: -5px; left: calc(50% - 5px); }
 
     .widget-header {
       display: grid;
@@ -309,20 +287,6 @@
     }
 
     .widget-content { padding: 10px; }
-
-    .widget-summary {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0 5px 8px;
-      color: rgba(230, 243, 236, 0.58);
-      font-size: 10px;
-    }
-
-    .widget-summary b {
-      color: rgba(244, 252, 248, 0.88);
-      font: 690 11px ui-monospace, SFMono-Regular, Consolas, monospace;
-    }
 
     .task-list {
       display: grid;
@@ -436,28 +400,6 @@
       color: rgba(226, 241, 233, 0.56);
       font-size: 10.5px;
     }
-
-    .widget-footer {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      min-height: 35px;
-      padding: 3px 14px 7px;
-      color: rgba(226, 241, 233, 0.43);
-      font: 9.5px ui-monospace, SFMono-Regular, Consolas, monospace;
-    }
-
-    .widget-footer button {
-      padding: 4px 0;
-      border: 0;
-      background: transparent;
-      color: rgba(232, 245, 238, 0.67);
-      font-family: Inter, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
-      font-size: 10px;
-      cursor: pointer;
-    }
-
-    .widget-footer button:hover { color: #fff; }
 
     .widget-menu {
       position: absolute;
@@ -585,18 +527,8 @@
 
     .today-widget.is-compact { width: 296px; }
     .today-widget.is-compact .widget-content,
-    .today-widget.is-compact .widget-footer,
     .today-widget.is-compact .widget-menu { display: none; }
     .today-widget.is-compact .widget-header { border-bottom: 0; }
-    .today-widget.is-compact .widget-title::after {
-      color: rgba(239, 248, 243, 0.64);
-      font: 10px ui-monospace, SFMono-Regular, Consolas, monospace;
-      content: attr(data-count) " 项待办";
-    }
-
-    .today-widget.is-unpinned {
-      box-shadow: 0 10px 28px rgba(13, 49, 39, 0.17);
-    }
 
     .restore-widget {
       position: absolute;
@@ -678,9 +610,12 @@
     body.widget-runtime .today-widget {
       position: relative;
       inset: auto !important;
-      margin: 30px;
+      width: var(--widget-width);
+      margin: 0;
       -webkit-app-region: no-drag;
     }
+
+    body.widget-runtime .today-widget.is-compact { width: 296px; }
 
     body.widget-runtime .widget-header {
       -webkit-app-region: drag;
@@ -709,9 +644,8 @@
     </div>
 
     <section class="today-widget" id="widget" data-position="top-right" aria-label="今日任务置顶窗口">
-      <i class="corner-anchor" aria-hidden="true"></i>
       <header class="widget-header" id="drag-region">
-        <div class="widget-title" id="widget-title" data-count="3">
+        <div class="widget-title" id="widget-title">
           <strong>今日任务</strong>
           <time id="today-date" datetime="2026-08-16">08/16 周日</time>
         </div>
@@ -729,7 +663,6 @@
       </header>
 
       <div class="widget-content">
-        <div class="widget-summary"><span>按优先级与阻塞状态排序</span><span><b id="task-count">3</b> 项待办</span></div>
         <div class="task-list" id="task-list">
           <article class="today-task high" data-title="完善个人任务管理 app" tabindex="0" role="button">
             <button class="task-check" type="button" aria-label="完成：完善个人任务管理 app"></button>
@@ -747,10 +680,8 @@
             <i class="task-state" title="被阻塞"></i>
           </article>
         </div>
-        <div class="empty-state" id="empty-state"><div><strong>今天的任务已完成</strong><span>窗口会保留，等待新的今日任务出现</span></div></div>
+        <div class="empty-state" id="empty-state"><div><strong>今天的任务已完成</strong></div></div>
       </div>
-
-      <footer class="widget-footer"><span id="sync-state">刚刚同步</span><button id="open-all" type="button">在主窗口查看全部</button></footer>
 
       <aside class="widget-menu" id="widget-menu" aria-label="今日窗口设置" data-no-drag>
         <span class="menu-label">窗口位置</span>
@@ -760,7 +691,7 @@
           <button class="position-button" data-place="bottom-left" type="button" title="左下角" aria-label="左下角"></button>
           <button class="position-button" data-place="bottom-right" type="button" title="右下角" aria-label="右下角"></button>
         </div>
-        <label class="menu-switch"><span>始终置顶</span><input id="always-on-top" type="checkbox" checked /><i class="switch" aria-hidden="true"></i></label>
+        <label class="menu-switch"><span>始终显示在最上层</span><input id="always-on-top" type="checkbox" checked /><i class="switch" aria-hidden="true"></i></label>
         <label class="menu-switch"><span>随应用启动</span><input id="launch-with-app" type="checkbox" checked /><i class="switch" aria-hidden="true"></i></label>
         <button class="hide-widget" id="hide-widget" type="button">隐藏今日窗口</button>
       </aside>
@@ -779,8 +710,6 @@
     const menuToggle = document.querySelector("#menu-toggle");
     const compactToggle = document.querySelector("#compact-toggle");
     const restoreWidget = document.querySelector("#restore-widget");
-    const taskCount = document.querySelector("#task-count");
-    const titleCount = document.querySelector("#widget-title");
     const taskList = document.querySelector("#task-list");
     const emptyState = document.querySelector("#empty-state");
     const positionNote = document.querySelector("#position-note");
@@ -820,8 +749,6 @@
 
     function updateCount() {
       const count = taskList.querySelectorAll(".today-task:not(.is-completing)").length;
-      taskCount.textContent = String(count);
-      titleCount.dataset.count = String(count);
       emptyState.classList.toggle("is-visible", count === 0);
       taskList.hidden = count === 0;
     }
@@ -876,7 +803,7 @@
       showToast("今日窗口已重新显示");
     });
 
-    document.querySelectorAll("#open-main, #open-all").forEach((button) => {
+    document.querySelectorAll("#open-main").forEach((button) => {
       button.addEventListener("click", () => showToast("正式实现时将在主窗口打开今日任务"));
     });
 

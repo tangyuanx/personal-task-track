@@ -8,11 +8,8 @@
   const menu = document.querySelector("#widget-menu");
   const menuToggle = document.querySelector("#menu-toggle");
   const compactToggle = document.querySelector("#compact-toggle");
-  const taskCount = document.querySelector("#task-count");
-  const titleCount = document.querySelector("#widget-title");
   const taskList = document.querySelector("#task-list");
   const emptyState = document.querySelector("#empty-state");
-  const syncState = document.querySelector("#sync-state");
   const toast = document.querySelector("#toast");
   const alwaysOnTop = document.querySelector("#always-on-top");
   const launchWithApp = document.querySelector("#launch-with-app");
@@ -41,6 +38,7 @@
   function closeMenu() {
     menu.classList.remove("is-open");
     menuToggle.setAttribute("aria-expanded", "false");
+    requestWidgetResize();
   }
 
   function formatToday(value) {
@@ -67,8 +65,6 @@
   }
 
   function updateCount(count = currentSnapshot.items.length) {
-    taskCount.textContent = String(count);
-    titleCount.dataset.count = String(count);
     emptyState.classList.toggle("is-visible", count === 0);
     taskList.hidden = count === 0;
   }
@@ -83,7 +79,6 @@
     taskList.innerHTML = items.map(taskHtml).join("");
     bindTaskRows();
     updateCount(items.length);
-    syncState.textContent = "刚刚同步";
     requestWidgetResize();
   }
 
@@ -108,10 +103,10 @@
   function requestWidgetResize() {
     window.cancelAnimationFrame(resizeFrame);
     resizeFrame = window.requestAnimationFrame(() => {
-      const bounds = widget.getBoundingClientRect();
+      const menuHeight = menu.classList.contains("is-open") ? menu.offsetTop + menu.offsetHeight : 0;
       void bridge.resize({
-        width: Math.ceil(bounds.width) + 60,
-        height: Math.ceil(bounds.height) + 60,
+        width: widget.offsetWidth,
+        height: Math.max(widget.offsetHeight, menuHeight),
       });
     });
   }
@@ -164,6 +159,7 @@
     const open = !menu.classList.contains("is-open");
     menu.classList.toggle("is-open", open);
     menuToggle.setAttribute("aria-expanded", String(open));
+    requestWidgetResize();
   });
 
   document.addEventListener("pointerdown", (event) => {
@@ -205,7 +201,7 @@
     void bridge.hide();
   });
 
-  document.querySelectorAll("#open-main, #open-all").forEach((button) => {
+  document.querySelectorAll("#open-main").forEach((button) => {
     button.addEventListener("click", () => void bridge.openMain(""));
   });
 
