@@ -99,6 +99,23 @@ function registerStorageHandlers() {
  * @returns {Promise<{ canceled: boolean, filePath?: string }>}
  */
   ipcMain.handle("task-data:write", (_event, data) => writeTaskData(app.getPath("userData"), data));
+  ipcMain.handle("app:confirm-destructive", async (event, value) => {
+    const message = String(value?.message || "确定删除所选内容？").slice(0, 500);
+    const parent = BrowserWindow.fromWebContents(event.sender);
+    const options = {
+      type: "warning",
+      buttons: ["取消", "删除"],
+      defaultId: 0,
+      cancelId: 0,
+      noLink: true,
+      title: "确认删除",
+      message,
+    };
+    const result = parent && !parent.isDestroyed()
+      ? await dialog.showMessageBox(parent, options)
+      : await dialog.showMessageBox(options);
+    return result.response === 1;
+  });
   ipcMain.handle("clipboard:read-image-data-url", () => {
     const image = clipboard.readImage();
     return image.isEmpty() ? "" : image.toDataURL();

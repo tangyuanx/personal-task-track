@@ -19,6 +19,9 @@ contextBridge.exposeInMainWorld("personalTaskTrack", {
   bugReports: {
     submit: (payload) => ipcRenderer.invoke("bug-report:submit", payload),
   },
+  dialogs: {
+    confirmDestructive: (options) => ipcRenderer.invoke("app:confirm-destructive", options),
+  },
   updates: {
     getState: () => ipcRenderer.invoke("app-update:get-state"),
     setAutomaticChecks: (enabled) => ipcRenderer.invoke("app-update:set-automatic-checks", enabled === true),

@@ -5,6 +5,8 @@ const crypto = require("node:crypto");
 const PREFERENCES_FILE = "today-widget-preferences.json";
 const WIDGET_GAP = 16;
 const WIDGET_POSITIONS = new Set(["top-left", "top-right", "bottom-left", "bottom-right", "custom"]);
+const WIDGET_ZH_FONTS = new Set(["system", "noto", "yahei", "pingfang", "songti", "simsun", "fangsong", "heiti", "kaiti"]);
+const WIDGET_EN_FONTS = new Set(["inter", "system", "segoe", "arial", "helvetica", "verdana", "trebuchet", "tahoma", "times", "georgia", "courier", "mono"]);
 const DEFAULT_PREFERENCES = Object.freeze({
   position: "top-right",
   alwaysOnTop: true,
@@ -346,6 +348,7 @@ function normalizeSnapshot(value) {
   const raw = value && typeof value === "object" ? value : {};
   return {
     date: String(raw.date || "").slice(0, 32),
+    appearance: normalizeTodayWidgetAppearance(raw.appearance),
     items: (Array.isArray(raw.items) ? raw.items : []).slice(0, 3).map((item) => ({
       taskId: normalizeTaskId(item?.taskId),
       title: String(item?.title || "未命名任务").slice(0, 240),
@@ -355,12 +358,25 @@ function normalizeSnapshot(value) {
   };
 }
 
+function normalizeTodayWidgetAppearance(value) {
+  const raw = value && typeof value === "object" ? value : {};
+  const fontSize = Number(raw.fontSize);
+  return {
+    theme: raw.theme === "dark" ? "dark" : "light",
+    zhFont: WIDGET_ZH_FONTS.has(raw.zhFont) ? raw.zhFont : "system",
+    enFont: WIDGET_EN_FONTS.has(raw.enFont) ? raw.enFont : "inter",
+    fontSize: Number.isFinite(fontSize) ? Math.max(12, Math.min(24, fontSize)) : 16.5,
+  };
+}
+
 module.exports = {
   DEFAULT_PREFERENCES,
   applyTodayWidgetTopmost,
   cornerWindowBounds,
   createTodayWidgetController,
   normalizeTodayWidgetPreferences,
+  normalizeTodayWidgetAppearance,
+  normalizeSnapshot,
   readTodayWidgetPreferences,
   writeTodayWidgetPreferences,
 };

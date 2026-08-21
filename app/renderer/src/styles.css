@@ -6567,11 +6567,18 @@ body {
 .task-knowledge-editor-panel .markdown-editor {
   min-height: 310px;
   padding: 21px;
-  overflow: auto;
   background: transparent;
   color: var(--handoff-ink);
   font-size: 14px;
   line-height: 1.78;
+}
+
+.task-knowledge-editor-panel .ProseMirror {
+  overflow: visible;
+}
+
+.task-knowledge-editor-panel .markdown-editor {
+  overflow: auto;
 }
 
 .task-knowledge-editor-panel .ProseMirror ul,

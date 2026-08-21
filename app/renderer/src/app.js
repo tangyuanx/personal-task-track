@@ -23,6 +23,7 @@ const desktopExport = window.personalTaskTrack?.export;
 const desktopBugReports = window.personalTaskTrack?.bugReports;
 const desktopUpdates = window.personalTaskTrack?.updates;
 const desktopTodayWidget = window.personalTaskTrack?.todayWidget;
+const desktopDialogs = window.personalTaskTrack?.dialogs;
 const desktopEnvironment = window.personalTaskTrack?.environment || {};
 const APP_VERSION = window.personalTaskTrack?.appVersion || "";
 
@@ -262,6 +263,19 @@ function id(prefix) {
 
 function now() {
   return new Date().toISOString();
+}
+
+async function confirmDestructiveAction(message) {
+  if (desktopDialogs?.confirmDestructive) {
+    try {
+      const confirmed = await desktopDialogs.confirmDestructive({ message });
+      state.restoreMarkdownFocus = false;
+      return confirmed === true;
+    } catch (error) {
+      console.error("Failed to open desktop confirmation dialog.", error);
+    }
+  }
+  return globalThis.confirm(message);
 }
 
 function createEmptyFeedbackDraft() {
@@ -4045,7 +4059,7 @@ async function pickEditorImageFile() {
  * @param {object} data - DOM dataset, includes { action, taskId, nodeId, ... }
  * @param {Event|null} event - Original DOM event, used for position calculations
  */
-function action(data, event = null) {
+async function action(data, event = null) {
   state.contextMenu = null;
   syncContextMenuRoot();
   if (data.action === "show-today-widget") {
@@ -4129,7 +4143,7 @@ function action(data, event = null) {
     render();
     return;
   }
-  if (data.action === "delete-group") deleteGroup(data.groupId);
+  if (data.action === "delete-group" && !(await deleteGroup(data.groupId))) return;
   if (data.action === "select-focus") {
     openTaskFromGlobalList(data.taskId, "");
   }
@@ -4137,7 +4151,7 @@ function action(data, event = null) {
     activateRepositoryTask(data.taskId);
   }
   if (data.action === "add-task") addBlankTask();
-  if (data.action === "delete-task") deleteTask(data.taskId);
+  if (data.action === "delete-task" && !(await deleteTask(data.taskId))) return;
   if (data.action === "select-node") {
     state.selectedNodeId = data.nodeId;
     const task = state.tasks.find((item) => item.id === data.taskId);
@@ -4159,7 +4173,7 @@ function action(data, event = null) {
   if (data.action === "toggle-node-collapse") toggleNodeCollapse(data.taskId, data.nodeId);
   if (data.action === "toggle-all-nodes") toggleAllNodes(data.taskId);
   if (data.action === "mark-node-status") markNodeStatus(data.taskId, data.nodeId, data.status);
-  if (data.action === "delete-node") deleteNode(data.taskId, data.nodeId);
+  if (data.action === "delete-node" && !(await deleteNode(data.taskId, data.nodeId))) return;
   if (data.action === "toggle-node-detail-fullscreen") state.nodeDetailFullscreen = !state.nodeDetailFullscreen;
   if (data.action === "close-node-detail") {
     state.selectedNodeId = "";
@@ -4282,6 +4296,7 @@ function edit(data, value) {
     } else {
       task[data.editKey] = value;
     }
+    if (data.editKey === "title") syncTaskTitleInputs(task.id, value);
     if (data.editKey === "hypothesis") task.hypothesisUpdatedAt = now();
     if (data.editKey === "conclusion" && value.trim()) clearConclusionNotice(task.id);
     task.updatedAt = now();
@@ -4300,6 +4315,13 @@ function edit(data, value) {
     const title = document.querySelector(`.flow-title-input[data-node-id="${data.nodeId}"]`);
     if (title) title.value = value || "";
   }
+}
+
+function syncTaskTitleInputs(taskId, value) {
+  document.querySelectorAll('[data-edit-key="title"][data-task-id]').forEach((element) => {
+    if (element === document.activeElement || element.dataset.taskId !== taskId || element.dataset.nodeId) return;
+    element.value = value || "";
+  });
 }
 
 function openTaskFromGlobalList(taskId, nodeId = "") {
@@ -4417,10 +4439,10 @@ function renameGroup(groupId, value, commit = false) {
  * Delete a task group and move its tasks into the protected default group.
  * @param {string} groupId - Group ID to delete
  */
-function deleteGroup(groupId) {
+async function deleteGroup(groupId) {
   const group = state.taskGroups.find((item) => item.id === groupId);
-  if (!group || group.id === defaultTaskGroup.id) return;
-  if (!confirm(`确定删除分组「${group.title}」吗？该分组内任务将移动到默认分组。`)) return;
+  if (!group || group.id === defaultTaskGroup.id) return false;
+  if (!(await confirmDestructiveAction(`确定删除分组「${group.title}」吗？该分组内任务将移动到默认分组。`))) return false;
 
   state.tasks.forEach((task) => {
     if ((task.groupId || defaultTaskGroup.id) === groupId) {
@@ -4438,6 +4460,7 @@ function deleteGroup(groupId) {
   state.editingGroupId = "";
   state.focusGroupTitleId = "";
   save();
+  return true;
 }
 
 /**
@@ -4739,9 +4762,9 @@ function updateTaskRecurrence(taskId, field, value) {
  * Delete a task and all its nodes.
  * @param {string} taskId - Task ID to delete
  */
-function deleteTask(taskId) {
+async function deleteTask(taskId) {
   const task = state.tasks.find((item) => item.id === taskId);
-  if (!task || !confirm(`确定删除任务「${task.title || "未命名任务"}」及其所有节点？`)) return;
+  if (!task || !(await confirmDestructiveAction(`确定删除任务「${task.title || "未命名任务"}」及其所有节点？`))) return false;
   const index = state.tasks.findIndex((item) => item.id === taskId);
   state.tasks = state.tasks.filter((item) => item.id !== taskId);
   reorder(state.tasks);
@@ -4751,6 +4774,7 @@ function deleteTask(taskId) {
     state.selectedNodeId = "";
   }
   save();
+  return true;
 }
 
 /**
@@ -4881,10 +4905,9 @@ function markNodeStatus(taskId, nodeId, status) {
  * @param {string} taskId - Task containing the node
  * @param {string} nodeId - Node ID to delete
  */
-function deleteNode(taskId, nodeId) {
-  if (!confirm("确定删除这个节点及其子节点？")) return;
+async function deleteNode(taskId, nodeId) {
   const task = state.tasks.find((item) => item.id === taskId);
-  if (!task) return;
+  if (!task || !(await confirmDestructiveAction("确定删除这个节点及其子节点？"))) return false;
   const deletedNode = findNode(task.nodes, nodeId);
   const deletedIds = new Set(deletedNode ? flatten([deletedNode]).map((node) => node.id) : []);
   task.nodes = removeNode(task.nodes, nodeId);
@@ -4895,6 +4918,7 @@ function deleteNode(taskId, nodeId) {
     state.nodeDetailFullscreen = false;
     state.nodeDetailPosition = null;
   }
+  return true;
 }
 
 function activeTask() {
@@ -5241,8 +5265,15 @@ function localDateKey(value) {
 }
 
 function todayWidgetSnapshot() {
+  const rootFontSize = Number.parseFloat(window.getComputedStyle?.(document.documentElement)?.fontSize);
   return {
     date: localDateKey(new Date()),
+    appearance: {
+      theme: state.theme,
+      zhFont: state.zhFont,
+      enFont: state.enFont,
+      fontSize: Number.isFinite(rootFontSize) ? rootFontSize : 16.5,
+    },
     items: todayFocusItems().map(({ task, kind, nextText }) => ({
       taskId: task.id,
       title: task.title || "未命名任务",

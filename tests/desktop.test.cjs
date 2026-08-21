@@ -12,6 +12,8 @@ const {
 const {
   applyTodayWidgetTopmost,
   cornerWindowBounds,
+  normalizeSnapshot,
+  normalizeTodayWidgetAppearance,
   normalizeTodayWidgetPreferences,
   readTodayWidgetPreferences,
   writeTodayWidgetPreferences,
@@ -300,6 +302,32 @@ test("Today widget corner placement respects each display work area", () => {
   assert.deepEqual(cornerWindowBounds(workArea, size, "bottom-right"), { x: 2984, y: 804, ...size });
 });
 
+test("Today widget appearance normalizes theme, fonts, and base font size", () => {
+  assert.deepEqual(normalizeTodayWidgetAppearance({
+    theme: "dark",
+    zhFont: "songti",
+    enFont: "georgia",
+    fontSize: 18,
+  }), {
+    theme: "dark",
+    zhFont: "songti",
+    enFont: "georgia",
+    fontSize: 18,
+  });
+  assert.deepEqual(normalizeTodayWidgetAppearance({
+    theme: "unknown",
+    zhFont: "unknown",
+    enFont: "unknown",
+    fontSize: 99,
+  }), {
+    theme: "light",
+    zhFont: "system",
+    enFont: "inter",
+    fontSize: 24,
+  });
+  assert.deepEqual(normalizeSnapshot({}).appearance, normalizeTodayWidgetAppearance());
+});
+
 test("Today widget topmost policy joins macOS fullscreen Spaces without hiding the host app from the Dock", () => {
   const calls = [];
   const window = {
@@ -363,11 +391,17 @@ test("production Today widget uses its dedicated frontend and a sandboxed Electr
   assert.match(demo, /<span>随应用启动<\/span>/);
   assert.match(demo, /隐藏今日窗口/);
   assert.match(demo, /body\.widget-runtime \.today-widget/);
+  assert.match(demo, /class="compact-expand-icon"/);
+  assert.match(demo, /\.today-widget\.is-compact \.compact-expand-icon\s*\{\s*display:\s*block;/);
+  assert.doesNotMatch(demo, /\.today-widget\.is-compact \.widget-menu[^}]*display:\s*none;/);
   assert.match(runtime, /bridge\.completeTask/);
   assert.match(runtime, /bridge\.openMain/);
   assert.match(runtime, /ResizeObserver/);
   assert.doesNotMatch(runtime, /\+ 60/);
   assert.match(runtime, /width: widget\.offsetWidth/);
+  assert.match(runtime, /function applyAppearance/);
+  assert.match(runtime, /document\.documentElement\.dataset\.zhFont/);
+  assert.match(runtime, /--widget-font-scale/);
   assert.match(widgetMain, /frame: false/);
   assert.match(widgetMain, /transparent: true/);
   assert.match(widgetMain, /hasShadow: false/);
@@ -385,6 +419,8 @@ test("production Today widget uses its dedicated frontend and a sandboxed Electr
   assert.match(appMain, /await app\.dock\.show\(\)/);
   assert.match(appMain, /app\.on\("did-resign-active"[\s\S]*fullscreenTransitionRefresh/);
   assert.match(preload, /todayWidget:/);
+  assert.match(preload, /app:confirm-destructive/);
+  assert.match(appMain, /dialog\.showMessageBox/);
   assert.ok(packageJson.build.files.includes("app/renderer/today-widget.html"));
 });
 
@@ -820,6 +856,25 @@ test("group and node mutations do not steal repository title focus", async () =>
   assert.match(app, /event\.relatedTarget\?\.closest\?\.\("\.task-title, \.page-title"\)/);
 });
 
+test("task title edits mirror immediately between repository and workbench", async () => {
+  const harness = await rendererHarness();
+  const result = harness.json(`(() => {
+    state.tasks = normalizeTasks([{ id: "task_title", title: "旧标题", nodes: [] }]);
+    const repository = { dataset: { taskId: "task_title", editKey: "title" }, value: "旧标题" };
+    const workbench = { dataset: { taskId: "task_title", editKey: "title" }, value: "新标题" };
+    document.activeElement = workbench;
+    document.querySelectorAll = (selector) => selector === '[data-edit-key="title"][data-task-id]' ? [repository, workbench] : [];
+    edit(workbench.dataset, workbench.value);
+    return { stateTitle: state.tasks[0].title, repositoryTitle: repository.value, workbenchTitle: workbench.value };
+  })()`);
+
+  assert.deepEqual(result, {
+    stateTitle: "新标题",
+    repositoryTitle: "新标题",
+    workbenchTitle: "新标题",
+  });
+});
+
 test("every repository row click activates its task before nested controls run", async () => {
   const harness = await rendererHarness();
   const result = harness.json(`(() => {
@@ -957,6 +1012,8 @@ test("knowledge images keep the caret beside the inline image node", async () =>
   assert.match(imageRule, /display:\s*inline-block;/);
   assert.match(imageRule, /vertical-align:\s*bottom;/);
   assert.doesNotMatch(styles, /\.task-knowledge-editor-panel \.ProseMirror img\s*\{[\s\S]*?display:\s*block;/);
+  assert.match(styles, /\.task-knowledge-editor-panel \.milkdown-editor-host\s*\{[\s\S]*?overflow:\s*auto;/);
+  assert.match(styles, /\.task-knowledge-editor-panel \.ProseMirror\s*\{\s*overflow:\s*visible;/);
 });
 
 test("knowledge lists and code use compact document-like presentation", async () => {
@@ -992,7 +1049,7 @@ test("Milkdown handles matching backtick code spans and defers markdown serializ
 
 test("node mutation rejects invalid statuses and clears deleted descendant detail", async () => {
   const harness = await rendererHarness();
-  const result = harness.json(`(() => {
+  const result = JSON.parse(JSON.stringify(await harness.evaluate(`(async () => {
     state.tasks = normalizeTasks([{
       id: "task_nodes",
       nodes: [{
@@ -1005,14 +1062,14 @@ test("node mutation rejects invalid statuses and clears deleted descendant detai
     state.recordDraft = "draft";
     markNodeStatus("task_nodes", "parent", "invalid");
     const status = state.tasks[0].nodes[0].status;
-    deleteNode("task_nodes", "parent");
+    await deleteNode("task_nodes", "parent");
     return {
       status,
       selectedNodeId: state.selectedNodeId,
       recordDraft: state.recordDraft,
       nodes: state.tasks[0].nodes
     };
-  })()`);
+  })()`)));
 
   assert.equal(result.status, "todo");
   assert.equal(result.selectedNodeId, "");

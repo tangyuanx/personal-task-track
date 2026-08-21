@@ -69,10 +69,23 @@
     taskList.hidden = count === 0;
   }
 
+  function applyAppearance(value) {
+    const appearance = value && typeof value === "object" ? value : {};
+    const fontSize = Number(appearance.fontSize);
+    document.documentElement.dataset.theme = appearance.theme === "dark" ? "dark" : "light";
+    document.documentElement.dataset.zhFont = appearance.zhFont || "system";
+    document.documentElement.dataset.enFont = appearance.enFont || "inter";
+    document.documentElement.style.setProperty(
+      "--widget-font-scale",
+      String(Number.isFinite(fontSize) ? Math.max(12, Math.min(24, fontSize)) / 16.5 : 1),
+    );
+  }
+
   function renderSnapshot(value) {
     currentSnapshot = value && typeof value === "object" ? value : { date: "", items: [] };
     const items = Array.isArray(currentSnapshot.items) ? currentSnapshot.items.slice(0, 3) : [];
     currentSnapshot.items = items;
+    applyAppearance(currentSnapshot.appearance);
     const dateElement = document.querySelector("#today-date");
     dateElement.textContent = formatToday(currentSnapshot.date);
     dateElement.dateTime = currentSnapshot.date || new Date().toISOString();
