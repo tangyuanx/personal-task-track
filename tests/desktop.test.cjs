@@ -179,6 +179,19 @@ test("Chinese and English font settings stay isolated in the application font ch
   assert.doesNotMatch(app, /横向滚动\s*·\s*双击重命名/);
 });
 
+test("Today widget uses the main Today focus surface treatment", async () => {
+  const [styles, widget] = await Promise.all([
+    fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "styles.css"), "utf8"),
+    fs.readFile(path.join(__dirname, "..", "app", "renderer", "today-widget.html"), "utf8"),
+  ]);
+
+  assert.match(styles, /\.today-focus\s*\{[\s\S]*linear-gradient\(135deg, color-mix\(in srgb, var\(--focus\) 16%/);
+  assert.match(widget, /--widget-bg:\s*\n\s*linear-gradient\(135deg, color-mix\(in srgb, var\(--widget-focus\) 16%/);
+  assert.match(widget, /--widget-task-bg:\s*var\(--widget-glass-soft\)/);
+  assert.match(widget, /\.today-widget\s*\{[\s\S]*background:\s*var\(--widget-bg\)/);
+  assert.match(widget, /\.today-task\s*\{[\s\S]*background:\s*var\(--widget-task-bg\)/);
+});
+
 test("settings expose the confirmed application update flow without silent install controls", async () => {
   const [app, styles, preload, updater] = await Promise.all([
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "app.js"), "utf8"),
