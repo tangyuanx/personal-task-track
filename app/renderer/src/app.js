@@ -17,15 +17,24 @@ const SIDEBAR_WIDTH_KEY = "task-track-sidebar-width";
 const DETAIL_HEIGHT_KEY = "task-track-detail-height";
 const ATTACHMENTS_KEY = "task-track-attachments";
 const INSTALLATION_ID_KEY = "task-track-installation-id";
+const KNOWLEDGE_RECOVERY_KEY = "task-track-knowledge-recovery-v1";
+const KNOWLEDGE_RECOVERY_DEBOUNCE_MS = 800;
+const KNOWLEDGE_RECOVERY_MAX_INTERVAL_MS = 5000;
 const DATA_VERSION = 1;
+const KNOWLEDGE_MIGRATION_VERSION = 1;
 const desktopStorage = window.personalTaskTrack?.storage;
+const desktopKnowledgeRecovery = window.personalTaskTrack?.knowledgeRecovery;
+const desktopKnowledgeFile = window.personalTaskTrack?.knowledgeFile;
 const desktopExport = window.personalTaskTrack?.export;
 const desktopBugReports = window.personalTaskTrack?.bugReports;
 const desktopUpdates = window.personalTaskTrack?.updates;
 const desktopTodayWidget = window.personalTaskTrack?.todayWidget;
 const desktopDialogs = window.personalTaskTrack?.dialogs;
 const desktopEnvironment = window.personalTaskTrack?.environment || {};
+const desktopPlatform = window.personalTaskTrack?.platform || "";
 const APP_VERSION = window.personalTaskTrack?.appVersion || "";
+const knowledgeDocument = globalThis.KnowledgeDocument;
+const knowledgeRecoveryModel = globalThis.KnowledgeRecovery;
 
 const priorityLabels = {
 
@@ -221,8 +230,12 @@ let state = {
   sidebarWidth: defaultSidebarWidth,
   detailHeight: defaultDetailHeight,
   attachments: { images: {} },
+  knowledgeAssets: {},
+  knowledgeFileIssues: {},
+  knowledgeRecovery: { version: 1, records: {} },
   installationId: "",
   conclusionPromptTaskId: "",
+  knowledgeDraftPrompt: null,
   contextMenu: null,
   nodeDetailPosition: null,
 };
@@ -230,6 +243,7 @@ let state = {
 let saveTimer = 0;
 let pendingPayload = null;
 let saveInFlight = false;
+let saveInFlightPromise = null;
 let conclusionNoticeTimer = 0;
 let taskDragState = null;
 let suppressTaskClickUntil = 0;
@@ -239,6 +253,9 @@ let recurrencePopoverTaskId = "";
 const milkdownEditors = new Map();
 const nodeNoteDrafts = new Map();
 const nodeNoteSaveTimers = new Map();
+const knowledgeRecoveryTimers = new Map();
+const knowledgeExternalSnapshots = new Map();
+let knowledgeRecoveryWriteQueue = Promise.resolve();
 let cachedKnowledgePane = null;
 let appUpdateState = normalizeAppUpdateState({
   status: desktopUpdates ? "idle" : "unsupported",
@@ -251,6 +268,7 @@ let unsubscribeAppUpdates = null;
 let unsubscribeTodayWidgetState = null;
 let unsubscribeTodayWidgetOpenTask = null;
 let unsubscribeTodayWidgetCompletion = null;
+let unsubscribeKnowledgeFileChanges = null;
 let todayWidgetWindowState = { visible: Boolean(desktopTodayWidget) };
 
 
@@ -365,18 +383,27 @@ function normalizeTasks(tasks) {
       const createdAt = normalizeDateValue(task.createdAt, now());
       const updatedAt = normalizeDateValue(task.updatedAt, createdAt);
       const hypothesis = normalizeText(task.hypothesis);
+      const legacyKnowledgeBody = task.notes === undefined && typeof task.knowledgeNote === "string"
+        ? task.knowledgeNote
+        : task.notes;
       return {
         ...task,
         id: taskId,
         order: normalizeOrder(task.order, index + 1),
         groupId: normalizeIdentifier(task.groupId) || defaultTaskGroup.id,
         title: normalizeText(task.title),
+        knowledgeNote: knowledgeDocument.normalizeKnowledgeNote(task.knowledgeNote, {
+          taskId,
+          title: normalizeText(task.title),
+          createdAt,
+          updatedAt,
+        }),
         description: normalizeText(task.description),
         status: taskStatusValues.has(task.status) ? task.status : "active",
         priority: normalizePriority(task.priority),
         tags: normalizeTaskTags(task.tags),
         recurrence: normalizeTaskRecurrence(task.recurrence),
-        notes: normalizeText(task.notes),
+        notes: normalizeText(legacyKnowledgeBody),
         hypothesis,
         hypothesisUpdatedAt: normalizeOptionalDateValue(
           task.hypothesisUpdatedAt,
@@ -646,6 +673,590 @@ function loadBrowserInstallationId() {
   return normalizeInstallationId(localStorage.getItem(INSTALLATION_ID_KEY));
 }
 
+function loadBrowserKnowledgeRecovery() {
+  const raw = localStorage.getItem(KNOWLEDGE_RECOVERY_KEY);
+  try {
+    return knowledgeRecoveryModel.normalizeRecoveryData(raw ? JSON.parse(raw) : {});
+  } catch {
+    return knowledgeRecoveryModel.normalizeRecoveryData({});
+  }
+}
+
+async function loadKnowledgeRecovery() {
+  if (desktopKnowledgeRecovery?.read) {
+    try {
+      return knowledgeRecoveryModel.normalizeRecoveryData(await desktopKnowledgeRecovery.read());
+    } catch (error) {
+      console.error("Failed to read knowledge note recovery data.", error);
+    }
+  }
+  return loadBrowserKnowledgeRecovery();
+}
+
+function recoveryRecordForTask(task, content, assets = []) {
+  const note = task?.knowledgeNote || {};
+  return knowledgeRecoveryModel.normalizeRecoveryRecord({
+    noteId: note.noteId || task?.id,
+    content,
+    updatedAt: now(),
+    baseFileHash: note.lastSavedHash,
+    assets,
+  });
+}
+
+function restoreKnowledgeRecoveryAssets(record) {
+  const assets = Array.isArray(record?.assets) ? record.assets : [];
+  if (!assets.length) return;
+  state.attachments = normalizeAttachments(state.attachments);
+  assets.forEach((asset) => {
+    const source = String(asset?.source || "").trim();
+    const dataUrl = String(asset?.dataUrl || "").trim();
+    if (!source || !dataUrl.startsWith("data:image/")) return;
+    if (source.startsWith("task-image:")) {
+      const imageId = source.slice("task-image:".length).trim();
+      if (imageId) state.attachments.images[imageId] = dataUrl;
+    }
+  });
+}
+
+function collectManagedKnowledgeAssets(content) {
+  const source = String(content || "");
+  const assets = [];
+  const seen = new Set();
+  Array.from(source.matchAll(/!\[[^\]]*\]\(([^)]+)\)/g)).forEach((match) => {
+    const reference = cleanMarkdownUrl(match[1]);
+    let dataUrl = "";
+    if (reference.startsWith("task-image:")) {
+      const imageId = reference.slice("task-image:".length);
+      dataUrl = state.attachments?.images?.[imageId] || "";
+    } else if (reference.toLowerCase().startsWith("data:image/")) {
+      dataUrl = reference;
+    }
+    if (!dataUrl || !dataUrl.toLowerCase().startsWith("data:image/") || seen.has(reference)) return;
+    seen.add(reference);
+    assets.push({ source: reference, dataUrl });
+  });
+  return assets;
+}
+
+async function stageKnowledgeAssetsForTask(task, content) {
+  const assets = collectManagedKnowledgeAssets(content);
+  if (!assets.length || !desktopKnowledgeFile?.stageAssets) return { success: true, assets };
+  try {
+    const result = await desktopKnowledgeFile.stageAssets({
+      noteId: task?.knowledgeNote?.noteId || task?.id,
+      assets,
+    });
+    if (result?.success === false) return result;
+    return { ...result, success: true, assets: result?.assets?.length ? result.assets : assets };
+  } catch (error) {
+    return { success: false, code: "ASSET_STAGE_FAILED", message: error?.message || "恢复资源暂存失败", error };
+  }
+}
+
+function rememberKnowledgeAssetFiles(assetFiles = []) {
+  if (!Array.isArray(assetFiles)) return;
+  assetFiles.forEach((asset) => {
+    const relativePath = String(asset?.relativePath || "").trim();
+    const dataUrl = String(asset?.dataUrl || "").trim();
+    if (relativePath && dataUrl.startsWith("data:image/")) state.knowledgeAssets[relativePath] = dataUrl;
+  });
+}
+
+function rememberKnowledgeAssetDiagnostics(noteId, result) {
+  if (!noteId) return;
+  if (Array.isArray(result?.missingAssetFiles) && result.missingAssetFiles.length) {
+    state.knowledgeFileIssues[noteId] = {
+      code: "MISSING_ATTACHMENTS",
+      message: `有 ${result.missingAssetFiles.length} 个 Markdown 附件不可用`,
+    };
+  } else if (state.knowledgeFileIssues[noteId]?.code === "MISSING_ATTACHMENTS") {
+    delete state.knowledgeFileIssues[noteId];
+  }
+}
+
+function hydrateKnowledgeEditorMarkdown(content) {
+  return Object.entries(state.knowledgeAssets || {}).reduce((markdown, [relativePath, dataUrl]) => {
+    if (!relativePath || !dataUrl?.startsWith?.("data:image/")) return markdown;
+    return markdown.split(relativePath).join(dataUrl);
+  }, String(content || ""));
+}
+
+function persistKnowledgeRecoveryRecord(record) {
+  if (!record) return Promise.resolve();
+  state.knowledgeRecovery.records[record.noteId] = record;
+  knowledgeRecoveryWriteQueue = knowledgeRecoveryWriteQueue
+    .then(async () => {
+      if (desktopKnowledgeRecovery?.write) {
+        await desktopKnowledgeRecovery.write(record);
+        return;
+      }
+      localStorage.setItem(KNOWLEDGE_RECOVERY_KEY, JSON.stringify(state.knowledgeRecovery));
+    })
+    .catch((error) => {
+      console.error("Failed to persist knowledge note recovery data.", error);
+    });
+  return knowledgeRecoveryWriteQueue;
+}
+
+function flushKnowledgeRecovery(noteId) {
+  const pending = knowledgeRecoveryTimers.get(noteId);
+  if (!pending) return Promise.resolve();
+  window.clearTimeout(pending.debounceTimer);
+  window.clearTimeout(pending.maxTimer);
+  knowledgeRecoveryTimers.delete(noteId);
+  const task = state.tasks.find((item) => item.knowledgeNote?.noteId === noteId || item.id === noteId);
+  if (!task) return Promise.resolve();
+  return stageKnowledgeAssetsForTask(task, pending.content)
+    .then((stagedAssets) => {
+      if (stagedAssets?.success === false) {
+        console.error("Failed to stage knowledge note assets for recovery.", stagedAssets.message || stagedAssets.code);
+        return null;
+      }
+      return persistKnowledgeRecoveryRecord(
+        recoveryRecordForTask(task, pending.content, stagedAssets?.assets),
+      );
+    })
+    .catch((error) => {
+      console.error("Failed to stage knowledge note assets for recovery.", error);
+      return null;
+    });
+}
+
+async function flushPendingKnowledgeRecoveries() {
+  const noteIds = Array.from(knowledgeRecoveryTimers.keys());
+  await Promise.all(noteIds.map((noteId) => flushKnowledgeRecovery(noteId)));
+  await knowledgeRecoveryWriteQueue;
+}
+
+function scheduleKnowledgeRecovery(taskId, content, timing = {}) {
+  const task = state.tasks.find((item) => item.id === taskId);
+  const noteId = task?.knowledgeNote?.noteId || taskId;
+  if (!task || !noteId) return;
+  const debounceMs = Number.isFinite(timing.debounceMs) ? timing.debounceMs : KNOWLEDGE_RECOVERY_DEBOUNCE_MS;
+  const maxIntervalMs = Number.isFinite(timing.maxIntervalMs) ? timing.maxIntervalMs : KNOWLEDGE_RECOVERY_MAX_INTERVAL_MS;
+  const existing = knowledgeRecoveryTimers.get(noteId);
+  if (existing) {
+    existing.content = String(content ?? "");
+    window.clearTimeout(existing.debounceTimer);
+    existing.debounceTimer = window.setTimeout(() => {
+      void flushKnowledgeRecovery(noteId);
+    }, debounceMs);
+    return;
+  }
+
+  const pending = {
+    content: String(content ?? ""),
+    debounceTimer: 0,
+    maxTimer: 0,
+  };
+  pending.debounceTimer = window.setTimeout(() => {
+    void flushKnowledgeRecovery(noteId);
+  }, debounceMs);
+  pending.maxTimer = window.setTimeout(() => {
+    void flushKnowledgeRecovery(noteId);
+  }, maxIntervalMs);
+  knowledgeRecoveryTimers.set(noteId, pending);
+}
+
+function applyKnowledgeRecoveryDraft(task, record) {
+  restoreKnowledgeRecoveryAssets(record);
+  task.notes = record.content;
+  task.knowledgeNote = knowledgeDocument.markDocumentEdited(task.knowledgeNote);
+  task.knowledgeNote.updatedAt = record.updatedAt;
+  task.updatedAt = record.updatedAt;
+}
+
+async function restoreKnowledgeRecoveryDrafts() {
+  for (const record of Object.values(state.knowledgeRecovery.records || {})) {
+    const task = state.tasks.find((item) => item.knowledgeNote?.noteId === record.noteId || item.id === record.noteId);
+    if (!task || !knowledgeRecoveryModel.isRecoveryNewerThan(record, task.updatedAt)) continue;
+
+    const filePath = task.knowledgeNote?.filePath;
+    if (!filePath) {
+      applyKnowledgeRecoveryDraft(task, record);
+      continue;
+    }
+
+    if (!desktopKnowledgeFile?.read || !record.baseFileHash) continue;
+    let currentFile;
+    try {
+      currentFile = await desktopKnowledgeFile.read({ filePath });
+    } catch (error) {
+      console.error("Failed to read bound knowledge note before recovery.", error);
+      continue;
+    }
+    if (!currentFile?.success) continue;
+    if (currentFile.lastSavedHash !== record.baseFileHash) {
+      task.knowledgeNote = knowledgeDocument.markDocumentExternalChanged(task.knowledgeNote);
+      continue;
+    }
+
+    rememberKnowledgeAssetFiles(currentFile.assetFiles);
+    applyKnowledgeRecoveryDraft(task, record);
+  }
+}
+
+function discardPendingKnowledgeRecovery(noteId) {
+  const pending = knowledgeRecoveryTimers.get(noteId);
+  if (!pending) return;
+  window.clearTimeout(pending.debounceTimer);
+  window.clearTimeout(pending.maxTimer);
+  knowledgeRecoveryTimers.delete(noteId);
+}
+
+async function clearKnowledgeRecoveryRecord(noteId) {
+  if (!noteId) return;
+  discardPendingKnowledgeRecovery(noteId);
+  await knowledgeRecoveryWriteQueue;
+  delete state.knowledgeRecovery.records[noteId];
+  try {
+    if (desktopKnowledgeRecovery?.delete) {
+      await desktopKnowledgeRecovery.delete(noteId);
+    } else {
+      localStorage.setItem(KNOWLEDGE_RECOVERY_KEY, JSON.stringify(state.knowledgeRecovery));
+    }
+  } catch (error) {
+    console.error("Failed to clear knowledge note recovery data.", error);
+  }
+}
+
+function boundKnowledgeFilePaths(excludeTaskId = "") {
+  return state.tasks
+    .filter((task) => task.id !== excludeTaskId)
+    .map((task) => task.knowledgeNote?.filePath)
+    .filter(Boolean)
+    .map((filePath) => knowledgeDocument.canonicalFilePath(filePath, desktopPlatform));
+}
+
+function syncKnowledgeFileWatcher(task) {
+  const note = task?.knowledgeNote;
+  if (!desktopKnowledgeFile?.watch || !note?.filePath) return Promise.resolve(null);
+  return desktopKnowledgeFile.watch({
+    noteId: note.noteId || task.id,
+    filePath: note.filePath,
+    lastSavedHash: note.lastSavedHash,
+    lastSavedMtime: note.lastSavedMtime,
+  });
+}
+
+async function verifyKnowledgeFileBeforeSave(task, { saveAs = false, allowExternalOverwrite = false } = {}) {
+  const note = task?.knowledgeNote;
+  if (saveAs || allowExternalOverwrite || !note?.filePath || !desktopKnowledgeFile?.read) return null;
+
+  let currentFile;
+  try {
+    currentFile = await desktopKnowledgeFile.read({ filePath: note.filePath });
+  } catch (error) {
+    return { success: false, code: "FILE_READ_FAILED", message: error?.message || "无法读取当前知识笔记文件", error };
+  }
+  if (!currentFile?.success) return currentFile || { success: false, code: "FILE_READ_FAILED" };
+
+  if (!note.lastSavedHash || currentFile.lastSavedHash !== note.lastSavedHash) {
+    knowledgeExternalSnapshots.set(note.noteId, currentFile);
+    task.knowledgeNote = knowledgeDocument.markDocumentExternalChanged(note);
+    task.knowledgeNote.updatedAt = now();
+    task.updatedAt = now();
+    save();
+    return {
+      success: false,
+      code: "EXTERNAL_CHANGE_REQUIRES_CONFIRMATION",
+      message: "文件已被外部修改，请先重新加载、明确覆盖或另存为。",
+    };
+  }
+  return null;
+}
+
+async function startKnowledgeFileWatchers() {
+  if (!desktopKnowledgeFile?.watch) return;
+  await Promise.all(state.tasks.filter((task) => task.knowledgeNote?.filePath).map((task) => syncKnowledgeFileWatcher(task)));
+}
+
+function knowledgeFileFailure(result, fallback = "文件不可用") {
+  return result?.message || fallback;
+}
+
+async function reloadKnowledgeTask(taskId) {
+  const task = state.tasks.find((item) => item.id === taskId);
+  const note = task?.knowledgeNote;
+  if (!task || !note?.filePath || !desktopKnowledgeFile?.read) return { success: false, code: "READ_UNAVAILABLE" };
+  if (note.dirty && !(await confirmDestructiveAction("重新加载将丢弃当前未保存的知识笔记修改，是否继续？"))) {
+    return { canceled: true };
+  }
+
+  const snapshot = knowledgeExternalSnapshots.get(note.noteId);
+  const result = snapshot?.success
+    ? snapshot
+    : await desktopKnowledgeFile.read({ filePath: note.filePath });
+  if (!result?.success) {
+    if (["EACCES", "EPERM", "EROFS"].includes(result?.errorCode)) {
+      task.knowledgeNote = knowledgeDocument.markDocumentReadOnly(note);
+      save();
+    } else if (["ENOENT", "ENOTDIR"].includes(result?.errorCode)) {
+      task.knowledgeNote = knowledgeDocument.markDocumentFileMissing(note);
+      save();
+    } else {
+      state.knowledgeFileIssues[note.noteId] = {
+        code: result?.errorCode || "UNKNOWN",
+        message: result?.message || "文件暂时不可用",
+      };
+    }
+    render();
+    return result || { success: false, code: "FILE_READ_FAILED" };
+  }
+
+  task.notes = result.content;
+  rememberKnowledgeAssetFiles(result.assetFiles);
+  rememberKnowledgeAssetDiagnostics(note.noteId, result);
+  task.knowledgeNote = knowledgeDocument.markDocumentSaved(note, result);
+  if (result.readOnly) task.knowledgeNote = knowledgeDocument.markDocumentReadOnly(task.knowledgeNote);
+  task.knowledgeNote.updatedAt = now();
+  task.updatedAt = now();
+  knowledgeExternalSnapshots.delete(note.noteId);
+  await clearKnowledgeRecoveryRecord(note.noteId);
+  save();
+  await syncKnowledgeFileWatcher(task);
+  return result;
+}
+
+async function relocateKnowledgeTask(taskId) {
+  const task = state.tasks.find((item) => item.id === taskId);
+  const note = task?.knowledgeNote;
+  if (!task || !desktopKnowledgeFile?.choose) return { success: false, code: "CHOOSE_UNAVAILABLE" };
+  if (note.dirty && !(await confirmDestructiveAction("重新定位将使用新文件内容替换当前知识笔记，是否继续？"))) {
+    return { canceled: true };
+  }
+  const result = await desktopKnowledgeFile.choose({ boundPaths: boundKnowledgeFilePaths(task.id) });
+  if (result?.canceled) return result;
+  if (!result?.success) {
+    alert(result?.code === "DUPLICATE_BINDING" ? "这篇知识笔记已绑定该文件路径，请选择其他文件。" : `重新定位失败：${knowledgeFileFailure(result)}`);
+    return result || { success: false, code: "FILE_READ_FAILED" };
+  }
+
+  task.notes = result.content;
+  rememberKnowledgeAssetFiles(result.assetFiles);
+  rememberKnowledgeAssetDiagnostics(note.noteId, result);
+  task.knowledgeNote = knowledgeDocument.markDocumentSaved(note, result);
+  if (result.readOnly) task.knowledgeNote = knowledgeDocument.markDocumentReadOnly(task.knowledgeNote);
+  task.knowledgeNote.updatedAt = now();
+  task.updatedAt = now();
+  knowledgeExternalSnapshots.delete(note.noteId);
+  await clearKnowledgeRecoveryRecord(note.noteId);
+  save();
+  await syncKnowledgeFileWatcher(task);
+  return result;
+}
+
+async function removeKnowledgeBinding(taskId) {
+  const task = state.tasks.find((item) => item.id === taskId);
+  const note = task?.knowledgeNote;
+  if (!task || !note?.filePath) return { success: false, code: "NO_FILE_BINDING" };
+  const confirmed = await confirmDestructiveAction("只从软件中移除这篇知识笔记的文件绑定？Markdown 文件和附件会保留在磁盘上。");
+  if (!confirmed) return { canceled: true };
+  if (desktopKnowledgeFile?.unwatch) {
+    void desktopKnowledgeFile.unwatch({ noteId: note.noteId || task.id });
+  }
+  knowledgeExternalSnapshots.delete(note.noteId || task.id);
+  task.knowledgeNote = {
+    ...note,
+    filePath: null,
+    documentState: "DRAFT",
+    dirty: false,
+    lastSavedHash: null,
+    lastSavedMtime: null,
+    updatedAt: now(),
+  };
+  task.updatedAt = now();
+  save();
+  return { success: true };
+}
+
+async function discardUnfiledKnowledgeDraft(taskId) {
+  const task = state.tasks.find((item) => item.id === taskId);
+  if (!task || task.knowledgeNote?.filePath) return { success: false, code: "FILE_BOUND" };
+  await clearKnowledgeRecoveryRecord(task.knowledgeNote?.noteId || task.id);
+  task.notes = "";
+  task.knowledgeNote = {
+    ...task.knowledgeNote,
+    filePath: null,
+    documentState: "DRAFT",
+    dirty: false,
+    lastSavedHash: null,
+    lastSavedMtime: null,
+    updatedAt: now(),
+  };
+  task.updatedAt = now();
+  save();
+  return { success: true };
+}
+
+async function closeKnowledgeEditor(taskId) {
+  const task = state.tasks.find((item) => item.id === taskId);
+  if (!task) return { success: false, code: "TASK_NOT_FOUND" };
+  if (task.knowledgeNote?.documentState === "DRAFT" && String(task.notes || "").trim()) {
+    state.knowledgeDraftPrompt = { taskId, mode: "close-editor" };
+    render();
+    return { success: false, code: "DRAFT_REQUIRES_DECISION" };
+  }
+  state.taskPane = "flow";
+  return { success: true };
+}
+
+async function handleKnowledgeFileChange(event) {
+  const noteId = String(event?.noteId || "").trim();
+  const task = state.tasks.find((item) => item.knowledgeNote?.noteId === noteId || item.id === noteId);
+  if (!task || !event?.filePath) return;
+  const note = task.knowledgeNote;
+  if (note.filePath && knowledgeDocument.canonicalFilePath(note.filePath, desktopPlatform) !== knowledgeDocument.canonicalFilePath(event.filePath, desktopPlatform)) return;
+
+  if (event.type === "baseline") {
+    rememberKnowledgeAssetDiagnostics(note.noteId, event);
+    rememberKnowledgeAssetFiles(event.assetFiles);
+    if (note.documentState === "SAVED") {
+      task.knowledgeNote = knowledgeDocument.markDocumentSaved(note, event);
+      save();
+      if (event.assetFiles?.length) render();
+    }
+    return;
+  }
+  if (event.type === "read-only") {
+    task.knowledgeNote = knowledgeDocument.markDocumentReadOnly(note);
+    save();
+    render();
+    return;
+  }
+  if (event.type === "file-missing") {
+    delete state.knowledgeFileIssues[note.noteId];
+    task.knowledgeNote = knowledgeDocument.markDocumentFileMissing(note);
+    save();
+    render();
+    return;
+  }
+  if (event.type === "file-unavailable") {
+    state.knowledgeFileIssues[note.noteId] = {
+      code: event.errorCode || "UNKNOWN",
+      message: event.message || "文件暂时不可用",
+    };
+    render();
+    return;
+  }
+  if (event.type !== "external-changed" || !event.success) return;
+
+  knowledgeExternalSnapshots.set(note.noteId, event);
+  if (note.documentState === "SAVED") {
+    task.notes = event.content;
+    rememberKnowledgeAssetFiles(event.assetFiles);
+    rememberKnowledgeAssetDiagnostics(note.noteId, event);
+    task.knowledgeNote = knowledgeDocument.markDocumentSaved(note, event);
+    task.knowledgeNote.updatedAt = now();
+    task.updatedAt = now();
+    knowledgeExternalSnapshots.delete(note.noteId);
+    await clearKnowledgeRecoveryRecord(note.noteId);
+    save();
+    await syncKnowledgeFileWatcher(task);
+    render();
+    return;
+  }
+
+  task.knowledgeNote = knowledgeDocument.markDocumentExternalChanged(note);
+  task.knowledgeNote.updatedAt = now();
+  task.updatedAt = now();
+  save();
+  render();
+}
+
+async function saveKnowledgeTask(taskId, { saveAs = false, allowExternalOverwrite = false } = {}) {
+  const task = state.tasks.find((item) => item.id === taskId);
+  if (!task) return { canceled: true };
+  if (!desktopKnowledgeFile?.save) {
+    alert("当前环境不支持将知识笔记保存为本地文件，请在桌面应用中使用。");
+    return { canceled: true, unsupported: true };
+  }
+
+  const note = task.knowledgeNote;
+  if (note.documentState === "EXTERNAL_CHANGED" && !saveAs && !allowExternalOverwrite) {
+    const result = {
+      success: false,
+      code: "EXTERNAL_CHANGE_REQUIRES_CONFIRMATION",
+      message: "文件已被外部修改，请先重新加载、明确覆盖或另存为。",
+    };
+    alert(result.message);
+    return result;
+  }
+  if (note.documentState === "FILE_MISSING" && !saveAs) {
+    const result = {
+      success: false,
+      code: "FILE_MISSING_REQUIRES_RELOCATION",
+      message: "原文件不存在，请重新定位文件或使用另存为。",
+    };
+    alert(result.message);
+    return result;
+  }
+
+  captureMountedMilkdownDrafts();
+  flushNodeNoteDraft(noteDraftKey(task.id, ""), { persist: true });
+  try {
+    const fileCheck = await verifyKnowledgeFileBeforeSave(task, { saveAs, allowExternalOverwrite });
+    if (fileCheck) {
+      if (fileCheck.code === "EXTERNAL_CHANGE_REQUIRES_CONFIRMATION") {
+        alert(fileCheck.message);
+      } else {
+        alert(`知识笔记保存前读取失败：${fileCheck.message || "未知文件错误"}`);
+      }
+      return fileCheck;
+    }
+    const stagedAssets = await stageKnowledgeAssetsForTask(task, task.notes);
+    if (stagedAssets?.success === false) {
+      alert(`知识笔记图片暂存失败：${stagedAssets.message || "未知资源错误"}\n当前内容未清除，请重试。`);
+      return stagedAssets;
+    }
+    const result = await desktopKnowledgeFile.save({
+      noteId: note.noteId || task.id,
+      filePath: saveAs ? "" : note.filePath,
+      saveAs,
+      title: task.title,
+      content: task.notes,
+      assets: stagedAssets.assets,
+      expectedLastSavedHash: saveAs ? null : note.lastSavedHash,
+      allowExternalOverwrite,
+      boundPaths: boundKnowledgeFilePaths(task.id),
+    });
+    if (result?.canceled) return result;
+    if (!result?.success) {
+      if (result?.code === "DUPLICATE_BINDING") {
+        alert("这篇知识笔记已绑定该文件路径，请选择其他文件。");
+      } else {
+        alert(`知识笔记保存失败：${result?.message || "未知文件错误"}\n请重试；如仍失败，可使用“另存为”。`);
+      }
+      return result || { success: false };
+    }
+
+    task.notes = result.content ?? task.notes;
+    rememberKnowledgeAssetFiles(result.assetFiles);
+    task.knowledgeNote = knowledgeDocument.markDocumentSaved(note, result);
+    task.knowledgeNote.updatedAt = now();
+    task.updatedAt = now();
+    save();
+    const taskDataSaved = await flushSave();
+    if (!taskDataSaved) {
+      return {
+        success: false,
+        code: "TASK_DATA_SAVE_FAILED",
+        message: "Markdown 已保存，但任务数据未能持久化；Recovery 草稿已保留，请重试。",
+        markdownSaved: true,
+      };
+    }
+    await clearKnowledgeRecoveryRecord(task.knowledgeNote.noteId);
+    await syncKnowledgeFileWatcher(task);
+    knowledgeExternalSnapshots.delete(task.knowledgeNote.noteId);
+    return result;
+  } catch (error) {
+    console.error("Failed to save knowledge note.", error);
+    alert(`知识笔记保存失败：${error?.message || "未知文件错误"}\n请重试；如仍失败，可使用“另存为”。`);
+    return { success: false, code: "SAVE_FAILED", message: error?.message || "未知文件错误", error };
+  }
+}
+
 
 // ============================================================
 // DATA PERSISTENCE (save / flush / normalize)
@@ -677,6 +1288,9 @@ async function loadAppData() {
       return { tasks, taskGroups, activeGroupId, flowWidths, sidebarWidth, detailHeight, attachments, theme, zhFont, enFont, taskFilter, priorityFilter, newTaskPriority, installationId };
     } catch (error) {
       console.error("Failed to read local task data.", error);
+      if (error?.code === "CORRUPT_TASK_DATA") {
+        alert("本地任务数据已损坏，应用已保留损坏文件备份。请先复制备份文件后再继续操作。");
+      }
     }
   }
 
@@ -706,6 +1320,7 @@ async function loadAppData() {
 function save() {
   const payload = {
     version: DATA_VERSION,
+    knowledgeSchemaVersion: KNOWLEDGE_MIGRATION_VERSION,
     tasks: state.tasks,
     taskGroups: state.taskGroups,
     activeGroupId: state.activeGroupId,
@@ -755,18 +1370,30 @@ function saveFlowWidths() {
  * Uses a save-in-flight flag to prevent concurrent writes.
  */
 async function flushSave() {
-  if (!desktopStorage?.write || saveInFlight || !pendingPayload) return;
+  window.clearTimeout(saveTimer);
+  saveTimer = 0;
+  if (!desktopStorage?.write) return true;
+  if (saveInFlight) return saveInFlightPromise ? saveInFlightPromise.then(() => flushSave()) : false;
+  if (!pendingPayload) return true;
   const payload = pendingPayload;
   pendingPayload = null;
   saveInFlight = true;
-  try {
-    await desktopStorage.write(payload);
-  } catch (error) {
-    console.error("Failed to save local task data.", error);
-  } finally {
-    saveInFlight = false;
-    if (pendingPayload) flushSave();
-  }
+  saveInFlightPromise = (async () => {
+    try {
+      await desktopStorage.write(payload);
+      return true;
+    } catch (error) {
+      console.error("Failed to save local task data.", error);
+      if (!pendingPayload) pendingPayload = payload;
+      alert("本地任务数据保存失败，请检查磁盘空间或权限后重试。Recovery 草稿将继续保留。");
+      return false;
+    }
+  })();
+  const success = await saveInFlightPromise;
+  saveInFlight = false;
+  saveInFlightPromise = null;
+  if (pendingPayload && success) return (await flushSave()) && success;
+  return success;
 }
 
 function normalizeFlowWidth(key, value) {
@@ -837,6 +1464,7 @@ function render() {
     </main>
     ${renderCompletionNotice()}
     ${renderTodayWidgetRestore()}
+    ${renderKnowledgeDraftPrompt()}
   `;
   restoreCachedKnowledgePane(task);
   bind();
@@ -857,6 +1485,31 @@ function renderTodayWidgetRestore() {
   return desktopTodayWidget && !todayWidgetWindowState.visible
     ? `<button class="restore-widget is-visible" type="button" data-action="show-today-widget">重新显示今日窗口</button>`
     : "";
+}
+
+function renderKnowledgeDraftPrompt() {
+  const taskId = state.knowledgeDraftPrompt?.taskId;
+  const mode = state.knowledgeDraftPrompt?.mode || "delete-task";
+  const task = state.tasks.find((item) => item.id === taskId);
+  if (!task) return "";
+  const closingEditor = mode === "close-editor";
+  return `
+    <div class="knowledge-draft-backdrop" role="presentation">
+      <section class="knowledge-draft-dialog" role="dialog" aria-modal="true" aria-labelledby="knowledge-draft-title">
+        <div class="knowledge-draft-heading">
+          <span class="knowledge-draft-kicker">知识笔记</span>
+          <h2 id="knowledge-draft-title">${closingEditor ? "关闭前如何处理这篇草稿？" : "这篇笔记尚未保存为本地文件"}</h2>
+          <p>${closingEditor ? "保存会打开文件选择；保留会关闭编辑页但继续保护草稿。" : "你可以先保存文件，也可以保留草稿。删除草稿不会删除任何本地 Markdown 文件或附件。"}</p>
+        </div>
+        <div class="knowledge-draft-context">${esc(task.title || "未命名任务")}</div>
+        <div class="knowledge-draft-actions">
+          <button type="button" data-action="keep-knowledge-draft" data-task-id="${task.id}">保留为草稿</button>
+          <button type="button" data-action="delete-knowledge-draft" data-task-id="${task.id}">删除草稿</button>
+          <button class="primary" type="button" data-action="${closingEditor ? "save-knowledge-before-close" : "save-knowledge-before-delete"}" data-task-id="${task.id}">保存</button>
+        </div>
+      </section>
+    </div>
+  `;
 }
 
 function renderSidebar() {
@@ -1115,9 +1768,50 @@ function renderTaskPaneTabs(task) {
 
 function renderTaskKnowledge(task) {
   const stats = markdownStats(task.notes);
+  const note = task.knowledgeNote || {};
+  const unavailable = state.knowledgeFileIssues[note.noteId];
+  const stateDetails = {
+    DRAFT: { label: "草稿", detail: "尚未保存到本地文件" },
+    SAVED: { label: "已保存", detail: note.filePath || "本地文件" },
+    DIRTY: { label: "已修改", detail: note.filePath || "尚未保存到本地文件" },
+    EXTERNAL_CHANGED: { label: "⚠ 文件已被外部修改", detail: note.filePath || "请先选择处理方式" },
+    FILE_MISSING: { label: "⚠ 本地文件不存在", detail: note.filePath || "请重新定位或另存为" },
+    READ_ONLY: { label: "⚠ 当前文件不可写", detail: note.filePath || "请重试或另存为" },
+  };
+  const stateDetail = unavailable
+    ? { label: "⚠ 文件暂时不可用", detail: unavailable.message }
+    : stateDetails[note.documentState] || stateDetails.DRAFT;
+  const stateClass = String(note.documentState || "DRAFT").toLowerCase();
+  const conflictActions = note.documentState === "EXTERNAL_CHANGED"
+    ? `<button type="button" data-action="reload-knowledge" data-task-id="${task.id}">重新加载</button>
+       <button type="button" data-action="save-knowledge-overwrite" data-task-id="${task.id}">仍然覆盖</button>`
+    : note.documentState === "FILE_MISSING"
+      ? `<button type="button" data-action="relocate-knowledge" data-task-id="${task.id}">重新定位</button>`
+      : note.documentState === "READ_ONLY"
+        ? `<button type="button" data-action="retry-knowledge" data-task-id="${task.id}">重试</button>`
+      : "";
+  const removeBindingAction = note.filePath
+    ? `<button type="button" data-action="remove-knowledge-binding" data-task-id="${task.id}">从软件中移除</button>`
+    : "";
+  const closeDraftAction = note.documentState === "DRAFT"
+    ? `<button type="button" data-action="close-knowledge-editor" data-task-id="${task.id}">关闭笔记</button>`
+    : "";
   return `
     <section class="task-knowledge-pane" data-task-id="${task.id}">
       <section class="markdown-panel milkdown-panel task-knowledge-editor-panel" data-task-id="${task.id}" data-editor-focus-target="task">
+        <div class="knowledge-save-bar">
+          <div class="knowledge-state-meta state-${stateClass}" data-knowledge-state="${escAttr(note.documentState || "DRAFT")}" aria-live="polite">
+            <span class="knowledge-state-label">${esc(stateDetail.label)}</span>
+            <span class="knowledge-file-label" title="${escAttr(stateDetail.detail)}">${esc(stateDetail.detail)}</span>
+          </div>
+          <div class="knowledge-save-actions">
+            ${conflictActions}
+            ${removeBindingAction}
+            ${closeDraftAction}
+            <button type="button" data-action="save-knowledge" data-task-id="${task.id}">保存</button>
+            <button type="button" data-action="save-knowledge-as" data-task-id="${task.id}">另存为</button>
+          </div>
+        </div>
         <div class="milkdown-editor-host" data-editor-kind="task" data-task-id="${task.id}">
           <div class="milkdown-loading">正在加载 Milkdown 编辑器...</div>
         </div>
@@ -3749,6 +4443,7 @@ function noteDraftKey(taskId, nodeId) {
 function updateNodeNoteDraft(taskId, nodeId, markdown, host = null) {
   nodeNoteDrafts.set(noteDraftKey(taskId, nodeId), { taskId, nodeId, markdown });
   if (host) updateMarkdownStatsForMarkdown(host, markdown);
+  if (!nodeId) scheduleKnowledgeRecovery(taskId, markdown);
   scheduleNodeNoteSave(taskId, nodeId);
 }
 
@@ -3782,6 +4477,7 @@ function flushNodeNoteDraft(key, { persist = true } = {}) {
     node.updatedAt = now();
   } else {
     task.notes = draft.markdown;
+    task.knowledgeNote = knowledgeDocument.markDocumentEdited(task.knowledgeNote);
   }
   task.updatedAt = now();
   if (persist) save();
@@ -3817,7 +4513,8 @@ function mountMilkdownEditors() {
     if (!task || (nodeId && !node)) return;
     const editorKey = noteDraftKey(taskId, nodeId);
     if (milkdownEditors.has(editorKey)) return;
-    const markdown = nodeNoteDrafts.get(editorKey)?.markdown ?? (node ? node.note : task.notes) ?? "";
+    const rawMarkdown = nodeNoteDrafts.get(editorKey)?.markdown ?? (node ? node.note : task.notes) ?? "";
+    const markdown = node ? rawMarkdown : hydrateKnowledgeEditorMarkdown(rawMarkdown);
 
     window.MilkdownTaskEditor.create({
       root: host,
@@ -3834,7 +4531,7 @@ function mountMilkdownEditors() {
         }
         milkdownEditors.set(editorKey, { host, instance, taskId, nodeId });
         bindMilkdownSurfaceEvents(host);
-        updateMarkdownStatsForMarkdown(host, nodeNoteDrafts.get(editorKey)?.markdown ?? (node ? node.note : task.notes) ?? "");
+        updateMarkdownStatsForMarkdown(host, node ? rawMarkdown : hydrateKnowledgeEditorMarkdown(rawMarkdown));
       })
       .catch((error) => {
         console.error("Milkdown failed to mount", error);
@@ -3849,7 +4546,8 @@ function mountFallbackMarkdownEditor(host) {
   const task = state.tasks.find((item) => item.id === taskId);
   const node = task && nodeId ? findNode(task.nodes, nodeId) : null;
   if (!task || (nodeId && !node)) return;
-  const markdown = nodeNoteDrafts.get(noteDraftKey(taskId, nodeId))?.markdown ?? (node ? node.note : task.notes) ?? "";
+  const rawMarkdown = nodeNoteDrafts.get(noteDraftKey(taskId, nodeId))?.markdown ?? (node ? node.note : task.notes) ?? "";
+  const markdown = node ? rawMarkdown : hydrateKnowledgeEditorMarkdown(rawMarkdown);
   const placeholder = node ? "记录处理过程" : "记录分析过程、知识点和可复用结论……";
   host.innerHTML = `<textarea class="markdown-editor codex-editor milkdown-fallback" data-task-id="${taskId}" data-node-id="${nodeId}" placeholder="${placeholder}">${esc(markdown)}</textarea>${renderEditorImagePreview(markdown)}`;
   host.querySelectorAll(".markdown-editor").forEach((editor) => {
@@ -4083,6 +4781,82 @@ async function action(data, event = null) {
     insertIntoActiveEditor(editorSnippet(data.kind));
     return;
   }
+  if (data.action === "save-knowledge" || data.action === "save-knowledge-as") {
+    const result = await saveKnowledgeTask(data.taskId, { saveAs: data.action === "save-knowledge-as" });
+    if (!result?.canceled) render();
+    return;
+  }
+  if (data.action === "save-knowledge-overwrite") {
+    const result = await saveKnowledgeTask(data.taskId, { allowExternalOverwrite: true });
+    if (!result?.canceled) render();
+    return;
+  }
+  if (data.action === "reload-knowledge") {
+    const result = await reloadKnowledgeTask(data.taskId);
+    if (!result?.canceled) render();
+    return;
+  }
+  if (data.action === "relocate-knowledge") {
+    const result = await relocateKnowledgeTask(data.taskId);
+    if (!result?.canceled) render();
+    return;
+  }
+  if (data.action === "retry-knowledge") {
+    const result = await saveKnowledgeTask(data.taskId);
+    if (!result?.canceled) render();
+    return;
+  }
+  if (data.action === "remove-knowledge-binding") {
+    const result = await removeKnowledgeBinding(data.taskId);
+    if (!result?.canceled) render();
+    return;
+  }
+  if (data.action === "close-knowledge-editor") {
+    const result = await closeKnowledgeEditor(data.taskId);
+    if (result?.success) render();
+    return;
+  }
+  if (data.action === "keep-knowledge-draft") {
+    const mode = state.knowledgeDraftPrompt?.mode;
+    state.knowledgeDraftPrompt = null;
+    if (mode === "close-editor") state.taskPane = "flow";
+    render();
+    return;
+  }
+  if (data.action === "delete-knowledge-draft") {
+    const mode = state.knowledgeDraftPrompt?.mode;
+    state.knowledgeDraftPrompt = null;
+    if (mode === "close-editor") {
+      await discardUnfiledKnowledgeDraft(data.taskId);
+      state.taskPane = "flow";
+    } else {
+      await deleteTask(data.taskId, { skipDraftPrompt: true });
+    }
+    render();
+    return;
+  }
+  if (data.action === "save-knowledge-before-delete") {
+    const result = await saveKnowledgeTask(data.taskId);
+    if (result?.success) {
+      state.knowledgeDraftPrompt = null;
+      await deleteTask(data.taskId, { skipDraftPrompt: true });
+      render();
+    } else if (!result?.canceled) {
+      render();
+    }
+    return;
+  }
+  if (data.action === "save-knowledge-before-close") {
+    const result = await saveKnowledgeTask(data.taskId);
+    if (result?.success) {
+      state.knowledgeDraftPrompt = null;
+      state.taskPane = "flow";
+      render();
+    } else if (!result?.canceled) {
+      render();
+    }
+    return;
+  }
   if (data.action === "export-node-pdf") {
     captureMountedMilkdownDrafts();
     flushNodeNoteDraft(noteDraftKey(data.taskId, data.nodeId), { persist: true });
@@ -4296,6 +5070,9 @@ function edit(data, value) {
     } else {
       task[data.editKey] = value;
     }
+    if (data.editKey === "title") {
+      task.knowledgeNote = knowledgeDocument.updateDocumentTitle(task.knowledgeNote, value);
+    }
     if (data.editKey === "title") syncTaskTitleInputs(task.id, value);
     if (data.editKey === "hypothesis") task.hypothesisUpdatedAt = now();
     if (data.editKey === "conclusion" && value.trim()) clearConclusionNotice(task.id);
@@ -4362,8 +5139,10 @@ function addBlankTask() {
  * @returns {object} The newly created task
  */
 function createTask(title, shouldRender = true) {
+  const taskId = id("task");
+  const createdAt = now();
   const task = {
-    id: id("task"),
+    id: taskId,
     order: state.tasks.length + 1,
     groupId: normalizeActiveGroupId(state.activeGroupId, state.taskGroups),
     title,
@@ -4376,8 +5155,15 @@ function createTask(title, shouldRender = true) {
     hypothesisUpdatedAt: "",
     conclusion: "",
     notes: "",
-    createdAt: now(),
-    updatedAt: now(),
+    knowledgeNote: knowledgeDocument.createKnowledgeNoteMetadata({
+      noteId: id("note"),
+      taskId,
+      title,
+      createdAt,
+      updatedAt: createdAt,
+    }),
+    createdAt,
+    updatedAt: createdAt,
     nodes: [],
   };
   state.tasks.push(task);
@@ -4762,10 +5548,19 @@ function updateTaskRecurrence(taskId, field, value) {
  * Delete a task and all its nodes.
  * @param {string} taskId - Task ID to delete
  */
-async function deleteTask(taskId) {
+async function deleteTask(taskId, { skipDraftPrompt = false } = {}) {
   const task = state.tasks.find((item) => item.id === taskId);
+  if (!task) return false;
+  if (!skipDraftPrompt && task.knowledgeNote?.documentState === "DRAFT" && String(task.notes || "").trim()) {
+    state.knowledgeDraftPrompt = { taskId };
+    render();
+    return false;
+  }
   if (!task || !(await confirmDestructiveAction(`确定删除任务「${task.title || "未命名任务"}」及其所有节点？`))) return false;
   const index = state.tasks.findIndex((item) => item.id === taskId);
+  if (desktopKnowledgeFile?.unwatch) {
+    void desktopKnowledgeFile.unwatch({ noteId: task.knowledgeNote?.noteId || task.id });
+  }
   state.tasks = state.tasks.filter((item) => item.id !== taskId);
   reorder(state.tasks);
   if (state.activeTaskId === taskId) {
@@ -5198,6 +5993,11 @@ function resolveMarkdownImageUrl(value) {
     const dataUrl = state.attachments?.images?.[imageId];
     return typeof dataUrl === "string" && dataUrl.startsWith("data:image/") ? escAttr(dataUrl) : "";
   }
+  if (cleaned.startsWith("./attachments/") || cleaned.startsWith("attachments/")) {
+    const relativePath = cleaned.startsWith("./") ? cleaned : `./${cleaned}`;
+    const dataUrl = state.knowledgeAssets?.[relativePath];
+    if (typeof dataUrl === "string" && dataUrl.startsWith("data:image/")) return escAttr(dataUrl);
+  }
   return safeMarkdownUrl(cleaned);
 }
 
@@ -5386,7 +6186,12 @@ function escAttr(value) {
  * Called immediately at the end of the script.
  */
 async function bootstrap() {
-  const [data] = await Promise.all([loadAppData(), initializeAppUpdates(), initializeTodayWidgetBridge()]);
+  const [data, recovery] = await Promise.all([
+    loadAppData(),
+    loadKnowledgeRecovery(),
+    initializeAppUpdates(),
+    initializeTodayWidgetBridge(),
+  ]);
   state.tasks = data.tasks;
   state.taskGroups = data.taskGroups;
   state.activeGroupId = data.activeGroupId;
@@ -5400,10 +6205,13 @@ async function bootstrap() {
   state.taskFilter = data.taskFilter;
   state.priorityFilter = data.priorityFilter;
   state.newTaskPriority = data.newTaskPriority;
+  state.knowledgeRecovery = recovery;
   state.installationId = normalizeInstallationId(data.installationId);
+  await restoreKnowledgeRecoveryDrafts();
   state.activeTaskId = tasksInActiveGroup()[0]?.id || "";
   syncRecurringTasks(new Date());
   render();
+  await startKnowledgeFileWatchers();
   startRecurringSchedule();
 }
 
@@ -5414,6 +6222,24 @@ window.addEventListener("blur", () => {
 window.addEventListener("focus", () => {
   if (state.restoreMarkdownFocus) window.requestAnimationFrame(restoreMarkdownSelection);
 });
+
+if (desktopKnowledgeFile?.onChange) {
+  unsubscribeKnowledgeFileChanges = desktopKnowledgeFile.onChange((event) => {
+    void handleKnowledgeFileChange(event);
+  });
+}
+
+if (desktopKnowledgeRecovery?.onFlushAndQuit) {
+  desktopKnowledgeRecovery.onFlushAndQuit(async () => {
+    try {
+      await flushPendingKnowledgeRecoveries();
+    } catch (error) {
+      console.error("Failed to flush knowledge note recovery before shutdown.", error);
+    } finally {
+      desktopKnowledgeRecovery.completeFlushAndQuit?.();
+    }
+  });
+}
 
 window.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
@@ -5434,7 +6260,18 @@ window.addEventListener("keydown", (event) => {
       return;
     }
   }
-  if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "k") return;
+  if (!(event.metaKey || event.ctrlKey)) return;
+  if (event.key.toLowerCase() === "s") {
+    event.preventDefault();
+    const task = activeTask();
+    if (task) {
+      void saveKnowledgeTask(task.id, { saveAs: event.shiftKey }).then((result) => {
+        if (!result?.canceled) render();
+      });
+    }
+    return;
+  }
+  if (event.key.toLowerCase() !== "k") return;
   const target = event.target;
   if (target instanceof HTMLTextAreaElement || target?.isContentEditable) return;
   event.preventDefault();

@@ -14,9 +14,11 @@
 const fs = require("node:fs/promises");
 const path = require("node:path");
 const crypto = require("node:crypto");
+const knowledgeDocument = require("../renderer/src/knowledge-document.js");
 
 const DATA_FILE = "task-data.json";
 const DATA_VERSION = 1;
+const KNOWLEDGE_MIGRATION_VERSION = 1;
 const DEFAULT_GROUP = { id: "group_inbox", title: "默认", order: 1 };
 const TASK_STATUSES = new Set(["active", "done"]);
 const NODE_STATUSES = new Set(["todo", "done", "blocked", "later"]);
@@ -39,12 +41,17 @@ function dataFilePath(userDataPath) {
 async function readTaskData(userDataPath) {
   try {
     const raw = await fs.readFile(dataFilePath(userDataPath), "utf8");
-    return normalizeTaskData(JSON.parse(raw));
+    const parsed = JSON.parse(raw);
+    assertSupportedDataVersion(parsed);
+    return normalizeTaskData(parsed);
   } catch (error) {
     if (error.code === "ENOENT") return null;
     if (error instanceof SyntaxError) {
-      await backupCorruptData(userDataPath);
-      return null;
+      const backupPath = await backupCorruptData(userDataPath);
+      throw Object.assign(new Error("任务数据文件已损坏，原文件已备份"), {
+        code: "CORRUPT_TASK_DATA",
+        backupPath,
+      });
     }
 /**
  * Write task data to disk using atomic write pattern.
@@ -58,28 +65,49 @@ async function readTaskData(userDataPath) {
 }
 
 async function writeTaskData(userDataPath, data) {
+  assertSupportedDataVersion(data);
   const normalized = normalizeTaskData(data);
   await fs.mkdir(userDataPath, { recursive: true });
   const filePath = dataFilePath(userDataPath);
-  const tempPath = `${filePath}.tmp`;
-  await fs.writeFile(tempPath, `${JSON.stringify(normalized, null, 2)}\n`, "utf8");
+  const tempPath = `${filePath}.tmp-${process.pid}-${crypto.randomUUID()}`;
+  const content = `${JSON.stringify(normalized, null, 2)}\n`;
+  let handle = null;
+  try {
+    handle = await fs.open(tempPath, "wx", 0o600);
+    await handle.writeFile(content, "utf8");
+    await handle.sync();
+    await handle.close();
+    handle = null;
+    await fs.rename(tempPath, filePath);
+  } catch (error) {
+    if (handle) await handle.close().catch(() => {});
+    await fs.rm(tempPath, { force: true }).catch(() => {});
+    throw error;
+  }
 /**
  * Normalize task data structure with safe defaults for all fields.
  * Ensures backward compatibility when new fields are added.
  * @param {object|null} data - Raw parsed data
  * @returns {object} Normalized data with all required fields
  */
-  await fs.rename(tempPath, filePath);
   return normalized;
 }
 
+function assertSupportedDataVersion(data) {
+  if (!isRecord(data)) return;
+  if (Number(data.version) > DATA_VERSION || Number(data.knowledgeSchemaVersion) > KNOWLEDGE_MIGRATION_VERSION) {
+    throw Object.assign(new Error("任务数据版本高于当前应用支持范围"), { code: "UNSUPPORTED_DATA_VERSION" });
+  }
+}
+
 function normalizeTaskData(data) {
-  const safeData = isRecord(data) ? data : {};
+  const safeData = migrateKnowledgeTaskData(data);
   const tasks = normalizeTasks(safeData.tasks);
   const taskGroups = normalizeTaskGroups(safeData.taskGroups, tasks);
   const legacyFonts = migrateLegacyFont(safeData.font);
   return {
     version: DATA_VERSION,
+    knowledgeSchemaVersion: KNOWLEDGE_MIGRATION_VERSION,
     tasks,
     taskGroups,
     activeGroupId: taskGroups.some((group) => group.id === safeData.activeGroupId)
@@ -101,6 +129,33 @@ function normalizeTaskData(data) {
   };
 }
 
+/**
+ * Apply only migration-safe knowledge-note changes before normalizing the
+ * complete task payload. This function is deliberately pure and idempotent:
+ * reading legacy data never writes it back or removes the legacy body/assets.
+ */
+function migrateKnowledgeTaskData(data) {
+  const safeData = isRecord(data) ? data : {};
+  const tasks = Array.isArray(safeData.tasks)
+    ? safeData.tasks.map((task) => {
+        if (!isRecord(task)) return task;
+        const hasLegacyString = typeof task.knowledgeNote === "string";
+        const hasCurrentBody = typeof task.notes === "string" && task.notes.trim().length > 0;
+        const legacyBody = hasLegacyString && (!hasCurrentBody || task.notes === undefined)
+          ? task.knowledgeNote
+          : task.notes;
+        const migrated = { ...task, notes: normalizeText(legacyBody) };
+        if (typeof task.knowledgeNote === "string") delete migrated.knowledgeNote;
+        return migrated;
+      })
+    : safeData.tasks;
+  return {
+    ...safeData,
+    knowledgeSchemaVersion: KNOWLEDGE_MIGRATION_VERSION,
+    tasks,
+  };
+}
+
 function normalizeTasks(tasks) {
   const seenTaskIds = new Set();
   return (Array.isArray(tasks) ? tasks : [])
@@ -116,6 +171,12 @@ function normalizeTasks(tasks) {
         order: normalizeOrder(task.order, index + 1),
         groupId: normalizeIdentifier(task.groupId) || DEFAULT_GROUP.id,
         title: normalizeText(task.title),
+        knowledgeNote: knowledgeDocument.normalizeKnowledgeNote(task.knowledgeNote, {
+          taskId,
+          title: normalizeText(task.title),
+          createdAt,
+          updatedAt,
+        }),
         description: normalizeText(task.description),
         status: TASK_STATUSES.has(task.status) ? task.status : "active",
         priority: PRIORITIES.has(task.priority) ? task.priority : "medium",
@@ -323,14 +384,18 @@ async function backupCorruptData(userDataPath) {
  */
   try {
     await fs.rename(filePath, backupPath);
+    return backupPath;
   } catch (error) {
     if (error.code !== "ENOENT") throw error;
+    return null;
   }
 }
 
 module.exports = {
   DATA_FILE,
+  KNOWLEDGE_MIGRATION_VERSION,
   dataFilePath,
+  migrateKnowledgeTaskData,
   normalizeTaskData,
   readTaskData,
   writeTaskData,

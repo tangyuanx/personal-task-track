@@ -15,8 +15,29 @@ const path = require("node:path");
 const { autoUpdater } = require("electron-updater");
 const { BugReportClientError, createBugReportClient } = require("./bug-report-client.cjs");
 const { readTaskData, writeTaskData } = require("./storage.cjs");
+const {
+  chooseKnowledgeDocument,
+  readKnowledgeDocument,
+  saveKnowledgeDocument,
+} = require("./knowledge-file.cjs");
+const { createKnowledgeFileWatcher } = require("./knowledge-watcher.cjs");
+const { stageKnowledgeAssets } = require("./knowledge-assets.cjs");
+const {
+  deleteKnowledgeRecovery,
+  readKnowledgeRecovery,
+  writeKnowledgeRecovery,
+} = require("./recovery.cjs");
 const { createTodayWidgetController } = require("./today-widget.cjs");
 const { createUpdateController } = require("./updater.cjs");
+
+const hasSingleInstanceLock = app.requestSingleInstanceLock();
+if (!hasSingleInstanceLock) app.quit();
+app.on("second-instance", () => {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+});
 /**
  * Create the main application window.
  * Sets up preload, CSP, and external link handling.
@@ -27,6 +48,14 @@ let updateController = null;
 let todayWidgetController = null;
 let mainWindow = null;
 let isQuitting = false;
+let recoveryShutdownWaitingFor = null;
+let recoveryShutdownTimer = null;
+const RECOVERY_SHUTDOWN_TIMEOUT_MS = 2000;
+const knowledgeWatcher = createKnowledgeFileWatcher({
+  onChange: (event) => {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send("knowledge-file:changed", event);
+  },
+});
 
 function createWindow() {
   if (mainWindow && !mainWindow.isDestroyed()) return mainWindow;
@@ -72,13 +101,37 @@ function createWindow() {
   window.on("closed", () => {
     if (mainWindow !== window) return;
     mainWindow = null;
+    knowledgeWatcher.closeAll();
     if (!isQuitting) app.quit();
+  });
+  window.on("close", (event) => {
+    if (isQuitting) return;
+    event.preventDefault();
+    app.quit();
   });
   return window;
 }
 
 function openExternalUrl(url) {
   if (/^(https?|mailto):/i.test(url)) shell.openExternal(url);
+}
+
+function finishRecoveryShutdown() {
+  if (recoveryShutdownTimer) clearTimeout(recoveryShutdownTimer);
+  recoveryShutdownTimer = null;
+  recoveryShutdownWaitingFor = null;
+  isQuitting = true;
+  app.quit();
+}
+
+function requestRecoveryShutdown(event) {
+  if (!mainWindow || mainWindow.isDestroyed()) return false;
+  event.preventDefault();
+  if (recoveryShutdownWaitingFor !== null) return true;
+  recoveryShutdownWaitingFor = mainWindow.webContents.id;
+  mainWindow.webContents.send("knowledge-recovery:flush-and-quit");
+  recoveryShutdownTimer = setTimeout(finishRecoveryShutdown, RECOVERY_SHUTDOWN_TIMEOUT_MS);
+  return true;
 }
 
 function registerStorageHandlers() {
@@ -99,6 +152,36 @@ function registerStorageHandlers() {
  * @returns {Promise<{ canceled: boolean, filePath?: string }>}
  */
   ipcMain.handle("task-data:write", (_event, data) => writeTaskData(app.getPath("userData"), data));
+  ipcMain.handle("knowledge-document:save", async (event, payload) => {
+    const parent = BrowserWindow.fromWebContents(event.sender);
+    const result = await saveKnowledgeDocument(payload, { dialog, parent, platform: process.platform });
+    if (result?.success && payload?.noteId) knowledgeWatcher.updateBaseline(payload.noteId, result);
+    return result;
+  });
+  ipcMain.handle("knowledge-document:stage-assets", (_event, payload) => stageKnowledgeAssets(
+    app.getPath("userData"),
+    payload,
+  ));
+  ipcMain.handle("knowledge-document:read", (_event, payload) => readKnowledgeDocument(payload?.filePath));
+  ipcMain.handle("knowledge-document:choose", async (event, payload) => {
+    const parent = BrowserWindow.fromWebContents(event.sender);
+    return chooseKnowledgeDocument({
+      dialog,
+      parent,
+      boundPaths: payload?.boundPaths,
+      platform: process.platform,
+    });
+  });
+  ipcMain.handle("knowledge-document:watch", (_event, payload) => knowledgeWatcher.watch(payload));
+  ipcMain.handle("knowledge-document:unwatch", (_event, payload) => knowledgeWatcher.unwatch(payload?.noteId));
+  ipcMain.handle("knowledge-document:update-baseline", (_event, payload) => knowledgeWatcher.updateBaseline(payload?.noteId, payload));
+  ipcMain.handle("knowledge-recovery:read", () => readKnowledgeRecovery(app.getPath("userData")));
+  ipcMain.handle("knowledge-recovery:write", (_event, record) => writeKnowledgeRecovery(app.getPath("userData"), record));
+  ipcMain.handle("knowledge-recovery:delete", (_event, noteId) => deleteKnowledgeRecovery(app.getPath("userData"), noteId));
+  ipcMain.on("knowledge-recovery:flush-complete", (event) => {
+    if (event.sender.id !== recoveryShutdownWaitingFor) return;
+    finishRecoveryShutdown();
+  });
   ipcMain.handle("app:confirm-destructive", async (event, value) => {
     const message = String(value?.message || "确定删除所选内容？").slice(0, 500);
     const parent = BrowserWindow.fromWebContents(event.sender);
@@ -370,6 +453,7 @@ function createMenu() {
 }
 
 app.whenReady().then(async () => {
+  if (!hasSingleInstanceLock) return;
   app.setName("Personal Task Track");
   if (isMac) {
     app.setActivationPolicy("regular");
@@ -412,7 +496,11 @@ app.whenReady().then(async () => {
   }
 });
 
-app.on("before-quit", () => {
+app.on("before-quit", (event) => {
+  // Stop filesystem watchers as soon as shutdown begins. The window `closed`
+  // event is a secondary cleanup path, not the lifecycle guarantee.
+  knowledgeWatcher.closeAll();
+  if (!isQuitting && requestRecoveryShutdown(event)) return;
   isQuitting = true;
   updateController?.stop();
   todayWidgetController?.stop();

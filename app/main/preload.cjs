@@ -8,6 +8,23 @@ contextBridge.exposeInMainWorld("personalTaskTrack", {
     read: () => ipcRenderer.invoke("task-data:read"),
     write: (data) => ipcRenderer.invoke("task-data:write", data),
   },
+  knowledgeRecovery: {
+    read: () => ipcRenderer.invoke("knowledge-recovery:read"),
+    write: (record) => ipcRenderer.invoke("knowledge-recovery:write", record),
+    delete: (noteId) => ipcRenderer.invoke("knowledge-recovery:delete", noteId),
+    onFlushAndQuit: (callback) => subscribe("knowledge-recovery:flush-and-quit", callback),
+    completeFlushAndQuit: () => ipcRenderer.send("knowledge-recovery:flush-complete"),
+  },
+  knowledgeFile: {
+    save: (payload) => ipcRenderer.invoke("knowledge-document:save", payload),
+    stageAssets: (payload) => ipcRenderer.invoke("knowledge-document:stage-assets", payload),
+    read: (payload) => ipcRenderer.invoke("knowledge-document:read", payload),
+    choose: (payload) => ipcRenderer.invoke("knowledge-document:choose", payload),
+    watch: (payload) => ipcRenderer.invoke("knowledge-document:watch", payload),
+    unwatch: (payload) => ipcRenderer.invoke("knowledge-document:unwatch", payload),
+    updateBaseline: (payload) => ipcRenderer.invoke("knowledge-document:update-baseline", payload),
+    onChange: (callback) => subscribe("knowledge-file:changed", callback),
+  },
   clipboard: {
     readImageDataUrl: () => ipcRenderer.invoke("clipboard:read-image-data-url"),
     readImageDataUrlSync: () => ipcRenderer.sendSync("clipboard:read-image-data-url-sync"),
