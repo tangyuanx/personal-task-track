@@ -6577,6 +6577,10 @@ body {
   overflow: visible;
 }
 
+.task-knowledge-editor-panel .ProseMirror-focused {
+  box-shadow: none;
+}
+
 .task-knowledge-editor-panel .markdown-editor {
   overflow: auto;
 }

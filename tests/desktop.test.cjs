@@ -1016,6 +1016,18 @@ test("knowledge images keep the caret beside the inline image node", async () =>
   assert.match(styles, /\.task-knowledge-editor-panel \.ProseMirror\s*\{\s*overflow:\s*visible;/);
 });
 
+test("knowledge scrolling does not paint an inner focus boundary across content", async () => {
+  const styles = await fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "styles.css"), "utf8");
+  const panelFocusRule = styles.match(/\.task-knowledge-editor-panel:focus-within\s*\{([\s\S]*?)\}/)?.[1] || "";
+  const editorFocusRule = styles.match(/\.task-knowledge-editor-panel \.ProseMirror-focused\s*\{([\s\S]*?)\}/)?.[1] || "";
+
+  assert.match(panelFocusRule, /border-color:/);
+  assert.match(panelFocusRule, /box-shadow:/);
+  assert.match(editorFocusRule, /box-shadow:\s*none;/);
+  assert.match(styles, /\.task-knowledge-editor-panel \.milkdown-editor-host\s*\{[\s\S]*?overflow:\s*auto;/);
+  assert.match(styles, /\.task-knowledge-editor-panel \.ProseMirror\s*\{\s*overflow:\s*visible;/);
+});
+
 test("knowledge lists and code use compact document-like presentation", async () => {
   const styles = await fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "styles.css"), "utf8");
   const listRule = styles.match(/\.task-knowledge-editor-panel \.ProseMirror ul,[\s\S]*?\.task-knowledge-editor-panel \.ProseMirror ol\s*\{([\s\S]*?)\}/)?.[1] || "";
