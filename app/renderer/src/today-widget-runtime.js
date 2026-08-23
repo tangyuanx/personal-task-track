@@ -190,6 +190,8 @@
     if (!event.target.closest("#widget-menu, #menu-toggle")) closeMenu();
   });
 
+  window.addEventListener("blur", closeMenu);
+
   document.querySelectorAll("[data-place]").forEach((button) => {
     button.addEventListener("click", async () => {
       widget.dataset.position = button.dataset.place;

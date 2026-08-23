@@ -1,9 +1,29 @@
 # Progress Log
 
+## Session: 2026-08-23 Today Widget Settings Outside-click Dismissal
+
+### Phase 29: Baseline and interaction audit
+- **Status:** in progress
+- Actions taken:
+  - Read the project maintenance and persistent planning instructions and recovered the published v0.1.122 context.
+  - Confirmed a clean synchronized `main` and verified `knowledge-note-local-storage` is absent.
+  - Confirmed the existing document-level pointer listener already closes settings for clicks elsewhere inside the widget.
+  - Identified the missing case as clicks outside the separate widget `BrowserWindow`, which require reacting to window focus loss.
+  - Chose to reuse the existing `closeMenu()` function on `window.blur` so accessibility state and widget resizing remain consistent.
+  - Added a failing source-level regression assertion, confirmed it fails before the implementation, then bound `window.blur` to the existing close path.
+  - Passed the focused Today-widget regression, JavaScript syntax check, and `git diff --check`.
+  - Passed the full v0.1.123 project check with 103 desktop/client tests and 11 mocked backend tests.
+  - Built the formal macOS ARM64 DMG/ZIP with `npm run dist:mac` and Windows x64 NSIS package with `npm run dist:win`.
+  - Verified eight release/update files, matching package/lock versions, three primary artifact checksums, and no AppleDouble files.
+  - Prepared commit, tag, remote push, and post-push verification for `v0.1.123`.
+- Errors:
+  - The first full check passed all 103 application tests, but the sandbox denied the unchanged backend runner's local IPC pipe; rerunning the same command outside the sandbox passed all 11 backend tests.
+  - macOS packaging reported the existing intentional unsigned-build warning because `build.mac.identity` is `null`.
+
 ## Session: 2026-08-23 Today Widget Theme Parity and Transparency
 
 ### Phase 28: Baseline and implementation audit
-- **Status:** in progress
+- **Status:** complete
 - Actions taken:
   - Read the project maintenance, persistent planning, and frontend design instructions.
   - Confirmed a clean `main`, synchronized remote `main` and tags, and verified `knowledge-note-local-storage` is absent.
@@ -18,6 +38,7 @@
   - Visually verified an isolated Electron widget instance against the simultaneously rendered main Today card and confirmed the settings accessibility tree exposes the opacity slider.
   - Re-fetched remote main/tags, confirmed `v0.1.121` remained latest with zero divergence, and bumped release metadata to `v0.1.122`.
   - Removed old release output and built the formal macOS ARM64 DMG/ZIP plus Windows x64 NSIS packages; confirmed all eight release/update files and no AppleDouble artifacts.
+  - Committed, tagged, pushed, and verified release `v0.1.122` on remote `main`.
 - Errors:
   - One exploratory `rg` command treated a pattern beginning with `--handoff` as an option; reran the search with explicit `-e` patterns.
   - The first full check passed all 103 application tests but the sandbox denied the backend runner's local IPC pipe; the unchanged check command passed outside the sandbox, including all 11 backend tests.

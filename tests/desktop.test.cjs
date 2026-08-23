@@ -2305,6 +2305,8 @@ test("production Today widget uses its dedicated frontend and a sandboxed Electr
   assert.match(runtime, /--widget-font-scale/);
   assert.match(runtime, /function applyOpacity/);
   assert.match(runtime, /setPreferences\(\{ opacity \}\)/);
+  assert.match(runtime, /document\.addEventListener\("pointerdown",[\s\S]*closeMenu\(\)/);
+  assert.match(runtime, /window\.addEventListener\("blur", closeMenu\)/);
   assert.match(widgetMain, /frame: false/);
   assert.match(widgetMain, /transparent: true/);
   assert.match(widgetMain, /hasShadow: false/);

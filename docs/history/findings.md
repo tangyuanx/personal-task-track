@@ -1,5 +1,15 @@
 # Findings & Decisions
 
+## Phase 29 Today Widget Settings Dismissal (2026-08-23)
+- Local `main` is clean and matches `origin/main` at the published `v0.1.122`; `knowledge-note-local-storage` remains absent.
+- The widget already closes its settings menu when a pointer press occurs inside the widget but outside `#widget-menu` and `#menu-toggle`.
+- Clicking the main window, desktop, or another application cannot reach that document-level pointer listener because the Today widget is a separate `BrowserWindow`.
+- Window focus loss is the correct lifecycle signal for those outside clicks. Reusing `closeMenu()` preserves the existing `aria-expanded` update and resize request without changing menu controls, preferences, or visual styles.
+- Keep the document-level outside-pointer behavior and add a window-level `blur` path; together they cover both clicks elsewhere inside the widget and clicks outside the widget window.
+- The new assertion failed before implementation and passed after binding `window.blur` to `closeMenu()`. The final full check passed 103 desktop/client tests plus 11 bug-report service tests.
+- Release version is `0.1.123`. Formal macOS ARM64 DMG/ZIP and Windows x64 NSIS builds completed with eight release/update files and no AppleDouble artifacts.
+- The only build warning is the existing intentional unsigned macOS configuration (`identity: null`); it does not affect the settings-menu interaction but still causes normal macOS distribution prompts.
+
 ## Phase 28 Today Widget Theme Parity (2026-08-23)
 - Local `main` is clean and matches `origin/main` at `0863cd5` / `v0.1.121`; `knowledge-note-local-storage` is absent as required before release.
 - The widget does receive the main theme, Chinese font, English font, and computed base font size through `todayWidgetSnapshot()`, so the remaining mismatch is not a missing snapshot update.

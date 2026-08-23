@@ -4,9 +4,18 @@
 Maintain the personal task management app through scoped, low-risk improvements while preserving existing task flow behavior and release discipline.
 
 ## Current Phase
-Phase 28
+Phase 29
 
 ## Phases
+
+### Phase 29: Today Widget Settings Outside-click Dismissal
+- [x] Recover repository context, confirm a clean latest `main`, and verify the excluded specification folder is absent
+- [x] Audit the existing settings-menu dismissal paths and widget window lifecycle
+- [x] Add regression coverage for closing the menu when the widget loses focus
+- [x] Reuse the existing close path for window blur without changing settings or styling
+- [x] Run focused and full validation
+- [x] Build, version, commit, tag, push, and verify the release
+- **Status:** complete
 
 ### Phase 28: Today Widget Theme Parity and Transparency
 - [x] Recover repository context, confirm a clean latest `main`, and verify the excluded specification folder is absent
@@ -14,8 +23,8 @@ Phase 28
 - [x] Make the widget reuse the main Today-card visual language and matching bundled font behavior
 - [x] Add a bounded, persisted widget transparency control inside the widget settings menu
 - [x] Add focused regression coverage and run full validation
-- [ ] Build, version, commit, tag, push, and verify the release
-- **Status:** release prepared
+- [x] Build, version, commit, tag, push, and verify the release
+- **Status:** complete
 
 ### Phase 27: Edit Recovery, Recurring Tasks, and Flow Split Resize
 - [x] Recover repository context, preserve unrelated artifacts, and confirm the latest remote baseline
