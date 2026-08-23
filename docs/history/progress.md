@@ -3,7 +3,7 @@
 ## Session: 2026-08-24 Publish Focus Restoration and Node Reorganization
 
 ### Phase 32: Release baseline
-- **Status:** in progress
+- **Status:** complete
 - Actions taken:
   - Re-read the project maintenance and persistent planning workflows.
   - Recovered the eight-file working tree containing the completed Phase 30 and Phase 31 changes.
@@ -13,6 +13,8 @@
   - Passed the complete versioned project check with 105 desktop/client tests and 11 mocked bug-report service tests, followed by `git diff --check`.
   - Removed the eight obsolete `0.1.123` release files and built the formal macOS ARM64 DMG/ZIP plus Windows x64 NSIS packages for `0.1.124`.
   - Verified eight release/update files, zero AppleDouble artifacts, and SHA-256 checksums for the DMG, ZIP, and EXE.
+  - Created release commit `b060646` (`feat: preserve editing focus and reorganize flow nodes`) and annotated tag `v0.1.124`.
+  - Pushed remote `main` and `v0.1.124`, fetched the published references, and confirmed both the tag and remote branch contain the release commit with zero local/remote divergence.
 - Errors:
   - The sandboxed check passed all 105 application tests but denied the unchanged backend runner's local IPC pipe with `listen EPERM`; the identical approved retry outside the sandbox passed all 11 backend tests.
   - macOS packaging reported the existing intentional unsigned-build warning because `build.mac.identity` is `null`; no build errors occurred.

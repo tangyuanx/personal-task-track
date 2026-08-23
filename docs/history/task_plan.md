@@ -13,9 +13,9 @@ Phase 32
 - [x] Fetch remote `main` and tags and confirm zero branch divergence
 - [x] Bump to the next remote patch version
 - [x] Re-run the complete check and release builds for macOS and Windows
-- [ ] Commit the two features, create the matching release tag, and push `main` plus the tag
-- [ ] Verify the remote branch/tag and finish with a clean local `main`
-- **Status:** in progress
+- [x] Commit the two features, create the matching release tag, and push `main` plus the tag
+- [x] Verify the remote branch/tag and finish with a clean local `main`
+- **Status:** complete
 
 ### Phase 31: Processing-flow Node Drag Reorganization
 - [x] Preserve the completed local focus-restoration changes and confirm the latest remote baseline
