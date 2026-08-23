@@ -48,9 +48,12 @@ let updateController = null;
 let todayWidgetController = null;
 let mainWindow = null;
 let isQuitting = false;
+let updateInstallPrepared = false;
 let recoveryShutdownWaitingFor = null;
 let recoveryShutdownTimer = null;
 const RECOVERY_SHUTDOWN_TIMEOUT_MS = 2000;
+let updateInstallPreparation = null;
+const UPDATE_INSTALL_PREPARATION_TIMEOUT_MS = 10_000;
 const knowledgeWatcher = createKnowledgeFileWatcher({
   onChange: (event) => {
     if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send("knowledge-file:changed", event);
@@ -102,7 +105,7 @@ function createWindow() {
     if (mainWindow !== window) return;
     mainWindow = null;
     knowledgeWatcher.closeAll();
-    if (!isQuitting) app.quit();
+    if (!isQuitting && !updateInstallPrepared) app.quit();
   });
   window.on("close", (event) => {
     if (isQuitting) return;
@@ -132,6 +135,33 @@ function requestRecoveryShutdown(event) {
   mainWindow.webContents.send("knowledge-recovery:flush-and-quit");
   recoveryShutdownTimer = setTimeout(finishRecoveryShutdown, RECOVERY_SHUTDOWN_TIMEOUT_MS);
   return true;
+}
+
+function finishUpdateInstallPreparation(success) {
+  if (!updateInstallPreparation) return;
+  const { resolve, timer } = updateInstallPreparation;
+  clearTimeout(timer);
+  updateInstallPreparation = null;
+  if (success) {
+    // `quitAndInstall` closes windows before `before-quit`, so the renderer has
+    // already completed all persistence work when this flag is set.
+    updateInstallPrepared = true;
+  }
+  resolve(success === true);
+}
+
+function requestUpdateInstallPreparation() {
+  if (!mainWindow || mainWindow.isDestroyed()) return Promise.resolve(true);
+  if (updateInstallPreparation) return updateInstallPreparation.promise;
+  const senderId = mainWindow.webContents.id;
+  let resolvePreparation;
+  const promise = new Promise((resolve) => {
+    resolvePreparation = resolve;
+  });
+  const timer = setTimeout(() => finishUpdateInstallPreparation(false), UPDATE_INSTALL_PREPARATION_TIMEOUT_MS);
+  updateInstallPreparation = { promise, resolve: resolvePreparation, senderId, timer };
+  mainWindow.webContents.send("app-update:prepare-install");
+  return promise;
 }
 
 function registerStorageHandlers() {
@@ -181,6 +211,10 @@ function registerStorageHandlers() {
   ipcMain.on("knowledge-recovery:flush-complete", (event) => {
     if (event.sender.id !== recoveryShutdownWaitingFor) return;
     finishRecoveryShutdown();
+  });
+  ipcMain.on("app-update:prepare-install-complete", (event, success) => {
+    if (event.sender.id !== updateInstallPreparation?.senderId) return;
+    finishUpdateInstallPreparation(success === true);
   });
   ipcMain.handle("app:confirm-destructive", async (event, value) => {
     const message = String(value?.message || "确定删除所选内容？").slice(0, 500);
@@ -475,6 +509,10 @@ app.whenReady().then(async () => {
     ipcMain,
     autoUpdater,
     macUpdatesEnabled: false,
+    prepareInstall: requestUpdateInstallPreparation,
+  });
+  autoUpdater.on("error", () => {
+    updateInstallPrepared = false;
   });
   updateController.registerIpc();
   createMenu();
@@ -500,7 +538,7 @@ app.on("before-quit", (event) => {
   // Stop filesystem watchers as soon as shutdown begins. The window `closed`
   // event is a secondary cleanup path, not the lifecycle guarantee.
   knowledgeWatcher.closeAll();
-  if (!isQuitting && requestRecoveryShutdown(event)) return;
+  if (!isQuitting && !updateInstallPrepared && requestRecoveryShutdown(event)) return;
   isQuitting = true;
   updateController?.stop();
   todayWidgetController?.stop();

@@ -24,6 +24,7 @@ function createUpdateController({
   startupDelayMs = DEFAULT_STARTUP_DELAY_MS,
   intervalMs = DEFAULT_INTERVAL_MS,
   fileSystem = fs,
+  prepareInstall = async () => true,
 } = {}) {
   if (!app || !BrowserWindow || !ipcMain || !autoUpdater) {
     throw new TypeError("Updater controller requires Electron app, BrowserWindow, ipcMain, and autoUpdater.");
@@ -55,6 +56,8 @@ function createUpdateController({
   let startupTimer = null;
   let intervalTimer = null;
   let started = false;
+  let userApprovedInstall = false;
+  let installInFlight = null;
 
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = false;
@@ -129,7 +132,7 @@ function createUpdateController({
   }
 
   async function checkForUpdates(source = "manual") {
-    if (!supported || state.status === "checking" || state.status === "downloading") return getState();
+    if (!supported || ["checking", "downloading", "downloaded", "preparing", "installing"].includes(state.status)) return getState();
     updateState({
       status: "checking",
       errorCode: "",
@@ -148,23 +151,61 @@ function createUpdateController({
   }
 
   async function downloadUpdate() {
-    if (!supported || state.status !== "available") return getState();
+    if (!supported || !["available", "downloaded"].includes(state.status)) return getState();
+    userApprovedInstall = true;
+    if (state.status === "downloaded") return installDownloadedUpdate();
     updateState({ status: "downloading", errorCode: "", percent: 0 });
     try {
       await autoUpdater.downloadUpdate();
     } catch (error) {
+      userApprovedInstall = false;
       setError(error);
     }
     return getState();
   }
 
   function installUpdate() {
-    if (!supported || state.status !== "downloaded") return false;
-    autoUpdater.quitAndInstall(false, true);
-    return true;
+    if (!supported || state.status !== "downloaded") return getState();
+    userApprovedInstall = true;
+    return installDownloadedUpdate();
+  }
+
+  function installDownloadedUpdate() {
+    if (!supported || !userApprovedInstall || state.status !== "downloaded") return Promise.resolve(getState());
+    if (installInFlight) return installInFlight;
+    installInFlight = (async () => {
+      updateState({ status: "preparing", errorCode: "" });
+      let prepared = false;
+      try {
+        prepared = await prepareInstall();
+      } catch (error) {
+        updateState({ status: "downloaded", errorCode: safeErrorCode(error) });
+        userApprovedInstall = false;
+        return getState();
+      }
+      if (!prepared) {
+        updateState({ status: "downloaded", errorCode: "INSTALL_PREPARATION_FAILED" });
+        userApprovedInstall = false;
+        return getState();
+      }
+      updateState({ status: "installing", errorCode: "" });
+      try {
+        // The explicit in-app upgrade action has already authorized this
+        // Windows-only silent installer run and the automatic relaunch.
+        autoUpdater.quitAndInstall(true, true);
+      } catch (error) {
+        userApprovedInstall = false;
+        setError(error);
+      }
+      return getState();
+    })().finally(() => {
+      installInFlight = null;
+    });
+    return installInFlight;
   }
 
   function setError(error) {
+    userApprovedInstall = false;
     updateState({
       status: "error",
       errorCode: safeErrorCode(error),
@@ -188,6 +229,7 @@ function createUpdateController({
     });
   });
   autoUpdater.on("update-not-available", () => {
+    userApprovedInstall = false;
     updateState({
       status: "latest",
       version: "",
@@ -214,8 +256,10 @@ function createUpdateController({
       transferred: state.total || state.transferred,
       errorCode: "",
     });
+    if (userApprovedInstall) void installDownloadedUpdate();
   });
   autoUpdater.on("update-cancelled", () => {
+    userApprovedInstall = false;
     updateState({ status: "available", percent: 0, transferred: 0, bytesPerSecond: 0 });
   });
   autoUpdater.on("error", setError);

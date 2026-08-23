@@ -45,6 +45,8 @@ contextBridge.exposeInMainWorld("personalTaskTrack", {
     check: () => ipcRenderer.invoke("app-update:check"),
     download: () => ipcRenderer.invoke("app-update:download"),
     install: () => ipcRenderer.invoke("app-update:install"),
+    onPrepareInstall: (callback) => subscribe("app-update:prepare-install", callback),
+    completeInstallPreparation: (success) => ipcRenderer.send("app-update:prepare-install-complete", success === true),
     onState: (callback) => {
       if (typeof callback !== "function") return () => {};
       const listener = (_event, state) => callback(state);

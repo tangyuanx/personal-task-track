@@ -1,5 +1,19 @@
 # Findings & Decisions
 
+## Phase 33 User-confirmed Seamless In-app Update (2026-08-24)
+- The requirement is not unattended automatic updating. Automatic checks may report availability, but download and installation must begin only after an explicit user upgrade action.
+- This work remains local. Preserve the existing uncommitted node-record focus CSS/test changes; do not bump the package version, build a release, commit, tag, or push.
+- Local `main` and `origin/main` have zero divergence at the published `v0.1.124` baseline.
+- The current Windows updater already uses `autoDownload = false` and `autoInstallOnAppQuit = false`, but requires separate “download” and “restart and update” actions and launches the NSIS installer non-silently.
+- The intended state flow is `available -> downloading -> preparing -> installing`, where the single explicit “upgrade and restart” action authorizes the remaining steps. An automatic availability check must never set that authorization.
+- `electron-updater.quitAndInstall()` closes renderer windows before the application `before-quit` event. The existing recovery-on-shutdown path therefore cannot be the safety boundary for update installation.
+- Before invoking the installer, the main process must request a renderer preparation handshake. The renderer blocks further editing, flushes node drafts and task data, and persists all pending Knowledge Note Recovery records. A timeout or failed flush must abort installation without quitting.
+- On supported Windows NSIS builds, `quitAndInstall(true, true)` is the stack's silent-install-and-relaunch mechanism. macOS remains intentionally disabled until signing/notarization is available, so this phase must not claim macOS seamless update support.
+- The completed controller retains `autoDownload = false` and a transient `userApprovedInstall` gate. A background check or unsolicited `update-downloaded` event cannot run the installer; one explicit “升级并重启” action authorizes download, preparation, silent install, and relaunch.
+- The renderer shows download progress and a blocking in-app preparation surface only when installation is imminent. It captures mounted editors, flushes node drafts, atomically writes task metadata, and strictly persists all queued Recovery records before acknowledging the main process.
+- Recovery write failures are retained by note ID. The first failed preparation keeps the app open and the package retryable; a later user retry re-attempts the failed Recovery write before installation.
+- Focused tests cover user authorization, unapproved events, preparation failure, Recovery retry, repeated rapid actions, and installer launch failure. The final complete check passed 111 desktop/client tests and 11 bug-report service tests.
+
 ## Phase 32 Two-feature Release (2026-08-24)
 - The user explicitly authorized publishing the two accumulated local changes: Phase 30 app-switch editing focus restoration and Phase 31 processing-flow node drag reorganization.
 - Local `main` and `origin/main` have zero divergence at `2443a89`; the eight modified files belong to these two completed features and their regression/planning records.

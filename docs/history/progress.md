@@ -1,5 +1,30 @@
 # Progress Log
 
+## Session: 2026-08-24 User-confirmed Seamless In-app Update
+
+### Phase 33: Baseline and updater safety audit
+- **Status:** complete
+- Actions taken:
+  - Re-read the project maintenance and persistent planning instructions.
+  - Preserved the two uncommitted node-record focus files and fetched remote `main`/tags without merging.
+  - Confirmed local `main` and `origin/main` have zero divergence at v0.1.124.
+  - Audited the updater controller, IPC bridge, renderer update settings, NSIS configuration, electron-updater install semantics, and application shutdown/recovery lifecycle.
+  - Kept explicit user consent as the only download/install trigger while defining automatic continuation after that one action.
+  - Identified that update installation closes renderer windows before `before-quit`, requiring a dedicated pre-install persistence handshake rather than relying on normal shutdown recovery flushing.
+  - Added failing updater tests first and confirmed the existing two-step flow did not auto-continue or report preparation failures.
+  - Added the explicit authorization gate and `available -> downloading -> preparing -> installing` state flow while retaining disabled automatic download/install preferences.
+  - Replaced the second routine confirmation with one “升级并重启” action, live download progress, an in-app save/restart wait surface, silent NSIS installation, and forced relaunch.
+  - Added an IPC preparation handshake with a 10-second timeout and sender validation. The renderer captures active editors, flushes node drafts/task data, and strictly persists all pending Recovery records before installation.
+  - Added failed-Recovery tracking and retry so disk/permission failures stop the upgrade without quitting and can recover on a later explicit attempt.
+  - Passed 7 focused updater tests, the focused renderer/settings tests, syntax checks, and `git diff --check`.
+  - Passed the complete project check with 111 desktop/client tests and 11 bug-report service tests.
+  - Kept package version 0.1.124 and left all changes local; no release build, commit, tag, or push was performed.
+- Errors:
+  - The first combined planning patch did not match the findings-file context and was rejected without partial edits; the three files were updated with focused patches.
+  - The first focused renderer test exposed a missing `document.body.append` method in the VM harness; production code was switched to the broadly supported `appendChild` path and the test passed.
+  - The first complete check found one stale Today-widget source assertion that required the old one-condition quit guard; it was updated to validate the new update-preparation guard and all 111 app tests passed.
+  - The sandboxed complete check then blocked the unchanged backend `tsx` IPC pipe with `listen EPERM`; the identical approved check outside the sandbox passed all 11 backend tests.
+
 ## Session: 2026-08-24 Publish Focus Restoration and Node Reorganization
 
 ### Phase 32: Release baseline

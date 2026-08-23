@@ -114,7 +114,10 @@ function rendererHarness(personalTaskTrack = undefined) {
     createElement: () => ({
       classList: { add() {}, contains: () => false, remove() {} },
       click() {},
+      dataset: {},
+      focus() {},
       remove() {},
+      setAttribute() {},
       style: {},
     }),
     createTextNode: (value) => ({ value }),
@@ -426,6 +429,42 @@ test("renderer flushes pending knowledge recovery before shutdown", async () => 
 
   assert.equal(recoveryWrites.length, 1);
   assert.equal(recoveryWrites[0].content, "退出前最新正文");
+});
+
+test("update installation preparation requires both task data and pending Recovery to persist", async () => {
+  let taskWrites = 0;
+  let recoveryWrites = 0;
+  let failRecovery = true;
+  const harness = await rendererHarness({
+    storage: {
+      write: async () => { taskWrites += 1; },
+    },
+    knowledgeRecovery: {
+      write: async () => {
+        recoveryWrites += 1;
+        if (failRecovery) throw Object.assign(new Error("recovery disk full"), { code: "ENOSPC" });
+      },
+    },
+  });
+  harness.evaluate(`(() => {
+    state.tasks = normalizeTasks([{
+      id: "update_recovery_task",
+      title: "升级前保存",
+      notes: "当前正文",
+      nodes: []
+    }]);
+    state.taskGroups = normalizeTaskGroups([], state.tasks);
+    state.activeGroupId = state.taskGroups[0].id;
+    state.knowledgeRecovery = { version: 1, records: {} };
+    scheduleKnowledgeRecovery("update_recovery_task", "升级前最新正文", { debounceMs: 1000, maxIntervalMs: 2000 });
+  })()`);
+
+  assert.equal(await harness.evaluate("prepareForUpdateInstall()"), false);
+  assert.equal(taskWrites, 1);
+  assert.equal(recoveryWrites, 1);
+  failRecovery = false;
+  assert.equal(await harness.evaluate("prepareForUpdateInstall()"), true);
+  assert.equal(recoveryWrites, 2);
 });
 
 test("task data and Recovery writes sync temporary files before replacement", async () => {
@@ -2070,12 +2109,13 @@ test("Today widget uses the main Today focus surface treatment", async () => {
   assert.match(widget, /NotoSansCJKsc-Bold\.otf/);
 });
 
-test("settings expose the confirmed application update flow without silent install controls", async () => {
-  const [app, styles, preload, updater] = await Promise.all([
+test("settings expose one-confirmation background update with a safe silent restart handshake", async () => {
+  const [app, styles, preload, updater, main] = await Promise.all([
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "app.js"), "utf8"),
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "styles.css"), "utf8"),
     fs.readFile(path.join(__dirname, "..", "app", "main", "preload.cjs"), "utf8"),
     fs.readFile(path.join(__dirname, "..", "app", "main", "updater.cjs"), "utf8"),
+    fs.readFile(path.join(__dirname, "..", "app", "main", "main.cjs"), "utf8"),
   ]);
   const harness = await rendererHarness();
   const available = harness.evaluate(`(() => {
@@ -2090,20 +2130,29 @@ test("settings expose the confirmed application update flow without silent insta
     });
     return renderUpdateSettingsControls();
   })()`);
-  const downloaded = harness.evaluate(`(() => {
-    appUpdateState = normalizeAppUpdateState({ status: "downloaded", supported: true, currentVersion: "0.1.109", version: "0.1.110" });
+  const preparing = harness.evaluate(`(() => {
+    appUpdateState = normalizeAppUpdateState({ status: "preparing", supported: true, currentVersion: "0.1.109", version: "0.1.110" });
     return renderUpdateSettingsControls();
   })()`);
 
   assert.match(app, /<h3 id="software-update-title">软件更新<\/h3>/);
   assert.match(available, /自动检查更新/);
   assert.match(available, /v0\.1\.110 可用/);
-  assert.match(available, /data-update-action="download">下载更新/);
-  assert.match(downloaded, /data-update-action="install">重启并更新/);
+  assert.match(available, /data-update-action="download">升级并重启/);
+  assert.match(preparing, /正在保存并准备升级/);
+  assert.doesNotMatch(available, /data-update-action="install"/);
   assert.match(styles, /\.settings-update-progress span\s*\{[\s\S]*background:\s*var\(--focus\);/);
+  assert.match(styles, /\.update-install-overlay\s*\{/);
   assert.match(preload, /app-update:get-state/);
+  assert.match(preload, /app-update:prepare-install/);
+  assert.match(preload, /app-update:prepare-install-complete/);
   assert.match(updater, /autoDownload = false/);
   assert.match(updater, /autoInstallOnAppQuit = false/);
+  assert.match(updater, /userApprovedInstall/);
+  assert.match(updater, /quitAndInstall\(true, true\)/);
+  assert.match(main, /requestUpdateInstallPreparation/);
+  assert.match(main, /UPDATE_INSTALL_PREPARATION_TIMEOUT_MS/);
+  assert.match(app, /flushPendingKnowledgeRecoveries\(\{ strict: true \}\)/);
   assert.doesNotMatch(app, /自动安装更新/);
 });
 
@@ -2318,7 +2367,7 @@ test("production Today widget uses its dedicated frontend and a sandboxed Electr
   assert.match(widgetMain, /moveTop\(\)/);
   assert.match(widgetMain, /getDisplayMatching/);
   assert.match(widgetMain, /function stop\(\)[\s\S]*widgetWindow\.destroy\(\)/);
-  assert.match(appMain, /if \(!isQuitting\) app\.quit\(\)/);
+  assert.match(appMain, /if \(!isQuitting && !updateInstallPrepared\) app\.quit\(\)/);
   assert.doesNotMatch(appMain, /!isMac && !isQuitting/);
   assert.match(appMain, /app\.setActivationPolicy\("regular"\)/);
   assert.match(appMain, /await app\.dock\.show\(\)/);
@@ -3068,6 +3117,15 @@ test("processing-flow nodes move across parents, levels, and sibling positions w
   assert.match(app, /function flowNodeDropPlacement\(/);
   assert.match(styles, /\.flow-node-drag-handle/);
   assert.match(styles, /\.node-drag-over-inside/);
+});
+
+test("node record input focus stays within a quiet field boundary", async () => {
+  const styles = await fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "styles.css"), "utf8");
+  const finalRecordFocusRules = styles.slice(styles.lastIndexOf("Node record editing stays inside the field"));
+
+  assert.match(finalRecordFocusRules, /\.record-modal-textarea\s*\{[\s\S]*outline:\s*none;/);
+  assert.match(finalRecordFocusRules, /\.record-modal-textarea:focus\s*\{[\s\S]*box-shadow:\s*inset 0 0 0 1px/);
+  assert.doesNotMatch(finalRecordFocusRules, /\.record-modal-textarea:focus\s*\{[\s\S]*box-shadow:\s*0 0 0/);
 });
 
 test("knowledge images keep the caret beside the inline image node", async () => {

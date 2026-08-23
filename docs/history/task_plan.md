@@ -4,9 +4,18 @@
 Maintain the personal task management app through scoped, low-risk improvements while preserving existing task flow behavior and release discipline.
 
 ## Current Phase
-Phase 32
+Phase 33
 
 ## Phases
+
+### Phase 33: User-confirmed Seamless In-app Update
+- [x] Preserve the local node-record focus styling and confirm zero remote divergence
+- [x] Audit the existing updater state machine, renderer controls, and shutdown data-safety path
+- [x] Add failing coverage for manual consent, automatic continuation, and pre-install persistence
+- [x] Implement one-confirmation background download, in-app wait, silent install, and automatic restart
+- [x] Run focused updater tests and the complete project check
+- [x] Leave all accumulated changes local without versioning, committing, tagging, or pushing
+- **Status:** complete
 
 ### Phase 32: Publish Focus Restoration and Flow Node Reorganization
 - [x] Recover the two verified local changes and preserve their complete working tree

@@ -178,7 +178,7 @@ const reviewDateFieldLabels = {
 
 const taskStatusValues = new Set(["active", "done"]);
 const nodeStatusValues = new Set(["todo", "done", "blocked", "later"]);
-const appUpdateStatuses = new Set(["idle", "unsupported", "checking", "latest", "available", "downloading", "downloaded", "error"]);
+const appUpdateStatuses = new Set(["idle", "unsupported", "checking", "latest", "available", "downloading", "downloaded", "preparing", "installing", "error"]);
 
 let state = {
 
@@ -257,6 +257,7 @@ const nodeNoteSaveTimers = new Map();
 const knowledgeRecoveryTimers = new Map();
 const knowledgeExternalSnapshots = new Map();
 let knowledgeRecoveryWriteQueue = Promise.resolve();
+const knowledgeRecoveryWriteErrors = new Map();
 let cachedKnowledgePane = null;
 let appSwitchFocusSnapshot = null;
 let appEditingPointerDown = false;
@@ -785,24 +786,25 @@ function hydrateKnowledgeEditorMarkdown(content) {
   }, String(content || ""));
 }
 
-function persistKnowledgeRecoveryRecord(record) {
+function persistKnowledgeRecoveryRecord(record, { strict = false } = {}) {
   if (!record) return Promise.resolve();
   state.knowledgeRecovery.records[record.noteId] = record;
-  knowledgeRecoveryWriteQueue = knowledgeRecoveryWriteQueue
-    .then(async () => {
+  const writePromise = knowledgeRecoveryWriteQueue.then(async () => {
       if (desktopKnowledgeRecovery?.write) {
         await desktopKnowledgeRecovery.write(record);
-        return;
+      } else {
+        localStorage.setItem(KNOWLEDGE_RECOVERY_KEY, JSON.stringify(state.knowledgeRecovery));
       }
-      localStorage.setItem(KNOWLEDGE_RECOVERY_KEY, JSON.stringify(state.knowledgeRecovery));
-    })
-    .catch((error) => {
-      console.error("Failed to persist knowledge note recovery data.", error);
+      knowledgeRecoveryWriteErrors.delete(record.noteId);
     });
-  return knowledgeRecoveryWriteQueue;
+  knowledgeRecoveryWriteQueue = writePromise.catch((error) => {
+    knowledgeRecoveryWriteErrors.set(record.noteId, error);
+    console.error("Failed to persist knowledge note recovery data.", error);
+  });
+  return strict ? writePromise : knowledgeRecoveryWriteQueue;
 }
 
-function flushKnowledgeRecovery(noteId) {
+function flushKnowledgeRecovery(noteId, { strict = false } = {}) {
   const pending = knowledgeRecoveryTimers.get(noteId);
   if (!pending) return Promise.resolve();
   window.clearTimeout(pending.debounceTimer);
@@ -814,22 +816,35 @@ function flushKnowledgeRecovery(noteId) {
     .then((stagedAssets) => {
       if (stagedAssets?.success === false) {
         console.error("Failed to stage knowledge note assets for recovery.", stagedAssets.message || stagedAssets.code);
+        if (strict) throw Object.assign(new Error("Knowledge recovery asset staging failed."), { code: stagedAssets.code || "RECOVERY_ASSET_STAGE_FAILED" });
         return null;
       }
       return persistKnowledgeRecoveryRecord(
         recoveryRecordForTask(task, pending.content, stagedAssets?.assets),
+        { strict },
       );
     })
     .catch((error) => {
       console.error("Failed to stage knowledge note assets for recovery.", error);
+      if (strict) throw error;
       return null;
     });
 }
 
-async function flushPendingKnowledgeRecoveries() {
+async function flushPendingKnowledgeRecoveries({ strict = false } = {}) {
   const noteIds = Array.from(knowledgeRecoveryTimers.keys());
-  await Promise.all(noteIds.map((noteId) => flushKnowledgeRecovery(noteId)));
+  await Promise.all(noteIds.map((noteId) => flushKnowledgeRecovery(noteId, { strict })));
   await knowledgeRecoveryWriteQueue;
+  if (strict && knowledgeRecoveryWriteErrors.size) {
+    const failedNoteIds = Array.from(knowledgeRecoveryWriteErrors.keys());
+    await Promise.all(failedNoteIds.map((noteId) => {
+      const record = state.knowledgeRecovery.records[noteId];
+      if (!record) throw Object.assign(new Error("Knowledge recovery retry record is missing."), { code: "RECOVERY_RETRY_MISSING" });
+      return persistKnowledgeRecoveryRecord(record, { strict: true });
+    }));
+    await knowledgeRecoveryWriteQueue;
+  }
+  if (strict && knowledgeRecoveryWriteErrors.size) throw knowledgeRecoveryWriteErrors.values().next().value;
 }
 
 function scheduleKnowledgeRecovery(taskId, content, timing = {}) {
@@ -2501,7 +2516,7 @@ function renderSettingsPanel() {
             <section class="settings-group settings-update-group" aria-labelledby="software-update-title">
               <div class="settings-group-head">
                 <h3 id="software-update-title">软件更新</h3>
-                <p>从 GitHub Release 检查新版本。下载和安装都由你决定。</p>
+                <p>发现新版本后，由你确认升级；应用会在后台完成并自动重启。</p>
               </div>
               <div class="settings-update-slot">
                 ${renderUpdateSettingsControls()}
@@ -2564,7 +2579,7 @@ function normalizeAppUpdateState(value) {
 
 function renderUpdateSettingsControls() {
   const update = appUpdateState;
-  const busy = update.status === "checking" || update.status === "downloading";
+  const busy = ["checking", "downloading", "preparing", "installing"].includes(update.status);
   const currentVersion = update.currentVersion || APP_VERSION;
   return `
     <div class="settings-update-controls" aria-busy="${busy}">
@@ -2580,7 +2595,7 @@ function renderUpdateSettingsControls() {
           aria-checked="${update.automaticChecks}"
           aria-label="自动检查更新"
           data-update-automatic
-          ${update.supported ? "" : "disabled"}
+          ${update.supported && !busy ? "" : "disabled"}
         ></button>
       </div>
       <div class="settings-update-action-row">
@@ -2623,8 +2638,8 @@ function renderUpdateStatus(update) {
       tone: "available",
       title: `v${esc(update.version)} 可用`,
       detail: metadata || "新版本已发布",
-      notes: ["新版本可直接在应用内下载", "下载完成后由你决定何时重启"],
-      actions: `<button class="settings-update-button ghost" type="button" data-update-action="later">稍后</button><button class="settings-update-button primary" type="button" data-update-action="download">下载更新</button>`,
+      notes: ["确认后在应用内后台下载", "完成后自动安装并重新启动"],
+      actions: `<button class="settings-update-button ghost" type="button" data-update-action="later">稍后</button><button class="settings-update-button primary" type="button" data-update-action="download">升级并重启</button>`,
     });
   }
   if (update.status === "downloading") {
@@ -2632,7 +2647,7 @@ function renderUpdateStatus(update) {
     const detail = [
       `${percent}%`,
       update.bytesPerSecond ? `${formatUpdateSize(update.bytesPerSecond)}/s` : "",
-      "下载期间可以继续使用",
+      "完成后将自动重启",
     ].filter(Boolean).join(" · ");
     return updateStatusSheet({
       icon: "↓",
@@ -2642,12 +2657,20 @@ function renderUpdateStatus(update) {
     });
   }
   if (update.status === "downloaded") {
+    const preparationFailed = update.errorCode === "INSTALL_PREPARATION_FAILED";
     return updateStatusSheet({
-      icon: "✓",
-      title: `v${esc(update.version)} 已准备好`,
-      detail: "重启应用后完成安装，请先确认正在编辑的内容已保存。",
-      actions: `<button class="settings-update-button ghost" type="button" data-update-action="later">稍后</button><button class="settings-update-button primary" type="button" data-update-action="install">重启并更新</button>`,
+      icon: preparationFailed ? "!" : "✓",
+      tone: preparationFailed ? "error" : "available",
+      title: preparationFailed ? "升级前保存未完成" : `v${esc(update.version)} 已下载`,
+      detail: preparationFailed ? "应用没有退出，你的内容仍保留。请排除磁盘或权限问题后重试。" : "升级包已就绪，由你确认后再安装并重启。",
+      actions: `<button class="settings-update-button ghost" type="button" data-update-action="later">稍后</button><button class="settings-update-button primary" type="button" data-update-action="download">${preparationFailed ? "重试升级" : "升级并重启"}</button>`,
     });
+  }
+  if (update.status === "preparing") {
+    return updateStatusSheet({ icon: "", title: "正在保存并准备升级…", detail: "正在安全写入任务与知识笔记草稿。", spinning: true });
+  }
+  if (update.status === "installing") {
+    return updateStatusSheet({ icon: "", title: "正在完成升级…", detail: "应用即将自动重启，请稍候。", spinning: true, progress: 100 });
   }
   return updateStatusSheet({
     icon: "!",
@@ -2758,8 +2781,57 @@ async function initializeAppUpdates() {
   if (!unsubscribeAppUpdates && desktopUpdates.onState) {
     unsubscribeAppUpdates = desktopUpdates.onState((nextState) => {
       appUpdateState = normalizeAppUpdateState(nextState);
+      if (["downloaded", "error"].includes(appUpdateState.status)) {
+        document.querySelector("[data-update-install-overlay]")?.remove();
+      }
       refreshUpdateSettings();
     });
+  }
+}
+
+function showUpdateInstallOverlay() {
+  const existing = document.querySelector("[data-update-install-overlay]");
+  if (existing) return existing;
+  const overlay = document.createElement("div");
+  overlay.className = "update-install-overlay";
+  overlay.dataset.updateInstallOverlay = "";
+  overlay.tabIndex = -1;
+  overlay.setAttribute("role", "dialog");
+  overlay.setAttribute("aria-modal", "true");
+  overlay.setAttribute("aria-labelledby", "update-install-overlay-title");
+  overlay.innerHTML = `
+    <div class="update-install-card">
+      <span class="update-install-spinner" aria-hidden="true"></span>
+      <div>
+        <strong id="update-install-overlay-title">正在完成升级</strong>
+        <p>正在安全保存当前内容，完成后应用会自动重启。</p>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  overlay.focus({ preventScroll: true });
+  return overlay;
+}
+
+async function prepareForUpdateInstall() {
+  captureMountedMilkdownDrafts();
+  flushNodeNoteDrafts({ persist: false });
+  save();
+  const overlay = showUpdateInstallOverlay();
+  let ready = false;
+  try {
+    const taskDataSaved = await flushSave();
+    if (!taskDataSaved) return false;
+    await flushPendingKnowledgeRecoveries({ strict: true });
+    ready = true;
+    return true;
+  } catch (error) {
+    console.error("Failed to persist local data before installing update.", error);
+    return false;
+  } finally {
+    // Keep the blocking wait screen in place only when the installer is about
+    // to close the app. On failure the current session remains fully usable.
+    if (!ready) overlay?.remove();
   }
 }
 
@@ -6521,6 +6593,13 @@ if (desktopKnowledgeRecovery?.onFlushAndQuit) {
     } finally {
       desktopKnowledgeRecovery.completeFlushAndQuit?.();
     }
+  });
+}
+
+if (desktopUpdates?.onPrepareInstall) {
+  desktopUpdates.onPrepareInstall(async () => {
+    const ready = await prepareForUpdateInstall();
+    desktopUpdates.completeInstallPreparation?.(ready);
   });
 }
 

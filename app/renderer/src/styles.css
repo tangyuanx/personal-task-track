@@ -1178,6 +1178,53 @@ body.resizing-sidebar .sidebar-resizer::before {
   transition: width 220ms ease;
 }
 
+.update-install-overlay {
+  position: fixed;
+  z-index: 10000;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  outline: 0;
+  background: color-mix(in srgb, var(--paper) 82%, transparent);
+  backdrop-filter: blur(10px);
+}
+
+.update-install-card {
+  display: flex;
+  align-items: center;
+  width: min(390px, calc(100vw - 48px));
+  gap: 13px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: 0 18px 48px var(--shadow);
+}
+
+.update-install-card strong {
+  display: block;
+  color: var(--heading);
+  font-size: 14px;
+}
+
+.update-install-card p {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.update-install-spinner {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  border: 2px solid color-mix(in srgb, var(--focus) 24%, var(--line));
+  border-right-color: var(--focus);
+  border-radius: 50%;
+  animation: settings-update-spin 800ms linear infinite;
+}
+
 @keyframes settings-update-spin {
   to { transform: rotate(360deg); }
 }
@@ -1187,6 +1234,10 @@ body.resizing-sidebar .sidebar-resizer::before {
   .settings-update-switch::after,
   .settings-update-progress span {
     transition: none;
+  }
+
+  .update-install-spinner {
+    animation-duration: 1600ms;
   }
 }
 
@@ -10173,4 +10224,15 @@ body.flow-node-reordering,
 body.flow-node-reordering * {
   cursor: grabbing !important;
   user-select: none !important;
+}
+
+/* Node record editing stays inside the field; avoid the browser's outer focus halo. */
+.record-modal-textarea {
+  outline: none;
+}
+
+.record-modal-textarea:focus {
+  border-color: color-mix(in srgb, var(--handoff-line-strong, var(--line)) 88%, var(--focus) 12%);
+  background: var(--surface-strong, #ffffff);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--focus) 20%, transparent);
 }
