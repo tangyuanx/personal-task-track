@@ -13,6 +13,7 @@ const DEFAULT_PREFERENCES = Object.freeze({
   launchWithApp: true,
   visible: true,
   compact: false,
+  opacity: 100,
   customBounds: null,
 });
 
@@ -28,8 +29,14 @@ function normalizeTodayWidgetPreferences(value) {
     launchWithApp: raw.launchWithApp !== false,
     visible: raw.visible !== false,
     compact: raw.compact === true,
+    opacity: normalizeOpacity(raw.opacity),
     customBounds,
   };
+}
+
+function normalizeOpacity(value) {
+  const opacity = value == null || value === "" ? Number.NaN : Number(value);
+  return Number.isFinite(opacity) ? Math.max(70, Math.min(100, Math.round(opacity))) : DEFAULT_PREFERENCES.opacity;
 }
 
 function normalizeCustomBounds(value) {

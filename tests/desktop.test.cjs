@@ -2059,11 +2059,15 @@ test("Today widget uses the main Today focus surface treatment", async () => {
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "today-widget.html"), "utf8"),
   ]);
 
-  assert.match(styles, /\.today-focus\s*\{[\s\S]*linear-gradient\(135deg, color-mix\(in srgb, var\(--focus\) 16%/);
-  assert.match(widget, /--widget-bg:\s*\n\s*linear-gradient\(135deg, color-mix\(in srgb, var\(--widget-focus\) 16%/);
-  assert.match(widget, /--widget-task-bg:\s*var\(--widget-glass-soft\)/);
+  assert.match(styles, /\.today-panel\.today-focus\s*\{[\s\S]*linear-gradient\(145deg, var\(--handoff-focus-800\), var\(--handoff-focus-950\)\)/);
+  assert.match(widget, /--widget-focus:\s*#2e5d49;/);
+  assert.match(widget, /--widget-focus-deep:\s*#17392d;/);
+  assert.match(widget, /--widget-bg:[\s\S]*linear-gradient\(145deg, var\(--widget-focus\), var\(--widget-focus-deep\)\)/);
+  assert.match(widget, /--widget-task-bg:\s*rgba\(255, 255, 255, 0\.075\)/);
   assert.match(widget, /\.today-widget\s*\{[\s\S]*background:\s*var\(--widget-bg\)/);
   assert.match(widget, /\.today-task\s*\{[\s\S]*background:\s*var\(--widget-task-bg\)/);
+  assert.match(widget, /--widget-font:\s*var\(--zh-font\),\s*var\(--en-font\),\s*sans-serif;/);
+  assert.match(widget, /NotoSansCJKsc-Bold\.otf/);
 });
 
 test("settings expose the confirmed application update flow without silent install controls", async () => {
@@ -2159,6 +2163,7 @@ test("Today widget preferences normalize safely and retain an intentional custom
     launchWithApp: true,
     visible: true,
     compact: false,
+    opacity: 100,
     customBounds: null,
   });
   assert.deepEqual(normalizeTodayWidgetPreferences({
@@ -2167,6 +2172,7 @@ test("Today widget preferences normalize safely and retain an intentional custom
     launchWithApp: false,
     visible: false,
     compact: true,
+    opacity: 84.6,
     customBounds: { x: 321.7, y: 48.2 },
   }), {
     position: "custom",
@@ -2174,9 +2180,13 @@ test("Today widget preferences normalize safely and retain an intentional custom
     launchWithApp: false,
     visible: false,
     compact: true,
+    opacity: 85,
     customBounds: { x: 322, y: 48 },
   });
   assert.equal(normalizeTodayWidgetPreferences({ position: "custom" }).position, "top-right");
+  assert.equal(normalizeTodayWidgetPreferences({ opacity: null }).opacity, 100);
+  assert.equal(normalizeTodayWidgetPreferences({ opacity: 12 }).opacity, 70);
+  assert.equal(normalizeTodayWidgetPreferences({ opacity: 120 }).opacity, 100);
 });
 
 test("Today widget corner placement respects each display work area", () => {
@@ -2253,11 +2263,13 @@ test("Today widget preferences persist atomically outside task data", async (t) 
     launchWithApp: true,
     visible: true,
     compact: true,
+    opacity: 82,
   });
   const read = await readTodayWidgetPreferences(directory);
 
   assert.deepEqual(read, written);
   assert.equal(read.position, "bottom-left");
+  assert.equal(read.opacity, 82);
   await assert.rejects(fs.access(path.join(directory, "today-widget-preferences.json.tmp")));
 });
 
@@ -2276,6 +2288,8 @@ test("production Today widget uses its dedicated frontend and a sandboxed Electr
   assert.match(demo, /data-place="top-left"/);
   assert.match(demo, /<span>始终显示在最上层<\/span>/);
   assert.match(demo, /<span>随应用启动<\/span>/);
+  assert.match(demo, /<span>窗口透明度<\/span>/);
+  assert.match(demo, /id="widget-opacity" type="range" min="70" max="100"/);
   assert.match(demo, /隐藏今日窗口/);
   assert.match(demo, /body\.widget-runtime \.today-widget/);
   assert.match(demo, /class="compact-expand-icon"/);
@@ -2289,6 +2303,8 @@ test("production Today widget uses its dedicated frontend and a sandboxed Electr
   assert.match(runtime, /function applyAppearance/);
   assert.match(runtime, /document\.documentElement\.dataset\.zhFont/);
   assert.match(runtime, /--widget-font-scale/);
+  assert.match(runtime, /function applyOpacity/);
+  assert.match(runtime, /setPreferences\(\{ opacity \}\)/);
   assert.match(widgetMain, /frame: false/);
   assert.match(widgetMain, /transparent: true/);
   assert.match(widgetMain, /hasShadow: false/);

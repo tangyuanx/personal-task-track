@@ -1,5 +1,17 @@
 # Findings & Decisions
 
+## Phase 28 Today Widget Theme Parity (2026-08-23)
+- Local `main` is clean and matches `origin/main` at `0863cd5` / `v0.1.121`; `knowledge-note-local-storage` is absent as required before release.
+- The widget does receive the main theme, Chinese font, English font, and computed base font size through `todayWidgetSnapshot()`, so the remaining mismatch is not a missing snapshot update.
+- The effective main Today card is the later `today-panel.today-focus` rule: a dark green `--handoff-focus-800` to `--handoff-focus-950` surface in light mode, with a separate dark-mode gradient. The widget still follows an earlier translucent light-card treatment, so its regression test validates an obsolete selector rather than the final rendered style.
+- The widget font chain places English before Chinese and only bundles the regular CJK face. The main app places Chinese first and declares both regular and bold CJK faces, which explains different Chinese metrics and bold rendering.
+- Implement transparency as an isolated widget preference stored in `today-widget-preferences.json`, represented as a bounded 70–100 percentage and applied to the widget surface. This avoids changing task data or main-window appearance.
+- Keep the widget menu itself within the widget surface and expose the percentage beside a native range control; default to full opacity for backward-compatible readability.
+- The isolated Electron visual check rendered the widget with the same dark green light-theme surface as the main Today card, matching Chinese metrics and a stable empty state; the accessibility tree confirmed the opacity slider is present in the widget settings.
+- All 8 focused Today-widget tests passed. The final full check passed 103 desktop/client tests plus 11 bug-report service tests.
+- Release version is `0.1.122`. Formal macOS ARM64 DMG/ZIP and Windows x64 NSIS builds completed, producing eight release/update files without AppleDouble artifacts.
+- macOS remains intentionally unsigned because `build.mac.identity` is `null`; this is an existing distribution limitation rather than a regression from the widget change.
+
 ## Phase 19 Requirements (2026-07-13)
 - `frontend_modification.md` is the user-provided source of truth for this change.
 - Local `main` and `origin/main` are identical at `1f36c3c`; v0.1.50 already contains the confirmed empty-group sidebar bottom-anchor fix.

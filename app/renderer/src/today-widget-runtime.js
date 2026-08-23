@@ -13,6 +13,8 @@
   const toast = document.querySelector("#toast");
   const alwaysOnTop = document.querySelector("#always-on-top");
   const launchWithApp = document.querySelector("#launch-with-app");
+  const opacityControl = document.querySelector("#widget-opacity");
+  const opacityValue = document.querySelector("#widget-opacity-value");
   let currentSnapshot = { date: "", items: [] };
   let queuedSnapshot = null;
   let completingTaskId = "";
@@ -95,6 +97,14 @@
     requestWidgetResize();
   }
 
+  function applyOpacity(value) {
+    const opacity = Number(value);
+    const percentage = Number.isFinite(opacity) ? Math.max(70, Math.min(100, Math.round(opacity))) : 100;
+    widget.style.setProperty("--widget-opacity", String(percentage / 100));
+    opacityControl.value = String(percentage);
+    opacityValue.textContent = `${percentage}%`;
+  }
+
   function applyWindowState(value) {
     const state = value && typeof value === "object" ? value : {};
     const position = ["top-left", "top-right", "bottom-left", "bottom-right", "custom"].includes(state.position)
@@ -105,6 +115,7 @@
     widget.classList.toggle("is-unpinned", state.alwaysOnTop === false);
     alwaysOnTop.checked = state.alwaysOnTop !== false;
     launchWithApp.checked = state.launchWithApp !== false;
+    applyOpacity(state.opacity);
     compactToggle.title = state.compact ? "展开" : "收起";
     compactToggle.setAttribute("aria-label", state.compact ? "展开今日窗口" : "收起今日窗口");
     document.querySelectorAll("[data-place]").forEach((button) => {
@@ -207,6 +218,13 @@
   launchWithApp.addEventListener("change", async (event) => {
     showToast(event.target.checked ? "将随应用启动" : "已取消随应用启动");
     await bridge.setPreferences({ launchWithApp: event.target.checked });
+  });
+
+  opacityControl.addEventListener("input", (event) => applyOpacity(event.target.value));
+  opacityControl.addEventListener("change", async (event) => {
+    const opacity = Number(event.target.value);
+    showToast(`窗口透明度 ${opacity}%`);
+    await bridge.setPreferences({ opacity });
   });
 
   document.querySelector("#hide-widget").addEventListener("click", () => {

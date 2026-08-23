@@ -1,5 +1,28 @@
 # Progress Log
 
+## Session: 2026-08-23 Today Widget Theme Parity and Transparency
+
+### Phase 28: Baseline and implementation audit
+- **Status:** in progress
+- Actions taken:
+  - Read the project maintenance, persistent planning, and frontend design instructions.
+  - Confirmed a clean `main`, synchronized remote `main` and tags, and verified `knowledge-note-local-storage` is absent.
+  - Traced the visible mismatch to the widget's obsolete translucent-light surface rules and a different font-family order/missing bundled bold CJK face.
+  - Confirmed the main renderer already publishes theme, Chinese font, English font, and computed base font size to the widget.
+  - Chose a minimal change: align the dedicated widget CSS to the effective main Today-card tokens, repair the font chain, and add a persisted 70–100% widget opacity preference in the existing settings menu.
+  - Replaced the obsolete translucent light card with the effective main Today dark-green gradients for both light and dark themes, while preserving the existing compact task content and controls.
+  - Reordered the widget font chain to Chinese-first and added matching regular/bold bundled CJK faces.
+  - Added normalized, atomic opacity persistence plus a live range control and percentage readout in the widget settings menu.
+  - Passed all 8 focused Today-widget tests, JavaScript syntax checks, and `git diff --check`.
+  - Passed the full project check with 103 desktop/client tests and 11 mocked backend tests.
+  - Visually verified an isolated Electron widget instance against the simultaneously rendered main Today card and confirmed the settings accessibility tree exposes the opacity slider.
+  - Re-fetched remote main/tags, confirmed `v0.1.121` remained latest with zero divergence, and bumped release metadata to `v0.1.122`.
+  - Removed old release output and built the formal macOS ARM64 DMG/ZIP plus Windows x64 NSIS packages; confirmed all eight release/update files and no AppleDouble artifacts.
+- Errors:
+  - One exploratory `rg` command treated a pattern beginning with `--handoff` as an option; reran the search with explicit `-e` patterns.
+  - The first full check passed all 103 application tests but the sandbox denied the backend runner's local IPC pipe; the unchanged check command passed outside the sandbox, including all 11 backend tests.
+  - One visual-QA image emission reused block-scoped Node REPL bindings and failed after the UI click; the subsequent fresh-state inspection succeeded without affecting the application.
+
 ## Session: 2026-08-15 Edit Recovery, Recurring Tasks, and Flow Split Resize
 
 ### Phase 27: Baseline and architecture audit

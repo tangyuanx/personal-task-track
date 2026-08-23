@@ -4,9 +4,18 @@
 Maintain the personal task management app through scoped, low-risk improvements while preserving existing task flow behavior and release discipline.
 
 ## Current Phase
-Phase 27
+Phase 28
 
 ## Phases
+
+### Phase 28: Today Widget Theme Parity and Transparency
+- [x] Recover repository context, confirm a clean latest `main`, and verify the excluded specification folder is absent
+- [x] Audit the effective main Today-card styles, widget font chain, appearance snapshot, and widget preferences
+- [x] Make the widget reuse the main Today-card visual language and matching bundled font behavior
+- [x] Add a bounded, persisted widget transparency control inside the widget settings menu
+- [x] Add focused regression coverage and run full validation
+- [ ] Build, version, commit, tag, push, and verify the release
+- **Status:** release prepared
 
 ### Phase 27: Edit Recovery, Recurring Tasks, and Flow Split Resize
 - [x] Recover repository context, preserve unrelated artifacts, and confirm the latest remote baseline

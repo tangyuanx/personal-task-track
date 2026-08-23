@@ -20,28 +20,25 @@
       --widget-width: 360px;
       --screen-gap: 22px;
       --widget-font-scale: 1;
-      --zh-font: "PingFang SC", "Microsoft YaHei", "TaskTrack Widget Chinese Noto", sans-serif;
+      --zh-font: "TaskTrack Widget Chinese System", sans-serif;
       --en-font: "TaskTrack Widget English Inter", sans-serif;
-      --widget-font: var(--en-font), var(--zh-font), sans-serif;
-      --widget-focus: #2f7d68;
-      --widget-focus-field: #edf6f2;
-      --widget-line: #ddd4c4;
-      --widget-line-soft: #eee6d8;
-      --widget-glass: rgba(255, 255, 255, 0.62);
-      --widget-glass-strong: rgba(255, 255, 255, 0.78);
-      --widget-glass-soft: rgba(255, 255, 255, 0.44);
-      --widget-inset-highlight: rgba(255, 255, 255, 0.52);
-      --widget-bg: #06362d;
-      --widget-border: rgba(255, 255, 255, 0.15);
+      --widget-font: var(--zh-font), var(--en-font), sans-serif;
+      --widget-focus: #2e5d49;
+      --widget-focus-deep: #17392d;
+      --widget-inset-highlight: rgba(255, 255, 255, 0.09);
+      --widget-bg:
+        radial-gradient(circle at 100% 0%, rgba(255, 255, 255, 0.13), transparent 35%),
+        linear-gradient(145deg, var(--widget-focus), var(--widget-focus-deep));
+      --widget-border: rgba(255, 255, 255, 0.1);
       --widget-title: #ffffff;
-      --widget-text: #f7fcf9;
-      --widget-muted: rgba(226, 241, 233, 0.57);
-      --widget-control: rgba(239, 249, 244, 0.72);
+      --widget-text: #ffffff;
+      --widget-muted: rgba(255, 255, 255, 0.68);
+      --widget-control: rgba(255, 255, 255, 0.72);
       --widget-control-hover: rgba(255, 255, 255, 0.1);
-      --widget-task-bg: rgba(255, 255, 255, 0.065);
+      --widget-task-bg: rgba(255, 255, 255, 0.075);
       --widget-task-border: rgba(255, 255, 255, 0.07);
-      --widget-task-hover: rgba(255, 255, 255, 0.1);
-      --widget-check-border: rgba(226, 242, 233, 0.52);
+      --widget-task-hover: rgba(255, 255, 255, 0.12);
+      --widget-check-border: rgba(255, 255, 255, 0.52);
       --widget-divider: rgba(255, 255, 255, 0.09);
       --widget-menu-bg: rgba(250, 252, 250, 0.98);
       --widget-menu-ink: #183129;
@@ -51,20 +48,6 @@
 
     :root[data-theme="light"] {
       color-scheme: light;
-      --widget-bg:
-        linear-gradient(135deg, color-mix(in srgb, var(--widget-focus) 16%, transparent), transparent 54%),
-        linear-gradient(180deg, var(--widget-glass), var(--widget-glass-soft));
-      --widget-border: color-mix(in srgb, var(--widget-focus) 18%, var(--widget-line));
-      --widget-title: #0c0f14;
-      --widget-text: #24272f;
-      --widget-muted: #656d7b;
-      --widget-control: #656d7b;
-      --widget-control-hover: rgba(69, 92, 79, 0.08);
-      --widget-task-bg: var(--widget-glass-soft);
-      --widget-task-border: var(--widget-line-soft);
-      --widget-task-hover: var(--widget-glass-strong);
-      --widget-check-border: #7d9a8f;
-      --widget-divider: var(--widget-line-soft);
       --widget-menu-bg: rgba(250, 252, 250, 0.98);
       --widget-menu-ink: #183129;
       --widget-menu-muted: #71857c;
@@ -73,25 +56,11 @@
 
     :root[data-theme="dark"] {
       color-scheme: dark;
-      --widget-focus: #88bca3;
-      --widget-focus-field: #263229;
-      --widget-line: #383b31;
-      --widget-line-soft: #2c3028;
-      --widget-glass: rgba(255, 255, 255, 0.04);
-      --widget-glass-strong: rgba(255, 255, 255, 0.08);
-      --widget-glass-soft: rgba(255, 255, 255, 0.025);
-      --widget-inset-highlight: rgba(255, 255, 255, 0.06);
-      --widget-bg: linear-gradient(90deg, color-mix(in srgb, var(--widget-focus) 8%, transparent), transparent);
-      --widget-border: color-mix(in srgb, var(--widget-focus) 18%, var(--widget-line));
-      --widget-title: #f3f5ef;
-      --widget-text: #d9ddd7;
-      --widget-muted: #a6aca4;
-      --widget-control: #a6aca4;
-      --widget-control-hover: rgba(136, 188, 163, 0.08);
-      --widget-task-bg: var(--widget-glass);
-      --widget-task-border: var(--widget-line-soft);
-      --widget-task-hover: var(--widget-glass-strong);
-      --widget-divider: var(--widget-line-soft);
+      --widget-focus: #1c4d38;
+      --widget-focus-deep: #0d1610;
+      --widget-bg:
+        radial-gradient(ellipse 150px 75px at 100% 0%, rgba(150, 210, 175, 0.22), transparent 100%),
+        linear-gradient(145deg, var(--widget-focus), var(--widget-focus-deep));
       --widget-menu-bg: rgba(28, 40, 34, 0.98);
       --widget-menu-ink: #e2eee7;
       --widget-menu-muted: #9eb1a7;
@@ -110,8 +79,12 @@
     @font-face { font-family: "TaskTrack Widget English Georgia"; src: local("Georgia"), local("Times New Roman"); unicode-range: U+0000-024F, U+0370-052F, U+2000-214F; }
     @font-face { font-family: "TaskTrack Widget English Courier"; src: local("Courier New"), local("Consolas"); unicode-range: U+0000-024F, U+0370-052F, U+2000-214F; }
     @font-face { font-family: "TaskTrack Widget English Mono"; src: local("SFMono-Regular"), local("Cascadia Mono"), local("Consolas"); unicode-range: U+0000-024F, U+0370-052F, U+2000-214F; }
+    @font-face { font-family: "TaskTrack Widget Chinese System"; src: local("PingFang SC"), local("Microsoft YaHei"), url("./src/assets/fonts/NotoSansCJKsc-Regular.otf") format("opentype"); }
+    @font-face { font-family: "TaskTrack Widget Chinese System"; src: local("PingFang SC"), local("Microsoft YaHei"), url("./src/assets/fonts/NotoSansCJKsc-Bold.otf") format("opentype"); font-weight: 700 900; }
     @font-face { font-family: "TaskTrack Widget Chinese Noto"; src: url("./src/assets/fonts/NotoSansCJKsc-Regular.otf") format("opentype"); }
+    @font-face { font-family: "TaskTrack Widget Chinese Noto"; src: url("./src/assets/fonts/NotoSansCJKsc-Bold.otf") format("opentype"); font-weight: 700 900; }
 
+    :root[data-zh-font="system"] { --zh-font: "TaskTrack Widget Chinese System", sans-serif; }
     :root[data-zh-font="noto"] { --zh-font: "TaskTrack Widget Chinese Noto", sans-serif; }
     :root[data-zh-font="yahei"] { --zh-font: "Microsoft YaHei", "微软雅黑", sans-serif; }
     :root[data-zh-font="pingfang"] { --zh-font: "PingFang SC", "苹方-简", sans-serif; }
@@ -143,6 +116,8 @@
       background: #dfe7e2;
       color: var(--ink);
       font-family: var(--widget-font);
+      font-synthesis: none;
+      -webkit-font-smoothing: antialiased;
     }
 
     button,
@@ -312,6 +287,7 @@
       border-radius: 16px;
       background: var(--widget-bg);
       box-shadow: inset 0 1px 0 var(--widget-inset-highlight);
+      opacity: var(--widget-opacity, 1);
       transition: width 180ms ease, height 180ms ease, opacity 160ms ease, transform 180ms ease;
     }
 
@@ -626,6 +602,34 @@
     input:checked + .switch::after { transform: translateX(12px); }
     .menu-switch input { position: absolute; opacity: 0; pointer-events: none; }
 
+    .menu-range {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px 10px;
+      align-items: center;
+      min-height: 52px;
+      padding: 8px 0;
+      border-top: 1px solid var(--widget-menu-line);
+      color: var(--widget-menu-ink);
+      font-size: calc(11px * var(--widget-font-scale));
+    }
+
+    .menu-range output {
+      min-width: 34px;
+      color: var(--widget-menu-muted);
+      font: 650 calc(10px * var(--widget-font-scale)) var(--en-font);
+      text-align: right;
+    }
+
+    .menu-range input {
+      grid-column: 1 / -1;
+      width: 100%;
+      height: 3px;
+      margin: 0;
+      accent-color: var(--widget-focus);
+      cursor: pointer;
+    }
+
     .hide-widget {
       width: 100%;
       margin-top: 5px;
@@ -811,6 +815,7 @@
         </div>
         <label class="menu-switch"><span>始终显示在最上层</span><input id="always-on-top" type="checkbox" checked /><i class="switch" aria-hidden="true"></i></label>
         <label class="menu-switch"><span>随应用启动</span><input id="launch-with-app" type="checkbox" checked /><i class="switch" aria-hidden="true"></i></label>
+        <label class="menu-range" for="widget-opacity"><span>窗口透明度</span><output id="widget-opacity-value" for="widget-opacity">100%</output><input id="widget-opacity" type="range" min="70" max="100" step="1" value="100" /></label>
         <button class="hide-widget" id="hide-widget" type="button">隐藏今日窗口</button>
       </aside>
     </section>
