@@ -2,8 +2,9 @@ import { Crepe } from "@milkdown/crepe";
 import { defaultKeymap, indentWithTab } from "@codemirror/commands";
 import { drawSelection, keymap } from "@codemirror/view";
 import { codeBlockConfig } from "@milkdown/kit/component/code-block";
-import { commandsCtx } from "@milkdown/kit/core";
+import { commandsCtx, editorViewCtx } from "@milkdown/kit/core";
 import { markRule } from "@milkdown/kit/prose";
+import { TextSelection } from "@milkdown/kit/prose/state";
 import { inlineCodeSchema, insertImageCommand } from "@milkdown/kit/preset/commonmark";
 import { $inputRule } from "@milkdown/kit/utils";
 import "@milkdown/crepe/theme/frame.css";
@@ -114,6 +115,22 @@ class MilkdownTaskEditor {
       },
       insertImage: ({ src, alt = "图片", title = "" }) =>
         crepe.editor.action((ctx) => ctx.get(commandsCtx).call(insertImageCommand.key, { src, alt, title })),
+      getSelection: () =>
+        crepe.editor.action((ctx) => {
+          const selection = ctx.get(editorViewCtx).state.selection;
+          return { anchor: selection.anchor, head: selection.head };
+        }),
+      restoreSelection: ({ anchor = 1, head = anchor } = {}) =>
+        crepe.editor.action((ctx) => {
+          const view = ctx.get(editorViewCtx);
+          const maximum = view.state.doc.content.size;
+          const safeAnchor = Math.max(0, Math.min(maximum, Number(anchor) || 0));
+          const safeHead = Math.max(0, Math.min(maximum, Number(head) || safeAnchor));
+          const selection = TextSelection.between(view.state.doc.resolve(safeAnchor), view.state.doc.resolve(safeHead));
+          view.dispatch(view.state.tr.setSelection(selection));
+          view.focus();
+          return true;
+        }),
       destroy: async () => {
         cancelScheduledIdle(markdownTimer, emitMarkdown);
         instances.delete(root);

@@ -10094,3 +10094,83 @@ body.resizing-flow-split {
       118px;
   }
 }
+
+/* Processing-flow tree reorganization. Keep after the legacy flow layers. */
+.flow-list.flow-table {
+  position: relative;
+}
+
+.flow-node-drag-handle {
+  position: absolute;
+  top: 50%;
+  left: -6px;
+  z-index: 3;
+  display: grid;
+  width: 24px;
+  height: 28px;
+  place-items: center;
+  border: 0;
+  border-radius: 6px;
+  padding: 0;
+  background: color-mix(in srgb, var(--surface-strong, #fff) 88%, transparent);
+  color: var(--handoff-muted, var(--muted));
+  opacity: 0;
+  cursor: grab;
+  transform: translateY(-50%);
+  transition: opacity 120ms ease, color 120ms ease, background-color 120ms ease;
+}
+
+.flow-node-drag-handle:hover,
+.flow-node-drag-handle:focus-visible,
+.flow-line.flow-row:hover .flow-node-drag-handle {
+  color: var(--focus);
+  opacity: 0.82;
+}
+
+.flow-node-drag-handle:focus-visible {
+  outline: 1px solid var(--focus);
+  outline-offset: 1px;
+}
+
+.flow-node-drag-handle:active {
+  cursor: grabbing;
+  transform: translateY(-50%);
+}
+
+.flow-node-drag-handle svg {
+  width: 12px;
+  height: 18px;
+  fill: currentColor;
+}
+
+.flow-line.flow-row:hover .flow-sequence-cell .sequence-index,
+.flow-line.flow-row.node-dragging .flow-sequence-cell .sequence-index {
+  opacity: 0;
+}
+
+.flow-line.flow-row.node-dragging {
+  opacity: 0.42;
+}
+
+.flow-list.flow-table .flow-line.flow-row.node-drag-over-before {
+  box-shadow: inset 0 2px 0 var(--focus);
+}
+
+.flow-list.flow-table .flow-line.flow-row.node-drag-over-after {
+  box-shadow: inset 0 -2px 0 var(--focus);
+}
+
+.flow-list.flow-table .flow-line.flow-row.node-drag-over-inside {
+  background: color-mix(in srgb, var(--focus) 10%, var(--surface-strong, #fff));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--focus) 76%, transparent);
+}
+
+.flow-list.flow-table.node-drag-over-root {
+  box-shadow: inset 0 -2px 0 var(--focus);
+}
+
+body.flow-node-reordering,
+body.flow-node-reordering * {
+  cursor: grabbing !important;
+  user-select: none !important;
+}

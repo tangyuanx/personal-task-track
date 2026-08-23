@@ -1,5 +1,75 @@
 # Progress Log
 
+## Session: 2026-08-24 Publish Focus Restoration and Node Reorganization
+
+### Phase 32: Release baseline
+- **Status:** in progress
+- Actions taken:
+  - Re-read the project maintenance and persistent planning workflows.
+  - Recovered the eight-file working tree containing the completed Phase 30 and Phase 31 changes.
+  - Fetched remote `main` and all tags, confirmed zero local/remote divergence at `2443a89`, and verified `v0.1.123` is the highest remote release tag.
+  - Selected patch release `0.1.124` / `v0.1.124` according to the formal release policy.
+  - Updated `package.json` and `package-lock.json` to `0.1.124` with `npm version --no-git-tag-version`.
+  - Passed the complete versioned project check with 105 desktop/client tests and 11 mocked bug-report service tests, followed by `git diff --check`.
+  - Removed the eight obsolete `0.1.123` release files and built the formal macOS ARM64 DMG/ZIP plus Windows x64 NSIS packages for `0.1.124`.
+  - Verified eight release/update files, zero AppleDouble artifacts, and SHA-256 checksums for the DMG, ZIP, and EXE.
+- Errors:
+  - The sandboxed check passed all 105 application tests but denied the unchanged backend runner's local IPC pipe with `listen EPERM`; the identical approved retry outside the sandbox passed all 11 backend tests.
+  - macOS packaging reported the existing intentional unsigned-build warning because `build.mac.identity` is `null`; no build errors occurred.
+
+## Session: 2026-08-23 Processing-flow Node Drag Reorganization
+
+### Phase 31: Baseline and tree-interaction audit
+- **Status:** complete
+- Actions taken:
+  - Read the project maintenance and persistent planning instructions.
+  - Preserved the seven verified, uncommitted Phase 30 files and recorded the continuing local-only constraint.
+  - Fetched `origin/main` and tags without touching the working tree.
+  - Confirmed local `main` and `origin/main` have zero divergence at `2443a89` / v0.1.123.
+  - Audited node normalization, nested rendering, CRUD utilities, task/group drag code, event binding, persistence, and final flow CSS overrides.
+  - Defined dedicated node drag data, three target-row placements, root-background relocation, descendant-cycle rejection, and subtree-preserving mutation semantics.
+  - Added the node tree-move regression first and confirmed it failed because `moveFlowNode` did not exist.
+  - Added a dedicated six-dot node drag handle, scoped custom drag MIME/state, before/inside/after/root indicators, and valid-drop filtering.
+  - Implemented subtree-preserving moves that update parent/type/order/timestamps, expand an inside target, and reject self/descendant cycles before detaching data.
+  - Passed the focused tree-move regression plus renderer/test syntax checks and `git diff --check`.
+  - Started the production Electron renderer with an isolated temporary profile and verified that every flow row exposes the dedicated accessible drag handle.
+  - Exercised the production HTML5 drag listeners through the isolated renderer: root-to-child, child-to-root, same-level before/after ordering, root-background append, and invalid parent-to-descendant movement.
+  - Confirmed each valid move persisted the expected `parentId`, `type`, and sibling-local `order`; the invalid cycle left both DOM ordering and persisted data unchanged.
+  - Passed the complete project check with 105 desktop/client tests and 11 mocked bug-report service tests.
+  - Kept package version `0.1.123` and left the accumulated Phase 30/31 work uncommitted on local `main`; no release build, tag, commit, or remote push was performed.
+- Errors:
+  - An unquoted multi-line `git log --format` argument was split by the shell and Git rejected the extra token; subsequent history checks use a quoted format string.
+  - The first sandboxed fetch could not write `.git/FETCH_HEAD`; the approved retry outside the sandbox succeeded.
+  - The first combined planning patch did not match the current findings header and was rejected without partial edits; the three planning files were updated with focused patches.
+  - The first drag-feedback CSS insertion landed before later legacy flow overrides; it was moved to the final stylesheet layer and given flow-list-qualified selectors so the inside highlight remains effective.
+  - The first non-escalated Electron launch exited with `SIGABRT`; the isolated GUI instance launched successfully with the required desktop permission.
+  - Computer Use could inspect and click the Electron drag handles, but coordinate drag returned `noWindowsAvailable`; the fallback used the renderer's local DevTools endpoint to dispatch the real HTML5 drag lifecycle against the isolated production page.
+  - The sandboxed full check passed all 105 application tests but blocked the unchanged `tsx` local IPC pipe with `listen EPERM`; rerunning the identical command outside the sandbox passed all 11 service tests.
+
+## Session: 2026-08-23 Restore Editing After App Switching
+
+### Phase 30: Baseline and focus-lifecycle audit
+- **Status:** complete
+- Actions taken:
+  - Read the project maintenance and persistent planning instructions.
+  - Confirmed a clean `main`, fetched and fast-forward checked `origin/main`, and verified `knowledge-note-local-storage` is absent.
+  - Recorded the explicit local-only constraint: no version bump, commit, tag, or remote push in this phase.
+  - Traced native title/background focus loss to the editable-field blur handler's full-page render when `relatedTarget` is absent.
+  - Confirmed the current app-switch recovery only handles the fallback Markdown textarea and omits the production Milkdown/ProseMirror editor.
+  - Chose a transient shared focus snapshot with native selection ranges and Milkdown document positions; no persistence schema or save behavior changes are required.
+  - Added a failing regression for application-switch focus restoration, then implemented a shared transient snapshot for native task fields, fallback Markdown, and Milkdown/ProseMirror.
+  - Prevented application deactivation blur from rebuilding the page while preserving normal in-app blur commits and renders.
+  - Exposed Milkdown selection capture/restore through the existing editor wrapper and rebuilt the checked-in vendor bundle.
+  - Passed the focused regression, JavaScript syntax checks, Milkdown bundle build, and `git diff --check`.
+  - Passed the complete project check with 104 desktop/client tests and 11 mocked bug-report service tests.
+  - Used an isolated temporary Electron profile to verify exact caret restoration after switching to Finder and back for title, background, and Knowledge Notes.
+  - Kept version `0.1.123` and left all source/test/documentation changes uncommitted on local `main`; no tag or remote push was performed.
+- Errors:
+  - The first combined source patch had overlapping updates for the renderer and was rejected without partial edits; the changes were reapplied as focused patches.
+  - The renderer VM harness does not provide `document.addEventListener`, so the capture listener was attached to `window`, which is also the correct event target for this renderer-wide interaction.
+  - The first native-selection fixture omitted a `value`, causing the safe range clamp to resolve to zero; adding a realistic field value fixed the test fixture.
+  - The sandboxed full check passed all 104 application tests but blocked the unchanged `tsx` local IPC pipe with `listen EPERM`; rerunning the identical command outside the sandbox passed all 11 service tests.
+
 ## Session: 2026-08-23 Today Widget Settings Outside-click Dismissal
 
 ### Phase 29: Baseline and interaction audit

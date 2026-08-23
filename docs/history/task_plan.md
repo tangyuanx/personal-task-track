@@ -4,9 +4,37 @@
 Maintain the personal task management app through scoped, low-risk improvements while preserving existing task flow behavior and release discipline.
 
 ## Current Phase
-Phase 29
+Phase 32
 
 ## Phases
+
+### Phase 32: Publish Focus Restoration and Flow Node Reorganization
+- [x] Recover the two verified local changes and preserve their complete working tree
+- [x] Fetch remote `main` and tags and confirm zero branch divergence
+- [x] Bump to the next remote patch version
+- [x] Re-run the complete check and release builds for macOS and Windows
+- [ ] Commit the two features, create the matching release tag, and push `main` plus the tag
+- [ ] Verify the remote branch/tag and finish with a clean local `main`
+- **Status:** in progress
+
+### Phase 31: Processing-flow Node Drag Reorganization
+- [x] Preserve the completed local focus-restoration changes and confirm the latest remote baseline
+- [x] Audit the node tree model, rendering order, mutation helpers, and existing drag interactions
+- [x] Define valid drop positions for sibling ordering, reparenting, and root relocation
+- [x] Add failing regression coverage for tree moves and invalid descendant drops
+- [x] Implement bounded drag feedback and the smallest reliable tree-move operation
+- [x] Run focused, full automated, and isolated UI validation
+- [x] Leave all accumulated verified changes local without versioning, committing, tagging, or pushing
+- **Status:** complete
+
+### Phase 30: Restore Active Editing After App Switching
+- [x] Recover repository context and confirm the latest clean local baseline
+- [x] Audit title, background, and Knowledge Notes focus/caret lifecycles
+- [x] Add failing regression coverage for app blur/focus restoration
+- [x] Implement the smallest shared focus restoration path without changing save behavior
+- [x] Run focused and full local validation
+- [x] Leave all verified changes local without versioning, committing, tagging, or pushing
+- **Status:** complete
 
 ### Phase 29: Today Widget Settings Outside-click Dismissal
 - [x] Recover repository context, confirm a clean latest `main`, and verify the excluded specification folder is absent

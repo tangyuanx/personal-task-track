@@ -246,6 +246,7 @@ let saveInFlight = false;
 let saveInFlightPromise = null;
 let conclusionNoticeTimer = 0;
 let taskDragState = null;
+let flowNodeDragState = null;
 let suppressTaskClickUntil = 0;
 let recurrenceScheduleTimer = 0;
 let recurringTodaySignature = "";
@@ -257,6 +258,8 @@ const knowledgeRecoveryTimers = new Map();
 const knowledgeExternalSnapshots = new Map();
 let knowledgeRecoveryWriteQueue = Promise.resolve();
 let cachedKnowledgePane = null;
+let appSwitchFocusSnapshot = null;
+let appEditingPointerDown = false;
 let appUpdateState = normalizeAppUpdateState({
   status: desktopUpdates ? "idle" : "unsupported",
   supported: Boolean(desktopUpdates),
@@ -1973,8 +1976,13 @@ function renderFlowNode(taskId, node, depth, rootIndex = 0, lineage = [], isLast
       : "";
   return `
     <article class="flow-item depth-${Math.min(depth, 6)}">
-      <div class="flow-row flow-line ${branch} ${branch === "sub-flow" ? "sub" : ""} ${node.status} ${isSelected ? "selected" : ""}" style="--tree-depth:${treeDepth}" data-context="node" data-task-id="${taskId}" data-node-id="${node.id}">
-        <span class="flow-sequence-cell">${depth === 0 ? `<span class="sequence-index">${rootIndex + 1}</span>` : ""}</span>
+      <div class="flow-row flow-line ${branch} ${branch === "sub-flow" ? "sub" : ""} ${node.status} ${isSelected ? "selected" : ""}" style="--tree-depth:${treeDepth}" data-context="node" data-task-id="${taskId}" data-node-id="${node.id}" data-flow-drag-target>
+        <span class="flow-sequence-cell">
+          ${depth === 0 ? `<span class="sequence-index">${rootIndex + 1}</span>` : ""}
+          <button class="flow-node-drag-handle" type="button" draggable="true" data-flow-drag-source data-task-id="${taskId}" data-node-id="${node.id}" aria-label="${escAttr(`拖拽重组节点：${node.title || "未命名节点"}`)}" title="拖拽调整节点层级和顺序">
+            <svg viewBox="0 0 12 18" aria-hidden="true"><circle cx="3" cy="4" r="1.2"></circle><circle cx="9" cy="4" r="1.2"></circle><circle cx="3" cy="9" r="1.2"></circle><circle cx="9" cy="9" r="1.2"></circle><circle cx="3" cy="14" r="1.2"></circle><circle cx="9" cy="14" r="1.2"></circle></svg>
+          </button>
+        </span>
         <span class="flow-title-cell flow-title process-cell">
           ${depth === 1 ? treeGuides : ""}
           <span class="flow-title-line">
@@ -3055,6 +3063,7 @@ function settingsOptionGroup(key, value, options) {
 // ============================================================
 const taskLongPressDelay = 320;
 const taskLongPressMoveTolerance = 8;
+const flowNodeDragMime = "application/x-personal-task-flow-node";
 
 function taskDropPlacement(targetItem, clientY) {
   const bounds = targetItem.getBoundingClientRect();
@@ -3143,6 +3152,113 @@ function finishTaskPointerDrag() {
     reorderTasks(sourceId, targetId, targetPlacement);
     render();
   }
+}
+
+function flowNodeDropPlacement(targetRow, clientY) {
+  const bounds = targetRow.getBoundingClientRect();
+  const ratio = bounds.height > 0 ? (clientY - bounds.top) / bounds.height : 0.5;
+  if (ratio < 0.25) return "before";
+  if (ratio > 0.75) return "after";
+  return "inside";
+}
+
+function canMoveFlowNode(taskId, sourceId, targetId = "") {
+  const task = state.tasks.find((item) => item.id === taskId);
+  const source = task ? findNode(task.nodes, sourceId) : null;
+  if (!task || !source) return false;
+  if (!targetId) return true;
+  if (sourceId === targetId) return false;
+  return !findNode(source.children, targetId);
+}
+
+function clearFlowNodeDropIndicators() {
+  document
+    .querySelectorAll(".node-drag-over-before, .node-drag-over-inside, .node-drag-over-after")
+    .forEach((row) => row.classList.remove("node-drag-over-before", "node-drag-over-inside", "node-drag-over-after"));
+  document.querySelectorAll(".flow-list.node-drag-over-root").forEach((list) => list.classList.remove("node-drag-over-root"));
+}
+
+function clearFlowNodeDragState() {
+  flowNodeDragState?.sourceRow?.classList.remove("node-dragging");
+  flowNodeDragState = null;
+  document.body.classList.remove("flow-node-reordering");
+  clearFlowNodeDropIndicators();
+}
+
+function bindFlowNodeDragAndDrop() {
+  document.querySelectorAll("[data-flow-drag-source]").forEach((handle) => {
+    handle.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+    });
+    handle.addEventListener("dragstart", (event) => {
+      const sourceRow = handle.closest("[data-flow-drag-target]");
+      const taskId = handle.dataset.taskId || "";
+      const nodeId = handle.dataset.nodeId || "";
+      if (!sourceRow || !canMoveFlowNode(taskId, nodeId)) {
+        event.preventDefault();
+        return;
+      }
+      flowNodeDragState = { taskId, nodeId, sourceRow };
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData(flowNodeDragMime, JSON.stringify({ taskId, nodeId }));
+      sourceRow.classList.add("node-dragging");
+      document.body.classList.add("flow-node-reordering");
+      state.contextMenu = null;
+      syncContextMenuRoot();
+    });
+    handle.addEventListener("dragend", clearFlowNodeDragState);
+  });
+
+  document.querySelectorAll("[data-flow-drag-target]").forEach((row) => {
+    row.addEventListener("dragover", (event) => {
+      if (!flowNodeDragState || flowNodeDragState.taskId !== row.dataset.taskId) return;
+      const targetId = row.dataset.nodeId || "";
+      if (!canMoveFlowNode(flowNodeDragState.taskId, flowNodeDragState.nodeId, targetId)) {
+        event.dataTransfer.dropEffect = "none";
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      event.dataTransfer.dropEffect = "move";
+      clearFlowNodeDropIndicators();
+      row.classList.add(`node-drag-over-${flowNodeDropPlacement(row, event.clientY)}`);
+    });
+    row.addEventListener("dragleave", (event) => {
+      if (event.relatedTarget && row.contains(event.relatedTarget)) return;
+      row.classList.remove("node-drag-over-before", "node-drag-over-inside", "node-drag-over-after");
+    });
+    row.addEventListener("drop", (event) => {
+      if (!flowNodeDragState || flowNodeDragState.taskId !== row.dataset.taskId) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const { taskId, nodeId } = flowNodeDragState;
+      const placement = flowNodeDropPlacement(row, event.clientY);
+      const targetId = row.dataset.nodeId || "";
+      clearFlowNodeDragState();
+      if (moveFlowNode(taskId, nodeId, targetId, placement)) render();
+    });
+  });
+
+  document.querySelectorAll(".flow-list[data-context='flow-root']").forEach((list) => {
+    list.addEventListener("dragover", (event) => {
+      if (event.target.closest?.("[data-flow-drag-target]")) return;
+      if (!flowNodeDragState || flowNodeDragState.taskId !== list.dataset.taskId) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "move";
+      clearFlowNodeDropIndicators();
+      list.classList.add("node-drag-over-root");
+    });
+    list.addEventListener("drop", (event) => {
+      if (event.target.closest?.("[data-flow-drag-target]")) return;
+      if (!flowNodeDragState || flowNodeDragState.taskId !== list.dataset.taskId) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const { taskId, nodeId } = flowNodeDragState;
+      clearFlowNodeDragState();
+      if (moveFlowNode(taskId, nodeId, "", "root")) render();
+    });
+  });
 }
 
 
@@ -3613,6 +3729,7 @@ function bindTaskRepositoryRows(scope = document) {
       event.stopPropagation();
     });
     element.addEventListener("blur", (event) => {
+      if (!event.relatedTarget && !appEditingPointerDown && captureAppSwitchEditingFocus(event.target)) return;
       if (event.target.classList.contains("markdown-editor")) {
         storeMarkdownSelection(event.target, !event.relatedTarget);
         if (!event.relatedTarget) return;
@@ -3859,6 +3976,8 @@ function bindTaskRepositoryRows(scope = document) {
       render();
     });
   });
+
+  bindFlowNodeDragAndDrop();
 
   document.querySelectorAll("[data-flow-split-resizer]").forEach((handle) => {
     handle.addEventListener("click", (event) => event.stopPropagation());
@@ -4361,6 +4480,79 @@ function focusPendingElement() {
   restoreMarkdownSelection();
 }
 
+function captureAppSwitchEditingFocus(target = document.activeElement) {
+  if (!target) return false;
+  const isProseMirror = target.classList?.contains("ProseMirror");
+  const isMarkdownEditor = target.classList?.contains("markdown-editor");
+  const isNativeField = Boolean(target.dataset?.editKey) && typeof target.setSelectionRange === "function";
+  if (!isProseMirror && !isMarkdownEditor && !isNativeField) return false;
+
+  const host = target.closest?.(".milkdown-editor-host");
+  const taskId = target.dataset?.taskId || host?.dataset?.taskId || "";
+  const nodeId = target.dataset?.nodeId || host?.dataset?.nodeId || "";
+  const instance = isProseMirror ? milkdownEditors.get(noteDraftKey(taskId, nodeId))?.instance : null;
+  const marker = ["page-title", "task-title", "flow-title-input"].find((name) => target.classList?.contains(name)) || "";
+  const restore = appSwitchFocusSnapshot?.restore === true;
+  appSwitchFocusSnapshot = {
+    restore,
+    kind: isProseMirror ? "milkdown" : isMarkdownEditor ? "markdown" : "field",
+    element: target,
+    taskId,
+    nodeId,
+    editKey: target.dataset?.editKey || "",
+    marker,
+    start: typeof target.selectionStart === "number" ? target.selectionStart : 0,
+    end: typeof target.selectionEnd === "number" ? target.selectionEnd : 0,
+    scrollLeft: Number(target.scrollLeft) || 0,
+    scrollTop: Number(target.scrollTop) || 0,
+    milkdownSelection: instance?.getSelection?.() || null,
+  };
+  return true;
+}
+
+function resolveAppSwitchEditingElement(snapshot) {
+  if (snapshot.element && document.body.contains(snapshot.element)) return snapshot.element;
+  if (snapshot.kind === "milkdown" || snapshot.kind === "markdown") {
+    const host = Array.from(document.querySelectorAll(".milkdown-editor-host")).find(
+      (item) => item.dataset.taskId === snapshot.taskId && (item.dataset.nodeId || "") === snapshot.nodeId,
+    );
+    return host?.querySelector(snapshot.kind === "milkdown" ? ".ProseMirror" : ".markdown-editor") || null;
+  }
+  return (
+    Array.from(document.querySelectorAll("[data-edit-key]")).find(
+      (item) =>
+        item.dataset.editKey === snapshot.editKey &&
+        item.dataset.taskId === snapshot.taskId &&
+        (item.dataset.nodeId || "") === snapshot.nodeId &&
+        (!snapshot.marker || item.classList?.contains(snapshot.marker)),
+    ) || null
+  );
+}
+
+function restoreAppSwitchEditingFocus() {
+  const snapshot = appSwitchFocusSnapshot;
+  if (!snapshot?.restore) return false;
+  const target = resolveAppSwitchEditingElement(snapshot);
+  if (!target) return false;
+
+  if (snapshot.kind === "milkdown") {
+    const host = target.closest?.(".milkdown-editor-host");
+    const instance = milkdownEditors.get(noteDraftKey(host?.dataset?.taskId || snapshot.taskId, host?.dataset?.nodeId || snapshot.nodeId))?.instance;
+    if (snapshot.milkdownSelection && !instance?.restoreSelection) return false;
+    if (snapshot.milkdownSelection) instance.restoreSelection(snapshot.milkdownSelection);
+    else target.focus({ preventScroll: true });
+  } else {
+    target.focus({ preventScroll: true });
+    const maximum = typeof target.value === "string" ? target.value.length : 0;
+    target.setSelectionRange(Math.min(snapshot.start, maximum), Math.min(snapshot.end, maximum));
+  }
+  target.scrollLeft = snapshot.scrollLeft;
+  target.scrollTop = snapshot.scrollTop;
+  state.restoreMarkdownFocus = false;
+  appSwitchFocusSnapshot = null;
+  return true;
+}
+
 
 // ============================================================
 // MARKDOWN EDITOR (Milkdown integration)
@@ -4557,6 +4749,9 @@ function mountFallbackMarkdownEditor(host) {
     });
     editor.addEventListener("paste", handleMarkdownPaste);
     editor.addEventListener("drop", handleMarkdownDrop);
+    editor.addEventListener("blur", (event) => {
+      if (!event.relatedTarget && !appEditingPointerDown) captureAppSwitchEditingFocus(event.target);
+    });
   });
 }
 
@@ -4564,6 +4759,9 @@ function bindMilkdownSurfaceEvents(host) {
   const editor = host.querySelector(".ProseMirror");
   if (!editor || editor.dataset.enhanced === "true") return;
   editor.dataset.enhanced = "true";
+  editor.addEventListener("blur", (event) => {
+    if (!event.relatedTarget && !appEditingPointerDown) captureAppSwitchEditingFocus(event.target);
+  });
   editor.addEventListener("paste", handleMarkdownPaste);
   editor.addEventListener("drop", handleMarkdownDrop);
   editor.addEventListener("dragover", (event) => {
@@ -4580,6 +4778,7 @@ function bindMilkdownSurfaceEvents(host) {
       handleMarkdownPasteShortcut(event);
     }
   });
+  if (appSwitchFocusSnapshot?.restore) window.requestAnimationFrame(restoreAppSwitchEditingFocus);
 }
 
 function updateMarkdownStatsForMarkdown(host, markdown) {
@@ -5754,6 +5953,68 @@ function removeNode(nodes, nodeId) {
 }
 
 /**
+ * Move a node subtree to a sibling position, into another node, or to root.
+ * @param {string} taskId - Task containing both source and target
+ * @param {string} sourceId - Root of the subtree being moved
+ * @param {string} targetId - Target node, empty for root append
+ * @param {"before"|"inside"|"after"|"root"} placement - Destination relative to target
+ * @returns {boolean} Whether a valid move was applied
+ */
+function moveFlowNode(taskId, sourceId, targetId = "", placement = "inside") {
+  const task = state.tasks.find((item) => item.id === taskId);
+  const allowedPlacements = new Set(["before", "inside", "after", "root"]);
+  if (!task || !sourceId || !allowedPlacements.has(placement)) return false;
+
+  const sourceCollection = findNodeCollection(task.nodes, sourceId);
+  const sourceNode = sourceCollection?.node;
+  if (!sourceCollection || !sourceNode) return false;
+  if (placement !== "root" && (!targetId || !findNode(task.nodes, targetId))) return false;
+  if (targetId && (targetId === sourceId || findNode(sourceNode.children, targetId))) return false;
+
+  sourceCollection.items.sort((a, b) => a.order - b.order);
+  const sourceIndex = sourceCollection.items.findIndex((node) => node.id === sourceId);
+  if (sourceIndex < 0) return false;
+  sourceCollection.items.splice(sourceIndex, 1);
+  reorder(sourceCollection.items);
+
+  let targetItems = task.nodes;
+  let targetParentId = null;
+  let insertionIndex = targetItems.length;
+  let insideTarget = null;
+
+  if (placement === "inside") {
+    insideTarget = findNode(task.nodes, targetId);
+    if (!insideTarget) return false;
+    targetItems = insideTarget.children;
+    targetParentId = insideTarget.id;
+    targetItems.sort((a, b) => a.order - b.order);
+    insertionIndex = targetItems.length;
+  } else if (placement === "before" || placement === "after") {
+    const targetCollection = findNodeCollection(task.nodes, targetId);
+    if (!targetCollection) return false;
+    targetItems = targetCollection.items;
+    targetItems.sort((a, b) => a.order - b.order);
+    const targetIndex = targetItems.findIndex((node) => node.id === targetId);
+    if (targetIndex < 0) return false;
+    targetParentId = targetCollection.node.parentId || null;
+    insertionIndex = placement === "after" ? targetIndex + 1 : targetIndex;
+  } else {
+    targetItems.sort((a, b) => a.order - b.order);
+    insertionIndex = targetItems.length;
+  }
+
+  const changedAt = now();
+  sourceNode.parentId = targetParentId;
+  sourceNode.type = targetParentId ? "subtask" : "step";
+  sourceNode.updatedAt = changedAt;
+  targetItems.splice(insertionIndex, 0, sourceNode);
+  reorder(targetItems);
+  if (insideTarget) insideTarget.collapsed = false;
+  task.updatedAt = changedAt;
+  return true;
+}
+
+/**
  * Flatten a nested node tree into a single array (pre-order traversal).
  * @param {Array} nodes - Nested node array
  * @returns {Array} Flat node array
@@ -6216,12 +6477,34 @@ async function bootstrap() {
 }
 
 window.addEventListener("blur", () => {
+  if (!appEditingPointerDown) captureAppSwitchEditingFocus(document.activeElement);
+  if (appSwitchFocusSnapshot) appSwitchFocusSnapshot.restore = true;
   storeMarkdownSelection(activeMarkdownEditor(), true);
 });
 
 window.addEventListener("focus", () => {
-  if (state.restoreMarkdownFocus) window.requestAnimationFrame(restoreMarkdownSelection);
+  if (restoreAppSwitchEditingFocus()) return;
+  window.requestAnimationFrame(() => {
+    if (!restoreAppSwitchEditingFocus() && state.restoreMarkdownFocus) restoreMarkdownSelection();
+  });
 });
+
+window.addEventListener(
+  "pointerdown",
+  (event) => {
+    if (appSwitchFocusSnapshot?.restore) {
+      const interactive = event.target.closest?.("button, input, textarea, select, [contenteditable], a");
+      const restoredTarget = resolveAppSwitchEditingElement(appSwitchFocusSnapshot);
+      if (!interactive || interactive === restoredTarget || interactive.closest?.(".ProseMirror") === restoredTarget) return;
+    }
+    appEditingPointerDown = true;
+    appSwitchFocusSnapshot = null;
+    window.setTimeout(() => {
+      appEditingPointerDown = false;
+    }, 0);
+  },
+  true,
+);
 
 if (desktopKnowledgeFile?.onChange) {
   unsubscribeKnowledgeFileChanges = desktopKnowledgeFile.onChange((event) => {

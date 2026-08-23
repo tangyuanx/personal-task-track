@@ -1,5 +1,42 @@
 # Findings & Decisions
 
+## Phase 32 Two-feature Release (2026-08-24)
+- The user explicitly authorized publishing the two accumulated local changes: Phase 30 app-switch editing focus restoration and Phase 31 processing-flow node drag reorganization.
+- Local `main` and `origin/main` have zero divergence at `2443a89`; the eight modified files belong to these two completed features and their regression/planning records.
+- The highest remote release tag is `v0.1.123`, so the formal patch release is `0.1.124` / `v0.1.124`.
+- Release scope remains limited to the two verified features. No additional product behavior should be introduced during packaging or publication.
+- The versioned full check passed 105 desktop/client tests and 11 bug-report service tests. Formal macOS ARM64 DMG/ZIP and Windows x64 NSIS builds produced eight release/update files with no AppleDouble artifacts.
+- macOS remains intentionally unsigned because the established release configuration sets `identity: null`; this is an existing distribution limitation and does not affect the two feature implementations.
+
+## Phase 31 Processing-flow Node Drag Reorganization (2026-08-23)
+- The requested capability must allow all four meaningful tree operations: change depth, change parent, reorder among siblings, and move between root/subtree locations.
+- This work continues on top of the verified but uncommitted Phase 30 focus-restoration changes. Those files are relevant local work and must not be reset, committed, tagged, or pushed yet.
+- Before designing the drop model, audit the existing normalized node shape and render order so drag behavior reuses the current source of truth rather than introducing a parallel tree representation.
+- Nodes are persisted as nested arrays. Each node already owns `parentId`, sibling-local `order`, `type`, and `children`; normalization reconstructs those invariants recursively, and rendering sorts each collection by `order`.
+- Existing mutation helpers already provide recursive lookup (`findNode`, `findNodeCollection`), flattening, and sibling reordering, so moving a whole subtree can be implemented by detaching one node object and inserting it into another existing collection.
+- The processing-flow rows currently have no draggable source or drop binding. Task/group HTML5 drag handling is scoped to their own selectors and must not be reused through the generic `text/plain` channel because that risks cross-feature drops.
+- Drop semantics: the upper quarter of a target row means “before” in the target's sibling collection; the middle half means “inside” as the target's last child; the lower quarter means “after”. Dropping on the flow background appends at root level.
+- Moving into the source itself or any source descendant is invalid. A valid move keeps the entire source subtree intact, rewrites only the moved root's `parentId`/`type`, normalizes old and new sibling orders, expands an inside target, and updates task/node timestamps.
+- Use a dedicated handle in the sequence column so title editing, record opening, context menus, and status interactions do not accidentally start a drag.
+- The implementation uses a custom drag MIME and transient in-memory drag state, so task/group drag payloads cannot be mistaken for node moves. Target-row and root-background handlers are scoped to the active task.
+- The mutation regression covers sibling reordering, moving into two different parents, moving a child to a root position, root append, moving a former child beside a root, automatic target expansion, and cycle rejection with an unchanged-tree assertion.
+- Isolated Electron validation dispatched the same HTML5 `dragstart`/`dragover`/`drop` lifecycle used by the bound production handlers. It verified moving a root node inside another node, moving a child after a root node, moving that node before another root, and dropping a child on the flow background to append it at root level; each successful move was confirmed in the persisted `task-data.json` tree.
+- The isolated invalid move attempted to drop parent `A` inside its child `C`; the DOM order and persisted tree stayed unchanged, confirming cycle rejection occurs before detachment.
+- The final full check passed 105 desktop/client tests and 11 bug-report service tests. No persistence schema, version metadata, release artifact, commit, tag, or remote branch was changed.
+
+## Phase 30 Editing Focus Restoration (2026-08-23)
+- The requested workflow is local-only: implement and verify the application-switch focus restoration, but do not version, commit, tag, or push it yet.
+- Scope is limited to the currently edited task title, task background, and Knowledge Notes surface; saving and navigation behavior must remain unchanged.
+- Root cause for native fields: every `[data-edit-key]` blur with no in-app `relatedTarget` falls through to `render()`, rebuilding the complete page and discarding the active input plus its selection.
+- Root cause for Knowledge Notes: the existing window-focus restoration calls `activeMarkdownEditor()`, which only recognizes the fallback `.markdown-editor`; the production Milkdown `.ProseMirror` surface is not captured.
+- Preserve the current DOM during actual application deactivation, store a transient non-persisted editing snapshot, and restore it on window focus. In-app blur behavior should remain intact.
+- For Milkdown, expose its ProseMirror selection through the existing editor wrapper so a remounted editor can restore the exact logical selection rather than only focusing the surface.
+- The implemented snapshot records the field identity, selection/caret, and scroll offsets; Milkdown records ProseMirror anchor/head positions through the wrapper. Window focus restores synchronously so typing can resume during a mouse-based return before a later pointer event changes focus.
+- A capture-phase pointer guard distinguishes application deactivation from deliberate in-app focus changes, preserving the existing render/commit behavior when the user intentionally clicks another control.
+- The new focused regression failed before the implementation and now verifies native range/scroll restoration, late blur ordering, snapshot cleanup, and the Milkdown selection API contract.
+- Full validation passed 104 desktop/client tests and 11 bug-report service tests. An isolated Electron GUI run confirmed exact insertion positions after switching to Finder and back for title (`ABCDE` -> `ABCXDE`), background (`12345` -> `123Y45`), and Milkdown Knowledge Notes (`ABC|DE` accepted resumed input at the marker).
+- No persistence schema, task data, recovery data, save flow, version metadata, release artifact, commit, tag, or remote branch was changed.
+
 ## Phase 29 Today Widget Settings Dismissal (2026-08-23)
 - Local `main` is clean and matches `origin/main` at the published `v0.1.122`; `knowledge-note-local-storage` remains absent.
 - The widget already closes its settings menu when a pointer press occurs inside the widget but outside `#widget-menu` and `#menu-toggle`.

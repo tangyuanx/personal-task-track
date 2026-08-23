@@ -2786,6 +2786,68 @@ test("group and node mutations do not steal repository title focus", async () =>
   assert.match(app, /event\.relatedTarget\?\.closest\?\.\("\.task-title, \.page-title"\)/);
 });
 
+test("app switching restores native and Milkdown editing selections", async () => {
+  const [app, milkdown] = await Promise.all([
+    fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "app.js"), "utf8"),
+    fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "milkdown-editor.entry.js"), "utf8"),
+  ]);
+
+  assert.match(app, /function captureAppSwitchEditingFocus\(/);
+  assert.match(app, /function restoreAppSwitchEditingFocus\(/);
+  assert.match(app, /if \(!event\.relatedTarget && !appEditingPointerDown && captureAppSwitchEditingFocus\(event\.target\)\)/);
+  assert.match(app, /window\.addEventListener\("focus", \(\) => \{\s*if \(restoreAppSwitchEditingFocus\(\)\) return;/);
+  assert.match(app, /editor\.addEventListener\("blur",[\s\S]*captureAppSwitchEditingFocus/);
+  assert.match(milkdown, /editorViewCtx/);
+  assert.match(milkdown, /getSelection:/);
+  assert.match(milkdown, /restoreSelection:/);
+
+  const harness = await rendererHarness();
+  const result = harness.json(`(() => {
+    let focusCount = 0;
+    let restoredRange = null;
+    const field = {
+      classList: { contains: (name) => name === "page-title" },
+      dataset: { editKey: "title", taskId: "task_focus", nodeId: "" },
+      value: "0123456789",
+      focus() { focusCount += 1; },
+      selectionStart: 4,
+      selectionEnd: 7,
+      scrollLeft: 12,
+      scrollTop: 3,
+      setSelectionRange(start, end) { restoredRange = [start, end]; }
+    };
+    document.body.contains = (element) => element === field;
+    captureAppSwitchEditingFocus(field);
+    appSwitchFocusSnapshot.restore = true;
+    captureAppSwitchEditingFocus(field);
+    const restoreSurvivedLateBlur = appSwitchFocusSnapshot.restore;
+    field.selectionStart = 0;
+    field.selectionEnd = 0;
+    field.scrollLeft = 0;
+    field.scrollTop = 0;
+    const restored = restoreAppSwitchEditingFocus();
+    return {
+      restored,
+      focusCount,
+      restoredRange,
+      scrollLeft: field.scrollLeft,
+      scrollTop: field.scrollTop,
+      restoreSurvivedLateBlur,
+      snapshotCleared: appSwitchFocusSnapshot === null
+    };
+  })()`);
+
+  assert.deepEqual(result, {
+    restored: true,
+    focusCount: 1,
+    restoredRange: [4, 7],
+    scrollLeft: 12,
+    scrollTop: 3,
+    restoreSurvivedLateBlur: true,
+    snapshotCleared: true,
+  });
+});
+
 test("task title edits mirror immediately between repository and workbench", async () => {
   const harness = await rendererHarness();
   const result = harness.json(`(() => {
@@ -2926,6 +2988,86 @@ test("flow title and record widths share a bounded accessible splitter", async (
   assert.match(styles, /\.flow-split-resizer\s*\{[\s\S]*?width:\s*15px;/);
   assert.match(finalFlowRules, /var\(--flow-title-track, 360fr\)/);
   assert.match(finalFlowRules, /var\(--flow-note-track, 330fr\)/);
+});
+
+test("processing-flow nodes move across parents, levels, and sibling positions without cycles", async () => {
+  const [app, styles] = await Promise.all([
+    fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "app.js"), "utf8"),
+    fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "styles.css"), "utf8"),
+  ]);
+  const harness = await rendererHarness();
+  const result = harness.json(`(() => {
+    state.tasks = normalizeTasks([{
+      id: "task_drag_nodes",
+      nodes: [
+        {
+          id: "a",
+          title: "A",
+          children: [
+            { id: "a1", title: "A1", collapsed: true, children: [{ id: "a1x", title: "A1X", children: [] }] },
+            { id: "a2", title: "A2", children: [] }
+          ]
+        },
+        { id: "b", title: "B", children: [{ id: "b1", title: "B1", children: [] }] },
+        { id: "c", title: "C", children: [] }
+      ]
+    }]);
+
+    const siblingMove = moveFlowNode("task_drag_nodes", "a2", "a1", "before");
+    const reparentMove = moveFlowNode("task_drag_nodes", "b1", "a1", "inside");
+    const rootPositionMove = moveFlowNode("task_drag_nodes", "a1x", "c", "before");
+    const secondReparentMove = moveFlowNode("task_drag_nodes", "c", "b", "inside");
+    const beforeInvalid = JSON.stringify(state.tasks[0].nodes);
+    const invalidDescendantMove = moveFlowNode("task_drag_nodes", "a", "b1", "inside");
+    const invalidUnchanged = JSON.stringify(state.tasks[0].nodes) === beforeInvalid;
+    const rootAppendMove = moveFlowNode("task_drag_nodes", "b1", "", "root");
+    const rootSiblingMove = moveFlowNode("task_drag_nodes", "a1", "b", "after");
+    const task = state.tasks[0];
+    const snapshot = (nodes) => sort(nodes).map((node) => ({
+      id: node.id,
+      parentId: node.parentId,
+      type: node.type,
+      order: node.order,
+      children: snapshot(node.children)
+    }));
+    return {
+      siblingMove,
+      reparentMove,
+      rootPositionMove,
+      secondReparentMove,
+      invalidDescendantMove,
+      invalidUnchanged,
+      rootAppendMove,
+      rootSiblingMove,
+      a1Expanded: findNode(task.nodes, "a1").collapsed === false,
+      placements: [10, 50, 90].map((clientY) => flowNodeDropPlacement({ getBoundingClientRect: () => ({ top: 0, height: 100 }) }, clientY)),
+      nodes: snapshot(task.nodes)
+    };
+  })()`);
+
+  assert.equal(result.siblingMove, true);
+  assert.equal(result.reparentMove, true);
+  assert.equal(result.rootPositionMove, true);
+  assert.equal(result.secondReparentMove, true);
+  assert.equal(result.invalidDescendantMove, false);
+  assert.equal(result.invalidUnchanged, true);
+  assert.equal(result.rootAppendMove, true);
+  assert.equal(result.rootSiblingMove, true);
+  assert.equal(result.a1Expanded, true);
+  assert.deepEqual(result.placements, ["before", "inside", "after"]);
+  assert.deepEqual(result.nodes, [
+    { id: "a", parentId: null, type: "step", order: 1, children: [{ id: "a2", parentId: "a", type: "subtask", order: 1, children: [] }] },
+    { id: "b", parentId: null, type: "step", order: 2, children: [{ id: "c", parentId: "b", type: "subtask", order: 1, children: [] }] },
+    { id: "a1", parentId: null, type: "step", order: 3, children: [] },
+    { id: "a1x", parentId: null, type: "step", order: 4, children: [] },
+    { id: "b1", parentId: null, type: "step", order: 5, children: [] },
+  ]);
+  assert.match(app, /draggable="true"[^>]+data-flow-drag-source/);
+  assert.match(app, /data-flow-drag-target/);
+  assert.match(app, /application\/x-personal-task-flow-node/);
+  assert.match(app, /function flowNodeDropPlacement\(/);
+  assert.match(styles, /\.flow-node-drag-handle/);
+  assert.match(styles, /\.node-drag-over-inside/);
 });
 
 test("knowledge images keep the caret beside the inline image node", async () => {
