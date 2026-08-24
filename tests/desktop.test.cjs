@@ -98,6 +98,24 @@ function runKilledRecoveryChild(userDataPath) {
   });
 }
 
+function assertForceTerminated(child) {
+  if (process.platform === "win32") {
+    assert.equal(child.signal, null);
+    assert.notEqual(child.code, 0);
+    return;
+  }
+  assert.equal(child.signal, "SIGKILL");
+}
+
+async function waitForCondition(predicate, timeoutMs = 500) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (predicate()) return;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  assert.fail("Timed out waiting for asynchronous test condition.");
+}
+
 function rendererHarness(personalTaskTrack = undefined) {
   const storage = new Map();
   const alerts = [];
@@ -372,7 +390,7 @@ test("forced Recovery-process termination preserves the previous Recovery record
   try {
     await writeKnowledgeRecovery(directory, { noteId: "kill-recovery", content: "Recovery 中断前的正文" });
     const child = await runKilledRecoveryChild(directory);
-    assert.equal(child.signal, "SIGKILL");
+    assertForceTerminated(child);
     const recovered = await readKnowledgeRecovery(directory);
     assert.equal(recovered.records["kill-recovery"].content, "Recovery 中断前的正文");
     const leftovers = (await fs.readdir(directory)).filter((entry) => entry.includes("knowledge-note-recovery.json.tmp-"));
@@ -1020,7 +1038,7 @@ test("forced process termination during atomic write preserves the original Mark
     for (const killPoint of ["after-write", "after-sync"]) {
       await fs.writeFile(filePath, `进程中断前的正文-${killPoint}`, "utf8");
       const child = await runKilledSaveChild(filePath, killPoint);
-      assert.equal(child.signal, "SIGKILL");
+      assertForceTerminated(child);
       assert.equal(await fs.readFile(filePath, "utf8"), `进程中断前的正文-${killPoint}`);
       const leftovers = (await fs.readdir(directory)).filter((entry) => entry.includes(".note.md.tmp-"));
       assert.equal(leftovers.length, 1);
@@ -1253,13 +1271,13 @@ test("knowledge file watcher reports deletion, unavailable paths, and read-only 
   try {
     const baseline = await knowledgeFile.readKnowledgeDocument(filePath);
     watcher.watch({ noteId: "missing_note", ...baseline });
-    await new Promise((resolve) => setTimeout(resolve, 25));
+    await waitForCondition(() => events.length > 0);
     events.length = 0;
     await fs.rename(filePath, path.join(directory, "moved-note.md"));
     callbacks[0]();
     callbacks[0]();
     callbacks[0]();
-    await new Promise((resolve) => setTimeout(resolve, 30));
+    await waitForCondition(() => events.some((event) => event.type === "file-missing"));
     assert.equal(events.at(-1).type, "file-missing");
     assert.equal(events.filter((event) => event.type === "file-missing").length, 1);
 
@@ -1280,7 +1298,7 @@ test("knowledge file watcher reports deletion, unavailable paths, and read-only 
     await fs.writeFile(filePath, "恢复内容", "utf8");
     const readOnlyBaseline = await knowledgeFile.readKnowledgeDocument(filePath);
     readOnlyWatcher.watch({ noteId: "readonly_note", ...readOnlyBaseline });
-    await new Promise((resolve) => setTimeout(resolve, 25));
+    await waitForCondition(() => events.at(-1)?.type === "read-only");
     assert.equal(events.at(-1).type, "read-only");
     readOnlyWatcher.closeAll();
   } finally {
@@ -1308,7 +1326,7 @@ test("knowledge file watcher contains read and watcher errors as unavailable eve
     onChange: (event) => events.push(event),
   });
   watcher.watch({ noteId: "error_note", filePath: "/volume/note.md" });
-  await new Promise((resolve) => setTimeout(resolve, 15));
+  await waitForCondition(() => events.length > 0);
   assert.equal(events[0]?.type, "file-unavailable");
   assert.equal(events[0]?.errorCode, "EIO");
   assert.equal(typeof watcherError, "function");
@@ -1327,7 +1345,7 @@ test("knowledge file watcher contains read and watcher errors as unavailable eve
     onChange: (event) => timeoutEvents.push(event),
   });
   timeoutWatcher.watch({ noteId: "timeout_note", filePath: "/network/note.md" });
-  await new Promise((resolve) => setTimeout(resolve, 20));
+  await waitForCondition(() => timeoutEvents.length > 0);
   assert.equal(timeoutEvents[0]?.type, "file-unavailable");
   assert.equal(timeoutEvents[0]?.errorCode, "ETIMEDOUT");
   timeoutWatcher.closeAll();
@@ -2134,12 +2152,19 @@ test("settings expose one-confirmation background update with a safe silent rest
     appUpdateState = normalizeAppUpdateState({ status: "preparing", supported: true, currentVersion: "0.1.109", version: "0.1.110" });
     return renderUpdateSettingsControls();
   })()`);
+  const missingWindowsFeed = harness.evaluate(`(() => {
+    appUpdateState = normalizeAppUpdateState({ status: "error", supported: true, currentVersion: "0.1.118", errorCode: "UPDATE_METADATA_MISSING" });
+    return renderUpdateSettingsControls();
+  })()`);
 
   assert.match(app, /<h3 id="software-update-title">软件更新<\/h3>/);
   assert.match(available, /自动检查更新/);
   assert.match(available, /v0\.1\.110 可用/);
   assert.match(available, /data-update-action="download">升级并重启/);
   assert.match(preparing, /正在保存并准备升级/);
+  assert.match(missingWindowsFeed, /Windows 更新包尚未发布完整/);
+  assert.match(missingWindowsFeed, /UPDATE_METADATA_MISSING/);
+  assert.match(missingWindowsFeed, /打开发布页/);
   assert.doesNotMatch(available, /data-update-action="install"/);
   assert.match(styles, /\.settings-update-progress span\s*\{[\s\S]*background:\s*var\(--focus\);/);
   assert.match(styles, /\.update-install-overlay\s*\{/);
@@ -2171,7 +2196,12 @@ test("release configuration uses deterministic updater artifacts and excludes de
   assert.match(workflow, /release\/latest\.yml/);
   assert.match(workflow, /release\/latest-mac\.yml/);
   assert.doesNotMatch(workflow, /release\/\*\.yml/);
+  assert.match(workflow, /needs:\s*build/);
+  assert.match(workflow, /actions\/upload-artifact@v4/);
+  assert.match(workflow, /actions\/download-artifact@v4/);
+  assert.match(workflow, /--require-all-platforms/);
   assert.match(verifier, /references missing artifact/);
+  assert.match(verifier, /Combined release is missing required update metadata/);
 });
 
 test("repository structure keeps production, tooling, documentation, and prototypes separate", async () => {

@@ -2,6 +2,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const releaseDirectory = path.resolve(process.argv[2] || "release");
+const requireAllPlatforms = process.argv.includes("--require-all-platforms");
 const allowedExtensions = new Set([".blockmap", ".dmg", ".exe", ".yml", ".zip"]);
 
 if (!fs.existsSync(releaseDirectory)) fail(`Release directory does not exist: ${releaseDirectory}`);
@@ -13,6 +14,11 @@ const available = new Set(files);
 const metadataFiles = files.filter((name) => /^latest(?:-mac)?\.yml$/i.test(name));
 
 if (!metadataFiles.length) fail("No latest.yml or latest-mac.yml update metadata was generated.");
+if (requireAllPlatforms) {
+  for (const required of ["latest.yml", "latest-mac.yml"]) {
+    if (!available.has(required)) fail(`Combined release is missing required update metadata: ${required}`);
+  }
+}
 
 for (const metadataFile of metadataFiles) {
   const content = fs.readFileSync(path.join(releaseDirectory, metadataFile), "utf8");

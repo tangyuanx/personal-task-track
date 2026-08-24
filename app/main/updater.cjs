@@ -208,7 +208,7 @@ function createUpdateController({
     userApprovedInstall = false;
     updateState({
       status: "error",
-      errorCode: safeErrorCode(error),
+      errorCode: classifyUpdateError(error),
       percent: 0,
       bytesPerSecond: 0,
     });
@@ -322,8 +322,42 @@ function safeErrorCode(error) {
   return code || "UPDATE_FAILED";
 }
 
+function classifyUpdateError(error) {
+  const code = safeErrorCode(error).toUpperCase();
+  const message = `${error?.message || ""} ${error?.stack || ""}`.toLowerCase();
+
+  if (
+    code === "ERR_UPDATER_CHANNEL_FILE_NOT_FOUND" ||
+    /cannot find (?:channel )?["']?latest(?:-[a-z0-9-]+)?\.yml/.test(message) ||
+    (/latest(?:-[a-z0-9-]+)?\.yml/.test(message) && /\b404\b|not found/.test(message))
+  ) {
+    return "UPDATE_METADATA_MISSING";
+  }
+  if (code === "ERR_UPDATER_INVALID_UPDATE_INFO" || /cannot parse update info|invalid update info/.test(message)) {
+    return "UPDATE_METADATA_INVALID";
+  }
+  if (code === "ERR_UPDATER_NO_PUBLISHED_VERSIONS" || /no published versions|unable to find latest version/.test(message)) {
+    return "UPDATE_RELEASE_NOT_FOUND";
+  }
+  if (code === "ETIMEDOUT" || code === "ERR_TIMED_OUT" || /timed?\s*out|timeout/.test(message)) {
+    return "UPDATE_TIMEOUT";
+  }
+  if (
+    ["ENOTFOUND", "EAI_AGAIN", "ECONNREFUSED", "ECONNRESET", "ENETUNREACH", "EHOSTUNREACH", "ERR_NETWORK", "ERR_INTERNET_DISCONNECTED"].includes(code) ||
+    /net::err_(?:name_not_resolved|internet_disconnected|connection_refused|connection_reset|network_changed)/.test(message)
+  ) {
+    return "UPDATE_NETWORK_UNAVAILABLE";
+  }
+  if (/certificate|cert_|ssl|tls/.test(`${code.toLowerCase()} ${message}`)) return "UPDATE_TLS_FAILED";
+  if (/\b429\b|rate.?limit/.test(message)) return "UPDATE_RATE_LIMITED";
+  if (/\b403\b|forbidden/.test(message)) return "UPDATE_ACCESS_DENIED";
+  if (/sha512|checksum|signature/.test(message)) return "UPDATE_INTEGRITY_FAILED";
+  return code;
+}
+
 module.exports = {
   UPDATE_CHANNELS,
+  classifyUpdateError,
   createUpdateController,
   sanitizeVersion,
 };

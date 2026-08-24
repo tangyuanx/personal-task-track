@@ -4,7 +4,7 @@ const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
 const { EventEmitter } = require("node:events");
-const { createUpdateController } = require("../app/main/updater.cjs");
+const { classifyUpdateError, createUpdateController } = require("../app/main/updater.cjs");
 
 function createHarness({
   platform = "win32",
@@ -12,6 +12,7 @@ function createHarness({
   macUpdatesEnabled = false,
   prepareInstallResult = true,
   installThrows = false,
+  checkError = null,
 } = {}) {
   const updates = new EventEmitter();
   const handlers = new Map();
@@ -24,6 +25,7 @@ function createHarness({
   updates.checkForUpdates = async () => {
     checkCount += 1;
     updates.emit("checking-for-update");
+    if (checkError) throw checkError;
     updates.emit("update-available", {
       version: "0.1.110",
       releaseDate: "2026-08-15T08:00:00.000Z",
@@ -185,4 +187,30 @@ test("development and unsigned macOS builds do not contact the update feed", asy
     assert.equal(harness.checkCount(), 0);
     await fs.rm(harness.userData, { recursive: true, force: true });
   }
+});
+
+test("update failures distinguish an incomplete Windows release from user network errors", async () => {
+  const incompleteRelease = createHarness({
+    checkError: Object.assign(
+      new Error('Cannot find channel "latest.yml" update info: HttpError: 404 Not Found'),
+      { code: "ERR_UPDATER_CHANNEL_FILE_NOT_FOUND" },
+    ),
+  });
+  await incompleteRelease.controller.start({ schedule: false });
+  await incompleteRelease.controller.checkForUpdates();
+  assert.equal(incompleteRelease.controller.getState().status, "error");
+  assert.equal(incompleteRelease.controller.getState().errorCode, "UPDATE_METADATA_MISSING");
+
+  const offline = createHarness({
+    checkError: Object.assign(new Error("getaddrinfo ENOTFOUND api.github.com"), { code: "ENOTFOUND" }),
+  });
+  await offline.controller.start({ schedule: false });
+  await offline.controller.checkForUpdates();
+  assert.equal(offline.controller.getState().errorCode, "UPDATE_NETWORK_UNAVAILABLE");
+
+  assert.equal(classifyUpdateError(Object.assign(new Error("request timed out"), { code: "ETIMEDOUT" })), "UPDATE_TIMEOUT");
+  await Promise.all([
+    fs.rm(incompleteRelease.userData, { recursive: true, force: true }),
+    fs.rm(offline.userData, { recursive: true, force: true }),
+  ]);
 });

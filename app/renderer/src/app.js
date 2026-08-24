@@ -2672,13 +2672,66 @@ function renderUpdateStatus(update) {
   if (update.status === "installing") {
     return updateStatusSheet({ icon: "", title: "正在完成升级…", detail: "应用即将自动重启，请稍候。", spinning: true, progress: 100 });
   }
+  const error = updateErrorPresentation(update.errorCode);
   return updateStatusSheet({
     icon: "!",
     tone: "error",
-    title: "暂时无法检查或下载更新",
-    detail: "请检查网络连接，当前版本仍可正常使用。",
-    actions: `<button class="settings-update-button" type="button" data-update-action="check">重试</button>`,
+    title: error.title,
+    detail: error.detail,
+    notes: error.code ? [`诊断代码：${error.code}`] : [],
+    actions: `<a class="settings-update-button ghost" href="https://github.com/tangyuanx/personal-task-track/releases/latest" target="_blank" rel="noreferrer">打开发布页</a><button class="settings-update-button" type="button" data-update-action="check">重试</button>`,
   });
+}
+
+function updateErrorPresentation(value) {
+  const code = String(value || "UPDATE_FAILED").replace(/[^0-9A-Z_.-]/gi, "").slice(0, 64) || "UPDATE_FAILED";
+  if (code === "UPDATE_METADATA_MISSING") {
+    return {
+      code,
+      title: "Windows 更新包尚未发布完整",
+      detail: "GitHub Release 缺少 Windows 更新元数据。请稍后重试，或打开发布页手动下载完整安装包。",
+    };
+  }
+  if (["UPDATE_METADATA_INVALID", "UPDATE_RELEASE_NOT_FOUND"].includes(code)) {
+    return {
+      code,
+      title: "暂时没有可用的更新信息",
+      detail: "发布元数据不可用。当前版本仍可正常使用，请稍后重试。",
+    };
+  }
+  if (["UPDATE_TIMEOUT", "UPDATE_NETWORK_UNAVAILABLE"].includes(code)) {
+    return {
+      code,
+      title: "暂时无法连接更新服务",
+      detail: "连接 GitHub 超时或网络不可用。请检查网络后重试。",
+    };
+  }
+  if (code === "UPDATE_TLS_FAILED") {
+    return {
+      code,
+      title: "更新服务安全连接失败",
+      detail: "请检查系统时间、代理或安全软件的 HTTPS 证书设置后重试。",
+    };
+  }
+  if (["UPDATE_RATE_LIMITED", "UPDATE_ACCESS_DENIED"].includes(code)) {
+    return {
+      code,
+      title: "GitHub 暂时拒绝了更新请求",
+      detail: "请求可能过于频繁或被网络代理拦截。请稍后重试。",
+    };
+  }
+  if (code === "UPDATE_INTEGRITY_FAILED") {
+    return {
+      code,
+      title: "更新包完整性校验失败",
+      detail: "应用没有安装该文件。请稍后重试，或从发布页重新下载安装包。",
+    };
+  }
+  return {
+    code,
+    title: "暂时无法检查或下载更新",
+    detail: "当前版本仍可正常使用。你可以重试，或打开发布页查看最新版本。",
+  };
 }
 
 function updateStatusSheet({ icon, title, detail, tone = "", spinning = false, notes = [], actions = "", progress = null }) {

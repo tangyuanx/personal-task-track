@@ -6,7 +6,7 @@ on:
       - "v*"
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
@@ -19,9 +19,11 @@ jobs:
           - platform: macOS
             os: macos-latest
             script: npm run dist:mac -- --x64 --arm64 --publish never
+            artifact: release-macos
           - platform: Windows
             os: windows-latest
             script: npm run dist:win -- --publish never
+            artifact: release-windows
 
     steps:
       - name: Checkout
@@ -47,7 +49,42 @@ jobs:
       - name: Verify update metadata
         run: node tools/verify-update-artifacts.cjs release
 
-      - name: Upload release assets
+      - name: Stage platform release assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            release/*.dmg
+            release/*.zip
+            release/*.exe
+            release/*.blockmap
+            release/latest.yml
+            release/latest-mac.yml
+          if-no-files-found: error
+          retention-days: 2
+
+  publish:
+    name: Publish complete release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Collect platform release assets
+        uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: release
+          merge-multiple: true
+
+      - name: Verify complete cross-platform update feed
+        run: node tools/verify-update-artifacts.cjs release --require-all-platforms
+
+      - name: Upload complete release assets
         uses: softprops/action-gh-release@v2
         with:
           files: |
