@@ -4,6 +4,8 @@ const crypto = require("node:crypto");
 
 const PREFERENCES_FILE = "today-widget-preferences.json";
 const WIDGET_GAP = 16;
+const WIDGET_MIN_HEIGHT = 180;
+const WIDGET_MAX_HEIGHT = 720;
 const WIDGET_POSITIONS = new Set(["top-left", "top-right", "bottom-left", "bottom-right", "custom"]);
 const WIDGET_ZH_FONTS = new Set(["system", "noto", "yahei", "pingfang", "songti", "simsun", "fangsong", "heiti", "kaiti"]);
 const WIDGET_EN_FONTS = new Set(["inter", "system", "segoe", "arial", "helvetica", "verdana", "trebuchet", "tahoma", "times", "georgia", "courier", "mono"]);
@@ -14,6 +16,7 @@ const DEFAULT_PREFERENCES = Object.freeze({
   visible: true,
   compact: false,
   opacity: 100,
+  height: 260,
   customBounds: null,
 });
 
@@ -30,6 +33,7 @@ function normalizeTodayWidgetPreferences(value) {
     visible: raw.visible !== false,
     compact: raw.compact === true,
     opacity: normalizeOpacity(raw.opacity),
+    height: normalizeHeight(raw.height),
     customBounds,
   };
 }
@@ -37,6 +41,13 @@ function normalizeTodayWidgetPreferences(value) {
 function normalizeOpacity(value) {
   const opacity = value == null || value === "" ? Number.NaN : Number(value);
   return Number.isFinite(opacity) ? Math.max(70, Math.min(100, Math.round(opacity))) : DEFAULT_PREFERENCES.opacity;
+}
+
+function normalizeHeight(value) {
+  const height = value == null || value === "" ? Number.NaN : Number(value);
+  return Number.isFinite(height)
+    ? Math.max(WIDGET_MIN_HEIGHT, Math.min(WIDGET_MAX_HEIGHT, Math.round(height)))
+    : DEFAULT_PREFERENCES.height;
 }
 
 function normalizeCustomBounds(value) {
@@ -58,6 +69,31 @@ function cornerWindowBounds(workArea, size, position, gap = WIDGET_GAP) {
   return {
     x: position.endsWith("right") ? Math.max(left, right) : left,
     y: position.startsWith("bottom") ? Math.max(top, bottom) : top,
+    width,
+    height,
+  };
+}
+
+function resizedWidgetBounds(bounds, workArea, requestedHeight, edge = "bottom") {
+  const safeBounds = bounds && typeof bounds === "object" ? bounds : { x: 0, y: 0, width: 360, height: 260 };
+  const safeArea = workArea && typeof workArea === "object" ? workArea : { x: 0, y: 0, width: 1280, height: 800 };
+  const x = Math.round(Number(safeBounds.x) || 0);
+  const y = Math.round(Number(safeBounds.y) || 0);
+  const width = Math.max(296, Math.round(Number(safeBounds.width) || 360));
+  const currentHeight = Math.max(49, Math.round(Number(safeBounds.height) || DEFAULT_PREFERENCES.height));
+  const areaTop = Math.round(Number(safeArea.y) || 0);
+  const areaHeight = Math.max(1, Math.round(Number(safeArea.height) || 800));
+  const areaBottom = areaTop + areaHeight;
+  const resizeFromTop = edge === "top";
+  const availableHeight = resizeFromTop ? y + currentHeight - areaTop : areaBottom - y;
+  const minimumHeight = Math.min(WIDGET_MIN_HEIGHT, areaHeight);
+  const maximumHeight = Math.max(minimumHeight, Math.min(WIDGET_MAX_HEIGHT, availableHeight));
+  const numericHeight = Number(requestedHeight);
+  const desiredHeight = Number.isFinite(numericHeight) ? Math.round(numericHeight) : currentHeight;
+  const height = Math.max(minimumHeight, Math.min(maximumHeight, desiredHeight));
+  return {
+    x,
+    y: resizeFromTop ? y + currentHeight - height : y,
     width,
     height,
   };
@@ -103,8 +139,9 @@ function createTodayWidgetController({ app, BrowserWindow, ipcMain, screen, getM
   let preferences = { ...DEFAULT_PREFERENCES };
   let widgetWindow = null;
   let snapshot = { date: "", items: [] };
-  let currentSize = { width: 360, height: 260 };
+  let currentSize = { width: 360, height: DEFAULT_PREFERENCES.height };
   let moveSaveTimer = null;
+  let resizeSaveTimer = null;
   let suppressMoveUntil = 0;
   const pendingCompletions = new Map();
 
@@ -254,19 +291,37 @@ function createTodayWidgetController({ app, BrowserWindow, ipcMain, screen, getM
     preferences = normalizeTodayWidgetPreferences({ ...preferences, ...raw });
     if (raw.position && raw.position !== "custom") preferences.customBounds = null;
     applyAlwaysOnTop();
-    if (raw.position) positionWidget();
+    if (Object.hasOwn(raw, "compact")) {
+      currentSize = preferences.compact
+        ? { width: 296, height: 49 }
+        : { width: 360, height: preferences.height };
+    }
+    if (raw.position || Object.hasOwn(raw, "compact")) positionWidget();
     await persistPreferences();
     broadcastState();
     return widgetState();
   }
 
   async function resizeWidget(size) {
-    if (!widgetWindow || widgetWindow.isDestroyed()) return widgetState();
-    currentSize = {
-      width: Math.max(296, Math.min(420, Math.round(Number(size?.width) || currentSize.width))),
-      height: Math.max(49, Math.min(420, Math.round(Number(size?.height) || currentSize.height))),
-    };
-    positionWidget();
+    if (!widgetWindow || widgetWindow.isDestroyed() || preferences.compact) return widgetState();
+    const bounds = widgetWindow.getBounds();
+    const workArea = screen.getDisplayMatching(bounds).workArea;
+    const edge = size?.edge === "top" ? "top" : "bottom";
+    const nextBounds = resizedWidgetBounds(bounds, workArea, size?.height, edge);
+    currentSize = { width: nextBounds.width, height: nextBounds.height };
+    preferences = normalizeTodayWidgetPreferences({
+      ...preferences,
+      position: "custom",
+      height: nextBounds.height,
+      customBounds: { x: nextBounds.x, y: nextBounds.y },
+    });
+    suppressMoveUntil = Date.now() + 350;
+    widgetWindow.setBounds(nextBounds, false);
+    clearTimeout(resizeSaveTimer);
+    resizeSaveTimer = setTimeout(() => {
+      void persistPreferences();
+      broadcastState();
+    }, 180);
     return widgetState();
   }
 
@@ -322,6 +377,9 @@ function createTodayWidgetController({ app, BrowserWindow, ipcMain, screen, getM
 
   async function start() {
     preferences = await readTodayWidgetPreferences(app.getPath("userData"));
+    currentSize = preferences.compact
+      ? { width: 296, height: 49 }
+      : { width: 360, height: preferences.height };
     if (preferences.launchWithApp && preferences.visible) createWidgetWindow();
     screen.on("display-added", positionWidget);
     screen.on("display-removed", positionWidget);
@@ -331,6 +389,7 @@ function createTodayWidgetController({ app, BrowserWindow, ipcMain, screen, getM
 
   function stop() {
     clearTimeout(moveSaveTimer);
+    clearTimeout(resizeSaveTimer);
     screen.removeListener("display-added", positionWidget);
     screen.removeListener("display-removed", positionWidget);
     screen.removeListener("display-metrics-changed", positionWidget);
@@ -356,7 +415,7 @@ function normalizeSnapshot(value) {
   return {
     date: String(raw.date || "").slice(0, 32),
     appearance: normalizeTodayWidgetAppearance(raw.appearance),
-    items: (Array.isArray(raw.items) ? raw.items : []).slice(0, 3).map((item) => ({
+    items: (Array.isArray(raw.items) ? raw.items : []).map((item) => ({
       taskId: normalizeTaskId(item?.taskId),
       title: String(item?.title || "未命名任务").slice(0, 240),
       nextText: String(item?.nextText || "补充任务背景或新增第一个节点").slice(0, 500),
@@ -381,6 +440,7 @@ module.exports = {
   applyTodayWidgetTopmost,
   cornerWindowBounds,
   createTodayWidgetController,
+  resizedWidgetBounds,
   normalizeTodayWidgetPreferences,
   normalizeTodayWidgetAppearance,
   normalizeSnapshot,

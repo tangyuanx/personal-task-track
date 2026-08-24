@@ -26,6 +26,7 @@ const { createKnowledgeFileWatcher } = require("../app/main/knowledge-watcher.cj
 const {
   applyTodayWidgetTopmost,
   cornerWindowBounds,
+  resizedWidgetBounds,
   normalizeSnapshot,
   normalizeTodayWidgetAppearance,
   normalizeTodayWidgetPreferences,
@@ -2243,6 +2244,7 @@ test("Today widget preferences normalize safely and retain an intentional custom
     visible: true,
     compact: false,
     opacity: 100,
+    height: 260,
     customBounds: null,
   });
   assert.deepEqual(normalizeTodayWidgetPreferences({
@@ -2252,6 +2254,7 @@ test("Today widget preferences normalize safely and retain an intentional custom
     visible: false,
     compact: true,
     opacity: 84.6,
+    height: 347.8,
     customBounds: { x: 321.7, y: 48.2 },
   }), {
     position: "custom",
@@ -2260,12 +2263,15 @@ test("Today widget preferences normalize safely and retain an intentional custom
     visible: false,
     compact: true,
     opacity: 85,
+    height: 348,
     customBounds: { x: 322, y: 48 },
   });
   assert.equal(normalizeTodayWidgetPreferences({ position: "custom" }).position, "top-right");
   assert.equal(normalizeTodayWidgetPreferences({ opacity: null }).opacity, 100);
   assert.equal(normalizeTodayWidgetPreferences({ opacity: 12 }).opacity, 70);
   assert.equal(normalizeTodayWidgetPreferences({ opacity: 120 }).opacity, 100);
+  assert.equal(normalizeTodayWidgetPreferences({ height: 90 }).height, 180);
+  assert.equal(normalizeTodayWidgetPreferences({ height: 900 }).height, 720);
 });
 
 test("Today widget corner placement respects each display work area", () => {
@@ -2343,12 +2349,14 @@ test("Today widget preferences persist atomically outside task data", async (t) 
     visible: true,
     compact: true,
     opacity: 82,
+    height: 380,
   });
   const read = await readTodayWidgetPreferences(directory);
 
   assert.deepEqual(read, written);
   assert.equal(read.position, "bottom-left");
   assert.equal(read.opacity, 82);
+  assert.equal(read.height, 380);
   await assert.rejects(fs.access(path.join(directory, "today-widget-preferences.json.tmp")));
 });
 
@@ -2376,9 +2384,14 @@ test("production Today widget uses its dedicated frontend and a sandboxed Electr
   assert.doesNotMatch(demo, /\.today-widget\.is-compact \.widget-menu[^}]*display:\s*none;/);
   assert.match(runtime, /bridge\.completeTask/);
   assert.match(runtime, /bridge\.openMain/);
-  assert.match(runtime, /ResizeObserver/);
+  assert.doesNotMatch(runtime, /ResizeObserver/);
   assert.doesNotMatch(runtime, /\+ 60/);
-  assert.match(runtime, /width: widget\.offsetWidth/);
+  assert.match(runtime, /currentSnapshot\.items\) \? currentSnapshot\.items : \[\]/);
+  assert.match(runtime, /bridge\.resize\(\{ height: pendingResizeHeight, edge \}\)/);
+  assert.match(runtime, /startHeight: window\.innerHeight/);
+  assert.match(demo, /data-widget-resize="top"/);
+  assert.match(demo, /data-widget-resize="bottom"/);
+  assert.match(demo, /body\.widget-runtime \.task-list\s*\{[\s\S]*overflow-y:\s*auto;/);
   assert.match(runtime, /function applyAppearance/);
   assert.match(runtime, /document\.documentElement\.dataset\.zhFont/);
   assert.match(runtime, /--widget-font-scale/);
@@ -2396,6 +2409,7 @@ test("production Today widget uses its dedicated frontend and a sandboxed Electr
   assert.match(widgetMain, /setAlwaysOnTop[\s\S]*"screen-saver"/);
   assert.match(widgetMain, /moveTop\(\)/);
   assert.match(widgetMain, /getDisplayMatching/);
+  assert.match(widgetMain, /position:\s*"custom"[\s\S]*height,[\s\S]*customBounds:/);
   assert.match(widgetMain, /function stop\(\)[\s\S]*widgetWindow\.destroy\(\)/);
   assert.match(appMain, /if \(!isQuitting && !updateInstallPrepared\) app\.quit\(\)/);
   assert.doesNotMatch(appMain, /!isMac && !isQuitting/);
@@ -2646,8 +2660,44 @@ test("Today widget snapshot reuses the main Today ordering and next-step content
 
   assert.deepEqual(result.snapshot.items, result.focus);
   assert.deepEqual(result.snapshot.items.slice(0, 2).map((item) => item.taskId), ["blocked", "high"]);
-  assert.equal(result.snapshot.items.length, 3);
+  assert.equal(result.snapshot.items.length, 4);
   assert.equal(result.snapshot.items[0].nextText, "解除阻塞");
+});
+
+test("Today widget resizes vertically from either edge and stays inside the display", () => {
+  const workArea = { x: 0, y: 100, width: 1280, height: 700 };
+  const bounds = { x: 800, y: 200, width: 360, height: 260 };
+
+  assert.deepEqual(resizedWidgetBounds(bounds, workArea, 320, "top"), {
+    x: 800, y: 140, width: 360, height: 320,
+  });
+  assert.deepEqual(resizedWidgetBounds(bounds, workArea, 320, "bottom"), {
+    x: 800, y: 200, width: 360, height: 320,
+  });
+  assert.deepEqual(resizedWidgetBounds(bounds, workArea, 900, "top"), {
+    x: 800, y: 100, width: 360, height: 360,
+  });
+  assert.deepEqual(resizedWidgetBounds(bounds, workArea, 900, "bottom"), {
+    x: 800, y: 200, width: 360, height: 600,
+  });
+});
+
+test("Today surfaces keep every scheduled task and scroll within bounded content areas", async () => {
+  const [app, styles, runtime, widgetMain] = await Promise.all([
+    fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "app.js"), "utf8"),
+    fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "styles.css"), "utf8"),
+    fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "today-widget-runtime.js"), "utf8"),
+    fs.readFile(path.join(__dirname, "..", "app", "main", "today-widget.cjs"), "utf8"),
+  ]);
+  const normalized = normalizeSnapshot({
+    items: Array.from({ length: 7 }, (_, index) => ({ taskId: `today_${index}`, title: `任务 ${index}` })),
+  });
+
+  assert.equal(normalized.items.length, 7);
+  assert.doesNotMatch(app, /\.slice\(0, 3\)/);
+  assert.doesNotMatch(runtime, /\.slice\(0, 3\)/);
+  assert.doesNotMatch(widgetMain, /\.slice\(0, 3\)/);
+  assert.match(styles, /\.today-panel \.focus-stack\s*\{[\s\S]*max-height:\s*192px;[\s\S]*overflow-y:\s*auto;/);
 });
 
 test("task Markdown export resolves the task group and includes knowledge notes", async () => {

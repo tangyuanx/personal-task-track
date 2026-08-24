@@ -4337,6 +4337,12 @@ body {
   gap: 6px;
 }
 
+.today-panel .focus-stack {
+  max-height: 192px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
 .task-list {
   min-height: 0;
   overflow: auto;

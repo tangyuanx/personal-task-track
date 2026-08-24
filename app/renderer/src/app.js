@@ -2294,8 +2294,7 @@ function todayFocusItems() {
       const nextText = node?.title || (task.description.trim() ? task.description.trim() : "补充任务背景或新增第一个节点");
       return { task, node, kind, badge, nextText, score, updatedAt: latestTaskTime(task) };
     })
-    .sort((a, b) => b.score - a.score || b.updatedAt - a.updatedAt || a.task.order - b.task.order)
-    .slice(0, 3);
+    .sort((a, b) => b.score - a.score || b.updatedAt - a.updatedAt || a.task.order - b.task.order);
 }
 
 function recurrenceSummaryLabel(value) {

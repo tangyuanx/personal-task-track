@@ -19,7 +19,9 @@
   let queuedSnapshot = null;
   let completingTaskId = "";
   let toastTimer = 0;
+  let resizeGesture = null;
   let resizeFrame = 0;
+  let pendingResizeHeight = 0;
 
   function escapeHtml(value) {
     return String(value || "")
@@ -40,7 +42,6 @@
   function closeMenu() {
     menu.classList.remove("is-open");
     menuToggle.setAttribute("aria-expanded", "false");
-    requestWidgetResize();
   }
 
   function formatToday(value) {
@@ -85,7 +86,7 @@
 
   function renderSnapshot(value) {
     currentSnapshot = value && typeof value === "object" ? value : { date: "", items: [] };
-    const items = Array.isArray(currentSnapshot.items) ? currentSnapshot.items.slice(0, 3) : [];
+    const items = Array.isArray(currentSnapshot.items) ? currentSnapshot.items : [];
     currentSnapshot.items = items;
     applyAppearance(currentSnapshot.appearance);
     const dateElement = document.querySelector("#today-date");
@@ -94,7 +95,6 @@
     taskList.innerHTML = items.map(taskHtml).join("");
     bindTaskRows();
     updateCount(items.length);
-    requestWidgetResize();
   }
 
   function applyOpacity(value) {
@@ -121,18 +121,55 @@
     document.querySelectorAll("[data-place]").forEach((button) => {
       button.classList.toggle("is-active", button.dataset.place === position);
     });
-    requestWidgetResize();
   }
 
-  function requestWidgetResize() {
-    window.cancelAnimationFrame(resizeFrame);
+  function sendResize(height, edge) {
+    pendingResizeHeight = height;
+    if (resizeFrame) return;
     resizeFrame = window.requestAnimationFrame(() => {
-      const menuHeight = menu.classList.contains("is-open") ? menu.offsetTop + menu.offsetHeight : 0;
-      void bridge.resize({
-        width: widget.offsetWidth,
-        height: Math.max(widget.offsetHeight, menuHeight),
-      });
+      resizeFrame = 0;
+      void bridge.resize({ height: pendingResizeHeight, edge });
     });
+  }
+
+  function beginResize(event) {
+    if (widget.classList.contains("is-compact") || event.button !== 0) return;
+    const handle = event.currentTarget;
+    resizeGesture = {
+      edge: handle.dataset.widgetResize,
+      pointerId: event.pointerId,
+      startY: event.screenY,
+      startHeight: window.innerHeight,
+    };
+    handle.setPointerCapture(event.pointerId);
+    widget.classList.add("is-resizing");
+    document.body.classList.add("is-resizing-widget");
+    event.preventDefault();
+  }
+
+  function continueResize(event) {
+    if (!resizeGesture || event.pointerId !== resizeGesture.pointerId) return;
+    const delta = event.screenY - resizeGesture.startY;
+    const height = resizeGesture.edge === "top"
+      ? resizeGesture.startHeight - delta
+      : resizeGesture.startHeight + delta;
+    sendResize(height, resizeGesture.edge);
+  }
+
+  function finishResize(event) {
+    if (!resizeGesture || event.pointerId !== resizeGesture.pointerId) return;
+    const handle = event.currentTarget;
+    const delta = event.screenY - resizeGesture.startY;
+    const height = event.type === "pointercancel"
+      ? pendingResizeHeight || resizeGesture.startHeight
+      : resizeGesture.edge === "top"
+        ? resizeGesture.startHeight - delta
+        : resizeGesture.startHeight + delta;
+    sendResize(height, resizeGesture.edge);
+    if (handle.hasPointerCapture(event.pointerId)) handle.releasePointerCapture(event.pointerId);
+    resizeGesture = null;
+    widget.classList.remove("is-resizing");
+    document.body.classList.remove("is-resizing-widget");
   }
 
   function bindTaskRows() {
@@ -183,7 +220,6 @@
     const open = !menu.classList.contains("is-open");
     menu.classList.toggle("is-open", open);
     menuToggle.setAttribute("aria-expanded", String(open));
-    requestWidgetResize();
   });
 
   document.addEventListener("pointerdown", (event) => {
@@ -207,7 +243,6 @@
     compactToggle.title = compact ? "展开" : "收起";
     compactToggle.setAttribute("aria-label", compact ? "展开今日窗口" : "收起今日窗口");
     closeMenu();
-    requestWidgetResize();
     await bridge.setPreferences({ compact });
   });
 
@@ -238,6 +273,13 @@
     button.addEventListener("click", () => void bridge.openMain(""));
   });
 
+  document.querySelectorAll("[data-widget-resize]").forEach((handle) => {
+    handle.addEventListener("pointerdown", beginResize);
+    handle.addEventListener("pointermove", continueResize);
+    handle.addEventListener("pointerup", finishResize);
+    handle.addEventListener("pointercancel", finishResize);
+  });
+
   bridge.onSnapshot((value) => {
     if (completingTaskId) queuedSnapshot = value;
     else renderSnapshot(value);
@@ -248,6 +290,4 @@
     applyWindowState(state);
     renderSnapshot(state.snapshot);
   });
-
-  new ResizeObserver(requestWidgetResize).observe(widget);
 })();

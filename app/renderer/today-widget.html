@@ -300,6 +300,39 @@
       transition: none;
     }
 
+    .today-widget.is-resizing {
+      transition: none;
+    }
+
+    .widget-resize-handle {
+      position: absolute;
+      right: 12px;
+      left: 12px;
+      z-index: 30;
+      display: none;
+      height: 8px;
+      cursor: ns-resize;
+      touch-action: none;
+    }
+
+    .widget-resize-handle.top { top: 0; }
+    .widget-resize-handle.bottom { bottom: 0; }
+
+    .widget-resize-handle::after {
+      position: absolute;
+      right: 42%;
+      left: 42%;
+      height: 2px;
+      border-radius: 99px;
+      background: transparent;
+      content: "";
+      transition: background 120ms ease;
+    }
+
+    .widget-resize-handle.top::after { top: 2px; }
+    .widget-resize-handle.bottom::after { bottom: 2px; }
+    .widget-resize-handle:hover::after { background: var(--widget-control); }
+
     .today-widget.is-hidden {
       opacity: 0;
       transform: scale(0.96);
@@ -729,8 +762,12 @@
     body.widget-runtime .today-widget {
       position: relative;
       inset: auto !important;
+      display: grid;
       width: var(--widget-width);
+      height: 100%;
+      grid-template-rows: auto minmax(0, 1fr);
       margin: 0;
+      overflow: hidden;
       -webkit-app-region: no-drag;
     }
 
@@ -739,6 +776,35 @@
     body.widget-runtime .widget-header {
       -webkit-app-region: drag;
     }
+
+    body.widget-runtime .widget-content {
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    body.widget-runtime .task-list {
+      max-height: 100%;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      scrollbar-gutter: stable;
+    }
+
+    body.widget-runtime .empty-state {
+      height: 100%;
+    }
+
+    body.widget-runtime .widget-menu {
+      max-height: calc(100vh - 51px);
+      overflow-y: auto;
+    }
+
+    body.widget-runtime .widget-resize-handle {
+      display: block;
+      -webkit-app-region: no-drag;
+    }
+
+    body.widget-runtime .today-widget.is-compact .widget-resize-handle { display: none; }
+    body.widget-runtime.is-resizing-widget { cursor: ns-resize; user-select: none; }
 
     body.widget-runtime button,
     body.widget-runtime input,
@@ -763,6 +829,7 @@
     </div>
 
     <section class="today-widget" id="widget" data-position="top-right" aria-label="今日任务置顶窗口">
+      <div class="widget-resize-handle top" data-widget-resize="top" role="separator" aria-orientation="horizontal" aria-label="从顶部调整今日窗口高度"></div>
       <header class="widget-header" id="drag-region">
         <div class="widget-title" id="widget-title">
           <strong>今日任务</strong>
@@ -818,6 +885,7 @@
         <label class="menu-range" for="widget-opacity"><span>窗口透明度</span><output id="widget-opacity-value" for="widget-opacity">100%</output><input id="widget-opacity" type="range" min="70" max="100" step="1" value="100" /></label>
         <button class="hide-widget" id="hide-widget" type="button">隐藏今日窗口</button>
       </aside>
+      <div class="widget-resize-handle bottom" data-widget-resize="bottom" role="separator" aria-orientation="horizontal" aria-label="从底部调整今日窗口高度"></div>
     </section>
 
     <p class="screen-note"><i aria-hidden="true"></i><span id="position-note">置于右上角 · 可拖动到任意位置</span></p>
