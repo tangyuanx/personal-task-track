@@ -1613,29 +1613,16 @@ function renderSidebar() {
           </label>
         </div>
         <div class="task-repository-toolbar">
-          <div class="task-filter-primary">
-            <div class="task-status-filters" role="group" aria-label="任务状态筛选">
-              ${[
-                ["all", "全部"],
-                ["active", "未完成"],
-                ["done", "已完成"],
-              ]
-                .map(
-                  ([value, label]) => `<button class="${state.taskFilter === value ? "active" : ""}" type="button" data-setting-button="task-filter" data-value="${value}">${label}</button>`,
-                )
-                .join("")}
-            </div>
-            <button
-              class="task-calendar-filter ${state.taskDeadlineFilter !== "all" || state.taskDateFilter ? "active" : ""}"
-              type="button"
-              data-action="toggle-calendar"
-              title="打开截止日历"
-              aria-label="打开截止日历${deadlineFilterLabel() ? `，当前筛选 ${escAttr(deadlineFilterLabel())}` : ""}"
-              aria-pressed="${state.calendarOpen}"
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M16 3v4M8 3v4M3 10h18"></path></svg>
-              ${deadlineFilterLabel() ? `<span>${esc(deadlineFilterLabel())}</span>` : ""}
-            </button>
+          <div class="task-status-filters" role="group" aria-label="任务状态筛选">
+            ${[
+              ["all", "全部"],
+              ["active", "未完成"],
+              ["done", "已完成"],
+            ]
+              .map(
+                ([value, label]) => `<button class="${state.taskFilter === value ? "active" : ""}" type="button" data-setting-button="task-filter" data-value="${value}">${label}</button>`,
+              )
+              .join("")}
           </div>
           <label class="task-priority-filter">
             <span>优先级 ·</span>
@@ -3859,12 +3846,6 @@ function bind() {
     });
   }
 
-  const taskDateFilter = document.querySelector("[data-task-date-filter]");
-  taskDateFilter?.addEventListener("change", (event) => {
-    state.taskDateFilter = normalizeTaskDateFilter(event.target.value);
-    state.selectedNodeId = "";
-    render();
-  });
 }
 
 function bindTaskRepositoryRows(scope = document) {
@@ -5567,10 +5548,6 @@ async function action(data, event = null) {
     state.reviewPreset = Object.hasOwn(reviewPresetLabels, data.preset) ? data.preset : "week";
     if (state.reviewPreset === "custom") ensureReviewCustomDates();
   }
-  if (data.action === "clear-task-date-filter") {
-    state.taskDateFilter = "";
-    state.taskDeadlineFilter = "all";
-  }
   if (data.action === "open-review-task") openTaskFromGlobalList(data.taskId);
   if (data.action === "reload-app") window.location.reload();
   if (data.action === "select-group") selectGroup(data.groupId);
@@ -6910,14 +6887,6 @@ async function initializeTodayWidgetBridge() {
 function taskDateFilterLabel(value) {
   const normalized = normalizeTaskDateFilter(value);
   return normalized ? `${normalized.slice(5, 7)}/${normalized.slice(8, 10)}` : "";
-}
-
-function deadlineFilterLabel() {
-  if (state.taskDateFilter) return taskDateFilterLabel(state.taskDateFilter);
-  if (state.taskDeadlineFilter === "today") return "今天";
-  if (state.taskDeadlineFilter === "week") return "本周";
-  if (state.taskDeadlineFilter === "overdue") return "逾期";
-  return "";
 }
 
 function formatMinuteStamp(value) {

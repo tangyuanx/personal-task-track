@@ -3059,8 +3059,8 @@ test("exact deadline-date filtering composes with task status and remains transi
   assert.deepEqual(result.done, ["done_match"]);
   assert.equal(result.label, "08/12");
   assert.equal(harness.evaluate(`normalizeTaskDateFilter("2026-02-30")`), "");
-  assert.match(app, /data-action="toggle-calendar"/);
-  assert.match(app, /截止日历/);
+  assert.doesNotMatch(app, /task-calendar-filter|task-date-filter-popover|data-task-date-filter|clear-task-date-filter/);
+  assert.doesNotMatch(styles, /\.task-calendar-filter|\.task-date-filter-popover/);
   assert.doesNotMatch(app, /taskDateFilter:\s*state\.taskDateFilter/);
   assert.match(styles, /\.calendar-deadline-rail/);
 });
@@ -3125,6 +3125,7 @@ test("calendar owns the footer entry, exposes review in its upper-right, and edi
   ]);
 
   assert.match(app, /data-action="toggle-calendar"[^>]*>\s*日历\s*</);
+  assert.equal((app.match(/data-action="toggle-calendar"/g) || []).length, 1);
   assert.match(app, /function renderCalendarPanel\(\)/);
   assert.match(app, /class="calendar-head-actions"[\s\S]*data-action="open-review-from-calendar"[\s\S]*任务回顾/);
   assert.match(app, /data-deadline-field/);
