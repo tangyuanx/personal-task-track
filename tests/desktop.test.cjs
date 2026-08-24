@@ -601,6 +601,16 @@ test("knowledge file save flow handles Markdown paths, cancel, Save As, and dupl
     assert.equal(staleWriter.code, "EXTERNAL_CHANGE_REQUIRES_CONFIRMATION");
     assert.equal(await fs.readFile(first.filePath, "utf8"), "更新后的内容");
 
+    const explicitOverwrite = await knowledgeFile.saveKnowledgeDocument({
+      filePath: first.filePath,
+      content: "用户确认覆盖后的内容",
+      expectedLastSavedHash: "stale-hash",
+      allowExternalOverwrite: true,
+    });
+    assert.equal(explicitOverwrite.success, true);
+    assert.equal(explicitOverwrite.atomic, true);
+    assert.equal(await fs.readFile(first.filePath, "utf8"), "用户确认覆盖后的内容");
+
     const saveAs = await knowledgeFile.saveKnowledgeDocument({
       filePath: first.filePath,
       saveAs: true,
@@ -609,7 +619,7 @@ test("knowledge file save flow handles Markdown paths, cancel, Save As, and dupl
     }, { dialog: { showSaveDialog: async () => ({ canceled: false, filePath: path.join(directory, "B") }) } });
     assert.equal(saveAs.success, true);
     assert.equal(saveAs.filePath.endsWith("B.md"), true);
-    assert.equal(await fs.readFile(first.filePath, "utf8"), "更新后的内容");
+    assert.equal(await fs.readFile(first.filePath, "utf8"), "用户确认覆盖后的内容");
     assert.equal(await fs.readFile(saveAs.filePath, "utf8"), "另一个文件");
 
     const duplicate = await knowledgeFile.saveKnowledgeDocument({
@@ -623,7 +633,7 @@ test("knowledge file save flow handles Markdown paths, cancel, Save As, and dupl
       code: "DUPLICATE_BINDING",
       filePath: first.filePath,
     });
-    assert.equal(await fs.readFile(first.filePath, "utf8"), "更新后的内容");
+    assert.equal(await fs.readFile(first.filePath, "utf8"), "用户确认覆盖后的内容");
   } finally {
     await fs.rm(directory, { recursive: true, force: true });
   }
@@ -1397,6 +1407,7 @@ test("FileWatcher classifies startup failures and releases failed entries", () =
 test("renderer reloads saved external changes and blocks silent overwrite while dirty", async () => {
   let changeListener = null;
   let saveCalls = 0;
+  let lastSavePayload = null;
   const harness = await rendererHarness({
     knowledgeFile: {
       onChange: (callback) => {
@@ -1405,8 +1416,9 @@ test("renderer reloads saved external changes and blocks silent overwrite while 
       },
       watch: async () => ({ success: true }),
       read: async () => ({ success: true, content: "外部正文", filePath: "/tmp/external.md", lastSavedHash: "hash_b", lastSavedMtime: 2, encoding: "UTF-8", lineEnding: "LF" }),
-      save: async () => {
+      save: async (payload) => {
         saveCalls += 1;
+        lastSavePayload = payload;
         return { success: true, filePath: "/tmp/external.md", lastSavedHash: "hash_c", lastSavedMtime: 3, encoding: "UTF-8", lineEnding: "LF" };
       },
     },
@@ -1462,7 +1474,250 @@ test("renderer reloads saved external changes and blocks silent overwrite while 
   const overwritten = await harness.evaluate(`saveKnowledgeTask("external_task", { allowExternalOverwrite: true })`);
   assert.equal(overwritten.success, true);
   assert.equal(saveCalls, 1);
+  assert.equal(lastSavePayload.content, "本地修改");
+  assert.equal(lastSavePayload.allowExternalOverwrite, true);
   assert.equal(harness.json(`state.tasks[0].knowledgeNote.documentState`), "SAVED");
+  assert.equal(harness.json(`state.tasks[0].knowledgeNote.lastSavedHash`), "hash_c");
+  assert.equal(harness.evaluate(`knowledgeExternalSnapshots.has("external_task")`), false);
+});
+
+test("Bug 25 reload reads the current Markdown file and commits its new baseline", async () => {
+  let readCalls = 0;
+  const recoveryDeletes = [];
+  const watcherCalls = [];
+  const storageWrites = [];
+  const harness = await rendererHarness({
+    storage: { write: async (payload) => { storageWrites.push(payload); } },
+    knowledgeRecovery: { delete: async (noteId) => { recoveryDeletes.push(noteId); return true; } },
+    knowledgeFile: {
+      read: async () => {
+        readCalls += 1;
+        return {
+          success: true,
+          content: "磁盘上的最新正文",
+          filePath: "/tmp/bug-25.md",
+          lastSavedHash: "fresh-disk-hash",
+          lastSavedMtime: 25,
+          encoding: "UTF-8",
+          lineEnding: "LF",
+        };
+      },
+      watch: async (payload) => { watcherCalls.push(payload); return { success: true }; },
+    },
+  });
+  harness.evaluate(`(() => {
+    render = () => {};
+    state.tasks = normalizeTasks([{
+      id: "bug_25_reload", title: "重新加载语义", notes: "编辑器中的未保存正文", nodes: [],
+      knowledgeNote: {
+        noteId: "bug_25_reload", taskId: "bug_25_reload", filePath: "/tmp/bug-25.md",
+        documentState: "EXTERNAL_CHANGED", dirty: true,
+        lastSavedHash: "old-baseline", lastSavedMtime: 10
+      }
+    }]);
+    state.knowledgeRecovery.records.bug_25_reload = {
+      noteId: "bug_25_reload", content: "Recovery 正文", updatedAt: "2026-08-24T00:00:00.000Z"
+    };
+    knowledgeExternalSnapshots.set("bug_25_reload", {
+      success: true, content: "监听器中的旧快照", lastSavedHash: "stale-watcher-hash", lastSavedMtime: 20
+    });
+  })()`);
+
+  const result = await harness.evaluate(`reloadKnowledgeTask("bug_25_reload")`);
+
+  assert.equal(result.success, true);
+  assert.equal(readCalls, 1);
+  assert.equal(harness.json(`state.tasks[0].notes`), "磁盘上的最新正文");
+  assert.deepEqual(harness.json(`({
+    state: state.tasks[0].knowledgeNote.documentState,
+    dirty: state.tasks[0].knowledgeNote.dirty,
+    hash: state.tasks[0].knowledgeNote.lastSavedHash,
+    mtime: state.tasks[0].knowledgeNote.lastSavedMtime
+  })`), { state: "SAVED", dirty: false, hash: "fresh-disk-hash", mtime: 25 });
+  assert.equal(storageWrites.at(-1).tasks[0].notes, "磁盘上的最新正文");
+  assert.equal(watcherCalls.at(-1).lastSavedHash, "fresh-disk-hash");
+  assert.deepEqual(recoveryDeletes, ["bug_25_reload"]);
+  assert.equal(harness.evaluate(`knowledgeExternalSnapshots.has("bug_25_reload")`), false);
+  assert.equal(harness.evaluate(`Boolean(state.knowledgeRecovery.records.bug_25_reload)`), false);
+});
+
+test("Bug 25 reload failure preserves editor content, conflict evidence, and Recovery", async () => {
+  let recoveryDeletes = 0;
+  const harness = await rendererHarness({
+    knowledgeRecovery: { delete: async () => { recoveryDeletes += 1; return true; } },
+    knowledgeFile: {
+      read: async () => ({ success: false, code: "FILE_READ_FAILED", errorCode: "EIO", message: "磁盘暂时不可用" }),
+    },
+  });
+  harness.evaluate(`(() => {
+    render = () => {};
+    state.tasks = normalizeTasks([{
+      id: "bug_25_reload_failed", title: "失败不能丢数据", notes: "必须保留的编辑器正文", nodes: [],
+      knowledgeNote: {
+        noteId: "bug_25_reload_failed", taskId: "bug_25_reload_failed", filePath: "/tmp/bug-25-failed.md",
+        documentState: "EXTERNAL_CHANGED", dirty: true,
+        lastSavedHash: "old-baseline", lastSavedMtime: 10
+      }
+    }]);
+    state.knowledgeRecovery.records.bug_25_reload_failed = {
+      noteId: "bug_25_reload_failed", content: "必须保留的 Recovery", updatedAt: "2026-08-24T00:00:00.000Z"
+    };
+    knowledgeExternalSnapshots.set("bug_25_reload_failed", { success: true, content: "冲突证据" });
+  })()`);
+
+  const result = await harness.evaluate(`reloadKnowledgeTask("bug_25_reload_failed")`);
+
+  assert.equal(result.success, false);
+  assert.equal(harness.json(`state.tasks[0].notes`), "必须保留的编辑器正文");
+  assert.equal(harness.json(`state.tasks[0].knowledgeNote.documentState`), "EXTERNAL_CHANGED");
+  assert.equal(harness.evaluate(`knowledgeExternalSnapshots.has("bug_25_reload_failed")`), true);
+  assert.equal(harness.json(`state.knowledgeRecovery.records.bug_25_reload_failed.content`), "必须保留的 Recovery");
+  assert.equal(recoveryDeletes, 0);
+});
+
+test("Bug 25 reload rolls back when its new DocumentSession cannot persist", async () => {
+  let storageWrites = 0;
+  let recoveryDeletes = 0;
+  const harness = await rendererHarness({
+    storage: {
+      write: async () => {
+        storageWrites += 1;
+        if (storageWrites === 1) throw new Error("metadata disk full");
+      },
+    },
+    knowledgeRecovery: { delete: async () => { recoveryDeletes += 1; return true; } },
+    knowledgeFile: {
+      read: async () => ({
+        success: true,
+        content: "读取成功但不能提交的磁盘正文",
+        filePath: "/tmp/bug-25-reload-persist.md",
+        lastSavedHash: "new-disk-hash",
+        lastSavedMtime: 25,
+      }),
+      watch: async () => ({ success: true }),
+    },
+  });
+  harness.evaluate(`(() => {
+    render = () => {};
+    state.tasks = normalizeTasks([{
+      id: "bug_25_reload_persist", title: "重新加载提交失败", notes: "原编辑器正文", nodes: [],
+      knowledgeNote: {
+        noteId: "bug_25_reload_persist", taskId: "bug_25_reload_persist", filePath: "/tmp/bug-25-reload-persist.md",
+        documentState: "EXTERNAL_CHANGED", dirty: true,
+        lastSavedHash: "old-baseline", lastSavedMtime: 10
+      }
+    }]);
+    state.knowledgeRecovery.records.bug_25_reload_persist = {
+      noteId: "bug_25_reload_persist", content: "原 Recovery", updatedAt: "2026-08-24T00:00:00.000Z"
+    };
+    knowledgeExternalSnapshots.set("bug_25_reload_persist", { success: true, content: "冲突证据" });
+  })()`);
+
+  const result = await harness.evaluate(`reloadKnowledgeTask("bug_25_reload_persist")`);
+
+  assert.equal(result.code, "TASK_DATA_SAVE_FAILED");
+  assert.equal(harness.json(`state.tasks[0].notes`), "原编辑器正文");
+  assert.equal(harness.json(`state.tasks[0].knowledgeNote.documentState`), "EXTERNAL_CHANGED");
+  assert.equal(harness.json(`state.tasks[0].knowledgeNote.lastSavedHash`), "old-baseline");
+  assert.equal(harness.json(`state.knowledgeRecovery.records.bug_25_reload_persist.content`), "原 Recovery");
+  assert.equal(harness.evaluate(`knowledgeExternalSnapshots.has("bug_25_reload_persist")`), true);
+  assert.equal(recoveryDeletes, 0);
+  assert.equal(await harness.evaluate(`flushSave()`), true);
+});
+
+test("Bug 25 overwrite write failure leaves the conflict transaction untouched", async () => {
+  let recoveryDeletes = 0;
+  const harness = await rendererHarness({
+    knowledgeRecovery: { delete: async () => { recoveryDeletes += 1; return true; } },
+    knowledgeFile: {
+      save: async () => ({ success: false, code: "WRITE_FAILED", message: "原子替换失败" }),
+    },
+  });
+  harness.evaluate(`(() => {
+    render = () => {};
+    state.tasks = normalizeTasks([{
+      id: "bug_25_overwrite_write", title: "覆盖写入失败", notes: "不能丢失的编辑器正文", nodes: [],
+      knowledgeNote: {
+        noteId: "bug_25_overwrite_write", taskId: "bug_25_overwrite_write", filePath: "/tmp/bug-25-write.md",
+        documentState: "EXTERNAL_CHANGED", dirty: true,
+        lastSavedHash: "old-baseline", lastSavedMtime: 10
+      }
+    }]);
+    state.knowledgeRecovery.records.bug_25_overwrite_write = {
+      noteId: "bug_25_overwrite_write", content: "不能丢失的 Recovery", updatedAt: "2026-08-24T00:00:00.000Z"
+    };
+    knowledgeExternalSnapshots.set("bug_25_overwrite_write", { success: true, content: "外部正文" });
+  })()`);
+
+  const result = await harness.evaluate(`saveKnowledgeTask("bug_25_overwrite_write", { allowExternalOverwrite: true })`);
+
+  assert.equal(result.code, "WRITE_FAILED");
+  assert.equal(harness.json(`state.tasks[0].notes`), "不能丢失的编辑器正文");
+  assert.equal(harness.json(`state.tasks[0].knowledgeNote.documentState`), "EXTERNAL_CHANGED");
+  assert.equal(harness.json(`state.knowledgeRecovery.records.bug_25_overwrite_write.content`), "不能丢失的 Recovery");
+  assert.equal(harness.evaluate(`knowledgeExternalSnapshots.has("bug_25_overwrite_write")`), true);
+  assert.equal(recoveryDeletes, 0);
+});
+
+test("Bug 25 overwrite keeps conflict and Recovery when metadata persistence fails", async () => {
+  let storageWrites = 0;
+  let recoveryDeletes = 0;
+  const savePayloads = [];
+  const harness = await rendererHarness({
+    storage: {
+      write: async () => {
+        storageWrites += 1;
+        if (storageWrites === 1) throw new Error("metadata disk full");
+      },
+    },
+    knowledgeRecovery: { delete: async () => { recoveryDeletes += 1; return true; } },
+    knowledgeFile: {
+      save: async (payload) => {
+        savePayloads.push(payload);
+        return {
+          success: true,
+          atomic: true,
+          content: payload.content,
+          filePath: payload.filePath,
+          lastSavedHash: "overwritten-hash",
+          lastSavedMtime: 30,
+          encoding: "UTF-8",
+          lineEnding: "LF",
+        };
+      },
+      watch: async () => ({ success: true }),
+    },
+  });
+  harness.evaluate(`(() => {
+    render = () => {};
+    state.tasks = normalizeTasks([{
+      id: "bug_25_overwrite_failed", title: "覆盖失败语义", notes: "编辑器权威正文", nodes: [],
+      knowledgeNote: {
+        noteId: "bug_25_overwrite_failed", taskId: "bug_25_overwrite_failed", filePath: "/tmp/bug-25-overwrite.md",
+        documentState: "EXTERNAL_CHANGED", dirty: true,
+        lastSavedHash: "old-baseline", lastSavedMtime: 10
+      }
+    }]);
+    state.knowledgeRecovery.records.bug_25_overwrite_failed = {
+      noteId: "bug_25_overwrite_failed", content: "Recovery 权威正文", updatedAt: "2026-08-24T00:00:00.000Z"
+    };
+    knowledgeExternalSnapshots.set("bug_25_overwrite_failed", { success: true, content: "外部正文" });
+  })()`);
+
+  const result = await harness.evaluate(`saveKnowledgeTask("bug_25_overwrite_failed", { allowExternalOverwrite: true })`);
+
+  assert.equal(result.code, "TASK_DATA_SAVE_FAILED");
+  assert.equal(result.markdownSaved, true);
+  assert.equal(savePayloads.length, 1);
+  assert.equal(savePayloads[0].content, "编辑器权威正文");
+  assert.equal(savePayloads[0].allowExternalOverwrite, true);
+  assert.equal(harness.json(`state.tasks[0].notes`), "编辑器权威正文");
+  assert.equal(harness.json(`state.tasks[0].knowledgeNote.documentState`), "EXTERNAL_CHANGED");
+  assert.equal(harness.json(`state.tasks[0].knowledgeNote.lastSavedHash`), "old-baseline");
+  assert.equal(harness.json(`state.knowledgeRecovery.records.bug_25_overwrite_failed.content`), "Recovery 权威正文");
+  assert.equal(harness.evaluate(`knowledgeExternalSnapshots.has("bug_25_overwrite_failed")`), true);
+  assert.equal(recoveryDeletes, 0);
+  assert.equal(await harness.evaluate(`flushSave()`), true);
 });
 
 test("renderer keeps a temporarily unavailable file bound without inventing FILE_MISSING", async () => {

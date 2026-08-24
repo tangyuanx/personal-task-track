@@ -1002,38 +1002,62 @@ async function reloadKnowledgeTask(taskId) {
     return { canceled: true };
   }
 
-  const snapshot = knowledgeExternalSnapshots.get(note.noteId);
-  const result = snapshot?.success
-    ? snapshot
-    : await desktopKnowledgeFile.read({ filePath: note.filePath });
+  let result;
+  try {
+    // Reload is an explicit request for the current disk version. Watcher
+    // snapshots are only conflict evidence and may already be stale here.
+    result = await desktopKnowledgeFile.read({ filePath: note.filePath });
+  } catch (error) {
+    result = {
+      success: false,
+      code: "FILE_READ_FAILED",
+      errorCode: error?.code || "UNKNOWN",
+      message: error?.message || "文件暂时不可用",
+    };
+  }
   if (!result?.success) {
-    if (["EACCES", "EPERM", "EROFS"].includes(result?.errorCode)) {
-      task.knowledgeNote = knowledgeDocument.markDocumentReadOnly(note);
-      save();
-    } else if (["ENOENT", "ENOTDIR"].includes(result?.errorCode)) {
-      task.knowledgeNote = knowledgeDocument.markDocumentFileMissing(note);
-      save();
-    } else {
-      state.knowledgeFileIssues[note.noteId] = {
-        code: result?.errorCode || "UNKNOWN",
-        message: result?.message || "文件暂时不可用",
-      };
-    }
+    // A failed conflict resolution must not replace the editor content, clear
+    // EXTERNAL_CHANGED, or discard Recovery. Surface the read issue separately.
+    state.knowledgeFileIssues[note.noteId] = {
+      code: result?.errorCode || result?.code || "UNKNOWN",
+      message: result?.message || "文件暂时不可用",
+    };
     render();
     return result || { success: false, code: "FILE_READ_FAILED" };
   }
 
+  const previousNotes = task.notes;
+  const previousKnowledgeNote = { ...task.knowledgeNote };
+  const previousTaskUpdatedAt = task.updatedAt;
   task.notes = result.content;
-  rememberKnowledgeAssetFiles(result.assetFiles);
-  rememberKnowledgeAssetDiagnostics(note.noteId, result);
-  task.knowledgeNote = knowledgeDocument.markDocumentSaved(note, result);
+  task.knowledgeNote = knowledgeDocument.markDocumentSaved(previousKnowledgeNote, result);
   if (result.readOnly) task.knowledgeNote = knowledgeDocument.markDocumentReadOnly(task.knowledgeNote);
   task.knowledgeNote.updatedAt = now();
   task.updatedAt = now();
+  save();
+  if (!(await flushSave())) {
+    task.notes = previousNotes;
+    task.knowledgeNote = previousKnowledgeNote;
+    task.updatedAt = previousTaskUpdatedAt;
+    save();
+    render();
+    return {
+      success: false,
+      code: "TASK_DATA_SAVE_FAILED",
+      message: "磁盘文件读取成功，但冲突状态未能安全持久化；当前编辑内容与 Recovery 已保留。",
+    };
+  }
+
+  rememberKnowledgeAssetFiles(result.assetFiles);
+  rememberKnowledgeAssetDiagnostics(note.noteId, result);
+  delete state.knowledgeFileIssues[note.noteId];
+  try {
+    await syncKnowledgeFileWatcher(task);
+  } catch (error) {
+    console.error("Failed to update knowledge file watcher baseline after reload.", error);
+  }
   knowledgeExternalSnapshots.delete(note.noteId);
   await clearKnowledgeRecoveryRecord(note.noteId);
-  save();
-  await syncKnowledgeFileWatcher(task);
   return result;
 }
 
@@ -1213,6 +1237,9 @@ async function saveKnowledgeTask(taskId, { saveAs = false, allowExternalOverwrit
 
   captureMountedMilkdownDrafts();
   flushNodeNoteDraft(noteDraftKey(task.id, ""), { persist: true });
+  const contentBeforeSave = task.notes;
+  const sessionBeforeSave = { ...task.knowledgeNote };
+  const taskUpdatedAtBeforeSave = task.updatedAt;
   try {
     const fileCheck = await verifyKnowledgeFileBeforeSave(task, { saveAs, allowExternalOverwrite });
     if (fileCheck) {
@@ -1235,7 +1262,7 @@ async function saveKnowledgeTask(taskId, { saveAs = false, allowExternalOverwrit
       title: task.title,
       content: task.notes,
       assets: stagedAssets.assets,
-      expectedLastSavedHash: saveAs ? null : note.lastSavedHash,
+      expectedLastSavedHash: saveAs ? null : sessionBeforeSave.lastSavedHash,
       allowExternalOverwrite,
       boundPaths: boundKnowledgeFilePaths(task.id),
     });
@@ -1251,12 +1278,18 @@ async function saveKnowledgeTask(taskId, { saveAs = false, allowExternalOverwrit
 
     task.notes = result.content ?? task.notes;
     rememberKnowledgeAssetFiles(result.assetFiles);
-    task.knowledgeNote = knowledgeDocument.markDocumentSaved(note, result);
+    task.knowledgeNote = knowledgeDocument.markDocumentSaved(sessionBeforeSave, result);
     task.knowledgeNote.updatedAt = now();
     task.updatedAt = now();
     save();
     const taskDataSaved = await flushSave();
     if (!taskDataSaved) {
+      if (allowExternalOverwrite && sessionBeforeSave.documentState === "EXTERNAL_CHANGED") {
+        task.notes = contentBeforeSave;
+        task.knowledgeNote = sessionBeforeSave;
+        task.updatedAt = taskUpdatedAtBeforeSave;
+        save();
+      }
       return {
         success: false,
         code: "TASK_DATA_SAVE_FAILED",
@@ -1264,9 +1297,13 @@ async function saveKnowledgeTask(taskId, { saveAs = false, allowExternalOverwrit
         markdownSaved: true,
       };
     }
-    await clearKnowledgeRecoveryRecord(task.knowledgeNote.noteId);
-    await syncKnowledgeFileWatcher(task);
+    try {
+      await syncKnowledgeFileWatcher(task);
+    } catch (error) {
+      console.error("Failed to update knowledge file watcher baseline after save.", error);
+    }
     knowledgeExternalSnapshots.delete(task.knowledgeNote.noteId);
+    await clearKnowledgeRecoveryRecord(task.knowledgeNote.noteId);
     return result;
   } catch (error) {
     console.error("Failed to save knowledge note.", error);
