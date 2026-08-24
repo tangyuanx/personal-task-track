@@ -303,7 +303,16 @@ function createTodayWidgetController({ app, BrowserWindow, ipcMain, screen, getM
   }
 
   async function resizeWidget(size) {
-    if (!widgetWindow || widgetWindow.isDestroyed() || preferences.compact) return widgetState();
+    if (!widgetWindow || widgetWindow.isDestroyed()) return widgetState();
+    if (preferences.compact) {
+      if (size?.transient !== true) return widgetState();
+      currentSize = {
+        width: 296,
+        height: Math.max(49, Math.min(420, Math.round(Number(size?.height) || 49))),
+      };
+      positionWidget();
+      return widgetState();
+    }
     const bounds = widgetWindow.getBounds();
     const workArea = screen.getDisplayMatching(bounds).workArea;
     const edge = size?.edge === "top" ? "top" : "bottom";

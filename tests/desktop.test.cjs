@@ -2389,9 +2389,13 @@ test("production Today widget uses its dedicated frontend and a sandboxed Electr
   assert.match(runtime, /currentSnapshot\.items\) \? currentSnapshot\.items : \[\]/);
   assert.match(runtime, /bridge\.resize\(\{ height: pendingResizeHeight, edge \}\)/);
   assert.match(runtime, /startHeight: window\.innerHeight/);
+  assert.match(runtime, /COMPACT_MENU_WINDOW_HEIGHT = 340/);
+  assert.match(runtime, /bridge\.resize\(\{ height: COMPACT_MENU_WINDOW_HEIGHT, transient: true \}\)/);
+  assert.match(runtime, /bridge\.resize\(\{ height: 49, transient: true \}\)/);
   assert.match(demo, /data-widget-resize="top"/);
   assert.match(demo, /data-widget-resize="bottom"/);
   assert.match(demo, /body\.widget-runtime \.task-list\s*\{[\s\S]*overflow-y:\s*auto;/);
+  assert.match(demo, /body\.widget-runtime \.task-list::\-webkit-scrollbar\s*\{[\s\S]*display:\s*none;/);
   assert.match(runtime, /function applyAppearance/);
   assert.match(runtime, /document\.documentElement\.dataset\.zhFont/);
   assert.match(runtime, /--widget-font-scale/);
@@ -2409,6 +2413,7 @@ test("production Today widget uses its dedicated frontend and a sandboxed Electr
   assert.match(widgetMain, /setAlwaysOnTop[\s\S]*"screen-saver"/);
   assert.match(widgetMain, /moveTop\(\)/);
   assert.match(widgetMain, /getDisplayMatching/);
+  assert.match(widgetMain, /if \(preferences\.compact\)[\s\S]*size\?\.transient !== true[\s\S]*height:\s*Math\.max\(49, Math\.min\(420/);
   assert.match(widgetMain, /position:\s*"custom"[\s\S]*height,[\s\S]*customBounds:/);
   assert.match(widgetMain, /function stop\(\)[\s\S]*widgetWindow\.destroy\(\)/);
   assert.match(appMain, /if \(!isQuitting && !updateInstallPrepared\) app\.quit\(\)/);

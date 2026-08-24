@@ -2,6 +2,8 @@
   const bridge = window.personalTaskTrack?.todayWidget;
   if (!bridge) return;
 
+  const COMPACT_MENU_WINDOW_HEIGHT = 340;
+
   document.body.classList.add("widget-runtime");
 
   const widget = document.querySelector("#widget");
@@ -22,6 +24,7 @@
   let resizeGesture = null;
   let resizeFrame = 0;
   let pendingResizeHeight = 0;
+  let compactMenuExpanded = false;
 
   function escapeHtml(value) {
     return String(value || "")
@@ -42,6 +45,17 @@
   function closeMenu() {
     menu.classList.remove("is-open");
     menuToggle.setAttribute("aria-expanded", "false");
+    syncCompactMenuWindow(false);
+  }
+
+  function syncCompactMenuWindow(open) {
+    const wasExpanded = compactMenuExpanded;
+    compactMenuExpanded = open && widget.classList.contains("is-compact");
+    if (compactMenuExpanded) {
+      void bridge.resize({ height: COMPACT_MENU_WINDOW_HEIGHT, transient: true });
+    } else if (wasExpanded && widget.classList.contains("is-compact")) {
+      void bridge.resize({ height: 49, transient: true });
+    }
   }
 
   function formatToday(value) {
@@ -220,6 +234,7 @@
     const open = !menu.classList.contains("is-open");
     menu.classList.toggle("is-open", open);
     menuToggle.setAttribute("aria-expanded", String(open));
+    syncCompactMenuWindow(open);
   });
 
   document.addEventListener("pointerdown", (event) => {
