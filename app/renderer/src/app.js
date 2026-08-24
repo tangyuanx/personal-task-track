@@ -1792,7 +1792,7 @@ function renderTaskPage(task) {
 
       <section class="task-brief brief-strip" aria-label="任务简报">
         ${renderBriefField("背景", textareaHtml("description", task.description, task.id), "", false, "background")}
-        ${renderBriefField("进展", textareaHtml("hypothesis", task.hypothesis, task.id), task.hypothesisUpdatedAt, false, "hypothesis")}
+        ${renderBriefField("进展", textareaHtml("hypothesis", task.hypothesis, task.id), task.hypothesisUpdatedAt, false, "hypothesis", summary)}
         ${renderBriefField("结论", textareaHtml("conclusion", task.conclusion, task.id), "", needsConclusion, "conclusion")}
       </section>
 
@@ -2054,10 +2054,35 @@ function renderTaskRecurrenceControls(task) {
   `;
 }
 
-function renderBriefField(label, control, timestamp = "", attention = false, variant = "") {
+function briefFieldIcon(name, className = "brief-field-icon") {
+  return `<svg class="${className}" viewBox="0 0 24 24" aria-hidden="true"><use href="src/assets/feather/feather-sprite.svg#${name}"></use></svg>`;
+}
+
+function renderBriefProgress(summary) {
+  const total = Math.max(0, Number(summary?.total) || 0);
+  const done = Math.min(total, Math.max(0, Number(summary?.done) || 0));
+  const percent = total ? Math.round((done / total) * 100) : 0;
+  return `<span class="brief-progress-ring" style="--brief-progress:${percent}" role="img" aria-label="节点完成进度 ${percent}%"><span>${percent}%</span></span>`;
+}
+
+function renderBriefField(label, control, timestamp = "", attention = false, variant = "", summary = null) {
+  const iconNames = {
+    background: "file-text",
+    hypothesis: "bar-chart-2",
+    conclusion: "check-square",
+  };
+  const headerAction =
+    variant === "hypothesis"
+      ? renderBriefProgress(summary)
+      : variant === "conclusion"
+        ? briefFieldIcon("edit-3", "brief-field-icon brief-edit-icon")
+        : "";
   return `
     <label class="brief-field brief-cell ${variant} ${attention ? "needs-attention" : ""}">
-      <span class="brief-label"><b>${label}</b>${timestamp ? `<time class="brief-stamp">${formatShort(timestamp)}</time>` : ""}</span>
+      <span class="brief-label">
+        <span class="brief-label-title">${briefFieldIcon(iconNames[variant] || "file-text")}<b>${label}</b></span>
+        <span class="brief-label-action">${timestamp ? `<time class="brief-stamp">${formatShort(timestamp)}</time>` : ""}${headerAction}</span>
+      </span>
       ${control}
     </label>
   `;

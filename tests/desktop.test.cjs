@@ -3215,6 +3215,7 @@ test("recurrence settings match the selected compact popover and support multipl
     };
   })()`);
   const finalRules = styles.slice(styles.lastIndexOf("v0.1.109 — demo-matched recurrence popover"));
+  const briefCardRules = styles.slice(styles.lastIndexOf("v0.1.131 — reference-matched workbench brief cards"));
 
   assert.match(result.html, /class="task-recurrence-trigger"/);
   assert.match(result.html, /aria-expanded="true"/);
@@ -3231,9 +3232,13 @@ test("recurrence settings match the selected compact popover and support multipl
   assert.match(finalRules, /\.task-recurrence-popover\s*\{[\s\S]*width:\s*min\(372px,/);
   assert.match(finalRules, /\.task-recurrence-mode-switch\s*\{[\s\S]*grid-template-columns:\s*repeat\(3,/);
   assert.match(finalRules, /\.task-recurrence-weekday-list\s*\{[\s\S]*grid-template-columns:\s*repeat\(7,/);
-  assert.match(finalRules, /\.brief-strip\.task-brief\s*\{[\s\S]*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\);[\s\S]*min-height:\s*94px;/);
-  assert.match(finalRules, /\.brief-cell\.brief-field,[\s\S]*border-bottom:\s*1px solid/);
-  assert.match(finalRules, /\.brief-label \.brief-stamp\s*\{[\s\S]*display:\s*none;/);
+  assert.match(briefCardRules, /\.brief-strip\.task-brief\s*\{[\s\S]*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\);[\s\S]*gap:\s*clamp\(12px, 1\.4vw, 18px\);[\s\S]*min-height:\s*142px;/);
+  assert.match(briefCardRules, /\.brief-cell\.brief-field,[\s\S]*border:\s*1px solid[\s\S]*border-radius:\s*14px;[\s\S]*box-shadow:/);
+  assert.match(briefCardRules, /\.brief-cell\.brief-field:focus-within\s*\{[\s\S]*border-color:[\s\S]*box-shadow:/);
+  assert.match(briefCardRules, /\.brief-label \.brief-stamp\s*\{[\s\S]*display:\s*none;/);
+  assert.match(result.pageHtml, /class="brief-field brief-cell background/);
+  assert.match(result.pageHtml, /class="brief-field brief-cell hypothesis[\s\S]*class="brief-progress-ring"/);
+  assert.match(result.pageHtml, /src\/assets\/feather\/feather-sprite\.svg#(?:file-text|bar-chart-2|check-square|edit-3)/);
 });
 
 test("group and node mutations do not steal repository title focus", async () => {
