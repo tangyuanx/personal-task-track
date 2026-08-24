@@ -10246,3 +10246,466 @@ body.flow-node-reordering * {
   background: var(--surface-strong, #ffffff);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--focus) 20%, transparent);
 }
+
+/* Integrated deadline calendar and optional task commitments. */
+.task-deadline-control {
+  display: inline-flex;
+  min-height: 20px;
+  align-items: center;
+  gap: 5px;
+  color: var(--handoff-muted, var(--muted));
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.task-deadline-control svg {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.6;
+}
+
+.task-deadline-control input {
+  width: 142px;
+  height: 20px;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--handoff-ink, var(--ink));
+  font: inherit;
+  font-size: 11px;
+  outline: 0;
+}
+
+.task-deadline-control input:focus {
+  border-bottom-color: color-mix(in srgb, var(--focus) 60%, transparent);
+}
+
+.task-deadline-control.overdue,
+.task-deadline-badge.overdue {
+  color: var(--red, #b4232f);
+}
+
+.task-deadline-control.today,
+.task-deadline-badge.today {
+  color: var(--priority-high, #9a6b26);
+}
+
+.task-deadline-suggestion {
+  color: var(--priority-high, #9a6b26);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.task-row.task-item .task-row-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.task-deadline-badge {
+  color: var(--handoff-muted, var(--muted));
+  font-family: var(--mono);
+  font-size: 8.5px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.calendar-overlay {
+  position: fixed;
+  z-index: 34;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(16, 18, 16, 0.31);
+  backdrop-filter: blur(10px);
+}
+
+.calendar-panel {
+  display: flex;
+  width: min(940px, calc(100vw - 48px));
+  max-height: min(720px, calc(100vh - 48px));
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--handoff-line-strong, var(--line));
+  border-radius: 14px;
+  background: var(--handoff-surface, var(--panel));
+  color: var(--handoff-ink, var(--ink));
+  box-shadow: 0 22px 70px var(--shadow);
+}
+
+.calendar-head {
+  display: flex;
+  min-height: 76px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 17px 20px;
+  border-bottom: 1px solid var(--handoff-line-soft, var(--line-soft));
+}
+
+.calendar-head > div:first-child > span,
+.calendar-agenda header span {
+  color: var(--handoff-muted, var(--muted));
+  font-family: var(--mono);
+  font-size: 10px;
+}
+
+.calendar-head h2 {
+  margin: 3px 0 0;
+  font-size: 22px;
+  letter-spacing: -0.02em;
+}
+
+.calendar-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.calendar-review-link {
+  min-height: 32px;
+  border: 1px solid var(--handoff-line-strong, var(--line));
+  border-radius: 8px;
+  padding: 0 12px;
+  background: transparent;
+  color: var(--handoff-muted, var(--muted));
+  font-size: 11px;
+  font-weight: 680;
+}
+
+.calendar-review-link:hover,
+.calendar-review-link:focus-visible {
+  border-color: color-mix(in srgb, var(--focus) 46%, var(--handoff-line-strong, var(--line)));
+  color: var(--focus);
+}
+
+.calendar-quick-filters {
+  display: flex;
+  gap: 5px;
+  padding: 12px 20px 0;
+}
+
+.calendar-quick-filters button {
+  min-height: 28px;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  padding: 0 9px;
+  background: transparent;
+  color: var(--handoff-muted, var(--muted));
+  font-size: 11px;
+}
+
+.calendar-quick-filters button.active {
+  border-bottom-color: var(--focus);
+  color: var(--handoff-ink, var(--ink));
+  font-weight: 700;
+}
+
+.calendar-body {
+  display: grid;
+  min-height: 0;
+  grid-template-columns: minmax(0, 1.55fr) minmax(250px, .72fr);
+  gap: 18px;
+  padding: 15px 20px 20px;
+}
+
+.calendar-month,
+.calendar-agenda {
+  min-width: 0;
+  border: 1px solid var(--handoff-line-strong, var(--line));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--handoff-surface, var(--panel)) 93%, var(--focus) 7%);
+}
+
+.calendar-month {
+  padding: 12px;
+}
+
+.calendar-month-head {
+  display: grid;
+  min-height: 34px;
+  grid-template-columns: 72px 1fr 72px;
+  align-items: center;
+  margin-bottom: 7px;
+}
+
+.calendar-month-head > strong {
+  text-align: center;
+  font-size: 14px;
+}
+
+.calendar-month-head > div {
+  display: flex;
+  justify-content: flex-end;
+  gap: 3px;
+}
+
+.calendar-month-head button {
+  min-width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 6px;
+  padding: 0 6px;
+  background: transparent;
+  color: var(--handoff-muted, var(--muted));
+  font-size: 12px;
+}
+
+.calendar-month-head button:hover,
+.calendar-month-head button:focus-visible {
+  background: color-mix(in srgb, var(--focus) 9%, transparent);
+  color: var(--focus);
+}
+
+.calendar-weekdays,
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.calendar-weekdays span {
+  padding: 6px 0 8px;
+  color: var(--handoff-muted, var(--muted));
+  font-size: 9px;
+  text-align: center;
+}
+
+.calendar-grid {
+  overflow: hidden;
+  border-top: 1px solid var(--handoff-line-soft, var(--line-soft));
+  border-left: 1px solid var(--handoff-line-soft, var(--line-soft));
+  border-radius: 9px;
+}
+
+.calendar-day {
+  position: relative;
+  display: grid;
+  min-height: 57px;
+  align-content: space-between;
+  justify-items: start;
+  border: 0;
+  border-right: 1px solid var(--handoff-line-soft, var(--line-soft));
+  border-bottom: 1px solid var(--handoff-line-soft, var(--line-soft));
+  border-radius: 0;
+  padding: 7px;
+  background: transparent;
+  color: var(--handoff-ink, var(--ink));
+  font-size: 11px;
+  text-align: left;
+}
+
+.calendar-day:hover,
+.calendar-day:focus-visible {
+  background: color-mix(in srgb, var(--focus) 7%, transparent);
+  outline: none;
+}
+
+.calendar-day.outside {
+  color: color-mix(in srgb, var(--handoff-muted, var(--muted)) 52%, transparent);
+}
+
+.calendar-day.today > span:first-child {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--focus) 55%, transparent);
+  border-radius: 50%;
+  color: var(--focus);
+  font-weight: 760;
+}
+
+.calendar-day.selected {
+  background: color-mix(in srgb, var(--focus) 10%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--focus) 58%, transparent);
+}
+
+.calendar-day.has-overdue > span:first-child {
+  color: var(--red, #b4232f);
+}
+
+.calendar-day small {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  color: var(--handoff-muted, var(--muted));
+  font-family: var(--mono);
+  font-size: 8px;
+}
+
+.calendar-deadline-rail {
+  display: flex;
+  width: 100%;
+  gap: 3px;
+  padding-bottom: 1px;
+}
+
+.calendar-deadline-rail i {
+  width: 12px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--focus);
+}
+
+.calendar-deadline-rail i.priority-high { background: var(--red, #b4232f); }
+.calendar-deadline-rail i.priority-medium { background: var(--priority-high, #9a6b26); }
+.calendar-deadline-rail i.done { opacity: .28; }
+
+.calendar-agenda {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.calendar-agenda > header {
+  display: flex;
+  min-height: 62px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 11px 13px;
+  border-bottom: 1px solid var(--handoff-line-soft, var(--line-soft));
+}
+
+.calendar-agenda > header > div {
+  display: grid;
+  gap: 3px;
+}
+
+.calendar-agenda > header strong {
+  font-size: 13px;
+}
+
+.calendar-agenda > header button {
+  border: 0;
+  padding: 4px 0;
+  background: transparent;
+  color: var(--focus);
+  font-size: 10px;
+  font-weight: 680;
+}
+
+.calendar-agenda > header button:disabled {
+  color: var(--handoff-muted, var(--muted));
+  opacity: .45;
+}
+
+.calendar-agenda-list {
+  display: flex;
+  min-height: 260px;
+  flex: 1 1 auto;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 6px;
+}
+
+.calendar-agenda-task {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 7px;
+  border: 0;
+  border-bottom: 1px solid var(--handoff-line-soft, var(--line-soft));
+  border-radius: 0;
+  padding: 10px 7px;
+  background: transparent;
+  color: var(--handoff-ink, var(--ink));
+  text-align: left;
+}
+
+.calendar-agenda-task:hover,
+.calendar-agenda-task:focus-visible {
+  background: color-mix(in srgb, var(--focus) 7%, transparent);
+  outline: none;
+}
+
+.calendar-agenda-time {
+  color: var(--handoff-muted, var(--muted));
+  font-family: var(--mono);
+  font-size: 10px;
+}
+
+.calendar-agenda-task > span:last-child {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.calendar-agenda-task strong {
+  overflow: hidden;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calendar-agenda-task small {
+  color: var(--handoff-muted, var(--muted));
+  font-size: 9px;
+}
+
+.calendar-agenda-task.overdue .calendar-agenda-time,
+.calendar-agenda-task.overdue small {
+  color: var(--red, #b4232f);
+}
+
+.calendar-agenda-empty {
+  display: grid;
+  min-height: 210px;
+  place-items: center;
+  padding: 20px;
+  color: var(--handoff-muted, var(--muted));
+  font-size: 10px;
+  text-align: center;
+}
+
+:root[data-theme="dark"] .task-deadline-control input {
+  color-scheme: dark;
+}
+
+:root[data-theme="dark"] .calendar-overlay {
+  background: rgba(4, 8, 6, 0.7);
+}
+
+:root[data-theme="dark"] .calendar-panel,
+:root[data-theme="dark"] .calendar-month,
+:root[data-theme="dark"] .calendar-agenda {
+  border-color: var(--handoff-line-strong, #3f4c44);
+  background: #202b25;
+  color: var(--handoff-ink, #edf3ee);
+}
+
+@media (max-width: 760px) {
+  .calendar-overlay {
+    place-items: end center;
+    padding: 12px;
+  }
+
+  .calendar-panel {
+    width: 100%;
+    max-height: calc(100dvh - 24px);
+  }
+
+  .calendar-body {
+    grid-template-columns: minmax(0, 1fr);
+    overflow-y: auto;
+  }
+
+  .calendar-day {
+    min-height: 48px;
+  }
+
+  .calendar-agenda-list {
+    min-height: 160px;
+  }
+
+  .task-deadline-suggestion {
+    display: none;
+  }
+}

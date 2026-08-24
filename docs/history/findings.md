@@ -1,5 +1,26 @@
 # Findings & Decisions
 
+## Phase 34 Integrated Calendar, Optional Deadlines, and Reminders (2026-08-24)
+- The user explicitly requested implementation and formal publication after local verification.
+- Before final publication, remote `main` advanced by four release commits from `v0.1.125` to `v0.1.129`. These releases make update publication atomic, add Today-list scrolling, keep compact Today-widget controls visible, and make knowledge-conflict actions transactional; the calendar work must be replayed onto that baseline rather than push the obsolete `0.1.126` candidate.
+- The initial local baseline was synchronized at `v0.1.125`; final integration fast-forwarded `main` to remote `v0.1.129` before replaying the calendar work.
+- A deadline is optional for every task. Task creation time remains historical metadata and must never be inferred as an execution start or due date; high priority may show a suggestion but never a validation requirement.
+- The existing compact calendar control filters by the task's latest activity date. It is not a deadline calendar and must not silently change meaning without preserving access to history/review workflows.
+- The current lower-left `任务回顾` shortcut will become the `日历` entry. The review action will move into the calendar panel's upper-right header as requested.
+- The established manual ordering remains the source of truth in normal task lists. Deadline-specific Today/This Week/Overdue views may order matching tasks by deadline without rewriting persisted task order.
+- Visual direction: preserve the app's paper surfaces, quiet ink, green focus color, amber priority, and restrained red danger token. The calendar's signature element is a compact deadline rail inside each date cell, not a decorative standalone dashboard.
+- System reminders will apply only to incomplete tasks with valid explicit deadlines. They must be deduplicated across scans and application restarts and must not require the user to keep the calendar open.
+- The task page has a compact property line that already owns priority, status, group, and recurrence. The optional deadline belongs there as a native local date/time control; this keeps it attached to the task model instead of introducing a creation-time wizard.
+- The existing `today` task filter represents explicit Today tags and recurrence occurrences. Deadline Today/This Week/Overdue must remain a separate composable dimension so existing behavior is not redefined.
+- The calendar is global across task groups, while ordinary unfiltered lists remain group-scoped. Selecting a due range or exact calendar date temporarily scopes the repository globally and orders matches by the explicit deadline.
+- Recurrence time and deadline remain independent concepts. Recurrence controls when a task becomes active again; an explicit deadline is not silently shifted by recurrence because doing so would overwrite a user-entered commitment.
+- Reminder stages are 24 hours, 2 hours, and overdue. A scan emits only the most urgent newly reached stage per task, groups simultaneous tasks into at most one notification per stage, and records successful emissions in a separate atomic user-data file.
+- Notification clicks focus the main window. A single-task notification opens that task; a grouped notification opens the calendar. Unsupported system notifications remain observable through the bridge but do not affect task persistence.
+- Final automated verification at `0.1.130` passes 125 desktop/client tests and 11 bug-report service tests. One pre-integration run briefly exposed the existing FileWatcher test's fixed-delay timing flake; its immediate focused rerun and later complete runs passed.
+- Formal `0.1.130` release builds succeed for macOS ARM64 (DMG + ZIP) and Windows x64 (NSIS). The release directory contains no AppleDouble files, update metadata validates atomically against all eight artifacts, and the packaged macOS ASAR contains both the remote reliability updates and the new deadline/calendar modules.
+- macOS remains intentionally unsigned because `build.mac.identity` is `null`; this does not invalidate the package contents but may trigger Gatekeeper friction. Desktop visual interaction inspection could not be completed because the host Mac was locked, so automated render/source contracts and packaged-content checks are the verified UI evidence for this release.
+- The user explicitly authorized deleting the ignored `.planning/knowledge-note-local-storage` input directory. It was removed and a repository-wide directory search returned no remaining copy before remote integration.
+
 ## Phase 33 User-confirmed Seamless In-app Update (2026-08-24)
 - The requirement is not unattended automatic updating. Automatic checks may report availability, but download and installation must begin only after an explicit user upgrade action.
 - This work remains local. Preserve the existing uncommitted node-record focus CSS/test changes; do not bump the package version, build a release, commit, tag, or push.

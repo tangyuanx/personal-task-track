@@ -30,6 +30,7 @@ const desktopBugReports = window.personalTaskTrack?.bugReports;
 const desktopUpdates = window.personalTaskTrack?.updates;
 const desktopTodayWidget = window.personalTaskTrack?.todayWidget;
 const desktopDialogs = window.personalTaskTrack?.dialogs;
+const desktopDeadlineReminders = window.personalTaskTrack?.deadlineReminders;
 const desktopEnvironment = window.personalTaskTrack?.environment || {};
 const desktopPlatform = window.personalTaskTrack?.platform || "";
 const APP_VERSION = window.personalTaskTrack?.appVersion || "";
@@ -53,6 +54,13 @@ const taskFilterLabels = {
   done: "已完成",
   blocked: "卡住",
   later: "稍后",
+};
+
+const taskDeadlineFilterLabels = {
+  all: "全部截止",
+  today: "今天截止",
+  week: "本周截止",
+  overdue: "已逾期",
 };
 
 const priorityFilterLabels = {
@@ -195,6 +203,7 @@ let state = {
   query: "",
   taskFilter: "all",
   taskDateFilter: "",
+  taskDeadlineFilter: "all",
   priorityFilter: "all",
   newTaskPriority: "medium",
   markdownMode: "edit",
@@ -202,6 +211,7 @@ let state = {
   zhFont: "system",
   enFont: "inter",
   settingsOpen: false,
+  calendarOpen: false,
   reviewOpen: false,
   feedbackOpen: false,
   feedbackDraft: createEmptyFeedbackDraft(),
@@ -217,6 +227,8 @@ let state = {
   reviewDateField: "updated",
   reviewStartDate: "",
   reviewEndDate: "",
+  calendarMonth: "",
+  calendarSelectedDate: "",
   taskPane: "flow",
   nodeDetailFullscreen: false,
   focusTaskTitleId: "",
@@ -272,8 +284,11 @@ let unsubscribeAppUpdates = null;
 let unsubscribeTodayWidgetState = null;
 let unsubscribeTodayWidgetOpenTask = null;
 let unsubscribeTodayWidgetCompletion = null;
+let unsubscribeDeadlineReminderTask = null;
+let unsubscribeDeadlineReminderCalendar = null;
 let unsubscribeKnowledgeFileChanges = null;
 let todayWidgetWindowState = { visible: Boolean(desktopTodayWidget) };
+let deadlineReminderSignature = "";
 
 
 // ============================================================
@@ -416,6 +431,7 @@ function normalizeTasks(tasks) {
         conclusion: normalizeText(task.conclusion),
         createdAt,
         updatedAt,
+        deadlineAt: normalizeOptionalDateValue(task.deadlineAt),
         resolvedAt: normalizeOptionalDateValue(task.resolvedAt),
         nodes: normalizeNodes(task.nodes, taskId),
       };
@@ -1514,6 +1530,7 @@ function render() {
       </section>
       <div id="context-menu-root">${renderContextMenu()}</div>
       ${state.settingsOpen ? renderSettingsPanel() : ""}
+      ${state.calendarOpen ? renderCalendarPanel() : ""}
       ${state.reviewOpen ? renderReviewPanel() : ""}
       ${state.feedbackOpen ? renderBugReportPanel() : ""}
     </main>
@@ -1526,6 +1543,7 @@ function render() {
   resizeTaskBriefTextareas();
   focusPendingElement();
   publishTodayWidgetSnapshot();
+  publishDeadlineReminderSnapshot();
   window.requestAnimationFrame(() => mountMilkdownEditors());
 }
 
@@ -1608,26 +1626,16 @@ function renderSidebar() {
                 .join("")}
             </div>
             <button
-              class="task-calendar-filter ${state.taskDateFilter ? "active" : ""}"
+              class="task-calendar-filter ${state.taskDeadlineFilter !== "all" || state.taskDateFilter ? "active" : ""}"
               type="button"
-              popovertarget="task-date-filter-popover"
-              title="按最后活动日期筛选"
-              aria-label="${state.taskDateFilter ? `当前按 ${escAttr(state.taskDateFilter)} 的最后活动日期筛选` : "按最后活动日期筛选"}"
-              aria-pressed="${Boolean(state.taskDateFilter)}"
+              data-action="toggle-calendar"
+              title="打开截止日历"
+              aria-label="打开截止日历${deadlineFilterLabel() ? `，当前筛选 ${escAttr(deadlineFilterLabel())}` : ""}"
+              aria-pressed="${state.calendarOpen}"
             >
               <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M16 3v4M8 3v4M3 10h18"></path></svg>
-              ${state.taskDateFilter ? `<span>${taskDateFilterLabel(state.taskDateFilter)}</span>` : ""}
+              ${deadlineFilterLabel() ? `<span>${esc(deadlineFilterLabel())}</span>` : ""}
             </button>
-            <div class="task-date-filter-popover" id="task-date-filter-popover" popover>
-              <label>
-                <span>最后活动日期</span>
-                <input type="date" data-task-date-filter value="${escAttr(state.taskDateFilter)}" aria-label="选择任务最后活动日期" />
-              </label>
-              <footer>
-                <small>与状态、优先级同时生效</small>
-                ${state.taskDateFilter ? `<button type="button" data-action="clear-task-date-filter">清除</button>` : ""}
-              </footer>
-            </div>
           </div>
           <label class="task-priority-filter">
             <span>优先级 ·</span>
@@ -1650,7 +1658,7 @@ function renderSidebar() {
           aria-pressed="${state.theme === "dark"}"
         >${state.theme === "dark" ? `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path></svg>` : `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9Z"></path></svg>`}</button>
         <span class="autosave-status">自动保存已开启</span>
-        <button class="review-shortcut" type="button" data-action="toggle-review">任务回顾</button>
+        <button class="review-shortcut calendar-shortcut" type="button" data-action="toggle-calendar">日历</button>
       </div>
     </aside>
   `;
@@ -1723,6 +1731,7 @@ function renderTaskItem(task, displayOrder) {
         <span class="task-next-line">下一步：${esc(subtitle)}</span>
       </span>
       <span class="task-row-meta">
+        ${renderTaskDeadlineBadge(task)}
         <span class="task-priority-control ${task.priority}">${selectHtml("priority", task.priority, repositoryPriorityLabels, task.id)}</span>
       </span>
       <button class="task-check repository-complete ${task.status === "done" ? "is-checked" : ""}" type="button" title="${task.status === "done" ? "标记为未完成" : "标记为完成"}" aria-label="${task.status === "done" ? "标记为未完成" : "标记为完成"}" aria-pressed="${task.status === "done"}" data-action="toggle-task-done" data-task-id="${task.id}"></button>
@@ -1770,6 +1779,7 @@ function renderTaskPage(task) {
             <span class="task-context-item status ${task.status === "done" ? "resolved" : "attention"}">${task.status === "done" ? "已完成" : "处理中"}</span>
             <span class="task-context-progress">${summary.done}/${summary.total || 0} 节点</span>
             <label class="task-context-group"><span>分组</span>${selectHtml("groupId", task.groupId, taskGroupOptions(), task.id)}</label>
+            ${renderTaskDeadlineControl(task)}
             ${renderTaskRecurrenceControls(task)}
           </div>
         </div>
@@ -1933,6 +1943,47 @@ function renderTaskActiveTagPills(task) {
     .filter(([, active]) => active)
     .map(([tag]) => `<span class="task-context-item task-tag">${taskTagLabels[tag]}</span>`)
     .join("");
+}
+
+function renderTaskDeadlineBadge(task, at = new Date()) {
+  const deadline = safeDate(task.deadlineAt);
+  if (!deadline) return "";
+  const status = taskDeadlineStatus(task, at);
+  const label = status === "overdue"
+    ? `逾期 ${taskDateFilterLabel(localDateKey(deadline))}`
+    : localDateKey(deadline) === localDateKey(at)
+      ? `今天 ${String(deadline.getHours()).padStart(2, "0")}:${String(deadline.getMinutes()).padStart(2, "0")}`
+      : taskDateFilterLabel(localDateKey(deadline));
+  return `<time class="task-deadline-badge ${status}" datetime="${escAttr(deadline.toISOString())}" title="截止：${escAttr(formatMinuteStamp(deadline))}">${esc(label)}</time>`;
+}
+
+function renderTaskDeadlineControl(task) {
+  const deadline = safeDate(task.deadlineAt);
+  const status = taskDeadlineStatus(task);
+  const suggestion = task.priority === "high" && !deadline
+    ? `<span class="task-deadline-suggestion">高优任务建议设置截止时间</span>`
+    : "";
+  return `
+    <label class="task-deadline-control ${status}" title="截止时间可选，不会使用任务创建时间自动推断">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M16 3v4M8 3v4M3 10h18"></path></svg>
+      <span>截止</span>
+      <input type="datetime-local" data-deadline-field data-task-id="${task.id}" value="${escAttr(deadlineInputValue(task.deadlineAt))}" aria-label="任务截止时间（可选）" />
+    </label>
+    ${suggestion}
+  `;
+}
+
+function deadlineInputValue(value) {
+  const date = safeDate(value);
+  if (!date) return "";
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 16);
+}
+
+function normalizeDeadlineInput(value) {
+  if (!String(value || "").trim()) return "";
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) ? date.toISOString() : "";
 }
 
 function renderTaskRecurrenceControls(task) {
@@ -2269,8 +2320,9 @@ function syncContextMenuRoot() {
  * Get tasks matching current filters (search query + task filter + priority filter).
  * @returns {Array} Filtered task list
  */
-function filteredTasks({ includeQuery = true } = {}) {
+function filteredTasks({ includeQuery = true, at = new Date() } = {}) {
   const q = state.query.trim().toLowerCase();
+  const deadlineScoped = state.taskDeadlineFilter !== "all" || Boolean(state.taskDateFilter);
   return taskListScopeTasks()
     .filter((task) => {
       const tags = normalizeTaskTags(task.tags);
@@ -2281,7 +2333,7 @@ function filteredTasks({ includeQuery = true } = {}) {
       if (state.taskFilter === "done" && task.status !== "done") return false;
       if (state.taskFilter === "blocked" && !tags.blocked && !hasBlocked) return false;
       if (state.taskFilter === "later" && !tags.later && !hasLater) return false;
-      if (state.taskDateFilter && localDateKey(latestTaskTime(task)) !== state.taskDateFilter) return false;
+      if (!matchesTaskDeadlineFilter(task, at)) return false;
       if (state.priorityFilter !== "all" && task.priority !== state.priorityFilter) return false;
       if (includeQuery && q) {
         const taskText = `${task.title} ${task.description} ${task.hypothesis} ${task.conclusion}`.toLowerCase();
@@ -2290,16 +2342,58 @@ function filteredTasks({ includeQuery = true } = {}) {
       }
       return true;
     })
-    .sort((a, b) => a.order - b.order);
+    .sort(deadlineScoped ? compareTasksByDeadline : (a, b) => a.order - b.order);
 }
 
 function taskListScopeTasks() {
-  return state.taskFilter === "today" ? state.tasks : tasksInActiveGroup();
+  return state.taskFilter === "today" || state.taskDeadlineFilter !== "all" || state.taskDateFilter
+    ? state.tasks
+    : tasksInActiveGroup();
 }
 
 function taskListStatsTasks() {
+  if (state.taskDeadlineFilter !== "all" || state.taskDateFilter) {
+    return state.tasks.filter((task) => matchesTaskDeadlineFilter(task));
+  }
   if (state.taskFilter !== "today") return tasksInActiveGroup();
   return state.tasks.filter((task) => isTaskScheduledForToday(task));
+}
+
+function taskDeadlineStatus(task, at = new Date()) {
+  const deadline = safeDate(task?.deadlineAt);
+  if (!deadline) return "none";
+  if (task.status === "done") return "done";
+  if (deadline.getTime() < at.getTime()) return "overdue";
+  if (localDateKey(deadline) === localDateKey(at)) return "today";
+  return "upcoming";
+}
+
+function deadlineWeekRange(at = new Date()) {
+  const date = at instanceof Date ? at : new Date(at);
+  const day = date.getDay() || 7;
+  const start = new Date(date.getFullYear(), date.getMonth(), date.getDate() - day + 1);
+  const end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 7);
+  return { start, end };
+}
+
+function matchesTaskDeadlineFilter(task, at = new Date()) {
+  const deadline = safeDate(task?.deadlineAt);
+  if (state.taskDateFilter) return Boolean(deadline && localDateKey(deadline) === state.taskDateFilter);
+  if (state.taskDeadlineFilter === "all") return true;
+  if (!deadline) return false;
+  if (state.taskDeadlineFilter === "today") return localDateKey(deadline) === localDateKey(at);
+  if (state.taskDeadlineFilter === "overdue") return task.status !== "done" && deadline.getTime() < at.getTime();
+  if (state.taskDeadlineFilter === "week") {
+    const range = deadlineWeekRange(at);
+    return deadline >= range.start && deadline < range.end;
+  }
+  return true;
+}
+
+function compareTasksByDeadline(a, b) {
+  const aTime = safeDate(a.deadlineAt)?.getTime() ?? Number.POSITIVE_INFINITY;
+  const bTime = safeDate(b.deadlineAt)?.getTime() ?? Number.POSITIVE_INFINITY;
+  return aTime - bTime || a.order - b.order;
 }
 
 function tasksInActiveGroup() {
@@ -2380,7 +2474,8 @@ function isRecurringTaskDue(task, at = new Date()) {
 }
 
 function isTaskScheduledForToday(task, at = new Date()) {
-  return normalizeTaskTags(task.tags).today || isRecurringTaskDue(task, at);
+  const deadline = safeDate(task.deadlineAt);
+  return normalizeTaskTags(task.tags).today || isRecurringTaskDue(task, at) || Boolean(deadline && localDateKey(deadline) === localDateKey(at));
 }
 
 function syncRecurringTasks(at = new Date()) {
@@ -2556,15 +2651,6 @@ function renderSettingsPanel() {
               </div>
               <div class="settings-update-slot">
                 ${renderUpdateSettingsControls()}
-              </div>
-            </section>
-            <section class="settings-group">
-              <div class="settings-group-head">
-                <h3>时间回顾</h3>
-                <p>按更新时间、创建日期或解决日期筛选任务。</p>
-              </div>
-              <div class="settings-stack">
-                <button class="settings-inline-action" type="button" data-action="toggle-review">打开任务回顾</button>
               </div>
             </section>
             <section class="settings-group">
@@ -3017,6 +3103,126 @@ function feedbackEnvironmentSummary() {
   return `将发送：软件版本 ${APP_VERSION || "dev"}、${osName}、${architecture}、当前模块、提交时间和随机安装标识。`;
 }
 
+
+// ============================================================
+// DEADLINE CALENDAR
+// ============================================================
+function ensureCalendarState() {
+  const todayKey = localDateKey(new Date());
+  if (!normalizeTaskDateFilter(state.calendarSelectedDate)) state.calendarSelectedDate = todayKey;
+  if (!normalizeTaskDateFilter(state.calendarMonth)) state.calendarMonth = `${state.calendarSelectedDate.slice(0, 7)}-01`;
+}
+
+function calendarMonthDate() {
+  ensureCalendarState();
+  return parseDateInput(state.calendarMonth) || new Date();
+}
+
+function calendarGridDates(month = calendarMonthDate()) {
+  const first = new Date(month.getFullYear(), month.getMonth(), 1);
+  const mondayOffset = (first.getDay() + 6) % 7;
+  const start = new Date(first.getFullYear(), first.getMonth(), 1 - mondayOffset);
+  return Array.from({ length: 42 }, (_, index) => new Date(start.getFullYear(), start.getMonth(), start.getDate() + index));
+}
+
+function calendarTasksForDate(dateKey) {
+  const normalized = normalizeTaskDateFilter(dateKey);
+  if (!normalized) return [];
+  return state.tasks
+    .filter((task) => localDateKey(task.deadlineAt) === normalized)
+    .sort(compareTasksByDeadline);
+}
+
+function calendarMonthTitle(month = calendarMonthDate()) {
+  return new Intl.DateTimeFormat("zh-CN", { year: "numeric", month: "long" }).format(month);
+}
+
+function calendarAgendaTitle(dateKey) {
+  const date = parseDateInput(dateKey);
+  if (!date) return "选择日期";
+  return new Intl.DateTimeFormat("zh-CN", { month: "long", day: "numeric", weekday: "short" }).format(date);
+}
+
+function renderCalendarCell(date, month, at = new Date()) {
+  const dateKey = localDateKey(date);
+  const tasks = calendarTasksForDate(dateKey);
+  const pending = tasks.filter((task) => task.status !== "done");
+  const overdue = pending.some((task) => safeDate(task.deadlineAt) < at);
+  const classes = [
+    "calendar-day",
+    date.getMonth() !== month.getMonth() ? "outside" : "",
+    dateKey === localDateKey(at) ? "today" : "",
+    dateKey === state.calendarSelectedDate ? "selected" : "",
+    overdue ? "has-overdue" : "",
+  ].filter(Boolean).join(" ");
+  const dots = tasks.filter((_task, index) => index < 3).map((task) => `<i class="priority-${task.priority} ${task.status === "done" ? "done" : ""}"></i>`).join("");
+  return `
+    <button class="${classes}" type="button" data-action="select-calendar-date" data-date="${dateKey}" aria-label="${dateKey}${tasks.length ? `，${tasks.length} 项任务截止` : "，无截止任务"}">
+      <span>${date.getDate()}</span>
+      ${tasks.length ? `<small>${tasks.length}</small><span class="calendar-deadline-rail">${dots}</span>` : ""}
+    </button>
+  `;
+}
+
+function renderCalendarAgendaTask(task) {
+  const deadline = safeDate(task.deadlineAt);
+  const status = taskDeadlineStatus(task);
+  const group = state.taskGroups.find((item) => item.id === (task.groupId || defaultTaskGroup.id));
+  return `
+    <button class="calendar-agenda-task ${status}" type="button" data-action="open-calendar-task" data-task-id="${task.id}">
+      <span class="calendar-agenda-time">${deadline ? `${String(deadline.getHours()).padStart(2, "0")}:${String(deadline.getMinutes()).padStart(2, "0")}` : "--:--"}</span>
+      <span><strong>${esc(task.title || "未命名任务")}</strong><small>${esc(group?.title || "默认")} · ${task.status === "done" ? "已完成" : status === "overdue" ? "已逾期" : `${priorityLabels[task.priority]}优先`}</small></span>
+    </button>
+  `;
+}
+
+function renderCalendarPanel() {
+  ensureCalendarState();
+  const month = calendarMonthDate();
+  const agendaTasks = calendarTasksForDate(state.calendarSelectedDate);
+  return `
+    <div class="calendar-overlay" role="presentation">
+      <section class="calendar-panel" role="dialog" aria-modal="true" aria-labelledby="calendar-title">
+        <header class="calendar-head">
+          <div>
+            <span>Deadline Calendar</span>
+            <h2 id="calendar-title">日历</h2>
+          </div>
+          <div class="calendar-head-actions">
+            <button class="calendar-review-link" type="button" data-action="open-review-from-calendar">任务回顾</button>
+            <button class="settings-close" type="button" data-action="close-calendar" title="关闭">×</button>
+          </div>
+        </header>
+        <div class="calendar-quick-filters" role="group" aria-label="截止范围筛选">
+          ${Object.entries(taskDeadlineFilterLabels).map(([value, label]) => `<button class="${state.taskDeadlineFilter === value && !state.taskDateFilter ? "active" : ""}" type="button" data-action="set-deadline-filter" data-value="${value}">${label}</button>`).join("")}
+        </div>
+        <div class="calendar-body">
+          <section class="calendar-month" aria-label="月历">
+            <div class="calendar-month-head">
+              <button type="button" data-action="shift-calendar-month" data-direction="-1" aria-label="上个月">‹</button>
+              <strong>${esc(calendarMonthTitle(month))}</strong>
+              <div>
+                <button type="button" data-action="calendar-today">今天</button>
+                <button type="button" data-action="shift-calendar-month" data-direction="1" aria-label="下个月">›</button>
+              </div>
+            </div>
+            <div class="calendar-weekdays" aria-hidden="true">${["一", "二", "三", "四", "五", "六", "日"].map((day) => `<span>${day}</span>`).join("")}</div>
+            <div class="calendar-grid">${calendarGridDates(month).map((date) => renderCalendarCell(date, month)).join("")}</div>
+          </section>
+          <aside class="calendar-agenda" aria-label="选中日期的截止任务">
+            <header>
+              <div><span>选中日期</span><strong>${esc(calendarAgendaTitle(state.calendarSelectedDate))}</strong></div>
+              <button type="button" data-action="apply-calendar-date" ${agendaTasks.length ? "" : "disabled"}>筛选该日</button>
+            </header>
+            <div class="calendar-agenda-list">
+              ${agendaTasks.length ? agendaTasks.map(renderCalendarAgendaTask).join("") : `<div class="calendar-agenda-empty">这一天没有设置截止时间的任务。</div>`}
+            </div>
+          </aside>
+        </div>
+      </section>
+    </div>
+  `;
+}
 
 // ============================================================
 // REVIEW PANEL
@@ -4017,6 +4223,15 @@ function bindTaskRepositoryRows(scope = document) {
     });
   }
 
+  const calendarPanel = document.querySelector(".calendar-panel");
+  calendarPanel?.addEventListener("click", (event) => event.stopPropagation());
+
+  const calendarOverlay = document.querySelector(".calendar-overlay");
+  calendarOverlay?.addEventListener("click", () => {
+    state.calendarOpen = false;
+    render();
+  });
+
   const settingsPanel = document.querySelector(".settings-panel");
   if (settingsPanel) {
     settingsPanel.addEventListener("click", (event) => event.stopPropagation());
@@ -4102,6 +4317,18 @@ function bindTaskRepositoryRows(scope = document) {
       render();
     });
   }
+
+  document.querySelectorAll("[data-deadline-field]").forEach((control) => {
+    control.addEventListener("click", (event) => event.stopPropagation());
+    control.addEventListener("change", (event) => {
+      const task = state.tasks.find((item) => item.id === event.currentTarget.dataset.taskId);
+      if (!task) return;
+      task.deadlineAt = normalizeDeadlineInput(event.currentTarget.value);
+      task.updatedAt = now();
+      save();
+      render();
+    });
+  });
 
   document.querySelectorAll("[data-recurrence-toggle]").forEach((control) => {
     control.addEventListener("click", (event) => {
@@ -5244,6 +5471,7 @@ async function action(data, event = null) {
   if (data.action === "toggle-settings") {
     state.settingsOpen = !state.settingsOpen;
     if (state.settingsOpen) {
+      state.calendarOpen = false;
       state.reviewOpen = false;
       state.feedbackOpen = false;
     }
@@ -5252,22 +5480,72 @@ async function action(data, event = null) {
   if (data.action === "close-settings") state.settingsOpen = false;
   if (data.action === "open-feedback") {
     state.settingsOpen = false;
+    state.calendarOpen = false;
     state.reviewOpen = false;
     state.feedbackOpen = true;
     state.feedbackResult = null;
     state.feedbackMessage = "";
   }
   if (data.action === "close-feedback") closeBugReport();
+  if (data.action === "toggle-calendar") {
+    state.calendarOpen = !state.calendarOpen;
+    if (state.calendarOpen) {
+      ensureCalendarState();
+      state.settingsOpen = false;
+      state.reviewOpen = false;
+      state.feedbackOpen = false;
+    }
+  }
+  if (data.action === "close-calendar") state.calendarOpen = false;
+  if (data.action === "open-review-from-calendar") {
+    state.calendarOpen = false;
+    state.reviewOpen = true;
+  }
+  if (data.action === "set-deadline-filter") {
+    state.taskDeadlineFilter = Object.hasOwn(taskDeadlineFilterLabels, data.value) ? data.value : "all";
+    state.taskDateFilter = "";
+    state.selectedNodeId = "";
+    state.calendarOpen = false;
+  }
+  if (data.action === "select-calendar-date") {
+    const selected = normalizeTaskDateFilter(data.date);
+    if (selected) {
+      state.calendarSelectedDate = selected;
+      state.calendarMonth = `${selected.slice(0, 7)}-01`;
+    }
+  }
+  if (data.action === "apply-calendar-date") {
+    state.taskDateFilter = normalizeTaskDateFilter(state.calendarSelectedDate);
+    state.taskDeadlineFilter = "all";
+    state.selectedNodeId = "";
+    state.calendarOpen = false;
+  }
+  if (data.action === "shift-calendar-month") {
+    const month = calendarMonthDate();
+    month.setMonth(month.getMonth() + Number(data.direction || 0));
+    state.calendarMonth = localDateKey(new Date(month.getFullYear(), month.getMonth(), 1));
+  }
+  if (data.action === "calendar-today") {
+    state.calendarSelectedDate = localDateKey(new Date());
+    state.calendarMonth = `${state.calendarSelectedDate.slice(0, 7)}-01`;
+  }
+  if (data.action === "open-calendar-task") openTaskFromGlobalList(data.taskId);
   if (data.action === "toggle-review") {
     state.reviewOpen = !state.reviewOpen;
-    if (state.reviewOpen) state.settingsOpen = false;
+    if (state.reviewOpen) {
+      state.settingsOpen = false;
+      state.calendarOpen = false;
+    }
   }
   if (data.action === "close-review") state.reviewOpen = false;
   if (data.action === "set-review-preset") {
     state.reviewPreset = Object.hasOwn(reviewPresetLabels, data.preset) ? data.preset : "week";
     if (state.reviewPreset === "custom") ensureReviewCustomDates();
   }
-  if (data.action === "clear-task-date-filter") state.taskDateFilter = "";
+  if (data.action === "clear-task-date-filter") {
+    state.taskDateFilter = "";
+    state.taskDeadlineFilter = "all";
+  }
   if (data.action === "open-review-task") openTaskFromGlobalList(data.taskId);
   if (data.action === "reload-app") window.location.reload();
   if (data.action === "select-group") selectGroup(data.groupId);
@@ -5367,6 +5645,7 @@ function taskMarkdown(task) {
     `- 优先级：${priorityLabels[task.priority] || "中"}`,
     `- 状态：${task.status === "done" ? "已完成" : "处理中"}`,
     `- 节点：${summary.done}/${summary.total || 0}`,
+    ...(task.deadlineAt ? [`- 截止时间：${formatMinuteStamp(task.deadlineAt)}`] : []),
     `- 创建时间：${formatShort(task.createdAt)}`,
     `- 更新时间：${formatShort(task.updatedAt)}`,
     ...(tags.length ? [`- 标记：${tags.join("、")}`] : []),
@@ -5472,9 +5751,11 @@ function openTaskFromGlobalList(taskId, nodeId = "") {
   state.nodeDetailPosition = null;
   state.taskFilter = "all";
   state.taskDateFilter = "";
+  state.taskDeadlineFilter = "all";
   state.priorityFilter = "all";
   state.query = "";
   state.reviewOpen = false;
+  state.calendarOpen = false;
 }
 
 function createTaskFromBlank(title) {
@@ -5514,6 +5795,7 @@ function createTask(title, shouldRender = true) {
     hypothesis: "",
     hypothesisUpdatedAt: "",
     conclusion: "",
+    deadlineAt: "",
     notes: "",
     knowledgeNote: knowledgeDocument.createKnowledgeNoteMetadata({
       noteId: id("note"),
@@ -6509,6 +6791,48 @@ function publishTodayWidgetSnapshot() {
   desktopTodayWidget?.publish(todayWidgetSnapshot());
 }
 
+function deadlineReminderSnapshot() {
+  return state.tasks
+    .filter((task) => safeDate(task.deadlineAt))
+    .map((task) => ({
+      id: task.id,
+      title: task.title || "未命名任务",
+      status: task.status,
+      priority: task.priority,
+      deadlineAt: task.deadlineAt,
+    }));
+}
+
+function publishDeadlineReminderSnapshot() {
+  if (!desktopDeadlineReminders?.sync) return;
+  const snapshot = deadlineReminderSnapshot();
+  const signature = JSON.stringify(snapshot);
+  if (signature === deadlineReminderSignature) return;
+  deadlineReminderSignature = signature;
+  void desktopDeadlineReminders.sync(snapshot).catch((error) => {
+    deadlineReminderSignature = "";
+    console.error("Failed to synchronize task deadline reminders.", error);
+  });
+}
+
+function initializeDeadlineReminderBridge() {
+  if (!desktopDeadlineReminders) return;
+  unsubscribeDeadlineReminderTask?.();
+  unsubscribeDeadlineReminderCalendar?.();
+  unsubscribeDeadlineReminderTask = desktopDeadlineReminders.onOpenTask?.(({ taskId } = {}) => {
+    if (!taskId) return;
+    openTaskFromGlobalList(taskId);
+    render();
+  });
+  unsubscribeDeadlineReminderCalendar = desktopDeadlineReminders.onOpenCalendar?.(() => {
+    ensureCalendarState();
+    state.calendarOpen = true;
+    state.settingsOpen = false;
+    state.reviewOpen = false;
+    render();
+  });
+}
+
 function syncTodayWidgetRestoreButton() {
   const current = document.querySelector(".restore-widget");
   if (!desktopTodayWidget || todayWidgetWindowState.visible) {
@@ -6563,6 +6887,14 @@ function taskDateFilterLabel(value) {
   return normalized ? `${normalized.slice(5, 7)}/${normalized.slice(8, 10)}` : "";
 }
 
+function deadlineFilterLabel() {
+  if (state.taskDateFilter) return taskDateFilterLabel(state.taskDateFilter);
+  if (state.taskDeadlineFilter === "today") return "今天";
+  if (state.taskDeadlineFilter === "week") return "本周";
+  if (state.taskDeadlineFilter === "overdue") return "逾期";
+  return "";
+}
+
 function formatMinuteStamp(value) {
   return new Intl.DateTimeFormat("zh-CN", {
     year: "numeric",
@@ -6613,6 +6945,7 @@ async function bootstrap() {
     loadKnowledgeRecovery(),
     initializeAppUpdates(),
     initializeTodayWidgetBridge(),
+    initializeDeadlineReminderBridge(),
   ]);
   state.tasks = data.tasks;
   state.taskGroups = data.taskGroups;
@@ -6700,10 +7033,11 @@ window.addEventListener("keydown", (event) => {
       syncContextMenuRoot();
       return;
     }
-    if (state.selectedNodeId || state.settingsOpen || state.reviewOpen || state.feedbackOpen || recurrencePopoverTaskId) {
+    if (state.selectedNodeId || state.settingsOpen || state.calendarOpen || state.reviewOpen || state.feedbackOpen || recurrencePopoverTaskId) {
       event.preventDefault();
       exitNodeDetail();
       state.settingsOpen = false;
+      state.calendarOpen = false;
       state.reviewOpen = false;
       recurrencePopoverTaskId = "";
       closeBugReport();

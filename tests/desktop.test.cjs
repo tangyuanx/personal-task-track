@@ -3031,7 +3031,7 @@ test("search filters repository rows without switching the active task", async (
   assert.match(app, /compositionstart/);
 });
 
-test("calendar filter composes with task status and leaves existing preferences unchanged", async () => {
+test("exact deadline-date filtering composes with task status and remains transient", async () => {
   const [app, styles] = await Promise.all([
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "app.js"), "utf8"),
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "styles.css"), "utf8"),
@@ -3044,9 +3044,9 @@ test("calendar filter composes with task status and leaves existing preferences 
     state.priorityFilter = "all";
     state.taskDateFilter = "2026-08-12";
     state.tasks = normalizeTasks([
-      { id: "active_match", title: "当日未完成", status: "active", updatedAt: new Date(2026, 7, 12, 10).toISOString(), nodes: [] },
-      { id: "done_match", title: "当日已完成", status: "done", updatedAt: new Date(2026, 7, 12, 18).toISOString(), nodes: [] },
-      { id: "other_day", title: "其他日期", status: "active", updatedAt: new Date(2026, 7, 11, 10).toISOString(), nodes: [] }
+      { id: "active_match", title: "当日未完成", status: "active", deadlineAt: new Date(2026, 7, 12, 10).toISOString(), nodes: [] },
+      { id: "done_match", title: "当日已完成", status: "done", deadlineAt: new Date(2026, 7, 12, 18).toISOString(), nodes: [] },
+      { id: "other_day", title: "其他日期", status: "active", deadlineAt: new Date(2026, 7, 11, 10).toISOString(), nodes: [] }
     ]);
     state.taskFilter = "active";
     const active = filteredTasks().map((task) => task.id);
@@ -3059,10 +3059,78 @@ test("calendar filter composes with task status and leaves existing preferences 
   assert.deepEqual(result.done, ["done_match"]);
   assert.equal(result.label, "08/12");
   assert.equal(harness.evaluate(`normalizeTaskDateFilter("2026-02-30")`), "");
-  assert.match(app, /popovertarget="task-date-filter-popover"/);
-  assert.match(app, /最后活动日期/);
+  assert.match(app, /data-action="toggle-calendar"/);
+  assert.match(app, /截止日历/);
   assert.doesNotMatch(app, /taskDateFilter:\s*state\.taskDateFilter/);
-  assert.match(styles, /anchor-name:\s*--task-calendar-filter;/);
+  assert.match(styles, /\.calendar-deadline-rail/);
+});
+
+test("optional deadlines normalize consistently and invalid values stay unset", async () => {
+  const normalized = normalizeTaskData({
+    tasks: [
+      { id: "valid", deadlineAt: "2026-08-25T10:30:00.000Z" },
+      { id: "invalid", deadlineAt: "not-a-date" },
+      { id: "missing" },
+    ],
+  }).tasks;
+
+  assert.equal(normalized[0].deadlineAt, "2026-08-25T10:30:00.000Z");
+  assert.equal(normalized[1].deadlineAt, "");
+  assert.equal(normalized[2].deadlineAt, "");
+
+  const harness = await rendererHarness();
+  assert.equal(harness.evaluate(`normalizeTasks([{ id: "renderer", deadlineAt: "2026-08-25T10:30:00.000Z" }])[0].deadlineAt`), "2026-08-25T10:30:00.000Z");
+  assert.equal(harness.evaluate(`normalizeTasks([{ id: "renderer-invalid", deadlineAt: "invalid" }])[0].deadlineAt`), "");
+});
+
+test("deadline ranges compose with status and order only deadline-scoped results", async () => {
+  const harness = await rendererHarness();
+  const result = harness.json(`(() => {
+    const at = new Date(2026, 7, 24, 10, 0);
+    state.taskGroups = [{ id: "group_inbox", title: "默认", order: 1 }];
+    state.activeGroupId = "group_inbox";
+    state.query = "";
+    state.priorityFilter = "all";
+    state.taskFilter = "active";
+    state.taskDateFilter = "";
+    state.tasks = normalizeTasks([
+      { id: "manual-first", title: "无截止", status: "active", order: 1, nodes: [] },
+      { id: "tomorrow-late", title: "明晚", status: "active", order: 2, deadlineAt: new Date(2026, 7, 25, 18).toISOString(), nodes: [] },
+      { id: "overdue", title: "已逾期", status: "active", order: 3, deadlineAt: new Date(2026, 7, 23, 18).toISOString(), nodes: [] },
+      { id: "tomorrow-early", title: "明早", status: "active", order: 4, deadlineAt: new Date(2026, 7, 25, 9).toISOString(), nodes: [] },
+      { id: "done-overdue", title: "已完成", status: "done", order: 5, deadlineAt: new Date(2026, 7, 23, 9).toISOString(), nodes: [] }
+    ]);
+    state.taskDeadlineFilter = "all";
+    const manual = filteredTasks({ at }).map((task) => task.id);
+    state.taskDeadlineFilter = "week";
+    const week = filteredTasks({ at }).map((task) => task.id);
+    state.taskDeadlineFilter = "overdue";
+    const overdue = filteredTasks({ at }).map((task) => task.id);
+    state.taskDeadlineFilter = "all";
+    state.taskDateFilter = "2026-08-25";
+    const exact = filteredTasks({ at }).map((task) => task.id);
+    return { manual, week, overdue, exact };
+  })()`);
+
+  assert.deepEqual(result.manual, ["manual-first", "tomorrow-late", "overdue", "tomorrow-early"]);
+  assert.deepEqual(result.week, ["tomorrow-early", "tomorrow-late"]);
+  assert.deepEqual(result.overdue, ["overdue"]);
+  assert.deepEqual(result.exact, ["tomorrow-early", "tomorrow-late"]);
+});
+
+test("calendar owns the footer entry, exposes review in its upper-right, and edits an optional deadline", async () => {
+  const [app, styles] = await Promise.all([
+    fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "app.js"), "utf8"),
+    fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "styles.css"), "utf8"),
+  ]);
+
+  assert.match(app, /data-action="toggle-calendar"[^>]*>\s*日历\s*</);
+  assert.match(app, /function renderCalendarPanel\(\)/);
+  assert.match(app, /class="calendar-head-actions"[\s\S]*data-action="open-review-from-calendar"[\s\S]*任务回顾/);
+  assert.match(app, /data-deadline-field/);
+  assert.match(app, /高优任务建议设置截止时间/);
+  assert.match(styles, /\.calendar-grid/);
+  assert.match(styles, /\.task-deadline-control/);
 });
 
 test("recurring tasks normalize, become due at local time, and reactivate for a new occurrence", async () => {

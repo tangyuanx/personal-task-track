@@ -4,9 +4,20 @@
 Maintain the personal task management app through scoped, low-risk improvements while preserving existing task flow behavior and release discipline.
 
 ## Current Phase
-Phase 33
+Phase 34
 
 ## Phases
+
+### Phase 34: Integrated Calendar, Optional Deadlines, and Reminders
+- [x] Confirm the latest clean remote baseline and preserve the established compact visual system
+- [x] Audit task persistence, existing date filters, review overlay, Electron bridge, and lifecycle scheduling
+- [x] Define optional deadline semantics, calendar navigation, due-range filtering, ordering, and reminder thresholds
+- [x] Add failing regression coverage for persistence, deadline classification, calendar/review placement, and reminder deduplication
+- [x] Implement the integrated calendar, optional task deadline editor, due filters, and system reminders
+- [x] Run focused tests and complete checks; record the locked-macOS limitation on manual UI inspection
+- [x] Build and verify the formal macOS and Windows release artifacts
+- [ ] Version, commit, tag, push, and verify the published release
+- **Status:** in progress
 
 ### Phase 33: User-confirmed Seamless In-app Update
 - [x] Preserve the local node-record focus styling and confirm zero remote divergence

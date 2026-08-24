@@ -1,6 +1,6 @@
 {
   "name": "personal-task-track",
-  "version": "0.1.129",
+  "version": "0.1.130",
   "description": "A local-first personal task flow tracker for programmer daily work.",
   "private": true,
   "license": "UNLICENSED",
@@ -19,8 +19,8 @@
     "start": "electron .",
     "postinstall": "npm --prefix services/bug-report ci",
     "build:milkdown": "node tools/build-milkdown.cjs",
-    "test": "node --test tests/desktop.test.cjs tests/bug-report-client.test.cjs tests/updater.test.cjs && npm --prefix services/bug-report test",
-    "check": "npm run build:milkdown && node --check app/renderer/src/app.js && node --check app/renderer/src/today-widget-runtime.js && node --check app/main/main.cjs && node --check app/main/preload.cjs && node --check app/main/storage.cjs && node --check app/main/today-widget.cjs && node --check app/main/updater.cjs && node --check app/main/bug-report-client.cjs && node --check tools/after-pack.cjs && node --check tools/build.cjs && node --check tools/build-milkdown.cjs && node --check tools/make-ico.cjs && node --check tools/verify-update-artifacts.cjs && node --check tests/desktop.test.cjs && node --check tests/bug-report-client.test.cjs && node --check tests/updater.test.cjs && npm --prefix services/bug-report run build && npm test",
+    "test": "node --test tests/desktop.test.cjs tests/bug-report-client.test.cjs tests/updater.test.cjs tests/deadline-reminders.test.cjs && npm --prefix services/bug-report test",
+    "check": "npm run build:milkdown && node --check app/renderer/src/app.js && node --check app/renderer/src/today-widget-runtime.js && node --check app/main/main.cjs && node --check app/main/preload.cjs && node --check app/main/storage.cjs && node --check app/main/today-widget.cjs && node --check app/main/deadline-reminders.cjs && node --check app/main/updater.cjs && node --check app/main/bug-report-client.cjs && node --check tools/after-pack.cjs && node --check tools/build.cjs && node --check tools/build-milkdown.cjs && node --check tools/make-ico.cjs && node --check tools/verify-update-artifacts.cjs && node --check tests/desktop.test.cjs && node --check tests/bug-report-client.test.cjs && node --check tests/updater.test.cjs && node --check tests/deadline-reminders.test.cjs && npm --prefix services/bug-report run build && npm test",
     "dist": "node tools/build.cjs",
     "dist:mac": "node tools/build.cjs --mac",
     "dist:win": "node tools/build.cjs --win"

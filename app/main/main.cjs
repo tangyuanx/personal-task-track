@@ -8,7 +8,7 @@
  *   - Manage application menu
  */
 
-const { app, BrowserWindow, Menu, clipboard, dialog, ipcMain, screen, shell } = require("electron");
+const { app, BrowserWindow, Menu, Notification, clipboard, dialog, ipcMain, screen, shell } = require("electron");
 const fs = require("node:fs/promises");
 const os = require("node:os");
 const path = require("node:path");
@@ -28,6 +28,7 @@ const {
   writeKnowledgeRecovery,
 } = require("./recovery.cjs");
 const { createTodayWidgetController } = require("./today-widget.cjs");
+const { createDeadlineReminderController } = require("./deadline-reminders.cjs");
 const { createUpdateController } = require("./updater.cjs");
 
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
@@ -46,6 +47,7 @@ app.on("second-instance", () => {
 const isMac = process.platform === "darwin";
 let updateController = null;
 let todayWidgetController = null;
+let deadlineReminderController = null;
 let mainWindow = null;
 let isQuitting = false;
 let updateInstallPrepared = false;
@@ -503,6 +505,14 @@ app.whenReady().then(async () => {
     ensureMainWindow: createWindow,
   });
   todayWidgetController.registerIpc();
+  deadlineReminderController = createDeadlineReminderController({
+    app,
+    Notification,
+    ipcMain,
+    getMainWindow: () => mainWindow,
+    ensureMainWindow: createWindow,
+  });
+  deadlineReminderController.registerIpc();
   updateController = createUpdateController({
     app,
     BrowserWindow,
@@ -517,7 +527,7 @@ app.whenReady().then(async () => {
   updateController.registerIpc();
   createMenu();
   createWindow();
-  await Promise.all([updateController.start(), todayWidgetController.start()]);
+  await Promise.all([updateController.start(), todayWidgetController.start(), deadlineReminderController.start()]);
 
   app.on("activate", () => {
     if (!mainWindow || mainWindow.isDestroyed()) createWindow();
@@ -542,6 +552,7 @@ app.on("before-quit", (event) => {
   isQuitting = true;
   updateController?.stop();
   todayWidgetController?.stop();
+  void deadlineReminderController?.stop();
 });
 
 app.on("window-all-closed", () => {

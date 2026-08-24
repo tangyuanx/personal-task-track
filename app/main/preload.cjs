@@ -39,6 +39,12 @@ contextBridge.exposeInMainWorld("personalTaskTrack", {
   dialogs: {
     confirmDestructive: (options) => ipcRenderer.invoke("app:confirm-destructive", options),
   },
+  deadlineReminders: {
+    sync: (tasks) => ipcRenderer.invoke("deadline-reminders:sync", tasks),
+    getState: () => ipcRenderer.invoke("deadline-reminders:get-state"),
+    onOpenTask: (callback) => subscribe("deadline-reminders:open-task", callback),
+    onOpenCalendar: (callback) => subscribe("deadline-reminders:open-calendar", callback),
+  },
   updates: {
     getState: () => ipcRenderer.invoke("app-update:get-state"),
     setAutomaticChecks: (enabled) => ipcRenderer.invoke("app-update:set-automatic-checks", enabled === true),

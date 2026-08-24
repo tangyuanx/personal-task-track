@@ -889,3 +889,39 @@
   - ASAR-enabled output on the external volume failed with a corrupted ASAR header offset on both platforms; the next build uses an internal APFS output directory.
 - Errors:
   - Initial TODO/error search included the generated Milkdown vendor bundle and returned excessive output; future searches exclude `src/vendor` and `release`.
+# Session: 2026-08-24 Integrated Calendar, Optional Deadlines, and Reminders
+
+### Phase 34: Integrated calendar implementation and release validation
+- **Status:** in progress
+- Actions taken:
+  - Read the persistent planning, frontend design, and project maintenance instructions.
+  - Recovered the previous release context, confirmed a clean `main`, fetched remote `main` and tags, and fast-forward checked the branch.
+  - Confirmed local and remote are synchronized at the published `v0.1.125` baseline.
+  - Located the existing last-activity calendar filter, lower-left review shortcut, review overlay, recurrence scheduler, and renderer/main task normalization paths.
+  - Defined optional deadline semantics, deadline-only range ordering, a calendar-header review entry, and deduplicated incomplete-task reminders as the bounded scope.
+  - Confirmed task normalization is duplicated intentionally in the renderer and main storage service, and both must accept the new optional ISO deadline.
+  - Confirmed the existing Today filter means tag/recurrence scheduling; chose a separate deadline filter to preserve that established behavior.
+  - Confirmed normal task lists are manual-order lists; chose deadline ordering only while a deadline range or date is active.
+  - Chose a global month calendar with a selected-date agenda, a review action in the upper-right header, and a separate main-process reminder controller with atomic deduplication state.
+  - Added failing regressions for deadline normalization, exact/range filtering, deadline-only ordering, calendar/review placement, reminder thresholds, restart deduplication, and notification click routing.
+  - Implemented optional `deadlineAt` normalization in both renderer and Electron storage without changing the data-version ceiling.
+  - Implemented a month calendar with priority rails, an agenda, Today/This Week/Overdue/exact-date filters, deadline badges, and a compact native date/time editor in the existing task property line.
+  - Replaced the footer review shortcut with the calendar entry, removed the duplicate settings entry, and placed task review in the calendar header.
+  - Implemented an atomic main-process reminder controller with 24-hour, 2-hour, and overdue stages, grouped notifications, restart-safe deduplication, and task/calendar click return paths.
+  - Passed the seven focused deadline/calendar/reminder regressions plus JavaScript syntax checks and `git diff --check`.
+  - Re-ran the complete `npm run check` twice successfully on the initial candidate, including 117 desktop/client tests and 11 bug-report service tests at the then-current `0.1.126` candidate.
+  - Fetched remote `main` and tags immediately before versioning; confirmed zero divergence at `v0.1.125` and that `v0.1.126` was unoccupied.
+  - Built the initial macOS ARM64 DMG/ZIP and Windows x64 NSIS candidate with `npm run dist:mac` and `npm run dist:win`; those `0.1.126` artifacts were discarded after remote advanced.
+  - Deleted `.planning/knowledge-note-local-storage` after the user explicitly authorized agent-side deletion and verified no directory with that name remains.
+  - Fetched remote again at the publication gate and found four new release commits through `v0.1.129`; paused the obsolete `0.1.126` publication and began safe replay onto the new remote baseline.
+  - Safely stashed all local files, fast-forwarded `main` to `v0.1.129`, replayed the calendar changes, and resolved only the expected package-version conflict as `0.1.130` while retaining the remote test/update scripts.
+  - Passed the final integrated `npm run check`: 125 desktop/client tests and 11 bug-report service tests, including all new remote update/Today/knowledge-conflict regressions and all deadline/calendar/reminder regressions.
+  - Rebuilt formal `0.1.130` macOS ARM64 DMG/ZIP and Windows x64 NSIS artifacts. Verified both update metadata files against all eight artifacts, found no AppleDouble files, and confirmed the packaged ASAR includes remote reliability modules plus the new deadline controller and calendar frontend.
+  - Final `0.1.130` SHA-256: DMG `faa2f97b6c6477d2d931ad1dec1d8aec1fe6c59d7c1ca02aea6c71acdd1cea08`; ZIP `0be29d535b0dc123fb66d1848351fa024b0b8c820eddbc0c0d2b9b63b805c8a5`; EXE `263ce401038823c889e48c218cbc0e1cb0206c7c7207e4083fd890c7f780ae24`.
+- Errors:
+  - The first broad date-feature search also matched the generated Milkdown vendor bundle and produced truncated output; subsequent searches exclude generated vendor files and use narrower source ranges.
+  - An early complete run had one timeout-like failure in the existing FileWatcher deletion test; the focused rerun and both subsequent complete checks passed, so no functional watcher change was made.
+  - Automated desktop launch succeeded only up to the OS boundary because the host Mac was locked. Manual calendar visual inspection is therefore not claimed as passed.
+  - macOS packaging reports the established unsigned-build warning (`identity` explicitly set to `null`); no release build errors occurred.
+  - The first pre-sync `git stash push -u` could not write `.git/index` under the default sandbox. No worktree content changed; retry with explicit Git write approval is required.
+  - The first post-`v0.1.129` complete check passed 124 of 125 desktop/client tests but failed the remote Today no-truncation source assertion because the calendar independently used `.slice(0, 3)` for date-cell rails. Today data was not truncated; changed the equivalent calendar cap to an index filter so the remote regression remains enforceable.

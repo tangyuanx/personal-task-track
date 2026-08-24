@@ -191,6 +191,7 @@ function normalizeTasks(tasks) {
         conclusion: normalizeText(task.conclusion),
         createdAt,
         updatedAt,
+        deadlineAt: normalizeOptionalDateValue(task.deadlineAt),
         resolvedAt: normalizeOptionalDateValue(task.resolvedAt),
         nodes: normalizeTaskNodes(task.nodes, taskId),
       };
