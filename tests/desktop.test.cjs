@@ -1625,6 +1625,16 @@ test("Bug 25 reload rolls back when its new DocumentSession cannot persist", asy
   assert.equal(await harness.evaluate(`flushSave()`), true);
 });
 
+test("knowledge rerenders preserve only the editor host and invalidate stale disk-backed drafts", async () => {
+  const app = await fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "app.js"), "utf8");
+
+  assert.match(app, /function stashKnowledgePane\(\)[\s\S]*querySelector\("\.milkdown-editor-host\[data-task-id\]"\)[\s\S]*host\.remove\(\)/);
+  assert.match(app, /function restoreCachedKnowledgePane\(task\)[\s\S]*const host = replacement\.querySelector\("\.milkdown-editor-host\[data-task-id\]"\)[\s\S]*host\.replaceWith\(cachedKnowledgePane\.host\)/);
+  assert.match(app, /function discardMountedKnowledgeEditor\(taskId\)/);
+  assert.match(app, /discardMountedKnowledgeEditor\(task\.id\);/);
+  assert.doesNotMatch(app, /replacement\.replaceWith\(cachedKnowledgePane\.pane\)/);
+});
+
 test("Bug 25 overwrite write failure leaves the conflict transaction untouched", async () => {
   let recoveryDeletes = 0;
   const harness = await rendererHarness({
@@ -2659,6 +2669,7 @@ test("production Today widget uses its dedicated frontend and a sandboxed Electr
   assert.match(runtime, /document\.addEventListener\("pointerdown",[\s\S]*closeMenu\(\)/);
   assert.match(runtime, /window\.addEventListener\("blur", closeMenu\)/);
   assert.match(widgetMain, /frame: false/);
+  assert.match(widgetMain, /acceptFirstMouse: true/);
   assert.match(widgetMain, /transparent: true/);
   assert.match(widgetMain, /hasShadow: false/);
   assert.match(widgetMain, /sandbox: true/);
@@ -2751,6 +2762,17 @@ test("task repository renders priority without an update timestamp", async () =>
   assert.match(app, /class="task-priority-control \$\{task\.priority\}"/);
   assert.doesNotMatch(app, /formatRepositoryStamp/);
   assert.doesNotMatch(app, /<time datetime="\$\{escAttr\(task\.updatedAt\)\}">/);
+  assert.match(app, /class="repository-add-task" type="button" data-action="add-task"/);
+  assert.match(app, /aria-label="新增任务"/);
+});
+
+test("group editing preserves the horizontal group viewport across renders", async () => {
+  const app = await fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "app.js"), "utf8");
+
+  assert.match(app, /const previousGroupScrollLeft = document\.querySelector\("\[data-sheet-tabs\]"\)/);
+  assert.match(app, /const restoreGroupScroll = \(\) => \{/);
+  assert.match(app, /input\.focus\(\{ preventScroll: true \}\)/);
+  assert.match(app, /window\.requestAnimationFrame\(\(\) => \{[\s\S]*restoreGroupScroll\(\);[\s\S]*mountMilkdownEditors\(\)/);
 });
 
 test("task repository follows the approved compact ordering layout", async () => {

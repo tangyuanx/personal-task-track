@@ -8129,6 +8129,35 @@ body.task-reordering * {
   margin-bottom: 0;
 }
 
+.repository-add-task {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  place-items: center;
+  margin-left: auto;
+  border: 1px solid var(--handoff-line-strong);
+  border-radius: 8px;
+  padding: 0;
+  background: var(--handoff-surface);
+  color: var(--handoff-focus-800);
+  font-size: 17px;
+  font-weight: 680;
+  line-height: 1;
+}
+
+.repository-add-task:hover,
+.repository-add-task:focus-visible {
+  border-color: var(--handoff-focus-800);
+  background: rgba(13, 91, 73, 0.08);
+}
+
+:root[data-theme="dark"] .repository-add-task {
+  border-color: #4a5b52;
+  background: transparent;
+  color: #b8e0c8;
+}
+
 .task-repository-rows {
   overflow: visible;
   border: 0;

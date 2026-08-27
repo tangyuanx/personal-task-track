@@ -203,6 +203,7 @@ function createTodayWidgetController({ app, BrowserWindow, ipcMain, screen, getM
       minWidth: 296,
       minHeight: 49,
       frame: false,
+      acceptFirstMouse: true,
       transparent: true,
       hasShadow: false,
       backgroundColor: "#00000000",

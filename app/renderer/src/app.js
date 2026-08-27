@@ -1071,6 +1071,7 @@ async function reloadKnowledgeTask(taskId) {
     };
   }
 
+  discardMountedKnowledgeEditor(task.id);
   rememberKnowledgeAssetFiles(result.assetFiles);
   rememberKnowledgeAssetDiagnostics(note.noteId, result);
   delete state.knowledgeFileIssues[note.noteId];
@@ -1107,6 +1108,7 @@ async function relocateKnowledgeTask(taskId) {
   task.updatedAt = now();
   knowledgeExternalSnapshots.delete(note.noteId);
   await clearKnowledgeRecoveryRecord(note.noteId);
+  discardMountedKnowledgeEditor(task.id);
   save();
   await syncKnowledgeFileWatcher(task);
   return result;
@@ -1217,6 +1219,7 @@ async function handleKnowledgeFileChange(event) {
     task.updatedAt = now();
     knowledgeExternalSnapshots.delete(note.noteId);
     await clearKnowledgeRecoveryRecord(note.noteId);
+    discardMountedKnowledgeEditor(task.id);
     save();
     await syncKnowledgeFileWatcher(task);
     render();
@@ -1518,6 +1521,8 @@ function workbenchStyle() {
  * This is called after every state change.
  */
 function render() {
+  const previousGroupScrollLeft = document.querySelector("[data-sheet-tabs]");
+  const groupScrollLeft = previousGroupScrollLeft ? Number(previousGroupScrollLeft.scrollLeft) || 0 : null;
   captureMountedMilkdownDrafts();
   flushNodeNoteDrafts({ persist: false });
   save();
@@ -1548,10 +1553,20 @@ function render() {
   restoreCachedKnowledgePane(task);
   bind();
   resizeTaskBriefTextareas();
+  const restoreGroupScroll = () => {
+    if (groupScrollLeft === null) return;
+    const groupScroller = document.querySelector("[data-sheet-tabs]");
+    if (groupScroller) groupScroller.scrollLeft = groupScrollLeft;
+  };
+  restoreGroupScroll();
   focusPendingElement();
+  restoreGroupScroll();
   publishTodayWidgetSnapshot();
   publishDeadlineReminderSnapshot();
-  window.requestAnimationFrame(() => mountMilkdownEditors());
+  window.requestAnimationFrame(() => {
+    restoreGroupScroll();
+    mountMilkdownEditors();
+  });
 }
 
 function renderCompletionNotice() {
@@ -1635,6 +1650,7 @@ function renderSidebar() {
             <span>优先级 ·</span>
             ${filterSelectHtml("priority-filter", state.priorityFilter, repositoryPriorityFilterLabels, "按优先级筛选")}
           </label>
+          <button class="repository-add-task" type="button" data-action="add-task" title="新增任务" aria-label="新增任务">＋</button>
         </div>
         <div class="task-repository-rows">${renderTaskRepositoryRows()}</div>
       </div>
@@ -4923,7 +4939,7 @@ function focusPendingElement() {
     const input = document.querySelector(`[data-group-title="${state.focusGroupTitleId}"]`);
     state.focusGroupTitleId = "";
     if (input) {
-      input.focus();
+      input.focus({ preventScroll: true });
       input.select();
     }
   }
@@ -5053,8 +5069,10 @@ function stashKnowledgePane() {
   const taskId = pane.dataset.taskId;
   if (!taskId) return;
   if (cachedKnowledgePane && cachedKnowledgePane.taskId !== taskId) discardCachedKnowledgePane();
-  cachedKnowledgePane = { taskId, pane };
-  pane.remove();
+  const host = pane.querySelector(".milkdown-editor-host[data-task-id]");
+  if (!host) return;
+  cachedKnowledgePane = { taskId, host };
+  host.remove();
 }
 
 function discardCachedKnowledgePane() {
@@ -5062,8 +5080,24 @@ function discardCachedKnowledgePane() {
   const key = noteDraftKey(cachedKnowledgePane.taskId, "");
   milkdownEditors.get(key)?.instance?.destroy?.().catch?.(() => {});
   milkdownEditors.delete(key);
-  cachedKnowledgePane.pane?.remove();
+  cachedKnowledgePane.host?.remove();
   cachedKnowledgePane = null;
+}
+
+function discardMountedKnowledgeEditor(taskId) {
+  const normalizedTaskId = String(taskId || "");
+  if (!normalizedTaskId) return;
+  const key = noteDraftKey(normalizedTaskId, "");
+  window.clearTimeout(nodeNoteSaveTimers.get(key));
+  nodeNoteSaveTimers.delete(key);
+  nodeNoteDrafts.delete(key);
+  const entry = milkdownEditors.get(key);
+  entry?.instance?.destroy?.().catch?.(() => {});
+  milkdownEditors.delete(key);
+  if (cachedKnowledgePane?.taskId === normalizedTaskId) {
+    cachedKnowledgePane.host?.remove();
+    cachedKnowledgePane = null;
+  }
 }
 
 function restoreCachedKnowledgePane(task) {
@@ -5071,7 +5105,9 @@ function restoreCachedKnowledgePane(task) {
   if (cachedKnowledgePane.taskId !== task.id) return;
   const replacement = document.querySelector(".task-knowledge-pane[data-task-id]");
   if (!replacement) return;
-  replacement.replaceWith(cachedKnowledgePane.pane);
+  const host = replacement.querySelector(".milkdown-editor-host[data-task-id]");
+  if (!host) return;
+  host.replaceWith(cachedKnowledgePane.host);
   cachedKnowledgePane = null;
 }
 
