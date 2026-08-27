@@ -1,51 +1,55 @@
-# Design QA — Workbench Background / Progress / Conclusion Cards
+# Design QA — Processing Flow Tree
 
-- Source visual truth: `/var/folders/6r/6tb8rrdx2k38kb0mp8gqt6c80000gn/T/codex-clipboard-b9fd13b9-0824-4a38-ad3a-beabef4ff863.png`
-- Implementation screenshot: `/Volumes/T7/work/personal-task-track/.planning/workbench-three-input-cards/implementation-pass-2.png`
-- Focus screenshot: `/Volumes/T7/work/personal-task-track/.planning/workbench-three-input-cards/implementation-focus.png`
-- Comparison image: `/Volumes/T7/work/personal-task-track/.planning/workbench-three-input-cards/comparison-pass-2.png`
-- App viewport: 1199 × 768 px, Electron light theme, device scale represented by the captured desktop screenshot.
-- Source pixels: 1006 × 310 px. Source card crop: 948 × 158 px, padded to 948 × 166 px.
-- Implementation pixels: 1199 × 768 px. Implementation card crop: 780 × 137 px, normalized to 948 × 166 px.
-- Comparison state: same three-card light-theme workbench region; source contains illustrative copy while implementation contains the user's real task values.
+## Scope
 
-## Full-view comparison evidence
+Rebuild the processing-flow hierarchy from the supplied visual reference and make the node detail page appear only after a node is selected.
 
-The live app keeps the existing page hierarchy and places three equal cards in the same workbench position. The cards use the source's quiet white surface, low-contrast green-gray border, rounded corners, restrained shadow, green line icons, compact title row, and muted multiline body text. The Progress card retains a real percentage ring in the upper-right; the Conclusion card retains the matching edit affordance.
+## Evidence
 
-## Focused-region comparison evidence
+- Source reference: `/var/folders/6r/6tb8rrdx2k38kb0mp8gqt6c80000gn/T/codex-clipboard-89f5a87d-3826-49f0-9113-693c4c0233b5.png`
+- Source dimensions: 529 × 341 px
+- Implementation screenshot: `/Volumes/T7/work/personal-task-track/.planning/flow_tree_reference_20260827/implementation-tree.png`
+- Detail-page screenshot: `/Volumes/T7/work/personal-task-track/.planning/flow_tree_reference_20260827/implementation-detail-final.png`
+- Implementation viewport: 1280 × 720 px
 
-`comparison-pass-2.png` stacks equal-width normalized card crops: source on top and implementation below. The card grid, individual framing, title/icon alignment, upper-right actions, typography hierarchy, and spacing correspond closely. The implementation intentionally omits the source's non-editable checklist bullets and status pills because the product requirement is three independent freeform inputs.
+## Visual comparison
 
-## Required fidelity surfaces
+| Area | Reference | Implementation | Result |
+|---|---|---|---|
+| Root inset | Marker centered about 33 px from the tree canvas edge | Marker centered about 32 px from the processing-flow canvas edge | Passed |
+| Hierarchy step | Nested markers advance about 48 px | `--tree-depth` advances 48 px | Passed |
+| Row rhythm | Compact 26–29 px rows | 29 px minimum row height | Passed |
+| Tree connector | Thin gray-green vertical rails and elbows | 1 px `#d3ddda` rails and 42 px elbows terminating at the next marker | Passed |
+| Node marker | Small teal disc/ring marker | Bundled Feather `disc` icon at 12 px | Passed |
+| Status badge | Inline TODO / DOING / DONE chips | Inline lowercase chips retain the reference palette while following the final annotated interaction copy | Passed |
+| Surface | Flat near-white canvas without node cards | Flat canvas; no node borders, card radii, or shadows | Passed |
+| Completed state | DONE chip is struck through, title remains readable | DONE chip is struck through; title is not struck through | Passed |
 
-- Fonts and typography: passed. Existing application font remains consistent with the rest of the product; weight, size, line height, and muted body hierarchy match the reference direction.
-- Spacing and layout rhythm: passed. Three equal cards, compact gaps, 14 px radius, internal padding, and header/body separation align with the reference.
-- Colors and visual tokens: passed. Existing project green is used for icons, progress, hover, and focus; card surfaces and borders remain quiet and consistent with the app.
-- Image quality and asset fidelity: passed. Header icons use the official Feather v4.29.2 sprite; no placeholder or improvised raster asset is used.
-- Copy and content: passed with expected product difference. Labels remain 背景 / 进展 / 结论, while body content remains user-authored task data.
+## Interaction verification
 
-## Interaction evidence
+| Check | Evidence | Result |
+|---|---|---|
+| Default detail state | Rendered page contains no `.node-detail-page` and no `.has-node-page` | Passed |
+| Open detail | Clicking a node title produces one `.node-detail-page` and one split layout | Passed |
+| Detail placement | Right page starts at the split boundary and remains at scrollTop 0 | Passed |
+| Return to tree | “返回处理流” removes the detail page and restores the full-width tree | Passed |
+| Detail hierarchy | Only the complete node path remains; parent and depth rows are removed | Passed |
+| Status editing | Clicking a lowercase tree badge cycles `todo → doing → done → blocked → todo` without opening details; the detail page shows only the current status below the title | Passed |
+| Metadata | Only the latest modification time remains, beside the title | Passed |
+| Node actions | Redundant child/sibling/delete footer is absent; shortcuts and context menu remain available | Passed |
+| Existing node behavior | Collapse, status action, context menu, drag handle, title editing, and hierarchy rendering remain wired | Passed |
 
-- Accessibility exposes all three controls as settable text entry areas.
-- Clicking the Progress body focuses the existing textarea without changing its content.
-- Focus is shown at card level with a restrained green frame; no orange textarea outline appears.
-- Progress percentage is calculated from the existing task node summary rather than hard-coded.
+## Iteration history
 
-## Comparison history
-
-### Pass 1 — blocked
-
-- P1: Progress ring and Conclusion edit icon wrapped below their titles.
-- Fix: strengthened the card-child header selector and defined a full-width two-column grid.
-
-### Pass 2 — passed
-
-- The Progress ring and Conclusion edit icon are aligned in the upper-right.
-- No actionable P0, P1, or P2 fidelity issues remain.
-
-## Follow-up polish
-
-- P3: Real task copy may naturally produce different card density than the illustrative reference; the textarea scroll behavior handles longer content without changing card layout.
+1. Replaced the permanent empty inspector with conditional detail-page rendering.
+2. Reordered each row to marker → status badge → title and replaced text-symbol controls with the bundled Feather icon sprite.
+3. Matched the reference’s 48 px hierarchy advance and compact row rhythm.
+4. Fixed node-title clicks so they open the detail page despite editable-field event isolation.
+5. Prevented automatic record focus from scrolling the newly opened detail page away from its header.
+6. Captured the expanded default tree and selected-node detail state in the in-app browser and compared them with the source reference.
+7. Applied browser annotations: removed the detail kicker, parent/depth rows, extra timestamps, and node-action footer; moved the latest modification time beside the title; converted status to a horizontal segmented action row; and restyled the record-save action.
+8. Recaptured the refined detail page and confirmed the requested information hierarchy visually.
+9. Applied the final browser annotations: made lowercase status badges directly clickable with the annotated cycle order, removed the detail status selector, placed the current status below the title, shortened the save action to “保存”, and increased the latest-modified text to 12 px.
+10. Click-tested all four status transitions in the in-app browser, confirmed the detail page stayed closed during badge clicks, and recaptured the selected-node detail state.
 
 final result: passed

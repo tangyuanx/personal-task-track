@@ -2744,16 +2744,77 @@ test("missing conclusion highlights only the current task without locking task s
   assert.doesNotMatch(styles, /\.conclusion-prompt \{/);
 });
 
-test("flow status renders as an independent text-only element", async () => {
+test("processing flow matches the compact reference tree and opens details only on demand", async () => {
   const [styles, app] = await Promise.all([
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "styles.css"), "utf8"),
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "app.js"), "utf8"),
   ]);
+  const harness = await rendererHarness();
+  const result = harness.json(`(() => {
+    const task = normalizeTasks([{
+      id: "flow_reference",
+      title: "Windows 自动更新下载失败",
+      nodes: [{
+        id: "root_todo",
+        title: "定位 Windows 自动更新下载失败",
+        status: "todo",
+        children: [{
+          id: "child_doing",
+          title: "复现：安装后触发更新",
+          status: "later",
+          children: [{ id: "leaf_done", title: "校验 CI 上传目录", status: "done", children: [] }]
+        }]
+      }]
+    }])[0];
+    state.tasks = [task];
+    state.activeTaskId = task.id;
+    state.taskPane = "flow";
+    state.selectedNodeId = "";
+    const defaultPage = renderTaskPage(task);
+    const tree = renderFlowNode(task.id, task.nodes[0], 0, 0, [], true);
+    state.selectedNodeId = "child_doing";
+    state.recordDraft = "详情记录";
+    const selectedPage = renderTaskPage(task);
+    const detail = renderNodeDetailPage(task.id, findNode(task.nodes, "child_doing"));
+    const cycleStatuses = [];
+    for (let index = 0; index < 4; index += 1) {
+      cycleNodeStatus(task.id, "root_todo");
+      cycleStatuses.push(findNode(task.nodes, "root_todo").status);
+    }
+    return { defaultPage, selectedPage, tree, detail, cycleStatuses };
+  })()`);
+  const finalFlowRules = styles.slice(styles.lastIndexOf("v0.1.135 — reference-matched processing tree"));
 
-  assert.match(app, /class="flow-status-text status-\$\{node\.status\}"/);
-  assert.doesNotMatch(app, /class="flow-status status-\$\{node\.status\}"/);
-  assert.match(styles, /\.flow-status-text::before,[\s\S]*display: none !important;/);
-  assert.match(styles, /\.flow-status-text\s*\{[\s\S]*box-shadow: none;/);
+  assert.match(result.tree, /flow-node-marker flow-status-bullet status-todo/);
+  assert.match(result.tree, /feather-sprite\.svg#disc/);
+  assert.match(result.tree, /flow-status-badge status-todo"[^>]*data-action="cycle-node-status"[^>]*>todo</);
+  assert.match(result.tree, /flow-status-badge status-later"[^>]*data-action="cycle-node-status"[^>]*>doing</);
+  assert.match(result.tree, /flow-status-badge status-done"[^>]*data-action="cycle-node-status"[^>]*>done</);
+  assert.deepEqual(result.cycleStatuses, ["later", "done", "blocked", "todo"]);
+  assert.match(result.tree, /class="flow-tree-rail/);
+  assert.match(result.tree, /class="flow-tree-elbow"/);
+  assert.match(result.tree, /data-flow-select data-task-id="flow_reference" data-node-id="root_todo"/);
+  assert.doesNotMatch(result.defaultPage, /node-detail-page|node-inspector-empty|has-node-page/);
+  assert.match(result.selectedPage, /flow-workspace has-node-page/);
+  assert.match(result.selectedPage, /class="node-detail-page"/);
+  assert.match(result.selectedPage, /aria-label="返回处理流"/);
+  assert.match(result.detail, /class="node-detail-updated"[^>]*>最近修改 /);
+  assert.match(result.detail, /node-detail-title-row/);
+  assert.match(result.detail, /node-detail-current-status flow-status-badge status-later">doing</);
+  assert.doesNotMatch(result.detail, /node-detail-status-section|node-detail-status-options|node-detail-status-option/);
+  assert.match(result.detail, /node-inspector-breadcrumb"><span>路径<\/span>/);
+  assert.match(result.detail, /data-action="save-node-detail">保存<\/button>/);
+  assert.doesNotMatch(result.detail, /保存记录/);
+  assert.doesNotMatch(result.detail, /节点详情<\/span>|父节点|第 2 层|创建时间|状态变化|完成时间|新增下级节点|新增同级节点|删除节点/);
+  assert.match(app, /selectedNode \? renderNodeDetailPage\(task\.id, selectedNode\) : ""/);
+  assert.match(app, /element\.classList\.contains\("flow-title-input"\)[\s\S]*selectNodeForInspector\(element\.dataset\.taskId, element\.dataset\.nodeId\);[\s\S]*render\(\);/);
+  assert.match(app, /recordInput\.focus\(\{ preventScroll: true \}\);/);
+  assert.match(finalFlowRules, /\.flow-outline-row\s*\{[\s\S]*min-height:\s*29px;[\s\S]*gap:\s*8px;[\s\S]*var\(--tree-depth\) \* 48px/);
+  assert.match(finalFlowRules, /\.flow-status-badge\s*\{[\s\S]*height:\s*19px;[\s\S]*border-radius:\s*2px;/);
+  assert.match(finalFlowRules, /\.flow-workspace\.has-node-page\s*\{[\s\S]*grid-template-columns:/);
+  assert.match(finalFlowRules, /\.node-detail-updated\s*\{[\s\S]*font-size:\s*12px;[\s\S]*font-weight:\s*520;/);
+  assert.doesNotMatch(finalFlowRules, /\.node-detail-status-options\s*\{/);
+  assert.match(finalFlowRules, /\.node-detail-page \.node-inspector-save\s*\{[\s\S]*border-radius:\s*6px;[\s\S]*background:\s*#4f766d;/);
 });
 
 test("task repository renders priority without an update timestamp", async () => {

@@ -1809,7 +1809,7 @@ function renderTaskPage(task) {
       ${renderTaskPaneTabs(task)}
 
       <section class="task-workbench lower">
-        ${state.taskPane === "flow" ? `<section class="task-workspace flow-workspace">
+        ${state.taskPane === "flow" ? `<section class="task-workspace flow-workspace ${selectedNode ? "has-node-page" : ""}">
           <section class="flow-section flow-main" data-context="flow-root" data-task-id="${task.id}">
           ${
             topNodes.length
@@ -1817,7 +1817,7 @@ function renderTaskPage(task) {
               : `<div class="flow-list flow-outline empty-flow" data-context="flow-root" data-task-id="${task.id}"></div>`
           }
           </section>
-          ${renderNodeInspector(task.id, selectedNode)}
+          ${selectedNode ? renderNodeDetailPage(task.id, selectedNode) : ""}
         </section>` : state.taskPane === "notes" ? renderTaskKnowledge(task) : renderTaskHistory(task)}
       </section>
     </div>
@@ -2110,20 +2110,21 @@ function renderFlowNode(taskId, node, depth, rootIndex = 0, lineage = [], isLast
       ).join("")}<span class="flow-tree-elbow"></span></span>`
     : "";
   const statusLabel = nodeStatusText(node.status);
+  const statusBadgeLabel = nodeStatusBadgeText(node.status);
   const collapseControl = children.length
-    ? `<button class="flow-collapse-toggle" type="button" data-action="toggle-node-collapse" data-task-id="${taskId}" data-node-id="${node.id}" aria-label="${node.collapsed ? "展开" : "折叠"}节点" aria-expanded="${!node.collapsed}">${node.collapsed ? "▸" : "▾"}</button>`
+    ? `<button class="flow-collapse-toggle" type="button" data-action="toggle-node-collapse" data-task-id="${taskId}" data-node-id="${node.id}" aria-label="${node.collapsed ? "展开" : "折叠"}节点" aria-expanded="${!node.collapsed}">${briefFieldIcon(node.collapsed ? "chevron-right" : "chevron-down", "flow-row-icon")}</button>`
     : `<span class="flow-collapse-spacer" aria-hidden="true"></span>`;
   return `
     <article class="flow-outline-node ${node.status} ${isSelected ? "selected" : ""}" style="--tree-depth:${depth}" data-context="node" data-task-id="${taskId}" data-node-id="${node.id}" data-flow-drag-target>
-      <div class="flow-outline-row" data-flow-select>
+      <div class="flow-outline-row" data-flow-select data-task-id="${taskId}" data-node-id="${node.id}">
         <span class="flow-tree-zone">${treeGuides}</span>
-        <button class="flow-status-bullet status-${node.status}" type="button" data-action="node-status-primary-action" data-task-id="${taskId}" data-node-id="${node.id}" aria-label="${escAttr(statusLabel)}：点击切换或选择状态">${node.status === "done" ? "✓" : node.status === "blocked" ? "!" : node.status === "later" ? "◷" : ""}</button>
-        <span class="flow-status-text status-${node.status}" aria-hidden="true">${statusLabel}</span>
-        ${collapseControl}
+        <button class="flow-node-marker flow-status-bullet status-${node.status}" type="button" data-action="cycle-node-status" data-task-id="${taskId}" data-node-id="${node.id}" aria-label="${escAttr(statusLabel)}：点击切换状态">${briefFieldIcon("disc", "flow-node-marker-icon")}</button>
+        <button class="flow-status-badge status-${node.status}" type="button" data-action="cycle-node-status" data-task-id="${taskId}" data-node-id="${node.id}" aria-label="${escAttr(`${statusBadgeLabel}，点击切换状态`)}">${statusBadgeLabel}</button>
         ${nodeTitleInputHtml(node, taskId)}
-        <button class="flow-node-more" type="button" data-action="open-node-menu" data-task-id="${taskId}" data-node-id="${node.id}" aria-label="打开节点菜单">···</button>
+        ${collapseControl}
+        <button class="flow-node-more" type="button" data-action="open-node-menu" data-task-id="${taskId}" data-node-id="${node.id}" aria-label="打开节点菜单">${briefFieldIcon("more-horizontal", "flow-row-icon")}</button>
         <button class="flow-node-drag-handle" type="button" draggable="true" data-flow-drag-source data-task-id="${taskId}" data-node-id="${node.id}" aria-label="${escAttr(`拖拽重组节点：${node.title || "未命名节点"}`)}" title="拖拽调整节点层级和顺序">
-          <svg viewBox="0 0 12 18" aria-hidden="true"><circle cx="3" cy="4" r="1.2"></circle><circle cx="9" cy="4" r="1.2"></circle><circle cx="3" cy="9" r="1.2"></circle><circle cx="9" cy="9" r="1.2"></circle><circle cx="3" cy="14" r="1.2"></circle><circle cx="9" cy="14" r="1.2"></circle></svg>
+          ${briefFieldIcon("move", "flow-row-icon")}
         </button>
       </div>
       ${
@@ -2178,26 +2179,21 @@ function getNodePath(nodes, nodeId, path = []) {
   return [];
 }
 
-function getNodeDepth(nodes, nodeId) {
-  return Math.max(0, getNodePath(nodes, nodeId).length - 1);
-}
-
-function renderNodeInspector(taskId, node) {
-  if (!node) {
-    return `<aside class="node-inspector node-inspector-empty"><p>选择一个节点查看详情</p></aside>`;
-  }
+function renderNodeDetailPage(taskId, node) {
+  if (!node) return "";
   const task = state.tasks.find((item) => item.id === taskId);
   const path = task ? getNodePath(task.nodes, node.id) : [];
-  const parent = path.length > 1 ? path[path.length - 2] : null;
-  const statusOptions = Array.from(nodeStatusValues).map((status) => `<option value="${status}" ${status === node.status ? "selected" : ""}>${nodeStatusText(status)}</option>`).join("");
   return `
-    <aside class="node-inspector" data-task-id="${taskId}" data-node-id="${node.id}">
-      <header class="node-inspector-header"><div><span class="node-inspector-kicker">当前节点</span><h2>${esc(node.title || "未命名节点")}</h2></div><button type="button" data-action="close-node-detail" aria-label="关闭节点详情">×</button></header>
-      <section class="node-inspector-section"><label>状态<select data-edit-key="status" data-task-id="${taskId}" data-node-id="${node.id}">${statusOptions}</select></label></section>
-      <section class="node-inspector-section node-inspector-hierarchy"><div><span>父节点</span><strong>${esc(parent?.title || "根节点")}</strong></div><div><span>层级</span><strong>第 ${getNodeDepth(task?.nodes || [], node.id) + 1} 层</strong></div><div class="node-inspector-breadcrumb"><span>路径</span><strong>${esc(path.map((item) => item.title || "未命名").join(" / ") || "—")}</strong></div></section>
-      <section class="node-inspector-section"><label>记录<textarea class="record-modal-textarea node-inspector-note" data-record-input placeholder="记录该节点的处理过程、关键数据、判断依据、结果或后续事项……">${esc(state.recordDraft)}</textarea></label><button class="node-inspector-save" type="button" data-action="save-node-detail">保存记录</button></section>
-      <section class="node-inspector-section node-inspector-meta"><div><span>创建时间</span><time>${formatShort(node.createdAt)}</time></div><div><span>最近修改</span><time>${formatShort(node.updatedAt)}</time></div><div><span>状态变化</span><time>${formatShort(node.statusChangedAt)}</time></div><div><span>完成时间</span><time>${node.completedAt ? formatShort(node.completedAt) : "—"}</time></div></section>
-      <footer class="node-inspector-actions"><button type="button" data-action="add-child-node" data-task-id="${taskId}" data-node-id="${node.id}">＋新增下级节点</button><button type="button" data-action="add-sibling-node" data-task-id="${taskId}" data-node-id="${node.id}">＋新增同级节点</button><button class="danger" type="button" data-action="delete-node" data-task-id="${taskId}" data-node-id="${node.id}">删除节点</button></footer>
+    <aside class="node-detail-page" data-task-id="${taskId}" data-node-id="${node.id}" aria-label="节点详情页面">
+      <header class="node-inspector-header">
+        <button class="node-detail-back" type="button" data-action="close-node-detail" aria-label="返回处理流">${briefFieldIcon("arrow-left", "node-detail-back-icon")}<span>返回处理流</span></button>
+        <div class="node-detail-heading">
+          <div class="node-detail-title-row">${inputHtml("title", node.title, taskId, "node-detail-title", node.id)}<time class="node-detail-updated" datetime="${escAttr(node.updatedAt)}">最近修改 ${formatShort(node.updatedAt)}</time></div>
+          <span class="node-detail-current-status flow-status-badge status-${node.status}">${nodeStatusBadgeText(node.status)}</span>
+        </div>
+      </header>
+      <section class="node-inspector-section node-inspector-hierarchy"><div class="node-inspector-breadcrumb"><span>路径</span><strong>${esc(path.map((item) => item.title || "未命名").join(" / ") || "—")}</strong></div></section>
+      <section class="node-inspector-section"><label>记录<textarea class="record-modal-textarea node-inspector-note" data-record-input placeholder="记录该节点的处理过程、关键数据、判断依据、结果或后续事项……">${esc(state.recordDraft)}</textarea></label><button class="node-inspector-save" type="button" data-action="save-node-detail">保存</button></section>
     </aside>
   `;
 }
@@ -4119,6 +4115,10 @@ function bindTaskRepositoryRows(scope = document) {
     });
     element.addEventListener("click", (event) => {
       event.stopPropagation();
+      if (element.classList.contains("flow-title-input")) {
+        selectNodeForInspector(element.dataset.taskId, element.dataset.nodeId);
+        render();
+      }
     });
     element.addEventListener("blur", (event) => {
       if (!event.relatedTarget && !appEditingPointerDown && captureAppSwitchEditingFocus(event.target)) return;
@@ -4410,7 +4410,7 @@ function bindTaskRepositoryRows(scope = document) {
 
   document.querySelectorAll(".flow-outline-row[data-flow-select]").forEach((row) => {
     row.addEventListener("click", (event) => {
-      if (event.target.closest("button, input, select, textarea")) return;
+      if (event.target.closest("button, select, textarea")) return;
       selectNodeForInspector(row.dataset.taskId, row.dataset.nodeId);
       render();
     });
@@ -4946,7 +4946,7 @@ function focusPendingElement() {
 
   const recordInput = document.querySelector("[data-record-input]");
   if (recordInput) {
-    recordInput.focus();
+    recordInput.focus({ preventScroll: true });
     const end = recordInput.value.length;
     recordInput.setSelectionRange(end, end);
     return;
@@ -5683,24 +5683,7 @@ async function action(data, event = null) {
   if (data.action === "toggle-node-collapse") toggleNodeCollapse(data.taskId, data.nodeId);
   if (data.action === "toggle-all-nodes") toggleAllNodes(data.taskId);
   if (data.action === "mark-node-status") markNodeStatus(data.taskId, data.nodeId, data.status);
-  if (data.action === "node-status-primary-action") {
-    const task = state.tasks.find((item) => item.id === data.taskId);
-    const node = task ? findNode(task.nodes, data.nodeId) : null;
-    if (node?.status === "todo" || node?.status === "done") {
-      toggleNodeDone(data.taskId, data.nodeId);
-    } else if (node) {
-      state.contextMenu = {
-        kind: "node",
-        taskId: data.taskId,
-        nodeId: data.nodeId,
-        x: Math.min((event?.clientX || 0) + 8, window.innerWidth - 210),
-        y: Math.min((event?.clientY || 0) + 8, window.innerHeight - 245),
-      };
-      selectNodeForInspector(data.taskId, data.nodeId);
-      render();
-      return;
-    }
-  }
+  if (data.action === "cycle-node-status") cycleNodeStatus(data.taskId, data.nodeId);
   if (data.action === "open-node-menu") {
     state.contextMenu = {
       kind: "node",
@@ -6478,6 +6461,15 @@ function markNodeStatus(taskId, nodeId, status) {
   task.updatedAt = timestamp;
 }
 
+function cycleNodeStatus(taskId, nodeId) {
+  const task = state.tasks.find((item) => item.id === taskId);
+  const node = task ? findNode(task.nodes, nodeId) : null;
+  if (!node) return;
+  const statusCycle = ["todo", "later", "done", "blocked"];
+  const currentIndex = statusCycle.indexOf(node.status);
+  markNodeStatus(taskId, nodeId, statusCycle[(currentIndex + 1) % statusCycle.length]);
+}
+
 /**
  * Delete a node and its descendants from a task's node tree.
  * @param {string} taskId - Task containing the node
@@ -6622,6 +6614,13 @@ function nodeStatusText(status) {
   if (status === "blocked") return "卡住";
   if (status === "later") return "稍后";
   return "未完成";
+}
+
+function nodeStatusBadgeText(status) {
+  if (status === "done") return "done";
+  if (status === "blocked") return "blocked";
+  if (status === "later") return "doing";
+  return "todo";
 }
 
 
