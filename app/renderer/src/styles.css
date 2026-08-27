@@ -6321,6 +6321,201 @@ body {
   }
 }
 
+/* Outliner processing flow and persistent node inspector. */
+.task-workbench:has(.flow-workspace) {
+  display: block;
+  padding-top: 0;
+}
+
+.flow-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  min-height: 0;
+  flex: 1;
+}
+
+.flow-main {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.flow-outline {
+  min-width: max-content;
+  margin: 12px 0 22px 42px;
+  overflow: auto;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.flow-outline-node {
+  display: block;
+  min-width: 720px;
+}
+
+.flow-outline-row {
+  position: relative;
+  display: flex;
+  min-height: 38px;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 12px 2px calc(8px + var(--tree-depth) * 22px);
+  border-radius: 7px;
+  color: var(--ink);
+}
+
+.flow-outline-row:hover {
+  background: color-mix(in srgb, var(--focus-field) 55%, transparent);
+}
+
+.flow-outline-node.selected > .flow-outline-row {
+  background: color-mix(in srgb, var(--selected) 72%, transparent);
+  box-shadow: inset 2px 0 0 var(--focus);
+}
+
+.flow-tree-zone {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: calc(var(--tree-depth) * 22px + 8px);
+  pointer-events: none;
+}
+
+.flow-tree-guides {
+  position: absolute;
+  inset: 0;
+}
+
+.flow-tree-rail {
+  position: absolute;
+  top: -19px;
+  bottom: 50%;
+  left: calc(8px + var(--rail-index) * 22px);
+  width: 1px;
+  background: var(--line);
+}
+
+.flow-tree-rail.continues { bottom: -19px; }
+
+.flow-tree-elbow {
+  position: absolute;
+  top: 50%;
+  left: calc(8px + (var(--tree-depth) - 1) * 22px);
+  width: 22px;
+  height: 1px;
+  background: var(--line);
+}
+
+.flow-status-bullet,
+.flow-collapse-toggle,
+.flow-collapse-spacer,
+.flow-node-more {
+  flex: 0 0 24px;
+}
+
+.flow-status-bullet {
+  display: grid;
+  width: 21px;
+  height: 21px;
+  place-items: center;
+  border: 1.5px solid var(--todo);
+  border-radius: 50%;
+  padding: 0;
+  color: #fff;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.flow-status-bullet.status-done { border-color: var(--focus); background: var(--focus); }
+.flow-status-bullet.status-blocked { border-color: var(--red); color: #fff; background: var(--red); }
+.flow-status-bullet.status-later { border-color: var(--muted); color: var(--muted); background: color-mix(in srgb, var(--muted) 13%, transparent); }
+.flow-outline-row > .flow-status-text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+.flow-collapse-toggle,
+.flow-node-more {
+  height: 26px;
+  border: 0;
+  border-radius: 5px;
+  padding: 0;
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+}
+
+.flow-collapse-toggle:hover,
+.flow-node-more:hover { color: var(--heading); background: var(--focus-field); }
+
+.flow-title-input {
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
+  height: 32px;
+  border: 0;
+  background: transparent;
+  font-size: 14px;
+  font-weight: 620;
+}
+
+.flow-outline-node.done .flow-title-input { color: var(--faint); text-decoration: line-through; }
+.flow-outline-node.blocked .flow-title-input,
+.flow-outline-node.later .flow-title-input { text-decoration: none; }
+
+.flow-node-more { opacity: 0; font-size: 16px; }
+.flow-outline-row:hover .flow-node-more,
+.flow-outline-node.selected .flow-node-more { opacity: 1; }
+
+.node-inspector {
+  min-width: 0;
+  overflow-y: auto;
+  border-left: 1px solid var(--line-soft);
+  background: var(--panel);
+}
+
+.node-inspector-empty {
+  display: grid;
+  min-height: 180px;
+  place-items: center;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.node-inspector-header,
+.node-inspector-section,
+.node-inspector-actions { padding: 16px 18px; }
+.node-inspector-header { display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--line-soft); }
+.node-inspector-header h2 { margin: 4px 0 0; color: var(--heading); font-size: 16px; line-height: 1.35; }
+.node-inspector-header button { border: 0; color: var(--muted); background: transparent; font-size: 20px; cursor: pointer; }
+.node-inspector-kicker { color: var(--muted); font-size: 11px; letter-spacing: .08em; }
+.node-inspector-section { border-bottom: 1px solid var(--line-soft); }
+.node-inspector-section > label { display: grid; gap: 8px; color: var(--muted); font-size: 12px; }
+.node-inspector-section select { width: 100%; }
+.node-inspector-note { min-height: 180px; max-height: 38vh; margin-top: 2px; }
+.node-inspector-save { margin-top: 9px; }
+.node-inspector-hierarchy,
+.node-inspector-meta { display: grid; gap: 10px; }
+.node-inspector-hierarchy div,
+.node-inspector-meta div { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; }
+.node-inspector-hierarchy span,
+.node-inspector-meta span { color: var(--muted); }
+.node-inspector-hierarchy strong,
+.node-inspector-meta time { color: var(--heading); font-weight: 600; text-align: right; }
+.node-inspector-breadcrumb { display: grid !important; gap: 4px; }
+.node-inspector-breadcrumb strong { overflow-wrap: anywhere; text-align: left; }
+.node-inspector-actions { display: grid; gap: 8px; }
+.node-inspector-actions button { min-height: 32px; text-align: left; }
+
+@media (max-width: 980px) {
+  .flow-workspace { grid-template-columns: minmax(0, 1fr) 300px; }
+}
+
+@media (max-width: 760px) {
+  .flow-workspace { display: block; overflow: auto; }
+  .flow-main { min-height: 300px; }
+  .node-inspector { border-top: 1px solid var(--line-soft); border-left: 0; }
+}
+
 /* ============================================================
    Phase 19 — compact empty state and direct theme switching
    ============================================================ */
@@ -10774,3 +10969,54 @@ body.flow-node-reordering * {
     margin-left: 22px;
   }
 }
+
+/* Final flow overrides: keep the tree presentation above legacy table layers. */
+.task-workbench:has(.flow-workspace) { display: block; padding-top: 0; }
+.flow-workspace { display: grid; grid-template-columns: minmax(0, 1fr) 340px; min-height: 0; flex: 1; }
+.flow-main { min-width: 0; overflow: hidden; }
+.flow-outline { min-width: max-content; margin: 12px 0 22px 42px; overflow: auto; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.flow-outline-node { display: block; min-width: 720px; }
+.flow-outline-row { position: relative; display: flex; min-height: 38px; align-items: center; gap: 6px; padding: 2px 12px 2px calc(8px + var(--tree-depth) * 22px); border-radius: 7px; color: var(--ink); }
+.flow-outline-row:hover { background: color-mix(in srgb, var(--focus-field) 55%, transparent); }
+.flow-outline-node.selected > .flow-outline-row { background: color-mix(in srgb, var(--selected) 72%, transparent); box-shadow: inset 2px 0 0 var(--focus); }
+.flow-tree-zone { position: absolute; inset: 0 auto 0 0; width: calc(var(--tree-depth) * 22px + 8px); pointer-events: none; }
+.flow-tree-guides { position: absolute; inset: 0; }
+.flow-tree-rail { position: absolute; top: -19px; bottom: 50%; left: calc(8px + var(--rail-index) * 22px); width: 1px; background: var(--line); }
+.flow-tree-rail.continues { bottom: -19px; }
+.flow-tree-elbow { position: absolute; top: 50%; left: calc(8px + (var(--tree-depth) - 1) * 22px); width: 22px; height: 1px; background: var(--line); }
+.flow-status-bullet { display: grid; width: 21px; height: 21px; flex: 0 0 21px; place-items: center; border: 1.5px solid var(--todo); border-radius: 50%; padding: 0; color: #fff; background: transparent; font-size: 12px; font-weight: 800; cursor: pointer; }
+.flow-status-bullet.status-done { border-color: var(--focus); background: var(--focus); }
+.flow-status-bullet.status-blocked { border-color: var(--red); background: var(--red); }
+.flow-status-bullet.status-later { border-color: var(--muted); color: var(--muted); background: color-mix(in srgb, var(--muted) 13%, transparent); }
+.flow-collapse-toggle, .flow-collapse-spacer, .flow-node-more { width: 24px; height: 26px; flex: 0 0 24px; border: 0; border-radius: 5px; padding: 0; color: var(--muted); background: transparent; cursor: pointer; }
+.flow-collapse-toggle:hover, .flow-node-more:hover { color: var(--heading); background: var(--focus-field); }
+.flow-title-input { width: auto; min-width: 0; height: 32px; flex: 1 1 auto; border: 0; background: transparent; font-size: 14px; font-weight: 620; }
+.flow-outline-node.done .flow-title-input { color: var(--faint); text-decoration: line-through; }
+.flow-outline-node.blocked .flow-title-input, .flow-outline-node.later .flow-title-input { text-decoration: none; }
+.flow-node-more { opacity: 0; font-size: 16px; }
+.flow-outline-row:hover .flow-node-more, .flow-outline-node.selected .flow-node-more { opacity: 1; }
+.flow-outline-row .flow-node-drag-handle { position: static; width: 24px; height: 26px; flex: 0 0 24px; transform: none; }
+.flow-outline-row:hover .flow-node-drag-handle, .flow-outline-node.selected .flow-node-drag-handle { opacity: .82; }
+.node-inspector { min-width: 0; overflow-y: auto; border-left: 1px solid var(--line-soft); background: var(--panel); }
+.node-inspector-empty { display: grid; min-height: 180px; place-items: center; color: var(--muted); font-size: 13px; }
+.node-inspector-header, .node-inspector-section, .node-inspector-actions { padding: 16px 18px; }
+.node-inspector-header { display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--line-soft); }
+.node-inspector-header h2 { margin: 4px 0 0; color: var(--heading); font-size: 16px; line-height: 1.35; }
+.node-inspector-header button { border: 0; color: var(--muted); background: transparent; font-size: 20px; cursor: pointer; }
+.node-inspector-kicker { color: var(--muted); font-size: 11px; letter-spacing: .08em; }
+.node-inspector-section { border-bottom: 1px solid var(--line-soft); }
+.node-inspector-section > label { display: grid; gap: 8px; color: var(--muted); font-size: 12px; }
+.node-inspector-section select { width: 100%; }
+.node-inspector-note { min-height: 180px; max-height: 38vh; margin-top: 2px; }
+.node-inspector-save { margin-top: 9px; }
+.node-inspector-hierarchy, .node-inspector-meta { display: grid; gap: 10px; }
+.node-inspector-hierarchy div, .node-inspector-meta div { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; }
+.node-inspector-hierarchy span, .node-inspector-meta span { color: var(--muted); }
+.node-inspector-hierarchy strong, .node-inspector-meta time { color: var(--heading); font-weight: 600; text-align: right; }
+.node-inspector-breadcrumb { display: grid !important; gap: 4px; }
+.node-inspector-breadcrumb strong { overflow-wrap: anywhere; text-align: left; }
+.node-inspector-actions { display: grid; gap: 8px; }
+.node-inspector-actions button { min-height: 32px; text-align: left; }
+
+@media (max-width: 980px) { .flow-workspace { grid-template-columns: minmax(0, 1fr) 300px; } }
+@media (max-width: 760px) { .flow-workspace { display: block; overflow: auto; } .flow-main { min-height: 300px; } .node-inspector { border-top: 1px solid var(--line-soft); border-left: 0; } }

@@ -369,6 +369,8 @@ function makeNode(taskId, parentId, order) {
     conclusion: "",
     createdAt: now(),
     updatedAt: now(),
+    statusChangedAt: now(),
+    completedAt: "",
     collapsed: false,
     children: [],
   };
@@ -459,6 +461,11 @@ function normalizeNodes(nodes, taskId = "", parentId = null, seenNodeIds = new S
             conclusion: normalizeText(node.conclusion),
             createdAt,
             updatedAt: normalizeDateValue(node.updatedAt, createdAt),
+            statusChangedAt: normalizeOptionalDateValue(
+              node.statusChangedAt,
+              node.updatedAt || createdAt,
+            ),
+            completedAt: normalizeOptionalDateValue(node.completedAt),
             collapsed: Boolean(node.collapsed),
             children: normalizeNodes(node.children, taskId, nodeId, seenNodeIds),
           };
@@ -1786,15 +1793,16 @@ function renderTaskPage(task) {
       ${renderTaskPaneTabs(task)}
 
       <section class="task-workbench lower">
-        ${state.taskPane === "flow" ? `<section class="flow-section flow" data-context="flow-root" data-task-id="${task.id}">
+        ${state.taskPane === "flow" ? `<section class="task-workspace flow-workspace">
+          <section class="flow-section flow-main" data-context="flow-root" data-task-id="${task.id}">
           ${
             topNodes.length
-              ? `<div class="flow-list flow-table" style="${flowWidthStyle()};--flow-visible-row-count:${visibleFlowRowCount(topNodes)}" data-context="flow-root" data-task-id="${task.id}">${renderFlowSplitResizer()}${topNodes.map((node, index) => renderFlowNode(task.id, node, 0, index, [], index === topNodes.length - 1)).join("")}</div>`
-              : `<div class="flow-list flow-table empty-flow" data-context="flow-root" data-task-id="${task.id}"></div>`
+              ? `<div class="flow-list flow-outline" style="--flow-visible-row-count:${visibleFlowRowCount(topNodes)}" data-context="flow-root" data-task-id="${task.id}">${topNodes.map((node, index) => renderFlowNode(task.id, node, 0, index, [], index === topNodes.length - 1)).join("")}</div>`
+              : `<div class="flow-list flow-outline empty-flow" data-context="flow-root" data-task-id="${task.id}"></div>`
           }
+          </section>
+          ${renderNodeInspector(task.id, selectedNode)}
         </section>` : state.taskPane === "notes" ? renderTaskKnowledge(task) : renderTaskHistory(task)}
-
-        ${selectedNode && state.taskPane === "flow" ? renderNodeDetail(task.id, selectedNode) : ""}
       </section>
     </div>
   `;
@@ -2078,40 +2086,34 @@ function renderBriefField(label, control, timestamp = "", attention = false, var
 function renderFlowNode(taskId, node, depth, rootIndex = 0, lineage = [], isLast = true) {
   const children = sort(node.children);
   const isSelected = state.selectedNodeId === node.id;
-  const treeDepth = Math.min(depth, 3);
-  const branch = depth === 0 ? "main-flow" : "sub-flow";
-  const noteSummary = nodeNoteSummary(node.note);
-  const railContinuations = [...lineage, !isLast].slice(0, treeDepth);
-  const treeGuides =
-    depth > 0
-      ? `<span class="flow-tree-guides" aria-hidden="true">${Array.from(
-          { length: treeDepth },
-          (_, index) => `<span class="flow-tree-rail ${railContinuations[index] ? "continues" : ""}" style="--rail-index:${index}"></span>`,
-        ).join("")}<span class="flow-tree-elbow"></span></span>`
-      : "";
+  const railContinuations = [...lineage, !isLast];
+  const treeGuides = depth
+    ? `<span class="flow-tree-guides" aria-hidden="true">${Array.from(
+        { length: depth },
+        (_, index) => `<span class="flow-tree-rail ${railContinuations[index] ? "continues" : ""}" style="--rail-index:${index}"></span>`,
+      ).join("")}<span class="flow-tree-elbow"></span></span>`
+    : "";
+  const statusLabel = nodeStatusText(node.status);
+  const collapseControl = children.length
+    ? `<button class="flow-collapse-toggle" type="button" data-action="toggle-node-collapse" data-task-id="${taskId}" data-node-id="${node.id}" aria-label="${node.collapsed ? "展开" : "折叠"}节点" aria-expanded="${!node.collapsed}">${node.collapsed ? "▸" : "▾"}</button>`
+    : `<span class="flow-collapse-spacer" aria-hidden="true"></span>`;
   return `
-    <article class="flow-item depth-${Math.min(depth, 6)}">
-      <div class="flow-row flow-line ${branch} ${branch === "sub-flow" ? "sub" : ""} ${node.status} ${isSelected ? "selected" : ""}" style="--tree-depth:${treeDepth}" data-context="node" data-task-id="${taskId}" data-node-id="${node.id}" data-flow-drag-target>
-        <span class="flow-sequence-cell">
-          ${depth === 0 ? `<span class="sequence-index">${rootIndex + 1}</span>` : ""}
-          <button class="flow-node-drag-handle" type="button" draggable="true" data-flow-drag-source data-task-id="${taskId}" data-node-id="${node.id}" aria-label="${escAttr(`拖拽重组节点：${node.title || "未命名节点"}`)}" title="拖拽调整节点层级和顺序">
-            <svg viewBox="0 0 12 18" aria-hidden="true"><circle cx="3" cy="4" r="1.2"></circle><circle cx="9" cy="4" r="1.2"></circle><circle cx="3" cy="9" r="1.2"></circle><circle cx="9" cy="9" r="1.2"></circle><circle cx="3" cy="14" r="1.2"></circle><circle cx="9" cy="14" r="1.2"></circle></svg>
-          </button>
-        </span>
-        <span class="flow-title-cell flow-title process-cell">
-          ${depth === 1 ? treeGuides : ""}
-          <span class="flow-title-line">
-            ${nodeTitleInputHtml(node, taskId)}
-          </span>
-        </span>
-        <input class="flow-record-input" readonly aria-label="节点记录" data-action="select-node" data-task-id="${taskId}" data-node-id="${node.id}" value="${escAttr(node.note ? noteSummary.title : "")}" placeholder="记录" />
-        <span class="flow-status-text status-${node.status}">${nodeStatusText(node.status)}</span>
-        <span class="flow-updated note-link">${formatShort(node.updatedAt)}</span>
+    <article class="flow-outline-node ${node.status} ${isSelected ? "selected" : ""}" style="--tree-depth:${depth}" data-context="node" data-task-id="${taskId}" data-node-id="${node.id}" data-flow-drag-target>
+      <div class="flow-outline-row" data-flow-select>
+        <span class="flow-tree-zone">${treeGuides}</span>
+        <button class="flow-status-bullet status-${node.status}" type="button" data-action="node-status-primary-action" data-task-id="${taskId}" data-node-id="${node.id}" aria-label="${escAttr(statusLabel)}：点击切换或选择状态">${node.status === "done" ? "✓" : node.status === "blocked" ? "!" : node.status === "later" ? "◷" : ""}</button>
+        <span class="flow-status-text status-${node.status}" aria-hidden="true">${statusLabel}</span>
+        ${collapseControl}
+        ${nodeTitleInputHtml(node, taskId)}
+        <button class="flow-node-more" type="button" data-action="open-node-menu" data-task-id="${taskId}" data-node-id="${node.id}" aria-label="打开节点菜单">···</button>
+        <button class="flow-node-drag-handle" type="button" draggable="true" data-flow-drag-source data-task-id="${taskId}" data-node-id="${node.id}" aria-label="${escAttr(`拖拽重组节点：${node.title || "未命名节点"}`)}" title="拖拽调整节点层级和顺序">
+          <svg viewBox="0 0 12 18" aria-hidden="true"><circle cx="3" cy="4" r="1.2"></circle><circle cx="9" cy="4" r="1.2"></circle><circle cx="3" cy="9" r="1.2"></circle><circle cx="9" cy="9" r="1.2"></circle><circle cx="3" cy="14" r="1.2"></circle><circle cx="9" cy="14" r="1.2"></circle></svg>
+        </button>
       </div>
       ${
         children.length && !node.collapsed
           ? children
-              .map((child, index) => renderFlowNode(taskId, child, depth + 1, rootIndex, depth === 0 ? [] : [...lineage, !isLast], index === children.length - 1))
+              .map((child, index) => renderFlowNode(taskId, child, depth + 1, rootIndex, [...lineage, !isLast], index === children.length - 1))
               .join("")
           : ""
       }
@@ -2150,33 +2152,37 @@ function renderFlowHeadCell(_key, label) {
   `;
 }
 
-function renderNodeDetail(taskId, node) {
+function getNodePath(nodes, nodeId, path = []) {
+  for (const node of nodes || []) {
+    const nextPath = [...path, node];
+    if (node.id === nodeId) return nextPath;
+    const found = getNodePath(node.children, nodeId, nextPath);
+    if (found) return found;
+  }
+  return [];
+}
+
+function getNodeDepth(nodes, nodeId) {
+  return Math.max(0, getNodePath(nodes, nodeId).length - 1);
+}
+
+function renderNodeInspector(taskId, node) {
+  if (!node) {
+    return `<aside class="node-inspector node-inspector-empty"><p>选择一个节点查看详情</p></aside>`;
+  }
+  const task = state.tasks.find((item) => item.id === taskId);
+  const path = task ? getNodePath(task.nodes, node.id) : [];
+  const parent = path.length > 1 ? path[path.length - 2] : null;
+  const statusOptions = Array.from(nodeStatusValues).map((status) => `<option value="${status}" ${status === node.status ? "selected" : ""}>${nodeStatusText(status)}</option>`).join("");
   return `
-    <div class="record-modal-backdrop" data-record-modal-backdrop>
-      <section class="node-detail record-modal" data-task-id="${taskId}" data-node-id="${node.id}" role="dialog" aria-modal="true" aria-labelledby="record-modal-title">
-        <header class="record-modal-header">
-          <div class="record-modal-heading">
-            <h2 class="record-modal-title" id="record-modal-title">节点记录</h2>
-            <p class="record-modal-description">补充简短的处理过程、信息或结论，处理流中只显示摘要。</p>
-          </div>
-          <button class="record-modal-close" type="button" data-action="close-node-detail" title="关闭节点记录" aria-label="关闭节点记录">×</button>
-        </header>
-        <div class="record-modal-context">
-          <strong>${esc(node.title || "未命名节点")}</strong>
-          <span>${nodeStatusText(node.status)} · ${formatShort(node.updatedAt)}</span>
-        </div>
-        <div class="record-modal-body">
-          <textarea class="record-modal-textarea" data-record-input placeholder="记录该节点的处理过程、关键数据、判断依据、结果或后续事项……">${esc(state.recordDraft)}</textarea>
-        </div>
-        <footer class="record-modal-footer">
-          <span>Ctrl / ⌘ + Enter 保存 · Esc 关闭</span>
-          <div class="record-modal-actions">
-            <button type="button" data-action="close-node-detail">取消</button>
-            <button class="primary" type="button" data-action="save-node-detail">保存记录</button>
-          </div>
-        </footer>
-      </section>
-    </div>
+    <aside class="node-inspector" data-task-id="${taskId}" data-node-id="${node.id}">
+      <header class="node-inspector-header"><div><span class="node-inspector-kicker">当前节点</span><h2>${esc(node.title || "未命名节点")}</h2></div><button type="button" data-action="close-node-detail" aria-label="关闭节点详情">×</button></header>
+      <section class="node-inspector-section"><label>状态<select data-edit-key="status" data-task-id="${taskId}" data-node-id="${node.id}">${statusOptions}</select></label></section>
+      <section class="node-inspector-section node-inspector-hierarchy"><div><span>父节点</span><strong>${esc(parent?.title || "根节点")}</strong></div><div><span>层级</span><strong>第 ${getNodeDepth(task?.nodes || [], node.id) + 1} 层</strong></div><div class="node-inspector-breadcrumb"><span>路径</span><strong>${esc(path.map((item) => item.title || "未命名").join(" / ") || "—")}</strong></div></section>
+      <section class="node-inspector-section"><label>记录<textarea class="record-modal-textarea node-inspector-note" data-record-input placeholder="记录该节点的处理过程、关键数据、判断依据、结果或后续事项……">${esc(state.recordDraft)}</textarea></label><button class="node-inspector-save" type="button" data-action="save-node-detail">保存记录</button></section>
+      <section class="node-inspector-section node-inspector-meta"><div><span>创建时间</span><time>${formatShort(node.createdAt)}</time></div><div><span>最近修改</span><time>${formatShort(node.updatedAt)}</time></div><div><span>状态变化</span><time>${formatShort(node.statusChangedAt)}</time></div><div><span>完成时间</span><time>${node.completedAt ? formatShort(node.completedAt) : "—"}</time></div></section>
+      <footer class="node-inspector-actions"><button type="button" data-action="add-child-node" data-task-id="${taskId}" data-node-id="${node.id}">＋新增下级节点</button><button type="button" data-action="add-sibling-node" data-task-id="${taskId}" data-node-id="${node.id}">＋新增同级节点</button><button class="danger" type="button" data-action="delete-node" data-task-id="${taskId}" data-node-id="${node.id}">删除节点</button></footer>
+    </aside>
   `;
 }
 
@@ -2287,25 +2293,21 @@ function renderContextMenu() {
 
   const task = state.tasks.find((item) => item.id === menu.taskId);
   const node = task ? findNode(task.nodes, menu.nodeId) : null;
-  const doneLabel = node?.status === "done" ? "标记为未完成" : "标记为完成";
-  const secondaryStatuses = [
-    ["todo", "标记为未完成"],
-    ["blocked", "标记为卡住"],
-    ["later", "标记为稍后"],
+  const statusActions = [
+    ["todo", "Todo"],
+    ["done", "Done"],
+    ["blocked", "Blocked"],
+    ["later", "Later"],
   ]
-    .filter(([status]) => status !== node?.status && !(node?.status === "done" && status === "todo"))
-    .map(
-      ([status, label]) =>
-        `<button data-action="mark-node-status" data-task-id="${menu.taskId}" data-node-id="${menu.nodeId}" data-status="${status}">${label}</button>`,
-    )
+    .map(([status, label]) => `<button data-action="mark-node-status" data-task-id="${menu.taskId}" data-node-id="${menu.nodeId}" data-status="${status}" ${status === node?.status ? "disabled" : ""}>${label}${status === node?.status ? " ✓" : ""}</button>`)
     .join("");
   return `
     <div class="context-menu" style="left:${menu.x}px; top:${menu.y}px">
       <button data-action="add-child-node" data-task-id="${menu.taskId}" data-node-id="${menu.nodeId}">新增下级节点</button>
       <button data-action="add-sibling-node" data-task-id="${menu.taskId}" data-node-id="${menu.nodeId}">在下方新增同级</button>
       <hr />
-      <button data-action="toggle-node-done" data-task-id="${menu.taskId}" data-node-id="${menu.nodeId}">${doneLabel}</button>
-      ${secondaryStatuses}
+      <div class="context-menu-label">状态</div>
+      ${statusActions}
       <hr />
       <button class="danger" data-action="delete-node" data-task-id="${menu.taskId}" data-node-id="${menu.nodeId}">删除节点</button>
     </div>
@@ -4097,6 +4099,7 @@ function bindTaskRepositoryRows(scope = document) {
     element.addEventListener("change", (event) => edit(event.target.dataset, event.target.value));
     element.addEventListener("change", (event) => {
       if (event.target.dataset.editKey === "groupId") render();
+      if (event.target.dataset.editKey === "status") render();
     });
     element.addEventListener("click", (event) => {
       event.stopPropagation();
@@ -4388,6 +4391,16 @@ function bindTaskRepositoryRows(scope = document) {
     handle.addEventListener("click", (event) => event.stopPropagation());
     handle.addEventListener("pointerdown", startDetailResize);
   });
+
+  document.querySelectorAll(".flow-outline-row[data-flow-select]").forEach((row) => {
+    row.addEventListener("click", (event) => {
+      if (event.target.closest("button, input, select, textarea")) return;
+      selectNodeForInspector(row.dataset.taskId, row.dataset.nodeId);
+      render();
+    });
+  });
+
+  bindFlowTitleShortcuts();
 
   document.querySelectorAll(".markdown-editor").forEach((editor) => {
     editor.addEventListener("paste", handleMarkdownPaste);
@@ -4821,6 +4834,58 @@ function saveSelectedNodeRecord() {
   state.recordDraft = "";
   state.nodeDetailFullscreen = false;
   state.nodeDetailPosition = null;
+}
+
+function saveNodeInspectorRecord() {
+  const task = state.tasks.find((item) => item.id === state.activeTaskId);
+  const node = task && state.selectedNodeId ? findNode(task.nodes, state.selectedNodeId) : null;
+  if (!task || !node || node.note === state.recordDraft) return;
+  node.note = state.recordDraft;
+  node.updatedAt = now();
+  task.updatedAt = node.updatedAt;
+}
+
+function selectNodeForInspector(taskId, nodeId) {
+  const task = state.tasks.find((item) => item.id === taskId);
+  const node = task ? findNode(task.nodes, nodeId) : null;
+  if (!node) return;
+  state.activeTaskId = taskId;
+  state.selectedNodeId = nodeId;
+  state.recordDraft = node.note || "";
+  state.nodeDetailFullscreen = false;
+  state.nodeDetailPosition = null;
+}
+
+function bindFlowTitleShortcuts() {
+  document.querySelectorAll(".flow-title-input").forEach((input) => {
+    input.addEventListener("keydown", handleFlowTitleKeydown);
+  });
+}
+
+function handleFlowTitleKeydown(event) {
+  if (event.isComposing || event.keyCode === 229) return;
+  if (event.metaKey || event.ctrlKey || event.altKey) return;
+  const input = event.currentTarget;
+  const taskId = input.dataset.taskId;
+  const nodeId = input.dataset.nodeId;
+  if (!taskId || !nodeId) return;
+  if (event.key === "Enter" && event.shiftKey) {
+    event.preventDefault();
+    if (!input.value.trim()) return;
+    addSiblingNode(taskId, nodeId);
+    render();
+    return;
+  }
+  if (event.key === "Tab" && !event.shiftKey) {
+    event.preventDefault();
+    if (!input.value.trim()) return;
+    const task = state.tasks.find((item) => item.id === taskId);
+    const node = task ? findNode(task.nodes, nodeId) : null;
+    if (!node) return;
+    node.collapsed = false;
+    addNode(taskId, nodeId);
+    render();
+  }
 }
 
 function focusPendingElement() {
@@ -5567,12 +5632,7 @@ async function action(data, event = null) {
   if (data.action === "add-task") addBlankTask();
   if (data.action === "delete-task" && !(await deleteTask(data.taskId))) return;
   if (data.action === "select-node") {
-    state.selectedNodeId = data.nodeId;
-    const task = state.tasks.find((item) => item.id === data.taskId);
-    const node = task ? findNode(task.nodes, data.nodeId) : null;
-    state.recordDraft = node?.note || "";
-    state.nodeDetailFullscreen = false;
-    state.nodeDetailPosition = event ? { x: event.clientX + 12, y: event.clientY - 24 } : null;
+    selectNodeForInspector(data.taskId, data.nodeId);
   }
   if (data.action === "toggle-task-done") {
     activateRepositoryTask(data.taskId);
@@ -5587,6 +5647,36 @@ async function action(data, event = null) {
   if (data.action === "toggle-node-collapse") toggleNodeCollapse(data.taskId, data.nodeId);
   if (data.action === "toggle-all-nodes") toggleAllNodes(data.taskId);
   if (data.action === "mark-node-status") markNodeStatus(data.taskId, data.nodeId, data.status);
+  if (data.action === "node-status-primary-action") {
+    const task = state.tasks.find((item) => item.id === data.taskId);
+    const node = task ? findNode(task.nodes, data.nodeId) : null;
+    if (node?.status === "todo" || node?.status === "done") {
+      toggleNodeDone(data.taskId, data.nodeId);
+    } else if (node) {
+      state.contextMenu = {
+        kind: "node",
+        taskId: data.taskId,
+        nodeId: data.nodeId,
+        x: Math.min((event?.clientX || 0) + 8, window.innerWidth - 210),
+        y: Math.min((event?.clientY || 0) + 8, window.innerHeight - 245),
+      };
+      selectNodeForInspector(data.taskId, data.nodeId);
+      render();
+      return;
+    }
+  }
+  if (data.action === "open-node-menu") {
+    state.contextMenu = {
+      kind: "node",
+      taskId: data.taskId,
+      nodeId: data.nodeId,
+      x: Math.min((event?.clientX || 0) + 8, window.innerWidth - 210),
+      y: Math.min((event?.clientY || 0) + 8, window.innerHeight - 245),
+    };
+    selectNodeForInspector(data.taskId, data.nodeId);
+    render();
+    return;
+  }
   if (data.action === "delete-node" && !(await deleteNode(data.taskId, data.nodeId))) return;
   if (data.action === "toggle-node-detail-fullscreen") state.nodeDetailFullscreen = !state.nodeDetailFullscreen;
   if (data.action === "close-node-detail") {
@@ -5596,7 +5686,7 @@ async function action(data, event = null) {
     state.nodeDetailPosition = null;
   }
   if (data.action === "save-node-detail") {
-    saveSelectedNodeRecord();
+    saveNodeInspectorRecord();
   }
   render();
 }
@@ -5724,6 +5814,10 @@ function edit(data, value) {
 
   const node = findNode(task.nodes, data.nodeId);
   if (!node) return;
+  if (data.editKey === "status") {
+    markNodeStatus(data.taskId, data.nodeId, value);
+    return;
+  }
   node[data.editKey] = value;
   node.updatedAt = now();
   task.updatedAt = now();
@@ -6272,6 +6366,7 @@ function addNode(taskId, parentId) {
   } else {
     const parent = findNode(task.nodes, parentId);
     if (!parent) return;
+    parent.collapsed = false;
     created = makeNode(taskId, parentId, parent.children.length + 1);
     parent.children.push(created);
   }
@@ -6306,9 +6401,13 @@ function toggleNodeDone(taskId, nodeId) {
   const task = state.tasks.find((item) => item.id === taskId);
   const node = task ? findNode(task.nodes, nodeId) : null;
   if (!task || !node) return;
+  if (node.status !== "todo" && node.status !== "done") return;
+  const timestamp = now();
   node.status = node.status === "done" ? "todo" : "done";
-  node.updatedAt = now();
-  task.updatedAt = now();
+  node.statusChangedAt = timestamp;
+  node.updatedAt = timestamp;
+  node.completedAt = node.status === "done" ? timestamp : "";
+  task.updatedAt = timestamp;
 }
 
 function toggleNodeCollapse(taskId, nodeId) {
@@ -6334,9 +6433,13 @@ function markNodeStatus(taskId, nodeId, status) {
   const task = state.tasks.find((item) => item.id === taskId);
   const node = task ? findNode(task.nodes, nodeId) : null;
   if (!task || !node || !nodeStatusValues.has(status)) return;
+  if (node.status === status) return;
+  const timestamp = now();
   node.status = status;
-  node.updatedAt = now();
-  task.updatedAt = now();
+  node.statusChangedAt = timestamp;
+  node.updatedAt = timestamp;
+  node.completedAt = status === "done" ? timestamp : "";
+  task.updatedAt = timestamp;
 }
 
 /**
