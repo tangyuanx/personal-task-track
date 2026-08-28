@@ -10822,16 +10822,17 @@ body.flow-node-reordering * {
   }
 }
 
-/* v0.1.131 — reference-matched workbench brief cards. */
+/* v0.1.139 — continuous task brief: keep the editing area calm and generous. */
 .brief-strip.task-brief {
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: clamp(12px, 1.4vw, 18px);
-  min-height: 142px;
+  gap: 0;
+  min-height: 176px;
   margin: 22px 38px 0;
   padding: 0;
   overflow: visible;
-  border: 0;
-  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--handoff-line-strong, var(--line-strong)) 78%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--handoff-surface, var(--panel)) 97%, white 3%);
 }
 
 .brief-cell.brief-field,
@@ -10840,42 +10841,39 @@ body.flow-node-reordering * {
 .brief-cell.brief-field:last-child {
   display: flex;
   min-width: 0;
-  min-height: 142px;
+  min-height: 176px;
   flex-direction: column;
   gap: 0;
-  padding: 16px 18px 14px;
-  border: 1px solid color-mix(in srgb, var(--handoff-line-strong, var(--line-strong)) 76%, transparent);
-  border-radius: 14px;
-  background: color-mix(in srgb, var(--handoff-surface, var(--panel)) 96%, white 4%);
-  box-shadow:
-    0 8px 22px rgba(35, 54, 46, 0.055),
-    inset 0 1px 0 rgba(255, 255, 255, 0.72);
-  transition: border-color 150ms ease, box-shadow 150ms ease, background-color 150ms ease;
+  padding: 13px 17px 15px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  transition: background-color 150ms ease;
+}
+
+.brief-cell.brief-field + .brief-cell.brief-field {
+  border-left: 1px solid color-mix(in srgb, var(--handoff-line-strong, var(--line-strong)) 78%, transparent);
 }
 
 .brief-cell.brief-field:hover {
-  border-color: color-mix(in srgb, var(--focus) 28%, var(--handoff-line-strong, var(--line-strong)));
+  background: color-mix(in srgb, var(--focus-field, var(--focus)) 4%, transparent);
 }
 
 .brief-cell.brief-field:focus-within {
-  border-color: color-mix(in srgb, var(--focus) 48%, var(--handoff-line-strong, var(--line-strong)));
-  background: color-mix(in srgb, var(--handoff-surface, var(--panel)) 97%, var(--focus) 3%);
-  box-shadow:
-    0 9px 24px rgba(35, 54, 46, 0.07),
-    0 0 0 3px color-mix(in srgb, var(--focus) 9%, transparent);
+  background: color-mix(in srgb, var(--focus) 7%, transparent);
 }
 
 .brief-cell.brief-field.needs-attention {
-  border-color: color-mix(in srgb, var(--red, #b4232f) 26%, var(--handoff-line-strong, var(--line-strong)));
-  background: color-mix(in srgb, var(--attention-bg) 42%, var(--handoff-surface, var(--panel)));
+  background: color-mix(in srgb, var(--attention-bg) 28%, transparent);
 }
 
 .brief-cell.brief-field > .brief-label {
   display: grid;
   width: 100%;
-  min-height: 30px;
+  min-height: 22px;
   grid-template-columns: minmax(0, 1fr) max-content;
-  align-items: flex-start;
+  align-items: center;
   gap: 12px;
   margin: 0;
   border: 0;
@@ -10894,7 +10892,7 @@ body.flow-node-reordering * {
 
 .brief-label-title {
   gap: 9px;
-  padding-top: 2px;
+  padding-top: 0;
 }
 
 .brief-label-action {
@@ -10968,11 +10966,11 @@ body.flow-node-reordering * {
 }
 
 .task-brief textarea {
-  min-height: 78px;
-  height: 78px;
-  max-height: 150px;
-  margin: 0;
-  padding: 11px 0 2px;
+  min-height: 126px;
+  height: 126px;
+  max-height: 170px;
+  margin: 4px 0 0;
+  padding: 0;
   overflow-y: auto;
   border: 0;
   border-radius: 0;
@@ -10993,21 +10991,16 @@ body.flow-node-reordering * {
   box-shadow: none;
 }
 
-:root[data-theme="dark"] .brief-cell.brief-field,
-:root[data-theme="dark"] .brief-cell.brief-field.conclusion {
+:root[data-theme="dark"] .brief-strip.task-brief {
   border-color: color-mix(in srgb, var(--handoff-line-strong, var(--line-strong)) 86%, transparent);
   background: color-mix(in srgb, var(--handoff-surface, var(--panel)) 96%, white 4%);
-  box-shadow:
-    0 10px 26px rgba(0, 0, 0, 0.16),
-    inset 0 1px 0 rgba(255, 255, 255, 0.035);
 }
 
 @media (max-width: 980px) {
   .brief-strip.task-brief {
     grid-template-columns: repeat(3, minmax(224px, 1fr));
-    gap: 12px;
     overflow-x: auto;
-    padding-bottom: 5px;
+    padding-bottom: 0;
   }
 }
 
