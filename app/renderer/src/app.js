@@ -2670,6 +2670,18 @@ function renderSettingsPanel() {
                 </label>
               </div>
             </section>
+            <section class="settings-group">
+              <div class="settings-group-head">
+                <h3>今日任务浮窗</h3>
+                <p>让浮窗像歌词一样只显示内容，不影响下方软件操作。</p>
+              </div>
+              <div class="settings-stack">
+                <button class="settings-inline-action" type="button" data-action="toggle-today-widget-click-through" ${!desktopTodayWidget ? "disabled" : ""}>
+                  ${todayWidgetWindowState.clickThrough ? "关闭鼠标穿透" : "开启鼠标穿透"}
+                </button>
+                <span class="settings-help-text">快捷键：⌘/Ctrl + Shift + T${todayWidgetWindowState.clickThrough ? " · 当前已开启" : ""}</span>
+              </div>
+            </section>
             <section class="settings-group settings-update-group" aria-labelledby="software-update-title">
               <div class="settings-group-head">
                 <h3 id="software-update-title">软件更新</h3>
@@ -5458,6 +5470,11 @@ async function action(data, event = null) {
     void desktopTodayWidget?.show();
     return;
   }
+  if (data.action === "toggle-today-widget-click-through") {
+    if (!desktopTodayWidget) return;
+    await desktopTodayWidget.setPreferences({ clickThrough: todayWidgetWindowState.clickThrough !== true });
+    return;
+  }
   if (data.action === "markdown-tool") {
     applyMarkdownTool(data.tool);
     return;
@@ -6993,6 +7010,7 @@ async function initializeTodayWidgetBridge() {
   unsubscribeTodayWidgetState = desktopTodayWidget.onState((nextState) => {
     todayWidgetWindowState = nextState && typeof nextState === "object" ? nextState : { visible: false };
     syncTodayWidgetRestoreButton();
+    if (state.settingsOpen) render();
   });
   unsubscribeTodayWidgetOpenTask = desktopTodayWidget.onOpenTask(({ taskId } = {}) => {
     if (!taskId) return;

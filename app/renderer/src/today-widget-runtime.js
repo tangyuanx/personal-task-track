@@ -14,6 +14,8 @@
   const emptyState = document.querySelector("#empty-state");
   const toast = document.querySelector("#toast");
   const alwaysOnTop = document.querySelector("#always-on-top");
+  const clickThrough = document.querySelector("#click-through");
+  const clickThroughHint = document.querySelector("#click-through-hint");
   const launchWithApp = document.querySelector("#launch-with-app");
   const opacityControl = document.querySelector("#widget-opacity");
   const opacityValue = document.querySelector("#widget-opacity-value");
@@ -127,7 +129,10 @@
     widget.dataset.position = position;
     widget.classList.toggle("is-compact", state.compact === true);
     widget.classList.toggle("is-unpinned", state.alwaysOnTop === false);
+    widget.classList.toggle("is-click-through", state.clickThrough === true);
     alwaysOnTop.checked = state.alwaysOnTop !== false;
+    clickThrough.checked = state.clickThrough === true;
+    clickThroughHint.hidden = state.clickThrough !== true;
     launchWithApp.checked = state.launchWithApp !== false;
     applyOpacity(state.opacity);
     compactToggle.title = state.compact ? "展开" : "收起";
@@ -265,6 +270,12 @@
     widget.classList.toggle("is-unpinned", !event.target.checked);
     showToast(event.target.checked ? "已开启始终置顶" : "已关闭始终置顶");
     await bridge.setPreferences({ alwaysOnTop: event.target.checked });
+  });
+
+  clickThrough.addEventListener("change", async (event) => {
+    const enabled = event.target.checked === true;
+    showToast(enabled ? "已开启鼠标穿透 · ⌘/Ctrl + Shift + T 可恢复" : "已恢复浮窗操作");
+    await bridge.setPreferences({ clickThrough: enabled });
   });
 
   launchWithApp.addEventListener("change", async (event) => {

@@ -8,7 +8,7 @@
  *   - Manage application menu
  */
 
-const { app, BrowserWindow, Menu, Notification, clipboard, dialog, ipcMain, screen, shell } = require("electron");
+const { app, BrowserWindow, Menu, Notification, clipboard, dialog, globalShortcut, ipcMain, screen, shell } = require("electron");
 const fs = require("node:fs/promises");
 const os = require("node:os");
 const path = require("node:path");
@@ -499,6 +499,7 @@ app.whenReady().then(async () => {
   todayWidgetController = createTodayWidgetController({
     app,
     BrowserWindow,
+    globalShortcut,
     ipcMain,
     screen,
     getMainWindow: () => mainWindow,

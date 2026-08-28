@@ -1414,6 +1414,17 @@ body.resizing-sidebar .sidebar-resizer::before {
   font-size: 12px;
 }
 
+.settings-stack .settings-help-text {
+  color: var(--faint);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.settings-inline-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
 .task-list-head {
   display: grid;
   grid-template-columns: 10px 18px minmax(0, 1fr) 54px;

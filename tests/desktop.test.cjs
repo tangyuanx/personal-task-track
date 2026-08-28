@@ -2511,6 +2511,7 @@ test("Today widget preferences normalize safely and retain an intentional custom
     opacity: 100,
     height: 260,
     customBounds: null,
+    clickThrough: false,
   });
   assert.deepEqual(normalizeTodayWidgetPreferences({
     position: "custom",
@@ -2530,6 +2531,7 @@ test("Today widget preferences normalize safely and retain an intentional custom
     opacity: 85,
     height: 348,
     customBounds: { x: 322, y: 48 },
+    clickThrough: false,
   });
   assert.equal(normalizeTodayWidgetPreferences({ position: "custom" }).position, "top-right");
   assert.equal(normalizeTodayWidgetPreferences({ opacity: null }).opacity, 100);
@@ -2537,6 +2539,8 @@ test("Today widget preferences normalize safely and retain an intentional custom
   assert.equal(normalizeTodayWidgetPreferences({ opacity: 120 }).opacity, 100);
   assert.equal(normalizeTodayWidgetPreferences({ height: 90 }).height, 180);
   assert.equal(normalizeTodayWidgetPreferences({ height: 900 }).height, 720);
+  assert.equal(normalizeTodayWidgetPreferences({ clickThrough: true }).clickThrough, true);
+  assert.equal(normalizeTodayWidgetPreferences({ clickThrough: "true" }).clickThrough, false);
 });
 
 test("Today widget corner placement respects each display work area", () => {
@@ -2641,6 +2645,7 @@ test("production Today widget uses its dedicated frontend and a sandboxed Electr
   assert.match(demo, /<span>始终显示在最上层<\/span>/);
   assert.match(demo, /<span>随应用启动<\/span>/);
   assert.match(demo, /<span>窗口透明度<\/span>/);
+  assert.match(demo, /<span>鼠标穿透显示<\/span>/);
   assert.match(demo, /id="widget-opacity" type="range" min="70" max="100"/);
   assert.match(demo, /隐藏今日窗口/);
   assert.match(demo, /body\.widget-runtime \.today-widget/);
@@ -2648,6 +2653,7 @@ test("production Today widget uses its dedicated frontend and a sandboxed Electr
   assert.match(demo, /\.today-widget\.is-compact \.compact-expand-icon\s*\{\s*display:\s*block;/);
   assert.doesNotMatch(demo, /\.today-widget\.is-compact \.widget-menu[^}]*display:\s*none;/);
   assert.match(runtime, /bridge\.completeTask/);
+  assert.match(runtime, /bridge\.setPreferences\(\{ clickThrough: enabled \}\)/);
   assert.match(runtime, /bridge\.openMain/);
   assert.doesNotMatch(runtime, /ResizeObserver/);
   assert.doesNotMatch(runtime, /\+ 60/);
@@ -2657,6 +2663,8 @@ test("production Today widget uses its dedicated frontend and a sandboxed Electr
   assert.match(runtime, /COMPACT_MENU_WINDOW_HEIGHT = 340/);
   assert.match(runtime, /bridge\.resize\(\{ height: COMPACT_MENU_WINDOW_HEIGHT, transient: true \}\)/);
   assert.match(runtime, /bridge\.resize\(\{ height: 49, transient: true \}\)/);
+  assert.match(widgetMain, /setIgnoreMouseEvents\(preferences\.clickThrough === true, \{ forward: true \}\)/);
+  assert.match(widgetMain, /CommandOrControl\+Shift\+T/);
   assert.match(demo, /data-widget-resize="top"/);
   assert.match(demo, /data-widget-resize="bottom"/);
   assert.match(demo, /body\.widget-runtime \.task-list\s*\{[\s\S]*overflow-y:\s*auto;/);

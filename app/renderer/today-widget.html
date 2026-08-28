@@ -291,6 +291,31 @@
       transition: width 180ms ease, height 180ms ease, opacity 160ms ease, transform 180ms ease;
     }
 
+    .today-widget.is-click-through {
+      border-color: color-mix(in srgb, var(--widget-border) 58%, transparent);
+      box-shadow: 0 8px 24px rgba(27, 56, 45, 0.08), inset 0 1px 0 var(--widget-inset-highlight);
+    }
+
+    .today-widget.is-click-through .widget-header {
+      border-bottom-color: color-mix(in srgb, var(--widget-divider) 55%, transparent);
+    }
+
+    .today-widget.is-click-through .widget-tools,
+    .today-widget.is-click-through .widget-resize-handle {
+      display: none;
+    }
+
+    .today-widget.is-click-through .widget-content {
+      padding-top: 7px;
+      padding-bottom: 7px;
+    }
+
+    .today-widget.is-click-through .today-task {
+      min-height: 48px;
+      border-color: color-mix(in srgb, var(--widget-task-border) 60%, transparent);
+      background: color-mix(in srgb, var(--widget-task-bg) 72%, transparent);
+    }
+
     .today-widget[data-position="top-left"] { top: var(--screen-gap); left: var(--screen-gap); }
     .today-widget[data-position="top-right"] { top: var(--screen-gap); right: var(--screen-gap); }
     .today-widget[data-position="bottom-left"] { bottom: calc(var(--screen-gap) + 40px); left: var(--screen-gap); }
@@ -663,6 +688,13 @@
       cursor: pointer;
     }
 
+    .menu-hint {
+      margin: -3px 0 2px;
+      color: var(--widget-menu-muted);
+      font-size: calc(10px * var(--widget-font-scale));
+      line-height: 1.45;
+    }
+
     .hide-widget {
       width: 100%;
       margin-top: 5px;
@@ -888,6 +920,8 @@
           <button class="position-button" data-place="bottom-right" type="button" title="右下角" aria-label="右下角"></button>
         </div>
         <label class="menu-switch"><span>始终显示在最上层</span><input id="always-on-top" type="checkbox" checked /><i class="switch" aria-hidden="true"></i></label>
+        <label class="menu-switch"><span>鼠标穿透显示</span><input id="click-through" type="checkbox" /><i class="switch" aria-hidden="true"></i></label>
+        <p class="menu-hint" id="click-through-hint">开启后不拦截下方软件操作，可用 ⌘/Ctrl + Shift + T 恢复。</p>
         <label class="menu-switch"><span>随应用启动</span><input id="launch-with-app" type="checkbox" checked /><i class="switch" aria-hidden="true"></i></label>
         <label class="menu-range" for="widget-opacity"><span>窗口透明度</span><output id="widget-opacity-value" for="widget-opacity">100%</output><input id="widget-opacity" type="range" min="70" max="100" step="1" value="100" /></label>
         <button class="hide-widget" id="hide-widget" type="button">隐藏今日窗口</button>

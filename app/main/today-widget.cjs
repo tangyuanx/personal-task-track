@@ -9,6 +9,7 @@ const WIDGET_MAX_HEIGHT = 720;
 const WIDGET_POSITIONS = new Set(["top-left", "top-right", "bottom-left", "bottom-right", "custom"]);
 const WIDGET_ZH_FONTS = new Set(["system", "noto", "yahei", "pingfang", "songti", "simsun", "fangsong", "heiti", "kaiti"]);
 const WIDGET_EN_FONTS = new Set(["inter", "system", "segoe", "arial", "helvetica", "verdana", "trebuchet", "tahoma", "times", "georgia", "courier", "mono"]);
+const CLICK_THROUGH_ACCELERATOR = "CommandOrControl+Shift+T";
 const DEFAULT_PREFERENCES = Object.freeze({
   position: "top-right",
   alwaysOnTop: true,
@@ -18,6 +19,7 @@ const DEFAULT_PREFERENCES = Object.freeze({
   opacity: 100,
   height: 260,
   customBounds: null,
+  clickThrough: false,
 });
 
 function normalizeTodayWidgetPreferences(value) {
@@ -35,6 +37,7 @@ function normalizeTodayWidgetPreferences(value) {
     opacity: normalizeOpacity(raw.opacity),
     height: normalizeHeight(raw.height),
     customBounds,
+    clickThrough: raw.clickThrough === true,
   };
 }
 
@@ -135,7 +138,7 @@ async function writeTodayWidgetPreferences(userDataPath, value) {
   return preferences;
 }
 
-function createTodayWidgetController({ app, BrowserWindow, ipcMain, screen, getMainWindow, ensureMainWindow }) {
+function createTodayWidgetController({ app, BrowserWindow, globalShortcut, ipcMain, screen, getMainWindow, ensureMainWindow }) {
   let preferences = { ...DEFAULT_PREFERENCES };
   let widgetWindow = null;
   let snapshot = { date: "", items: [] };
@@ -195,6 +198,15 @@ function createTodayWidgetController({ app, BrowserWindow, ipcMain, screen, getM
     applyTodayWidgetTopmost(widgetWindow, preferences.alwaysOnTop);
   }
 
+  function applyClickThrough() {
+    if (!widgetWindow || widgetWindow.isDestroyed() || typeof widgetWindow.setIgnoreMouseEvents !== "function") return;
+    widgetWindow.setIgnoreMouseEvents(preferences.clickThrough === true, { forward: true });
+  }
+
+  async function toggleClickThrough() {
+    await updatePreferences({ clickThrough: !preferences.clickThrough });
+  }
+
   function createWidgetWindow() {
     if (widgetWindow && !widgetWindow.isDestroyed()) return widgetWindow;
     widgetWindow = new BrowserWindow({
@@ -231,10 +243,12 @@ function createTodayWidgetController({ app, BrowserWindow, ipcMain, screen, getM
       applyAlwaysOnTop();
       widgetWindow.webContents.send("today-widget:snapshot", snapshot);
       widgetWindow.webContents.send("today-widget:state", widgetState());
+      applyClickThrough();
       broadcastState();
     });
     widgetWindow.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
     widgetWindow.on("show", applyAlwaysOnTop);
+    widgetWindow.on("focus", applyClickThrough);
     widgetWindow.on("move", () => {
       if (Date.now() < suppressMoveUntil || !widgetWindow || widgetWindow.isDestroyed()) return;
       const { x, y } = widgetWindow.getBounds();
@@ -274,6 +288,7 @@ function createTodayWidgetController({ app, BrowserWindow, ipcMain, screen, getM
     positionWidget();
     window.showInactive();
     applyAlwaysOnTop();
+    applyClickThrough();
     await persistPreferences();
     broadcastState();
     return widgetState();
@@ -292,6 +307,7 @@ function createTodayWidgetController({ app, BrowserWindow, ipcMain, screen, getM
     preferences = normalizeTodayWidgetPreferences({ ...preferences, ...raw });
     if (raw.position && raw.position !== "custom") preferences.customBounds = null;
     applyAlwaysOnTop();
+    applyClickThrough();
     if (Object.hasOwn(raw, "compact")) {
       currentSize = preferences.compact
         ? { width: 296, height: 49 }
@@ -391,6 +407,12 @@ function createTodayWidgetController({ app, BrowserWindow, ipcMain, screen, getM
       ? { width: 296, height: 49 }
       : { width: 360, height: preferences.height };
     if (preferences.launchWithApp && preferences.visible) createWidgetWindow();
+    if (globalShortcut?.register) {
+      const registered = globalShortcut.register(CLICK_THROUGH_ACCELERATOR, () => {
+        void toggleClickThrough();
+      });
+      if (!registered) console.warn(`Failed to register ${CLICK_THROUGH_ACCELERATOR} for Today widget.`);
+    }
     screen.on("display-added", positionWidget);
     screen.on("display-removed", positionWidget);
     screen.on("display-metrics-changed", positionWidget);
@@ -403,6 +425,7 @@ function createTodayWidgetController({ app, BrowserWindow, ipcMain, screen, getM
     screen.removeListener("display-added", positionWidget);
     screen.removeListener("display-removed", positionWidget);
     screen.removeListener("display-metrics-changed", positionWidget);
+    globalShortcut?.unregister?.(CLICK_THROUGH_ACCELERATOR);
     pendingCompletions.forEach(({ resolve, timer }) => {
       clearTimeout(timer);
       resolve({ success: false, code: "APP_QUITTING" });
