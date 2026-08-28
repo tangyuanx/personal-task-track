@@ -11462,3 +11462,52 @@ body.flow-node-reordering * {
     border-left: 0;
   }
 }
+
+/* Processing-node interaction fixes. */
+.flow-node-marker.flow-status-bullet {
+  width: 10px;
+  height: 10px;
+  flex: 0 0 10px;
+  border: 0;
+  border-radius: 50%;
+  padding: 0;
+  color: var(--todo);
+  background: currentColor;
+}
+
+.flow-node-marker.flow-status-bullet.status-done { color: var(--focus); background: currentColor; }
+.flow-node-marker.flow-status-bullet.status-blocked { color: var(--red); background: currentColor; }
+.flow-node-marker.flow-status-bullet.status-later { color: var(--muted); background: currentColor; }
+.flow-node-marker-icon { display: none; }
+
+.node-detail-page {
+  min-height: 0;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+@media (max-width: 760px) {
+  .flow-workspace,
+  .flow-workspace.has-node-page {
+    display: flex;
+    height: 100%;
+    min-height: 0;
+    flex-direction: column;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  .flow-main {
+    flex: 0 0 auto;
+    min-height: 300px;
+    overflow: visible;
+  }
+
+  .node-detail-page {
+    flex: 0 0 auto;
+    min-height: 260px;
+    max-height: calc(100vh - 300px);
+    max-height: calc(100dvh - 300px);
+    overflow-y: auto;
+  }
+}

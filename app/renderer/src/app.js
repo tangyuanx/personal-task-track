@@ -2298,29 +2298,15 @@ function renderContextMenu() {
   if (menu.kind === "flow-root") {
     return `
       <div class="context-menu" style="left:${menu.x}px; top:${menu.y}px">
-        <button data-action="add-root-node" data-task-id="${menu.taskId}">新增主节点</button>
+        <button data-action="add-root-node" data-task-id="${menu.taskId}">新增节点</button>
       </div>
     `;
   }
 
-  const task = state.tasks.find((item) => item.id === menu.taskId);
-  const node = task ? findNode(task.nodes, menu.nodeId) : null;
-  const statusActions = [
-    ["todo", "Todo"],
-    ["done", "Done"],
-    ["blocked", "Blocked"],
-    ["later", "Later"],
-  ]
-    .map(([status, label]) => `<button data-action="mark-node-status" data-task-id="${menu.taskId}" data-node-id="${menu.nodeId}" data-status="${status}" ${status === node?.status ? "disabled" : ""}>${label}${status === node?.status ? " ✓" : ""}</button>`)
-    .join("");
   return `
     <div class="context-menu" style="left:${menu.x}px; top:${menu.y}px">
-      <button data-action="add-child-node" data-task-id="${menu.taskId}" data-node-id="${menu.nodeId}">新增下级节点</button>
-      <button data-action="add-sibling-node" data-task-id="${menu.taskId}" data-node-id="${menu.nodeId}">在下方新增同级</button>
-      <hr />
-      <div class="context-menu-label">状态</div>
-      ${statusActions}
-      <hr />
+      <button data-action="add-child-node" data-task-id="${menu.taskId}" data-node-id="${menu.nodeId}">添加子节点</button>
+      <button data-action="add-sibling-node" data-task-id="${menu.taskId}" data-node-id="${menu.nodeId}">添加兄弟节点</button>
       <button class="danger" data-action="delete-node" data-task-id="${menu.taskId}" data-node-id="${menu.nodeId}">删除节点</button>
     </div>
   `;
@@ -4127,10 +4113,6 @@ function bindTaskRepositoryRows(scope = document) {
     });
     element.addEventListener("click", (event) => {
       event.stopPropagation();
-      if (element.classList.contains("flow-title-input")) {
-        selectNodeForInspector(element.dataset.taskId, element.dataset.nodeId);
-        render();
-      }
     });
     element.addEventListener("blur", (event) => {
       if (!event.relatedTarget && !appEditingPointerDown && captureAppSwitchEditingFocus(event.target)) return;
@@ -4144,6 +4126,7 @@ function bindTaskRepositoryRows(scope = document) {
   });
 
   document.querySelectorAll("[data-context]").forEach((element) => {
+    if (element.dataset.context === "flow-root") return;
     element.addEventListener("contextmenu", (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -4160,6 +4143,19 @@ function bindTaskRepositoryRows(scope = document) {
         state.activeTaskId = element.dataset.taskId;
         state.selectedNodeId = "";
       }
+      render();
+    });
+  });
+
+  document.querySelectorAll('.flow-main[data-context="flow-root"]').forEach((element) => {
+    element.addEventListener("contextmenu", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const x = Math.min(event.clientX, window.innerWidth - 210);
+      const y = Math.min(event.clientY, window.innerHeight - 245);
+      state.activeTaskId = element.dataset.taskId;
+      state.selectedNodeId = "";
+      state.contextMenu = { kind: "flow-root", taskId: element.dataset.taskId, nodeId: "", x, y };
       render();
     });
   });
@@ -4520,7 +4516,7 @@ function bindTaskRepositoryRows(scope = document) {
   if (app) {
     app.addEventListener("pointerdown", (event) => {
       let needsRender = false;
-      const keepNodeDetail = event.target.closest(".node-detail, .flow-row:not(.flow-header), .context-menu, [data-action], [data-edit-key], button, input, textarea, select");
+      const keepNodeDetail = event.target.closest(".node-detail, .node-detail-page, .flow-row:not(.flow-header), .context-menu, [data-action], [data-edit-key], button, input, textarea, select");
       const keepSettings = event.target.closest(".settings-overlay, .settings-trigger, .theme-toggle");
       const keepReview = event.target.closest(".review-overlay, .review-trigger");
       const keepContextMenu = event.target.closest(".context-menu");
@@ -4845,7 +4841,7 @@ function exitNodeDetail() {
   state.recordDraft = "";
   state.nodeDetailFullscreen = false;
   state.nodeDetailPosition = null;
-  document.querySelector(".node-detail")?.remove();
+  document.querySelector(".node-detail, .node-detail-page")?.remove();
   document.querySelectorAll(".flow-row.selected").forEach((row) => row.classList.remove("selected"));
   return true;
 }

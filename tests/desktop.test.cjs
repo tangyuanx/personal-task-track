@@ -2815,7 +2815,16 @@ test("processing flow matches the compact reference tree and opens details only 
   assert.doesNotMatch(result.detail, /保存记录/);
   assert.doesNotMatch(result.detail, /节点详情<\/span>|父节点|第 2 层|创建时间|状态变化|完成时间|新增下级节点|新增同级节点|删除节点/);
   assert.match(app, /selectedNode \? renderNodeDetailPage\(task\.id, selectedNode\) : ""/);
-  assert.match(app, /element\.classList\.contains\("flow-title-input"\)[\s\S]*selectNodeForInspector\(element\.dataset\.taskId, element\.dataset\.nodeId\);[\s\S]*render\(\);/);
+  assert.doesNotMatch(app, /element\.classList\.contains\("flow-title-input"\)[\s\S]*selectNodeForInspector\(element\.dataset\.taskId, element\.dataset\.nodeId\);[\s\S]*render\(\);/);
+  assert.match(app, /data-action="add-child-node"[\s\S]*添加子节点/);
+  assert.match(app, /data-action="add-sibling-node"[\s\S]*添加兄弟节点/);
+  assert.match(app, /data-action="delete-node"[\s\S]*删除节点/);
+  assert.doesNotMatch(app, /context-menu-label">状态/);
+  assert.match(app, /\.flow-main\[data-context="flow-root"\]/);
+  assert.match(app, /if \(element\.dataset\.context === "flow-root"\) return;/);
+  assert.match(app, /event\.key === "Enter" && event\.shiftKey/);
+  assert.match(app, /event\.key === "Tab" && !event\.shiftKey/);
+  assert.match(app, /\.node-detail-page, \.flow-row/);
   assert.match(app, /recordInput\.focus\(\{ preventScroll: true \}\);/);
   assert.match(finalFlowRules, /\.flow-outline-row\s*\{[\s\S]*min-height:\s*29px;[\s\S]*gap:\s*8px;[\s\S]*var\(--tree-depth\) \* 48px/);
   assert.match(finalFlowRules, /\.flow-status-badge\s*\{[\s\S]*height:\s*19px;[\s\S]*border-radius:\s*2px;/);
@@ -2823,6 +2832,10 @@ test("processing flow matches the compact reference tree and opens details only 
   assert.match(finalFlowRules, /\.node-detail-updated\s*\{[\s\S]*font-size:\s*12px;[\s\S]*font-weight:\s*520;/);
   assert.doesNotMatch(finalFlowRules, /\.node-detail-status-options\s*\{/);
   assert.match(finalFlowRules, /\.node-detail-page \.node-inspector-save\s*\{[\s\S]*border-radius:\s*6px;[\s\S]*background:\s*#4f766d;/);
+  assert.match(finalFlowRules, /\.flow-node-marker\.flow-status-bullet\s*\{[\s\S]*border-radius:\s*50%;[\s\S]*background:\s*currentColor;/);
+  assert.match(finalFlowRules, /\.flow-node-marker-icon\s*\{\s*display:\s*none;/);
+  assert.match(finalFlowRules, /\.node-detail-page\s*\{[\s\S]*overscroll-behavior:\s*contain;/);
+  assert.match(finalFlowRules, /@media \(max-width: 760px\)[\s\S]*\.node-detail-page\s*\{[\s\S]*overflow-y:\s*auto;/);
 });
 
 test("task repository renders priority without an update timestamp", async () => {
