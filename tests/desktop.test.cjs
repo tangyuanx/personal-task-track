@@ -2460,8 +2460,10 @@ test("release configuration uses deterministic updater artifacts and excludes de
     fs.readFile(path.join(__dirname, "..", "tools", "verify-update-artifacts.cjs"), "utf8"),
   ]);
 
-  assert.equal(packageJson.build.win.artifactName, "Personal-Task-Track-${version}-${arch}-setup.${ext}");
-  assert.equal(packageJson.build.mac.artifactName, "Personal-Task-Track-${version}-${arch}.${ext}");
+  assert.equal(packageJson.build.productName, "Loop");
+  assert.equal(packageJson.build.win.executableName, "Loop");
+  assert.equal(packageJson.build.win.artifactName, "Loop-${version}-${arch}-setup.${ext}");
+  assert.equal(packageJson.build.mac.artifactName, "Loop-${version}-${arch}.${ext}");
   assert.deepEqual(packageJson.build.publish, [{ provider: "github", owner: "tangyuanx", repo: "personal-task-track" }]);
   assert.match(buildScript, /new Set\(\["latest\.yml", "latest-mac\.yml"\]\)/);
   assert.match(workflow, /release\/latest\.yml/);

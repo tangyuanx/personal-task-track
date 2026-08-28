@@ -1,9 +1,3 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="Task hammer">
-  <path d="M634 143c24-24 64-24 88 0l159 159c24 24 24 64 0 88L752 519 505 272 634 143Z" fill="#ef4444"/>
-  <path d="M563 214l247 247-86 86-247-247 86-86Z" fill="#dc2626"/>
-  <path d="M433 302l293 293-91 91-293-293 91-91Z" fill="#991b1b"/>
-  <path d="M592 625l95-95 218 218c31 31 31 81 0 112l-45 45c-31 31-81 31-112 0L530 687l62-62Z" fill="#dc2626"/>
-  <path d="M301 345l378 378-60 60c-26 26-69 26-95 0L241 500c-26-26-26-69 0-95l60-60Z" fill="#ef4444"/>
-  <path d="M163 704l185-185 157 157-185 185c-43 43-114 43-157 0s-43-114 0-157Z" fill="#dc2626"/>
-  <path d="M178 719l185-185 52 52-185 185c-14 14-38 14-52 0s-14-38 0-52Z" fill="#fca5a5" opacity=".62"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="Loop app icon">
+  <image width="1024" height="1024" href="icon.png"/>
 </svg>

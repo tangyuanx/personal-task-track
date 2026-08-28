@@ -1,6 +1,6 @@
-# Personal Task Track
+# Loop
 
-一个本地优先的个人任务流记录工具，面向程序员日常处理问题、拆解子任务、聚焦主线任务、跟踪处理过程、记录判断和沉淀结论的场景。
+Loop 是一个本地优先的个人任务闭环工具，让任务从创建、处理到完成形成清晰循环，面向程序员日常处理问题、拆解子任务、聚焦主线任务、跟踪处理过程、记录判断和沉淀结论的场景。
 
 ## 功能
 
@@ -98,7 +98,7 @@ git tag v0.1.0
 git push origin v0.1.0
 ```
 
-标签推送后，`Release Desktop Apps` workflow 会自动构建 macOS 和 Windows 安装包，并上传到 GitHub Release。Windows 安装包允许选择安装目录；如果选择一个父目录，安装器会在该目录下创建 `task track` 应用目录。
+标签推送后，`Release Desktop Apps` workflow 会自动构建 macOS 和 Windows 安装包，并上传到 GitHub Release。Windows 安装包允许选择安装目录；如果选择一个父目录，安装器会在该目录下创建 `Loop` 应用目录。
 
 ## 数据说明
 
@@ -106,6 +106,8 @@ git push origin v0.1.0
 
 - macOS: `~/Library/Application Support/Personal Task Track/task-data.json`
 - Windows: `%APPDATA%/Personal Task Track/task-data.json`
+
+为保证旧版本升级后仍能直接读取既有任务，Loop 继续沿用原来的 `Personal Task Track` 数据目录；这只影响本机存储路径，应用界面和安装包名称均为 Loop。
 
 任务数据只保存在本机，不会上传到远程服务。浏览器预览模式下会回退使用 `localStorage`，仅用于开发预览。
 

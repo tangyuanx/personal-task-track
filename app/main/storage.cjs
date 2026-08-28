@@ -1,5 +1,5 @@
 /**
- * Personal Task Track -- Data persistence layer
+ * Loop -- Data persistence layer
  *
  * Responsibilities:
  *   - Read/write task data as JSON to disk

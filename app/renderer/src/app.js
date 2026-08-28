@@ -1,5 +1,5 @@
 // ============================================================
-// Personal Task Track -- frontend application logic
+// Loop -- frontend application logic
 // All state management, DOM rendering, event handling,
 // Markdown processing, and Milkdown editor integration.
 // ============================================================
@@ -1618,7 +1618,7 @@ function renderSidebar() {
       <span class="sidebar-resizer" data-sidebar-resizer title="调整侧栏宽度"></span>
       <div class="sidebar-head brand">
         <div>
-          <strong>Task Track</strong>
+          <strong>Loop</strong>
         </div>
         <span>v${esc(APP_VERSION || "dev")}</span>
       </div>

@@ -1,5 +1,5 @@
 /**
- * Personal Task Track -- Electron main process
+ * Loop -- Electron main process
  *
  * Responsibilities:
  *   - Create and manage the BrowserWindow
@@ -30,6 +30,11 @@ const {
 const { createTodayWidgetController } = require("./today-widget.cjs");
 const { createDeadlineReminderController } = require("./deadline-reminders.cjs");
 const { createUpdateController } = require("./updater.cjs");
+
+const APP_DISPLAY_NAME = "Loop";
+const LEGACY_USER_DATA_DIRECTORY = "Personal Task Track";
+app.setName(APP_DISPLAY_NAME);
+app.setPath("userData", path.join(app.getPath("appData"), LEGACY_USER_DATA_DIRECTORY));
 
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
 if (!hasSingleInstanceLock) app.quit();
@@ -69,7 +74,7 @@ function createWindow() {
     height: 820,
     minWidth: 1024,
     minHeight: 680,
-    title: "个人任务流",
+    title: APP_DISPLAY_NAME,
     backgroundColor: "#ffffff",
     show: false,
     autoHideMenuBar: true,
@@ -459,7 +464,7 @@ function taskDocumentPdfHtml({ taskTitle, bodyHtml }) {
 </head>
 <body>
   <header>
-    <p class="kicker">Personal Task Track</p>
+    <p class="kicker">Loop</p>
     <h1>${escapeHtml(taskTitle)}</h1>
   </header>
   <main>${bodyHtml}</main>
@@ -490,7 +495,6 @@ function createMenu() {
 
 app.whenReady().then(async () => {
   if (!hasSingleInstanceLock) return;
-  app.setName("Personal Task Track");
   if (isMac) {
     app.setActivationPolicy("regular");
     await app.dock.show();

@@ -1,7 +1,7 @@
 {
   "name": "personal-task-track",
-  "version": "0.1.139",
-  "description": "A local-first personal task flow tracker for programmer daily work.",
+  "version": "0.1.140",
+  "description": "Loop is a local-first personal task flow tracker for closing work from creation to completion.",
   "private": true,
   "license": "UNLICENSED",
   "author": "xuesinian <tangyuan.sn@gmail.com>",
@@ -27,7 +27,7 @@
   },
   "build": {
     "appId": "io.github.tangyuanx.personal-task-track",
-    "productName": "Personal Task Track",
+    "productName": "Loop",
     "icon": "app/resources/icon",
     "asar": true,
     "afterPack": "tools/after-pack.cjs",
@@ -54,15 +54,15 @@
     "mac": {
       "identity": null,
       "category": "public.app-category.productivity",
-      "artifactName": "Personal-Task-Track-${version}-${arch}.${ext}",
+      "artifactName": "Loop-${version}-${arch}.${ext}",
       "target": [
         "dmg",
         "zip"
       ]
     },
     "win": {
-      "executableName": "PersonalTaskTrack",
-      "artifactName": "Personal-Task-Track-${version}-${arch}-setup.${ext}",
+      "executableName": "Loop",
+      "artifactName": "Loop-${version}-${arch}-setup.${ext}",
       "target": [
         {
           "target": "nsis",
