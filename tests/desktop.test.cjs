@@ -5,7 +5,9 @@ const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
 const vm = require("node:vm");
+const { UUID } = require("builder-util-runtime");
 const {
+  DATA_FILE,
   KNOWLEDGE_MIGRATION_VERSION,
   normalizeTaskData,
   migrateKnowledgeTaskData,
@@ -23,6 +25,14 @@ const {
 const knowledgeFile = require("../app/main/knowledge-file.cjs");
 const knowledgeAssets = require("../app/main/knowledge-assets.cjs");
 const { createKnowledgeFileWatcher } = require("../app/main/knowledge-watcher.cjs");
+const {
+  APP_DISPLAY_NAME,
+  DESKTOP_APP_ID,
+  LEGACY_USER_DATA_DIRECTORY,
+  WINDOWS_INSTALLER_GUID,
+  configureDesktopIdentity,
+  legacyUserDataPath,
+} = require("../app/main/app-identity.cjs");
 const {
   applyTodayWidgetTopmost,
   cornerWindowBounds,
@@ -2461,9 +2471,14 @@ test("release configuration uses deterministic updater artifacts and excludes de
   ]);
 
   assert.equal(packageJson.build.productName, "Loop");
+  assert.equal(packageJson.build.appId, DESKTOP_APP_ID);
   assert.equal(packageJson.build.win.executableName, "Loop");
   assert.equal(packageJson.build.win.artifactName, "Loop-${version}-${arch}-setup.${ext}");
   assert.equal(packageJson.build.mac.artifactName, "Loop-${version}-${arch}.${ext}");
+  assert.equal(packageJson.build.nsis.guid, WINDOWS_INSTALLER_GUID);
+  assert.equal(packageJson.build.nsis.deleteAppDataOnUninstall, false);
+  assert.equal(packageJson.build.nsis.shortcutName, APP_DISPLAY_NAME);
+  assert.equal(packageJson.build.nsis.uninstallDisplayName, "Loop ${version}");
   assert.deepEqual(packageJson.build.publish, [{ provider: "github", owner: "tangyuanx", repo: "personal-task-track" }]);
   assert.match(buildScript, /new Set\(\["latest\.yml", "latest-mac\.yml"\]\)/);
   assert.match(workflow, /release\/latest\.yml/);
@@ -2475,6 +2490,43 @@ test("release configuration uses deterministic updater artifacts and excludes de
   assert.match(workflow, /--require-all-platforms/);
   assert.match(verifier, /references missing artifact/);
   assert.match(verifier, /Combined release is missing required update metadata/);
+});
+
+test("Loop preserves the legacy task-data location on macOS and Windows", () => {
+  const electronBuilderNs = UUID.parse("50e065bc-3134-11e6-9bab-38c9862bdaf3");
+  assert.equal(WINDOWS_INSTALLER_GUID, UUID.v5(DESKTOP_APP_ID, electronBuilderNs));
+  const macAppData = "/Users/example/Library/Application Support";
+  const windowsAppData = "C:\\Users\\example\\AppData\\Roaming";
+  assert.equal(
+    legacyUserDataPath(macAppData, path.posix),
+    "/Users/example/Library/Application Support/Personal Task Track",
+  );
+  assert.equal(
+    legacyUserDataPath(windowsAppData, path.win32),
+    "C:\\Users\\example\\AppData\\Roaming\\Personal Task Track",
+  );
+
+  const calls = [];
+  const fakeApp = {
+    getPath(name) {
+      assert.equal(name, "appData");
+      return windowsAppData;
+    },
+    setName(name) {
+      calls.push(["name", name]);
+    },
+    setPath(name, value) {
+      calls.push([name, value]);
+    },
+  };
+  const identity = configureDesktopIdentity(fakeApp, path.win32);
+  assert.deepEqual(calls, [
+    ["name", APP_DISPLAY_NAME],
+    ["userData", "C:\\Users\\example\\AppData\\Roaming\\Personal Task Track"],
+  ]);
+  assert.equal(identity.appId, DESKTOP_APP_ID);
+  assert.equal(path.win32.basename(identity.userDataPath), LEGACY_USER_DATA_DIRECTORY);
+  assert.equal(path.win32.join(identity.userDataPath, DATA_FILE), "C:\\Users\\example\\AppData\\Roaming\\Personal Task Track\\task-data.json");
 });
 
 test("repository structure keeps production, tooling, documentation, and prototypes separate", async () => {

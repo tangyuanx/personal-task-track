@@ -30,11 +30,9 @@ const {
 const { createTodayWidgetController } = require("./today-widget.cjs");
 const { createDeadlineReminderController } = require("./deadline-reminders.cjs");
 const { createUpdateController } = require("./updater.cjs");
+const { APP_DISPLAY_NAME, configureDesktopIdentity } = require("./app-identity.cjs");
 
-const APP_DISPLAY_NAME = "Loop";
-const LEGACY_USER_DATA_DIRECTORY = "Personal Task Track";
-app.setName(APP_DISPLAY_NAME);
-app.setPath("userData", path.join(app.getPath("appData"), LEGACY_USER_DATA_DIRECTORY));
+configureDesktopIdentity(app);
 
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
 if (!hasSingleInstanceLock) app.quit();
