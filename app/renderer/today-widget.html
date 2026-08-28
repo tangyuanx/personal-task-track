@@ -20,9 +20,9 @@
       --widget-width: 360px;
       --screen-gap: 22px;
       --widget-font-scale: 1;
-      --zh-font: "TaskTrack Widget Chinese System", sans-serif;
-      --en-font: "TaskTrack Widget English Inter", sans-serif;
-      --widget-font: var(--zh-font), var(--en-font), sans-serif;
+      --zh-font: "TaskTrack Widget Chinese System";
+      --en-font: "TaskTrack Widget English Inter";
+      --widget-font: var(--en-font), var(--zh-font), sans-serif;
       --widget-focus: #2e5d49;
       --widget-focus-deep: #17392d;
       --widget-inset-highlight: rgba(255, 255, 255, 0.09);
@@ -84,26 +84,34 @@
     @font-face { font-family: "TaskTrack Widget Chinese Noto"; src: url("./src/assets/fonts/NotoSansCJKsc-Regular.otf") format("opentype"); }
     @font-face { font-family: "TaskTrack Widget Chinese Noto"; src: url("./src/assets/fonts/NotoSansCJKsc-Bold.otf") format("opentype"); font-weight: 700 900; }
 
-    :root[data-zh-font="system"] { --zh-font: "TaskTrack Widget Chinese System", sans-serif; }
-    :root[data-zh-font="noto"] { --zh-font: "TaskTrack Widget Chinese Noto", sans-serif; }
-    :root[data-zh-font="yahei"] { --zh-font: "Microsoft YaHei", "微软雅黑", sans-serif; }
-    :root[data-zh-font="pingfang"] { --zh-font: "PingFang SC", "苹方-简", sans-serif; }
-    :root[data-zh-font="songti"] { --zh-font: "Songti SC", "STSong", serif; }
-    :root[data-zh-font="simsun"] { --zh-font: "SimSun", "宋体", serif; }
-    :root[data-zh-font="fangsong"] { --zh-font: "FangSong", "仿宋", serif; }
-    :root[data-zh-font="heiti"] { --zh-font: "Heiti SC", "SimHei", sans-serif; }
-    :root[data-zh-font="kaiti"] { --zh-font: "KaiTi", "Kaiti SC", serif; }
-    :root[data-en-font="system"] { --en-font: "TaskTrack Widget English System", sans-serif; }
-    :root[data-en-font="segoe"] { --en-font: "TaskTrack Widget English Segoe", sans-serif; }
-    :root[data-en-font="arial"] { --en-font: "TaskTrack Widget English Arial", sans-serif; }
-    :root[data-en-font="helvetica"] { --en-font: "TaskTrack Widget English Helvetica", sans-serif; }
-    :root[data-en-font="verdana"] { --en-font: "TaskTrack Widget English Verdana", sans-serif; }
-    :root[data-en-font="trebuchet"] { --en-font: "TaskTrack Widget English Trebuchet", sans-serif; }
-    :root[data-en-font="tahoma"] { --en-font: "TaskTrack Widget English Tahoma", sans-serif; }
-    :root[data-en-font="times"] { --en-font: "TaskTrack Widget English Times", serif; }
-    :root[data-en-font="georgia"] { --en-font: "TaskTrack Widget English Georgia", serif; }
-    :root[data-en-font="courier"] { --en-font: "TaskTrack Widget English Courier", monospace; }
-    :root[data-en-font="mono"] { --en-font: "TaskTrack Widget English Mono", monospace; }
+    :root[data-zh-font="system"] { --zh-font: "TaskTrack Widget Chinese System"; }
+    :root[data-zh-font="noto"] { --zh-font: "TaskTrack Widget Chinese Noto"; }
+    :root[data-zh-font="yahei"] { --zh-font: "Microsoft YaHei", "微软雅黑"; }
+    :root[data-zh-font="pingfang"] { --zh-font: "PingFang SC", "苹方-简"; }
+    :root[data-zh-font="songti"] { --zh-font: "Songti SC", "STSong"; }
+    :root[data-zh-font="simsun"] { --zh-font: "SimSun", "宋体"; }
+    :root[data-zh-font="fangsong"] { --zh-font: "FangSong", "仿宋"; }
+    :root[data-zh-font="heiti"] { --zh-font: "Heiti SC", "SimHei"; }
+    :root[data-zh-font="kaiti"] { --zh-font: "KaiTi", "Kaiti SC"; }
+    :root[data-en-font="system"] { --en-font: "TaskTrack Widget English System"; }
+    :root[data-en-font="segoe"] { --en-font: "TaskTrack Widget English Segoe"; }
+    :root[data-en-font="arial"] { --en-font: "TaskTrack Widget English Arial"; }
+    :root[data-en-font="helvetica"] { --en-font: "TaskTrack Widget English Helvetica"; }
+    :root[data-en-font="verdana"] { --en-font: "TaskTrack Widget English Verdana"; }
+    :root[data-en-font="trebuchet"] { --en-font: "TaskTrack Widget English Trebuchet"; }
+    :root[data-en-font="tahoma"] { --en-font: "TaskTrack Widget English Tahoma"; }
+    :root[data-en-font="times"] { --en-font: "TaskTrack Widget English Times"; }
+    :root[data-en-font="georgia"] { --en-font: "TaskTrack Widget English Georgia"; }
+    :root[data-en-font="courier"] { --en-font: "TaskTrack Widget English Courier"; }
+    :root[data-en-font="mono"] { --en-font: "TaskTrack Widget English Mono"; }
+
+    :root[data-zh-font="songti"],
+    :root[data-zh-font="simsun"],
+    :root[data-zh-font="fangsong"],
+    :root[data-zh-font="kaiti"] {
+      -webkit-font-smoothing: auto;
+      text-rendering: optimizeLegibility;
+    }
 
     * { box-sizing: border-box; }
 

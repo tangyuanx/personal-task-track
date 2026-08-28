@@ -2122,7 +2122,7 @@ function renderFlowNode(taskId, node, depth, rootIndex = 0, lineage = [], isLast
         <button class="flow-status-badge status-${node.status}" type="button" data-action="cycle-node-status" data-task-id="${taskId}" data-node-id="${node.id}" aria-label="${escAttr(`${statusBadgeLabel}，点击切换状态`)}">${statusBadgeLabel}</button>
         ${nodeTitleInputHtml(node, taskId)}
         ${collapseControl}
-        <button class="flow-node-more" type="button" data-action="open-node-menu" data-task-id="${taskId}" data-node-id="${node.id}" aria-label="打开节点菜单">${briefFieldIcon("more-horizontal", "flow-row-icon")}</button>
+        <button class="flow-node-more" type="button" data-action="open-node-detail" data-task-id="${taskId}" data-node-id="${node.id}" aria-label="打开节点详情">${briefFieldIcon("more-horizontal", "flow-row-icon")}</button>
         <button class="flow-node-drag-handle" type="button" draggable="true" data-flow-drag-source data-task-id="${taskId}" data-node-id="${node.id}" aria-label="${escAttr(`拖拽重组节点：${node.title || "未命名节点"}`)}" title="拖拽调整节点层级和顺序">
           ${briefFieldIcon("move", "flow-row-icon")}
         </button>
@@ -2185,15 +2185,19 @@ function renderNodeDetailPage(taskId, node) {
   const path = task ? getNodePath(task.nodes, node.id) : [];
   return `
     <aside class="node-detail-page" data-task-id="${taskId}" data-node-id="${node.id}" aria-label="节点详情页面">
-      <header class="node-inspector-header">
+      <header class="node-detail-bar">
         <button class="node-detail-back" type="button" data-action="close-node-detail" aria-label="返回处理流">${briefFieldIcon("arrow-left", "node-detail-back-icon")}<span>返回处理流</span></button>
+      </header>
+      <div class="node-detail-scroll">
+        <header class="node-inspector-header">
         <div class="node-detail-heading">
           <div class="node-detail-title-row">${inputHtml("title", node.title, taskId, "node-detail-title", node.id)}<time class="node-detail-updated" datetime="${escAttr(node.updatedAt)}">最近修改 ${formatShort(node.updatedAt)}</time></div>
           <span class="node-detail-current-status flow-status-badge status-${node.status}">${nodeStatusBadgeText(node.status)}</span>
         </div>
-      </header>
-      <section class="node-inspector-section node-inspector-hierarchy"><div class="node-inspector-breadcrumb"><span>路径</span><strong>${esc(path.map((item) => item.title || "未命名").join(" / ") || "—")}</strong></div></section>
-      <section class="node-inspector-section"><label>记录<textarea class="record-modal-textarea node-inspector-note" data-record-input placeholder="记录该节点的处理过程、关键数据、判断依据、结果或后续事项……">${esc(state.recordDraft)}</textarea></label><button class="node-inspector-save" type="button" data-action="save-node-detail">保存</button></section>
+        </header>
+        <section class="node-inspector-section node-inspector-hierarchy"><div class="node-inspector-breadcrumb"><span>路径</span><strong>${esc(path.map((item) => item.title || "未命名").join(" / ") || "—")}</strong></div></section>
+        <section class="node-inspector-section"><label>记录<textarea class="record-modal-textarea node-inspector-note" data-record-input placeholder="记录该节点的处理过程、关键数据、判断依据、结果或后续事项……">${esc(state.recordDraft)}</textarea></label><button class="node-inspector-save" type="button" data-action="save-node-detail">保存</button></section>
+      </div>
     </aside>
   `;
 }
@@ -4419,6 +4423,11 @@ function bindTaskRepositoryRows(scope = document) {
   document.querySelectorAll(".flow-outline-row[data-flow-select]").forEach((row) => {
     row.addEventListener("click", (event) => {
       if (event.target.closest("button, select, textarea")) return;
+      row.querySelector(".flow-title-input")?.focus({ preventScroll: true });
+    });
+    row.addEventListener("dblclick", (event) => {
+      if (event.target.closest("button, select, textarea")) return;
+      event.preventDefault();
       selectNodeForInspector(row.dataset.taskId, row.dataset.nodeId);
       render();
     });
@@ -5697,14 +5706,7 @@ async function action(data, event = null) {
   if (data.action === "toggle-all-nodes") toggleAllNodes(data.taskId);
   if (data.action === "mark-node-status") markNodeStatus(data.taskId, data.nodeId, data.status);
   if (data.action === "cycle-node-status") cycleNodeStatus(data.taskId, data.nodeId);
-  if (data.action === "open-node-menu") {
-    state.contextMenu = {
-      kind: "node",
-      taskId: data.taskId,
-      nodeId: data.nodeId,
-      x: Math.min((event?.clientX || 0) + 8, window.innerWidth - 210),
-      y: Math.min((event?.clientY || 0) + 8, window.innerHeight - 245),
-    };
+  if (data.action === "open-node-detail") {
     selectNodeForInspector(data.taskId, data.nodeId);
     render();
     return;

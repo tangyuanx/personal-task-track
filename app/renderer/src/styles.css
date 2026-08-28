@@ -50,9 +50,9 @@
   --glass-soft: rgba(255, 255, 255, 0.44);
   --inset-highlight: rgba(255, 255, 255, 0.52);
   --shadow: rgba(70, 59, 43, 0.13);
-  --en-font: "TaskTrack English Inter", sans-serif;
-  --zh-font: "TaskTrack Chinese System", sans-serif;
-  --app-font: var(--zh-font), var(--en-font), sans-serif;
+  --en-font: "TaskTrack English Inter";
+  --zh-font: "TaskTrack Chinese System";
+  --app-font: var(--en-font), var(--zh-font), sans-serif;
   --mono: var(--app-font);
   color: var(--ink);
   background: var(--panel);
@@ -158,87 +158,95 @@
 @font-face { font-family: "TaskTrack Chinese KaiTi"; src: local("KaiTi"), local("Kaiti SC"), local("STKaiti"); unicode-range: U+2E80-2EFF, U+3000-303F, U+3040-30FF, U+3100-312F, U+31A0-31BF, U+3200-32FF, U+3400-4DBF, U+4E00-9FFF, U+F900-FAFF, U+FE10-FE1F, U+FE30-FE4F, U+FF00-FFEF; }
 
 :root[data-zh-font="system"] {
-  --zh-font: "TaskTrack Chinese System", sans-serif;
+  --zh-font: "TaskTrack Chinese System";
 }
 
 :root[data-zh-font="noto"] {
-  --zh-font: "TaskTrack Chinese Noto", sans-serif;
+  --zh-font: "TaskTrack Chinese Noto";
 }
 
 :root[data-zh-font="yahei"] {
-  --zh-font: "TaskTrack Chinese YaHei", sans-serif;
+  --zh-font: "TaskTrack Chinese YaHei";
 }
 
 :root[data-zh-font="pingfang"] {
-  --zh-font: "TaskTrack Chinese PingFang", sans-serif;
+  --zh-font: "TaskTrack Chinese PingFang";
 }
 
 :root[data-zh-font="songti"] {
-  --zh-font: "TaskTrack Chinese Songti", serif;
+  --zh-font: "TaskTrack Chinese Songti";
 }
 
 :root[data-zh-font="simsun"] {
-  --zh-font: "TaskTrack Chinese SimSun", serif;
+  --zh-font: "TaskTrack Chinese SimSun";
 }
 
 :root[data-zh-font="fangsong"] {
-  --zh-font: "TaskTrack Chinese FangSong", serif;
+  --zh-font: "TaskTrack Chinese FangSong";
 }
 
 :root[data-zh-font="heiti"] {
-  --zh-font: "TaskTrack Chinese Heiti", sans-serif;
+  --zh-font: "TaskTrack Chinese Heiti";
 }
 
 :root[data-zh-font="kaiti"] {
-  --zh-font: "TaskTrack Chinese KaiTi", serif;
+  --zh-font: "TaskTrack Chinese KaiTi";
 }
 
 :root[data-en-font="inter"] {
-  --en-font: "TaskTrack English Inter", sans-serif;
+  --en-font: "TaskTrack English Inter";
 }
 
 :root[data-en-font="system"] {
-  --en-font: "TaskTrack English System", sans-serif;
+  --en-font: "TaskTrack English System";
 }
 
 :root[data-en-font="segoe"] {
-  --en-font: "TaskTrack English Segoe", sans-serif;
+  --en-font: "TaskTrack English Segoe";
 }
 
 :root[data-en-font="arial"] {
-  --en-font: "TaskTrack English Arial", sans-serif;
+  --en-font: "TaskTrack English Arial";
 }
 
 :root[data-en-font="helvetica"] {
-  --en-font: "TaskTrack English Helvetica", sans-serif;
+  --en-font: "TaskTrack English Helvetica";
 }
 
 :root[data-en-font="verdana"] {
-  --en-font: "TaskTrack English Verdana", sans-serif;
+  --en-font: "TaskTrack English Verdana";
 }
 
 :root[data-en-font="trebuchet"] {
-  --en-font: "TaskTrack English Trebuchet", sans-serif;
+  --en-font: "TaskTrack English Trebuchet";
 }
 
 :root[data-en-font="tahoma"] {
-  --en-font: "TaskTrack English Tahoma", sans-serif;
+  --en-font: "TaskTrack English Tahoma";
 }
 
 :root[data-en-font="times"] {
-  --en-font: "TaskTrack English Times", serif;
+  --en-font: "TaskTrack English Times";
 }
 
 :root[data-en-font="georgia"] {
-  --en-font: "TaskTrack English Georgia", serif;
+  --en-font: "TaskTrack English Georgia";
 }
 
 :root[data-en-font="courier"] {
-  --en-font: "TaskTrack English Courier", monospace;
+  --en-font: "TaskTrack English Courier";
 }
 
 :root[data-en-font="mono"] {
-  --en-font: "TaskTrack English Mono", monospace;
+  --en-font: "TaskTrack English Mono";
+}
+
+:root[data-zh-font="songti"],
+:root[data-zh-font="simsun"],
+:root[data-zh-font="fangsong"],
+:root[data-zh-font="kaiti"] {
+  -webkit-font-smoothing: auto;
+  text-rendering: optimizeLegibility;
 }
 
 * {
@@ -929,11 +937,11 @@ body.resizing-sidebar .sidebar-resizer::before {
 }
 
 .settings-preview-zh {
-  font-family: var(--zh-font);
+  font-family: var(--zh-font), sans-serif;
 }
 
 .settings-preview-en {
-  font-family: var(--en-font);
+  font-family: var(--en-font), sans-serif;
 }
 
 .settings-preview p {
@@ -11464,6 +11472,17 @@ body.flow-node-reordering * {
 }
 
 /* Processing-node interaction fixes. */
+.task-workbench:has(.flow-workspace) {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.flow-workspace,
+.flow-main {
+  min-height: 0;
+  height: 100%;
+}
+
 .flow-node-marker.flow-status-bullet {
   width: 10px;
   height: 10px;
@@ -11481,16 +11500,37 @@ body.flow-node-reordering * {
 .flow-node-marker-icon { display: none; }
 
 .node-detail-page {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   min-height: 0;
+  overflow: hidden;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
+}
+
+.node-detail-bar {
+  position: relative;
+  z-index: 1;
+  padding: 12px 24px;
+  border-bottom: 1px solid #e4eae8;
+  background: inherit;
+}
+
+.node-detail-scroll {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.node-detail-scroll .node-inspector-header {
+  border-bottom: 0;
 }
 
 @media (max-width: 760px) {
   .flow-workspace,
   .flow-workspace.has-node-page {
     display: flex;
-    height: 100%;
+    height: auto;
     min-height: 0;
     flex-direction: column;
     overflow-x: hidden;
@@ -11499,6 +11539,7 @@ body.flow-node-reordering * {
 
   .flow-main {
     flex: 0 0 auto;
+    height: auto;
     min-height: 300px;
     overflow: visible;
   }
@@ -11508,6 +11549,10 @@ body.flow-node-reordering * {
     min-height: 260px;
     max-height: calc(100vh - 300px);
     max-height: calc(100dvh - 300px);
-    overflow-y: auto;
+  }
+
+  .node-detail-bar {
+    padding-right: 20px;
+    padding-left: 20px;
   }
 }

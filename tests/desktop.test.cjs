@@ -2372,7 +2372,11 @@ test("Chinese and English font settings stay isolated in the application font ch
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "app.js"), "utf8"),
   ]);
 
-  assert.match(styles, /--app-font:\s*var\(--zh-font\),\s*var\(--en-font\),\s*sans-serif;/);
+  assert.match(styles, /--app-font:\s*var\(--en-font\),\s*var\(--zh-font\),\s*sans-serif;/);
+  assert.doesNotMatch(styles, /--en-font:\s*"TaskTrack English [^"]+",\s*(?:sans-serif|serif|monospace);/);
+  assert.doesNotMatch(styles, /--zh-font:\s*"TaskTrack Chinese [^"]+",\s*(?:sans-serif|serif);/);
+  assert.match(styles, /:root\[data-zh-font="songti"\],[\s\S]*-webkit-font-smoothing:\s*auto;/);
+  assert.match(styles, /:root\[data-zh-font="kaiti"\][\s\S]*text-rendering:\s*optimizeLegibility;/);
   assert.doesNotMatch(app, /横向滚动\s*·\s*双击重命名/);
 });
 
@@ -2389,7 +2393,8 @@ test("Today widget uses the main Today focus surface treatment", async () => {
   assert.match(widget, /--widget-task-bg:\s*rgba\(255, 255, 255, 0\.075\)/);
   assert.match(widget, /\.today-widget\s*\{[\s\S]*background:\s*var\(--widget-bg\)/);
   assert.match(widget, /\.today-task\s*\{[\s\S]*background:\s*var\(--widget-task-bg\)/);
-  assert.match(widget, /--widget-font:\s*var\(--zh-font\),\s*var\(--en-font\),\s*sans-serif;/);
+  assert.match(widget, /--widget-font:\s*var\(--en-font\),\s*var\(--zh-font\),\s*sans-serif;/);
+  assert.match(widget, /:root\[data-zh-font="simsun"\],[\s\S]*-webkit-font-smoothing:\s*auto;/);
   assert.match(widget, /NotoSansCJKsc-Bold\.otf/);
 });
 
@@ -2807,6 +2812,7 @@ test("processing flow matches the compact reference tree and opens details only 
   assert.match(result.selectedPage, /class="node-detail-page"/);
   assert.match(result.selectedPage, /aria-label="返回处理流"/);
   assert.match(result.detail, /class="node-detail-updated"[^>]*>最近修改 /);
+  assert.match(result.detail, /class="node-detail-bar"[\s\S]*返回处理流[\s\S]*class="node-detail-scroll"/);
   assert.match(result.detail, /node-detail-title-row/);
   assert.match(result.detail, /node-detail-current-status flow-status-badge status-later">doing</);
   assert.doesNotMatch(result.detail, /node-detail-status-section|node-detail-status-options|node-detail-status-option/);
@@ -2822,6 +2828,10 @@ test("processing flow matches the compact reference tree and opens details only 
   assert.doesNotMatch(app, /context-menu-label">状态/);
   assert.match(app, /\.flow-main\[data-context="flow-root"\]/);
   assert.match(app, /if \(element\.dataset\.context === "flow-root"\) return;/);
+  assert.match(app, /data-action="open-node-detail"[\s\S]*aria-label="打开节点详情"/);
+  assert.doesNotMatch(app, /data\.action === "open-node-menu"/);
+  assert.match(app, /row\.querySelector\("\.flow-title-input"\)\?\.focus\(\{ preventScroll: true \}\);/);
+  assert.match(app, /row\.addEventListener\("dblclick"[\s\S]*selectNodeForInspector\(row\.dataset\.taskId, row\.dataset\.nodeId\);/);
   assert.match(app, /event\.key === "Enter" && event\.shiftKey/);
   assert.match(app, /event\.key === "Tab" && !event\.shiftKey/);
   assert.match(app, /\.node-detail-page, \.flow-row/);
@@ -2835,6 +2845,9 @@ test("processing flow matches the compact reference tree and opens details only 
   assert.match(finalFlowRules, /\.flow-node-marker\.flow-status-bullet\s*\{[\s\S]*border-radius:\s*50%;[\s\S]*background:\s*currentColor;/);
   assert.match(finalFlowRules, /\.flow-node-marker-icon\s*\{\s*display:\s*none;/);
   assert.match(finalFlowRules, /\.node-detail-page\s*\{[\s\S]*overscroll-behavior:\s*contain;/);
+  assert.match(finalFlowRules, /\.task-workbench:has\(\.flow-workspace\)\s*\{[\s\S]*grid-template-rows:\s*minmax\(0, 1fr\);/);
+  assert.match(finalFlowRules, /\.node-detail-page\s*\{[\s\S]*grid-template-rows:\s*auto minmax\(0, 1fr\);[\s\S]*overflow:\s*hidden;/);
+  assert.match(finalFlowRules, /\.node-detail-scroll\s*\{[\s\S]*overflow-y:\s*auto;/);
   assert.match(finalFlowRules, /@media \(max-width: 760px\)[\s\S]*\.node-detail-page\s*\{[\s\S]*overflow-y:\s*auto;/);
 });
 
