@@ -313,6 +313,8 @@
       display: none;
     }
 
+    .today-widget.is-click-through .quick-capture-panel { display: none; }
+
     .today-widget.is-click-through .widget-content {
       padding-top: 7px;
       padding-bottom: 7px;
@@ -445,6 +447,123 @@
     .today-widget.is-compact .compact-expand-icon { display: block; }
 
     .widget-content { padding: 10px; }
+
+    .quick-capture-panel {
+      margin-bottom: 8px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--widget-divider);
+    }
+
+    .quick-capture-input-row {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      gap: 6px;
+      align-items: center;
+      min-height: 36px;
+      padding: 0 7px;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      border-radius: 9px;
+      background: rgba(255, 255, 255, 0.075);
+    }
+
+    .quick-capture-prefix { color: rgba(255, 255, 255, 0.64); font-size: 16px; }
+
+    #quick-capture-input {
+      width: 100%;
+      min-height: 24px;
+      max-height: 72px;
+      padding: 4px 0;
+      border: 0;
+      outline: 0;
+      resize: none;
+      overflow-y: auto;
+      background: transparent;
+      color: var(--widget-text);
+      font-size: calc(11px * var(--widget-font-scale));
+      line-height: 1.45;
+    }
+
+    #quick-capture-input::placeholder { color: var(--widget-muted); }
+
+    .quick-capture-add-today {
+      width: 24px;
+      height: 24px;
+      padding: 0;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: rgba(255, 255, 255, 0.66);
+      cursor: pointer;
+    }
+
+    .quick-capture-add-today:hover { background: var(--widget-control-hover); color: var(--widget-title); }
+
+    .widget-section { display: grid; gap: 5px; }
+    .widget-section[hidden] { display: none; }
+    .widget-section + .widget-section { margin-top: 9px; }
+    .widget-section-heading {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin: 0 2px 2px;
+      color: var(--widget-muted);
+      font-size: calc(9px * var(--widget-font-scale));
+      letter-spacing: 0.03em;
+    }
+    .widget-section-heading b {
+      min-width: 17px;
+      padding: 1px 5px;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.1);
+      color: rgba(255, 255, 255, 0.74);
+      font-size: calc(8px * var(--widget-font-scale));
+      font-weight: 650;
+      text-align: center;
+    }
+    .quick-capture-list { display: grid; gap: 5px; }
+    .quick-capture-list:empty,
+    .quick-capture-overflow[hidden] { display: none; }
+    .today-task.quick-capture-item {
+      min-height: 45px;
+      grid-template-columns: 25px minmax(0, 1fr) 26px;
+      border-color: rgba(255, 255, 255, 0.25);
+      border-style: dashed;
+      background: rgba(255, 255, 255, 0.025);
+    }
+    .today-task.quick-capture-item:hover {
+      border-color: rgba(255, 255, 255, 0.48);
+      border-style: dashed;
+      background: rgba(255, 255, 255, 0.055);
+    }
+    .quick-capture-section { margin-bottom: 4px; }
+    .quick-capture-item .task-copy span { color: rgba(255, 255, 255, 0.54); }
+    .quick-capture-overflow { margin: 0 3px; color: var(--widget-muted); font-size: calc(9px * var(--widget-font-scale)); }
+    .quick-capture-promote {
+      display: grid;
+      width: 24px;
+      height: 24px;
+      place-items: center;
+      justify-self: end;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: rgba(255, 255, 255, 0.68);
+      cursor: pointer;
+      font-size: 16px;
+      line-height: 1;
+    }
+    .quick-capture-promote:hover { background: var(--widget-control-hover); color: var(--widget-title); }
+    .task-inline-input {
+      width: 100%;
+      min-width: 0;
+      padding: 2px 5px;
+      border: 1px solid rgba(255, 255, 255, 0.44);
+      border-radius: 5px;
+      outline: 0;
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--widget-text);
+      font-size: calc(12.5px * var(--widget-font-scale));
+    }
 
     .task-list {
       display: grid;
@@ -584,6 +703,40 @@
       pointer-events: auto;
     }
 
+    .quick-capture-group-menu {
+      position: absolute;
+      right: 10px;
+      z-index: 24;
+      width: 190px;
+      max-height: min(230px, calc(100vh - 70px));
+      padding: 8px;
+      overflow-y: auto;
+      border: 1px solid var(--widget-menu-line);
+      border-radius: 10px;
+      background: var(--widget-menu-bg);
+      box-shadow: 0 16px 38px rgba(13, 37, 28, 0.26);
+      color: var(--widget-menu-ink);
+    }
+    .quick-capture-group-menu[hidden] { display: none; }
+    .quick-capture-group-menu > span {
+      display: block;
+      padding: 3px 7px 6px;
+      color: var(--widget-menu-muted);
+      font-size: calc(9px * var(--widget-font-scale));
+    }
+    .quick-capture-group-menu button {
+      width: 100%;
+      padding: 7px;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: inherit;
+      font-size: calc(11px * var(--widget-font-scale));
+      text-align: left;
+      cursor: pointer;
+    }
+    .quick-capture-group-menu button:hover { background: rgba(46, 93, 73, 0.12); }
+
     .menu-label {
       display: block;
       margin: 0 0 8px;
@@ -721,6 +874,12 @@
     .today-widget.is-compact { width: 296px; }
     .today-widget.is-compact .widget-content { display: none; }
     .today-widget.is-compact .widget-header { border-bottom: 0; }
+    .today-widget.is-compact.is-capture-open { width: 360px; }
+    .today-widget.is-compact.is-capture-open .widget-content { display: block; }
+    .today-widget.is-compact.is-capture-open .quick-capture-list,
+    .today-widget.is-compact.is-capture-open .quick-capture-overflow,
+    .today-widget.is-compact.is-capture-open .quick-capture-section,
+    .today-widget.is-compact.is-capture-open .today-task-section { display: none; }
 
     .restore-widget {
       position: absolute;
@@ -812,6 +971,12 @@
     }
 
     body.widget-runtime .today-widget.is-compact { width: 296px; }
+    body.widget-runtime .today-widget.is-compact.is-capture-open { width: 360px; }
+    body.widget-runtime .today-widget.is-compact.is-capture-open .widget-content { display: block; }
+    body.widget-runtime .today-widget.is-compact.is-capture-open .quick-capture-list,
+    body.widget-runtime .today-widget.is-compact.is-capture-open .quick-capture-overflow,
+    body.widget-runtime .today-widget.is-compact.is-capture-open .quick-capture-section,
+    body.widget-runtime .today-widget.is-compact.is-capture-open .today-task-section { display: none; }
 
     body.widget-runtime .widget-header {
       -webkit-app-region: drag;
@@ -819,18 +984,18 @@
 
     body.widget-runtime .widget-content {
       min-height: 0;
-      overflow: hidden;
-    }
-
-    body.widget-runtime .task-list {
-      max-height: 100%;
       overflow-y: auto;
       overscroll-behavior: contain;
       -ms-overflow-style: none;
       scrollbar-width: none;
     }
 
-    body.widget-runtime .task-list::-webkit-scrollbar {
+    body.widget-runtime .task-list {
+      max-height: none;
+      overflow: visible;
+    }
+
+    body.widget-runtime .widget-content::-webkit-scrollbar {
       display: none;
       width: 0;
       height: 0;
@@ -883,6 +1048,9 @@
           <time id="today-date" datetime="2026-08-16">08/16 周日</time>
         </div>
         <div class="widget-tools" data-no-drag>
+          <button class="icon-button quick-capture-toggle" id="quick-capture-toggle" type="button" title="快速记录" aria-label="快速记录">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+          </button>
           <button class="icon-button" id="open-main" type="button" title="打开主窗口" aria-label="打开主窗口">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 5h5v5M19 5l-8 8"></path><path d="M17 13v5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1h5"></path></svg>
           </button>
@@ -899,7 +1067,21 @@
       </header>
 
       <div class="widget-content">
-        <div class="task-list" id="task-list">
+        <section class="quick-capture-panel" id="quick-capture-panel" aria-label="快速记录">
+          <div class="quick-capture-input-row">
+            <span class="quick-capture-prefix" aria-hidden="true">＋</span>
+            <textarea id="quick-capture-input" rows="1" maxlength="4000" placeholder="快速记录，Enter 保存 ↵" aria-label="快速记录内容"></textarea>
+            <button class="quick-capture-add-today" id="quick-capture-add-today" type="button" title="保存并加入今日" aria-label="保存并加入今日">↑</button>
+          </div>
+        </section>
+        <section class="widget-section quick-capture-section" id="quick-capture-section" aria-label="速记" hidden>
+          <header class="widget-section-heading"><span>速记</span><b id="quick-capture-count">0</b></header>
+          <div class="quick-capture-list" id="quick-capture-list"></div>
+          <p class="quick-capture-overflow" id="quick-capture-overflow" hidden></p>
+        </section>
+        <section class="widget-section today-task-section" aria-label="今日任务">
+          <header class="widget-section-heading"><span>今日任务</span><b id="today-task-count">0</b></header>
+          <div class="task-list" id="task-list">
           <article class="today-task high" data-title="完善个人任务管理 app" tabindex="0" role="button">
             <button class="task-check" type="button" aria-label="完成：完善个人任务管理 app"></button>
             <span class="task-copy"><strong>完善个人任务管理 app</strong><span>下一步：确认今日悬浮窗的交互方案</span></span>
@@ -915,9 +1097,12 @@
             <span class="task-copy"><strong>检查应用更新流程</strong><span>下一步：验证 Windows 自动更新安装</span></span>
             <i class="task-state" title="被阻塞"></i>
           </article>
-        </div>
-        <div class="empty-state" id="empty-state"><div><strong>今天的任务已完成</strong></div></div>
+          </div>
+          <div class="empty-state" id="empty-state"><div><strong>今天的任务已完成</strong></div></div>
+        </section>
       </div>
+
+      <aside class="quick-capture-group-menu" id="quick-capture-group-menu" aria-label="选择任务分组" data-no-drag hidden></aside>
 
       <aside class="widget-menu" id="widget-menu" aria-label="今日窗口设置" data-no-drag>
         <span class="menu-label">窗口位置</span>

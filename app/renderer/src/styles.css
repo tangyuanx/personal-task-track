@@ -9026,6 +9026,90 @@ button:not(:disabled):active,
   content: none;
 }
 
+/* v0.1.142 local acceptance — stable Today rail and compact repository controls */
+.today-panel.today-focus {
+  flex: 0 0 auto;
+}
+
+.task-repository-toolbar {
+  min-height: 30px;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  overflow: visible;
+}
+
+.task-status-filters {
+  gap: 12px;
+}
+
+.task-status-filters button,
+.task-status-filters button + button {
+  padding-bottom: 7px;
+}
+
+.task-priority-filter {
+  height: 28px;
+  align-self: center;
+  gap: 2px;
+  line-height: 1;
+}
+
+.task-priority-filter > span {
+  line-height: 1;
+}
+
+.task-priority-filter select {
+  min-width: 47px;
+  height: 28px;
+  padding-right: 7px;
+  line-height: 28px;
+}
+
+.task-source-filter select {
+  min-width: 43px;
+}
+
+.repository-add-task {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+}
+
+.group-nav.sheet-bar {
+  grid-template-columns: 22px max-content minmax(0, 1fr) 22px 26px;
+}
+
+.sheet-tab-all-wrap {
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.sheet-tab-all {
+  min-height: 30px;
+  height: 30px;
+  padding-inline: 9px;
+  border-color: color-mix(in srgb, var(--handoff-focus-800) 28%, var(--handoff-line));
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.5);
+  color: var(--handoff-focus-800);
+  font-size: 10.5px;
+  font-weight: 680;
+}
+
+.task-tabs .sheet-tab-all.active,
+.sheet-tab-all.active {
+  border-color: var(--handoff-focus-800);
+  background: var(--handoff-focus-800);
+  color: #ffffff;
+}
+
+:root[data-theme="dark"] .sheet-tab-all:not(.active) {
+  border-color: #4a5b52;
+  background: rgba(255, 255, 255, 0.045);
+  color: #b8e0c8;
+}
+
 .focus-row.focus-item.selected .row-title strong,
 :root[data-theme="dark"] .focus-row.focus-item.selected .row-title strong {
   color: #ffffff;

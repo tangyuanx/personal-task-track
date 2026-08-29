@@ -10,6 +10,7 @@ const ZH_FONT_KEY = "task-track-zh-font";
 const EN_FONT_KEY = "task-track-en-font";
 const TASK_FILTER_KEY = "task-track-task-filter";
 const PRIORITY_FILTER_KEY = "task-track-priority-filter";
+const CAPTURE_SOURCE_FILTER_KEY = "task-track-capture-source-filter";
 const NEW_TASK_PRIORITY_KEY = "task-track-new-task-priority";
 const TASK_GROUPS_KEY = "task-track-groups";
 const ACTIVE_GROUP_KEY = "task-track-active-group";
@@ -69,6 +70,12 @@ const priorityFilterLabels = {
   high: "高",
   medium: "中",
   low: "低",
+};
+
+const captureSourceFilterLabels = {
+  all: "全部",
+  task: "任务",
+  quick: "速记",
 };
 
 const repositoryPriorityFilterLabels = {
@@ -137,6 +144,7 @@ const flowWidthLimits = {
 };
 
 const defaultTaskGroup = { id: "group_inbox", title: "默认", order: 1 };
+const ALL_TASKS_GROUP_ID = "group_all";
 const defaultSidebarWidth = 390;
 const sidebarWidthLimits = [370, 560];
 const defaultDetailHeight = 58;
@@ -206,6 +214,7 @@ let state = {
   taskDateFilter: "",
   taskDeadlineFilter: "all",
   priorityFilter: "all",
+  captureSourceFilter: "all",
   newTaskPriority: "medium",
   markdownMode: "edit",
   theme: "light",
@@ -285,6 +294,9 @@ let unsubscribeAppUpdates = null;
 let unsubscribeTodayWidgetState = null;
 let unsubscribeTodayWidgetOpenTask = null;
 let unsubscribeTodayWidgetCompletion = null;
+let unsubscribeTodayWidgetCreateTask = null;
+let unsubscribeTodayWidgetUpdateTitle = null;
+let unsubscribeTodayWidgetPromote = null;
 let unsubscribeDeadlineReminderTask = null;
 let unsubscribeDeadlineReminderCalendar = null;
 let unsubscribeKnowledgeFileChanges = null;
@@ -588,7 +600,7 @@ function normalizeTaskGroups(groups, tasks = []) {
 }
 
 function normalizeActiveGroupId(value, groups) {
-  return groups.some((group) => group.id === value) ? value : groups[0]?.id || defaultTaskGroup.id;
+  return value === ALL_TASKS_GROUP_ID || groups.some((group) => group.id === value) ? value : groups[0]?.id || defaultTaskGroup.id;
 }
 
 function loadBrowserFlowWidths() {
@@ -632,6 +644,10 @@ function normalizePriorityFilter(value) {
   return Object.hasOwn(priorityFilterLabels, value) ? value : "all";
 }
 
+function normalizeCaptureSourceFilter(value) {
+  return Object.hasOwn(captureSourceFilterLabels, value) ? value : "all";
+}
+
 function normalizePriority(value) {
   return Object.hasOwn(priorityLabels, value) ? value : "medium";
 }
@@ -667,6 +683,7 @@ function loadBrowserPreferences() {
   return {
     taskFilter: normalizeTaskFilter(localStorage.getItem(TASK_FILTER_KEY)),
     priorityFilter: normalizePriorityFilter(localStorage.getItem(PRIORITY_FILTER_KEY)),
+    captureSourceFilter: normalizeCaptureSourceFilter(localStorage.getItem(CAPTURE_SOURCE_FILTER_KEY)),
     newTaskPriority: normalizePriority(localStorage.getItem(NEW_TASK_PRIORITY_KEY)),
   };
 }
@@ -1362,12 +1379,13 @@ async function loadAppData() {
       const enFont = normalizeEnFont(stored?.enFont || legacy.enFont);
       const taskFilter = normalizeTaskFilter(stored?.taskFilter);
       const priorityFilter = normalizePriorityFilter(stored?.priorityFilter);
+      const captureSourceFilter = normalizeCaptureSourceFilter(stored?.captureSourceFilter);
       const newTaskPriority = normalizePriority(stored?.newTaskPriority);
       const sidebarWidth = normalizeSidebarWidth(stored?.sidebarWidth);
       const detailHeight = normalizeDetailHeight(stored?.detailHeight);
       const attachments = normalizeAttachments(stored?.attachments);
       const installationId = normalizeInstallationId(stored?.installationId);
-      return { tasks, taskGroups, activeGroupId, flowWidths, sidebarWidth, detailHeight, attachments, theme, zhFont, enFont, taskFilter, priorityFilter, newTaskPriority, installationId };
+      return { tasks, taskGroups, activeGroupId, flowWidths, sidebarWidth, detailHeight, attachments, theme, zhFont, enFont, taskFilter, priorityFilter, captureSourceFilter, newTaskPriority, installationId };
     } catch (error) {
       console.error("Failed to read local task data.", error);
       if (error?.code === "CORRUPT_TASK_DATA") {
@@ -1415,6 +1433,7 @@ function save() {
     enFont: state.enFont,
     taskFilter: state.taskFilter,
     priorityFilter: state.priorityFilter,
+    captureSourceFilter: state.captureSourceFilter,
     newTaskPriority: state.newTaskPriority,
     installationId: state.installationId,
     updatedAt: now(),
@@ -1433,6 +1452,7 @@ function save() {
     localStorage.setItem(EN_FONT_KEY, state.enFont);
     localStorage.setItem(TASK_FILTER_KEY, state.taskFilter);
     localStorage.setItem(PRIORITY_FILTER_KEY, state.priorityFilter);
+    localStorage.setItem(CAPTURE_SOURCE_FILTER_KEY, state.captureSourceFilter);
     localStorage.setItem(NEW_TASK_PRIORITY_KEY, state.newTaskPriority);
     localStorage.setItem(INSTALLATION_ID_KEY, state.installationId);
     return;
@@ -1647,9 +1667,13 @@ function renderSidebar() {
               )
               .join("")}
           </div>
-          <label class="task-priority-filter">
+          <label class="task-priority-filter priority-filter-compact">
             <span>优先级 ·</span>
             ${filterSelectHtml("priority-filter", state.priorityFilter, repositoryPriorityFilterLabels, "按优先级筛选")}
+          </label>
+          <label class="task-priority-filter task-source-filter">
+            <span>类型 ·</span>
+            ${filterSelectHtml("capture-source-filter", state.captureSourceFilter, captureSourceFilterLabels, "按类型筛选")}
           </label>
           <button class="repository-add-task" type="button" data-action="add-task" title="新增任务" aria-label="新增任务">＋</button>
         </div>
@@ -1711,6 +1735,9 @@ function renderGroupTabs() {
   return `
     <div class="sheet-bar group-nav" aria-label="任务分组">
       <button class="sheet-nav scroll-button" type="button" data-action="scroll-sheets" data-direction="-1" title="查看前面的分组" aria-label="查看前面的分组">‹</button>
+      <span class="sheet-tab-all-wrap">
+        <button class="sheet-tab sheet-tab-all ${state.activeGroupId === ALL_TASKS_GROUP_ID ? "active" : ""}" type="button" data-action="select-group" data-group-id="${ALL_TASKS_GROUP_ID}" title="查看全部分组中的任务">全部任务</button>
+      </span>
       <div class="sheet-tabs task-tabs" data-sheet-tabs>
         ${sort(state.taskGroups)
           .map(
@@ -2352,6 +2379,8 @@ function filteredTasks({ includeQuery = true, at = new Date() } = {}) {
       if (state.taskFilter === "later" && !tags.later && !hasLater) return false;
       if (!matchesTaskDeadlineFilter(task, at)) return false;
       if (state.priorityFilter !== "all" && task.priority !== state.priorityFilter) return false;
+      if (state.captureSourceFilter === "quick" && task.captureSource !== "today-widget") return false;
+      if (state.captureSourceFilter === "task" && task.captureSource === "today-widget") return false;
       if (includeQuery && q) {
         const taskText = `${task.title} ${task.description} ${task.hypothesis} ${task.conclusion}`.toLowerCase();
         const nodeHit = flatten(task.nodes).some((node) => `${node.title} ${node.note}`.toLowerCase().includes(q));
@@ -2415,6 +2444,7 @@ function compareTasksByDeadline(a, b) {
 
 function tasksInActiveGroup() {
   const groupId = normalizeActiveGroupId(state.activeGroupId, state.taskGroups);
+  if (groupId === ALL_TASKS_GROUP_ID) return state.tasks;
   return state.tasks.filter((task) => (task.groupId || defaultTaskGroup.id) === groupId);
 }
 
@@ -3757,7 +3787,7 @@ function bind() {
     bindContextMenu(element);
   });
 
-  document.querySelectorAll(".sheet-tab").forEach((element) => {
+  document.querySelectorAll(".sheet-tab:not(.sheet-tab-all)").forEach((element) => {
     element.addEventListener("dblclick", (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -4089,7 +4119,7 @@ function bindTaskRepositoryRows(scope = document) {
     }
   });
 
-  document.querySelectorAll(".sheet-tab").forEach((element) => {
+  document.querySelectorAll(".sheet-tab:not(.sheet-tab-all)").forEach((element) => {
     element.addEventListener("dblclick", (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -4273,6 +4303,7 @@ function bindTaskRepositoryRows(scope = document) {
       if (event.target.dataset.setting === "en-font") state.enFont = normalizeEnFont(event.target.value);
       if (event.target.dataset.setting === "task-filter") state.taskFilter = normalizeTaskFilter(event.target.value);
       if (event.target.dataset.setting === "priority-filter") state.priorityFilter = normalizePriorityFilter(event.target.value);
+      if (event.target.dataset.setting === "capture-source-filter") state.captureSourceFilter = normalizeCaptureSourceFilter(event.target.value);
       if (event.target.dataset.setting === "new-task-priority") state.newTaskPriority = normalizePriority(event.target.value);
       save();
       render();
@@ -4410,6 +4441,16 @@ function bindTaskRepositoryRows(scope = document) {
     });
     priorityFilter.addEventListener("change", (event) => {
       state.priorityFilter = event.target.value;
+      state.selectedNodeId = "";
+      render();
+    });
+  }
+
+  const captureSourceFilter = document.querySelector("[data-capture-source-filter]");
+  if (captureSourceFilter) {
+    captureSourceFilter.addEventListener("click", (event) => event.stopPropagation());
+    captureSourceFilter.addEventListener("change", (event) => {
+      state.captureSourceFilter = normalizeCaptureSourceFilter(event.target.value);
       state.selectedNodeId = "";
       render();
     });
@@ -4656,8 +4697,9 @@ function applySetting(key, value) {
   if (key === "en-font") state.enFont = normalizeEnFont(value);
   if (key === "task-filter") state.taskFilter = normalizeTaskFilter(value);
   if (key === "priority-filter") state.priorityFilter = normalizePriorityFilter(value);
+  if (key === "capture-source-filter") state.captureSourceFilter = normalizeCaptureSourceFilter(value);
   if (key === "new-task-priority") state.newTaskPriority = normalizePriority(value);
-  if ((key === "task-filter" || key === "priority-filter") && !filteredTasks({ includeQuery: false }).some((task) => task.id === state.activeTaskId)) {
+  if ((key === "task-filter" || key === "priority-filter" || key === "capture-source-filter") && !filteredTasks({ includeQuery: false }).some((task) => task.id === state.activeTaskId)) {
     state.activeTaskId = "";
   }
 }
@@ -5975,7 +6017,9 @@ function createTask(title, shouldRender = true) {
   const task = {
     id: taskId,
     order: state.tasks.length + 1,
-    groupId: normalizeActiveGroupId(state.activeGroupId, state.taskGroups),
+    groupId: state.activeGroupId === ALL_TASKS_GROUP_ID
+      ? defaultTaskGroup.id
+      : normalizeActiveGroupId(state.activeGroupId, state.taskGroups),
     title,
     description: "",
     status: "active",
@@ -6007,6 +6051,51 @@ function createTask(title, shouldRender = true) {
   state.focusTaskTitleId = task.id;
   save();
   if (shouldRender) render();
+  return task;
+}
+
+function createQuickCapture(title, description = "", addToToday = false) {
+  const previousActiveTaskId = state.activeTaskId;
+  const previousActiveGroupId = state.activeGroupId;
+  const task = createTask(String(title || "").trim(), false);
+  if (!task) return null;
+  task.groupId = defaultTaskGroup.id;
+  task.priority = "low";
+  task.captureSource = "today-widget";
+  task.description = String(description || "").trim();
+  task.tags = normalizeTaskTags({ today: addToToday === true });
+  task.updatedAt = now();
+  state.activeGroupId = previousActiveGroupId;
+  state.activeTaskId = previousActiveTaskId;
+  save();
+  render();
+  return task;
+}
+
+function updateTaskTitleFromWidget(taskId, title) {
+  const task = state.tasks.find((item) => item.id === taskId);
+  const normalizedTitle = String(title || "").trim();
+  if (!task) return { success: false, code: "TASK_NOT_FOUND" };
+  if (!normalizedTitle) return { success: false, code: "INVALID_TITLE" };
+  task.title = normalizedTitle;
+  task.knowledgeNote = knowledgeDocument.updateDocumentTitle(task.knowledgeNote, normalizedTitle);
+  task.updatedAt = now();
+  save();
+  render();
+  return { success: true, code: "UPDATED", taskId };
+}
+
+function promoteQuickCaptureFromWidget(taskId, groupId) {
+  const task = state.tasks.find((item) => item.id === taskId && item.captureSource === "today-widget");
+  const group = state.taskGroups.find((item) => item.id === groupId);
+  if (!task) return { success: false, code: "TASK_NOT_FOUND" };
+  if (!group) return { success: false, code: "GROUP_NOT_FOUND" };
+  task.groupId = group.id;
+  task.captureSource = "";
+  task.updatedAt = now();
+  save();
+  render();
+  return { success: true, code: "PROMOTED", taskId: task.id };
 }
 
 /**
@@ -6983,6 +7072,24 @@ function localDateKey(value) {
   return `${year}-${month}-${day}`;
 }
 
+function todayQuickCaptureItems() {
+  return state.tasks
+    .filter((task) => task.captureSource === "today-widget")
+    .sort((a, b) => {
+      const aTime = Date.parse(a.updatedAt || a.createdAt);
+      const bTime = Date.parse(b.updatedAt || b.createdAt);
+      return (Number.isFinite(bTime) ? bTime : 0) - (Number.isFinite(aTime) ? aTime : 0);
+    })
+    .map((task) => ({
+      taskId: task.id,
+      title: task.title || "未命名速记",
+      createdAt: task.createdAt,
+      updatedAt: task.updatedAt,
+      resolvedAt: task.resolvedAt || "",
+      status: task.status,
+    }));
+}
+
 function todayWidgetSnapshot() {
   const rootFontSize = Number.parseFloat(window.getComputedStyle?.(document.documentElement)?.fontSize);
   return {
@@ -6999,6 +7106,9 @@ function todayWidgetSnapshot() {
       nextText,
       kind,
     })),
+    quickCaptures: todayQuickCaptureItems().filter((item) => item.status !== "done").filter((_item, index) => index < 3),
+    quickCaptureTotal: todayQuickCaptureItems().filter((item) => item.status !== "done").length,
+    groups: sort(state.taskGroups).map((group) => ({ id: group.id, title: group.title })),
   };
 }
 
@@ -7065,6 +7175,9 @@ async function initializeTodayWidgetBridge() {
   unsubscribeTodayWidgetState?.();
   unsubscribeTodayWidgetOpenTask?.();
   unsubscribeTodayWidgetCompletion?.();
+  unsubscribeTodayWidgetCreateTask?.();
+  unsubscribeTodayWidgetUpdateTitle?.();
+  unsubscribeTodayWidgetPromote?.();
   unsubscribeTodayWidgetState = desktopTodayWidget.onState((nextState) => {
     todayWidgetWindowState = nextState && typeof nextState === "object" ? nextState : { visible: false };
     syncTodayWidgetRestoreButton();
@@ -7081,8 +7194,15 @@ async function initializeTodayWidgetBridge() {
       desktopTodayWidget.respondCompletion({ requestId, success: false, code: "TASK_NOT_FOUND" });
       return;
     }
-    openTaskFromGlobalList(taskId);
-    toggleTaskDone(taskId);
+    if (task.captureSource === "today-widget" && task.status !== "done" && !task.conclusion.trim()) {
+      task.status = "done";
+      task.resolvedAt = now();
+      task.updatedAt = now();
+      save();
+    } else {
+      openTaskFromGlobalList(taskId);
+      toggleTaskDone(taskId);
+    }
     const success = task.status === "done";
     render();
     desktopTodayWidget.respondCompletion({
@@ -7090,6 +7210,21 @@ async function initializeTodayWidgetBridge() {
       success,
       code: success ? "COMPLETED" : "CONCLUSION_REQUIRED",
     });
+  });
+  unsubscribeTodayWidgetCreateTask = desktopTodayWidget.onCreateTaskRequest?.(({ requestId, title, description, addToToday } = {}) => {
+    const task = createQuickCapture(title, description, addToToday === true);
+    desktopTodayWidget.respondMutation?.({
+      requestId,
+      success: Boolean(task),
+      code: task ? "CREATED" : "INVALID_TITLE",
+      taskId: task?.id || "",
+    });
+  });
+  unsubscribeTodayWidgetUpdateTitle = desktopTodayWidget.onUpdateTaskTitleRequest?.(({ requestId, taskId, title } = {}) => {
+    desktopTodayWidget.respondMutation?.({ requestId, ...updateTaskTitleFromWidget(taskId, title) });
+  });
+  unsubscribeTodayWidgetPromote = desktopTodayWidget.onPromoteQuickCaptureRequest?.(({ requestId, taskId, groupId } = {}) => {
+    desktopTodayWidget.respondMutation?.({ requestId, ...promoteQuickCaptureFromWidget(taskId, groupId) });
   });
   try {
     todayWidgetWindowState = await desktopTodayWidget.getState();
@@ -7167,6 +7302,7 @@ async function bootstrap() {
   state.enFont = data.enFont;
   state.taskFilter = data.taskFilter;
   state.priorityFilter = data.priorityFilter;
+  state.captureSourceFilter = normalizeCaptureSourceFilter(data.captureSourceFilter);
   state.newTaskPriority = data.newTaskPriority;
   state.knowledgeRecovery = recovery;
   state.installationId = normalizeInstallationId(data.installationId);

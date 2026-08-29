@@ -20,12 +20,14 @@ const DATA_FILE = "task-data.json";
 const DATA_VERSION = 1;
 const KNOWLEDGE_MIGRATION_VERSION = 1;
 const DEFAULT_GROUP = { id: "group_inbox", title: "默认", order: 1 };
+const ALL_TASKS_GROUP_ID = "group_all";
 const TASK_STATUSES = new Set(["active", "done"]);
 const NODE_STATUSES = new Set(["todo", "done", "blocked", "later"]);
 const PRIORITIES = new Set(["high", "medium", "low"]);
 const RECURRENCE_FREQUENCIES = new Set(["none", "daily", "weekly"]);
 const TASK_FILTERS = new Set(["all", "today", "active", "done", "blocked", "later"]);
 const PRIORITY_FILTERS = new Set(["all", "high", "medium", "low"]);
+const CAPTURE_SOURCE_FILTERS = new Set(["all", "task", "quick"]);
 const ZH_FONTS = new Set(["system", "noto", "yahei", "pingfang", "songti", "simsun", "fangsong", "heiti", "kaiti"]);
 const EN_FONTS = new Set(["inter", "system", "segoe", "arial", "helvetica", "verdana", "trebuchet", "tahoma", "times", "georgia", "courier", "mono"]);
 
@@ -110,7 +112,7 @@ function normalizeTaskData(data) {
     knowledgeSchemaVersion: KNOWLEDGE_MIGRATION_VERSION,
     tasks,
     taskGroups,
-    activeGroupId: taskGroups.some((group) => group.id === safeData.activeGroupId)
+    activeGroupId: safeData.activeGroupId === ALL_TASKS_GROUP_ID || taskGroups.some((group) => group.id === safeData.activeGroupId)
       ? safeData.activeGroupId
       : taskGroups[0]?.id || DEFAULT_GROUP.id,
     flowWidths: normalizeFlowWidths(safeData.flowWidths),
@@ -123,6 +125,7 @@ function normalizeTaskData(data) {
     enFont: EN_FONTS.has(safeData.enFont) ? safeData.enFont : legacyFonts.enFont,
     taskFilter: TASK_FILTERS.has(safeData.taskFilter) ? safeData.taskFilter : "all",
     priorityFilter: PRIORITY_FILTERS.has(safeData.priorityFilter) ? safeData.priorityFilter : "all",
+    captureSourceFilter: CAPTURE_SOURCE_FILTERS.has(safeData.captureSourceFilter) ? safeData.captureSourceFilter : "all",
     newTaskPriority: PRIORITIES.has(safeData.newTaskPriority) ? safeData.newTaskPriority : "medium",
     installationId: normalizeInstallationId(safeData.installationId),
     updatedAt: normalizeDateValue(safeData.updatedAt, new Date().toISOString()),

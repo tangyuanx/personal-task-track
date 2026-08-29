@@ -10,6 +10,15 @@
   const menu = document.querySelector("#widget-menu");
   const menuToggle = document.querySelector("#menu-toggle");
   const compactToggle = document.querySelector("#compact-toggle");
+  const quickCaptureToggle = document.querySelector("#quick-capture-toggle");
+  const quickCaptureInput = document.querySelector("#quick-capture-input");
+  const quickCaptureAddToday = document.querySelector("#quick-capture-add-today");
+  const quickCaptureSection = document.querySelector("#quick-capture-section");
+  const quickCaptureCount = document.querySelector("#quick-capture-count");
+  const quickCaptureList = document.querySelector("#quick-capture-list");
+  const quickCaptureOverflow = document.querySelector("#quick-capture-overflow");
+  const todayTaskCount = document.querySelector("#today-task-count");
+  const quickCaptureGroupMenu = document.querySelector("#quick-capture-group-menu");
   const taskList = document.querySelector("#task-list");
   const emptyState = document.querySelector("#empty-state");
   const toast = document.querySelector("#toast");
@@ -19,7 +28,7 @@
   const launchWithApp = document.querySelector("#launch-with-app");
   const opacityControl = document.querySelector("#widget-opacity");
   const opacityValue = document.querySelector("#widget-opacity-value");
-  let currentSnapshot = { date: "", items: [] };
+  let currentSnapshot = { date: "", items: [], quickCaptures: [], quickCaptureTotal: 0, groups: [] };
   let queuedSnapshot = null;
   let completingTaskId = "";
   let toastTimer = 0;
@@ -27,6 +36,33 @@
   let resizeFrame = 0;
   let pendingResizeHeight = 0;
   let compactMenuExpanded = false;
+  let editingTaskId = "";
+  let editingInput = null;
+  let draftSaveTimer = 0;
+  let captureSubmitting = false;
+  let promotingTaskId = "";
+  let editingReleaseTimer = 0;
+
+  function isTextEditingTarget(element) {
+    return element === quickCaptureInput || element?.classList?.contains("task-inline-input");
+  }
+
+  function setTextEditing(enabled) {
+    window.clearTimeout(editingReleaseTimer);
+    editingReleaseTimer = 0;
+    if (enabled) {
+      void bridge.setEditing?.(true);
+      return;
+    }
+    // Native IME candidate panels can transiently affect window focus while
+    // the DOM input remains active. Only restore topmost after focus has truly
+    // left every text-editing target.
+    editingReleaseTimer = window.setTimeout(() => {
+      editingReleaseTimer = 0;
+      if (isTextEditingTarget(document.activeElement)) return;
+      void bridge.setEditing?.(false);
+    }, 320);
+  }
 
   function escapeHtml(value) {
     return String(value || "")
@@ -48,6 +84,27 @@
     menu.classList.remove("is-open");
     menuToggle.setAttribute("aria-expanded", "false");
     syncCompactMenuWindow(false);
+  }
+
+  function closeGroupMenu() {
+    promotingTaskId = "";
+    quickCaptureGroupMenu.hidden = true;
+    quickCaptureGroupMenu.innerHTML = "";
+  }
+
+  function openGroupMenu(button, taskId) {
+    const groups = Array.isArray(currentSnapshot.groups) ? currentSnapshot.groups : [];
+    if (!groups.length) {
+      showToast("请先在主窗口创建一个任务分组");
+      return;
+    }
+    promotingTaskId = taskId;
+    quickCaptureGroupMenu.innerHTML = `<span>升级为任务并移入</span>${groups.map((group) => `<button type="button" data-promote-group="${escapeHtml(group.id)}">${escapeHtml(group.title)}</button>`).join("")}`;
+    quickCaptureGroupMenu.hidden = false;
+    const buttonRect = button.getBoundingClientRect();
+    const desiredTop = buttonRect.bottom + 5;
+    const maxTop = Math.max(48, window.innerHeight - Math.min(230, quickCaptureGroupMenu.scrollHeight) - 8);
+    quickCaptureGroupMenu.style.top = `${Math.max(48, Math.min(maxTop, desiredTop))}px`;
   }
 
   function syncCompactMenuWindow(open) {
@@ -83,7 +140,22 @@
     `;
   }
 
+  function quickCaptureHtml(item) {
+    const taskId = escapeHtml(item.taskId);
+    const title = escapeHtml(item.title || "未命名速记");
+    const stamp = item.updatedAt || item.createdAt;
+    const time = stamp ? new Intl.DateTimeFormat("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(stamp)) : "刚刚";
+    return `
+      <article class="today-task quick-capture-item" data-task-id="${taskId}" data-title="${title}" tabindex="0" role="button">
+        <button class="task-check" type="button" aria-label="完成速记：${title}"></button>
+        <span class="task-copy"><strong>${title}</strong><span>速记 · ${escapeHtml(time)}</span></span>
+        <button class="quick-capture-promote" type="button" title="升级为任务" aria-label="将速记升级为任务">↑</button>
+      </article>
+    `;
+  }
+
   function updateCount(count = currentSnapshot.items.length) {
+    todayTaskCount.textContent = String(Math.max(0, count));
     emptyState.classList.toggle("is-visible", count === 0);
     taskList.hidden = count === 0;
   }
@@ -101,14 +173,24 @@
   }
 
   function renderSnapshot(value) {
-    currentSnapshot = value && typeof value === "object" ? value : { date: "", items: [] };
+    currentSnapshot = value && typeof value === "object" ? value : { date: "", items: [], quickCaptures: [], quickCaptureTotal: 0, groups: [] };
     const items = Array.isArray(currentSnapshot.items) ? currentSnapshot.items : [];
+    const captures = Array.isArray(currentSnapshot.quickCaptures) ? currentSnapshot.quickCaptures : [];
     currentSnapshot.items = items;
+    currentSnapshot.quickCaptures = captures;
+    currentSnapshot.groups = Array.isArray(currentSnapshot.groups) ? currentSnapshot.groups : [];
     applyAppearance(currentSnapshot.appearance);
     const dateElement = document.querySelector("#today-date");
     dateElement.textContent = formatToday(currentSnapshot.date);
     dateElement.dateTime = currentSnapshot.date || new Date().toISOString();
     taskList.innerHTML = items.map(taskHtml).join("");
+    quickCaptureList.innerHTML = captures.map(quickCaptureHtml).join("");
+    const total = Math.max(captures.length, Number(currentSnapshot.quickCaptureTotal) || 0);
+    quickCaptureSection.hidden = total === 0;
+    quickCaptureCount.textContent = String(total);
+    const overflow = Math.max(0, total - captures.length);
+    quickCaptureOverflow.hidden = overflow === 0;
+    quickCaptureOverflow.textContent = overflow ? `还有 ${overflow} 条在任务仓库` : "";
     bindTaskRows();
     updateCount(items.length);
   }
@@ -133,6 +215,8 @@
     alwaysOnTop.checked = state.alwaysOnTop !== false;
     clickThrough.checked = state.clickThrough === true;
     clickThroughHint.hidden = state.clickThrough !== true;
+    quickCaptureInput.value = String(state.quickCaptureDraft || "");
+    autosizeCaptureInput();
     launchWithApp.checked = state.launchWithApp !== false;
     applyOpacity(state.opacity);
     compactToggle.title = state.compact ? "展开" : "收起";
@@ -140,6 +224,108 @@
     document.querySelectorAll("[data-place]").forEach((button) => {
       button.classList.toggle("is-active", button.dataset.place === position);
     });
+  }
+
+  function autosizeCaptureInput() {
+    quickCaptureInput.style.height = "0px";
+    quickCaptureInput.style.height = `${Math.min(72, Math.max(24, quickCaptureInput.scrollHeight))}px`;
+  }
+
+  function persistCaptureDraft() {
+    window.clearTimeout(draftSaveTimer);
+    draftSaveTimer = window.setTimeout(() => {
+      void bridge.setPreferences({ quickCaptureDraft: quickCaptureInput.value.slice(0, 4000) });
+    }, 260);
+  }
+
+  function parseCaptureDraft() {
+    const lines = quickCaptureInput.value.replaceAll("\r", "").split("\n");
+    return { title: String(lines.shift() || "").trim(), description: lines.join("\n").trim() };
+  }
+
+  async function submitQuickCapture(addToToday = false) {
+    if (captureSubmitting) return;
+    const draft = parseCaptureDraft();
+    if (!draft.title) return;
+    captureSubmitting = true;
+    const result = await bridge.createTask({ ...draft, addToToday });
+    captureSubmitting = false;
+    if (!result?.success) {
+      showToast(result?.code === "INVALID_TITLE" ? "请输入速记标题" : "速记保存失败，请稍后重试");
+      return;
+    }
+    quickCaptureInput.value = "";
+    autosizeCaptureInput();
+    void bridge.setPreferences({ quickCaptureDraft: "" });
+    showToast(addToToday ? "已保存并加入今日任务" : "已保存到速记");
+  }
+
+  function cancelInlineEdit() {
+    if (!editingInput) return;
+    const row = editingInput.closest(".today-task");
+    const title = row?.dataset.title || "未命名任务";
+    const strong = document.createElement("strong");
+    strong.textContent = title;
+    editingInput.replaceWith(strong);
+    editingInput = null;
+    editingTaskId = "";
+    setTextEditing(false);
+  }
+
+  async function saveInlineEdit() {
+    if (!editingInput) return;
+    const input = editingInput;
+    const row = input.closest(".today-task");
+    const taskId = row?.dataset.taskId || "";
+    const title = input.value.trim();
+    if (!taskId || !title) {
+      cancelInlineEdit();
+      return;
+    }
+    const result = await bridge.updateTaskTitle({ taskId, title });
+    if (!result?.success) {
+      showToast(result?.code === "INVALID_TITLE" ? "标题不能为空" : "标题保存失败");
+      return;
+    }
+    editingInput = null;
+    editingTaskId = "";
+    setTextEditing(false);
+    if (queuedSnapshot) {
+      const nextSnapshot = queuedSnapshot;
+      queuedSnapshot = null;
+      renderSnapshot(nextSnapshot);
+    }
+    showToast("已同步修改");
+  }
+
+  function beginInlineEdit(row) {
+    if (editingInput || !row) return;
+    const strong = row.querySelector(".task-copy strong");
+    if (!strong) return;
+    const input = document.createElement("input");
+    input.className = "task-inline-input";
+    input.value = strong.textContent || "";
+    input.maxLength = 240;
+    input.setAttribute("aria-label", "编辑任务标题");
+    strong.replaceWith(input);
+    editingTaskId = row.dataset.taskId || "";
+    editingInput = input;
+    setTextEditing(true);
+    let composing = false;
+    input.addEventListener("compositionstart", () => { composing = true; });
+    input.addEventListener("compositionend", () => { composing = false; });
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        cancelInlineEdit();
+      } else if (event.key === "Enter" && !composing && !event.isComposing && event.keyCode !== 229) {
+        event.preventDefault();
+        void saveInlineEdit();
+      }
+    });
+    input.addEventListener("blur", () => void saveInlineEdit());
+    input.focus();
+    input.select();
   }
 
   function sendResize(height, edge) {
@@ -193,21 +379,30 @@
 
   function bindTaskRows() {
     document.querySelectorAll(".today-task").forEach((row) => {
-      const openTask = () => void bridge.openMain(row.dataset.taskId);
+      let clickTimer = 0;
       row.addEventListener("click", (event) => {
-        if (!event.target.closest(".task-check")) openTask();
+        if (event.target.closest(".task-check, .task-inline-input, .quick-capture-promote")) return;
+        window.clearTimeout(clickTimer);
+        clickTimer = window.setTimeout(() => beginInlineEdit(row), 220);
+      });
+      row.addEventListener("dblclick", (event) => {
+        if (event.target.closest(".task-check, .task-inline-input, .quick-capture-promote")) return;
+        event.preventDefault();
+        window.clearTimeout(clickTimer);
+        void bridge.openMain(row.dataset.taskId);
       });
       row.addEventListener("keydown", (event) => {
         if (event.key !== "Enter" && event.key !== " ") return;
         event.preventDefault();
-        openTask();
+        if (event.key === "Enter") beginInlineEdit(row);
       });
       row.querySelector(".task-check").addEventListener("click", async (event) => {
         event.stopPropagation();
         if (completingTaskId) return;
         completingTaskId = row.dataset.taskId;
         row.classList.add("is-completing");
-        updateCount(Math.max(0, currentSnapshot.items.length - 1));
+        const quickCapture = row.classList.contains("quick-capture-item");
+        if (!quickCapture) updateCount(Math.max(0, currentSnapshot.items.length - 1));
         const result = await bridge.completeTask(completingTaskId);
         if (result?.success) {
           showToast(`已完成「${row.dataset.title}」· 将同步到主窗口`);
@@ -220,7 +415,7 @@
         }
         completingTaskId = "";
         row.classList.remove("is-completing");
-        updateCount();
+        if (!quickCapture) updateCount();
         if (result?.code === "CONCLUSION_REQUIRED") {
           showToast("请先补充结论，已在主窗口打开该任务");
         } else {
@@ -231,8 +426,38 @@
           queuedSnapshot = null;
         }
       });
+      row.querySelector(".quick-capture-promote")?.addEventListener("click", (event) => {
+        event.stopPropagation();
+        closeMenu();
+        openGroupMenu(event.currentTarget, row.dataset.taskId);
+      });
     });
   }
+
+  quickCaptureInput.addEventListener("input", () => {
+    autosizeCaptureInput();
+    persistCaptureDraft();
+  });
+  quickCaptureInput.addEventListener("focus", () => setTextEditing(true));
+  quickCaptureInput.addEventListener("blur", () => setTextEditing(false));
+  quickCaptureInput.addEventListener("compositionstart", () => { quickCaptureInput.dataset.composing = "true"; });
+  quickCaptureInput.addEventListener("compositionend", () => { quickCaptureInput.dataset.composing = "false"; });
+  quickCaptureInput.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" || event.shiftKey || quickCaptureInput.dataset.composing === "true" || event.isComposing || event.keyCode === 229) return;
+    event.preventDefault();
+    void submitQuickCapture(event.ctrlKey || event.metaKey);
+  });
+  quickCaptureAddToday.addEventListener("click", () => void submitQuickCapture(true));
+  quickCaptureToggle.addEventListener("click", async () => {
+    if (widget.classList.contains("is-compact")) {
+      const open = !widget.classList.contains("is-capture-open");
+      widget.classList.toggle("is-capture-open", open);
+      await bridge.resize({ width: open ? 360 : 296, height: open ? 160 : 49, transient: true });
+      if (open) quickCaptureInput.focus();
+      return;
+    }
+    quickCaptureInput.focus();
+  });
 
   menuToggle.addEventListener("click", (event) => {
     event.stopPropagation();
@@ -244,9 +469,28 @@
 
   document.addEventListener("pointerdown", (event) => {
     if (!event.target.closest("#widget-menu, #menu-toggle")) closeMenu();
+    if (!event.target.closest("#quick-capture-group-menu, .quick-capture-promote")) closeGroupMenu();
   });
 
-  window.addEventListener("blur", closeMenu);
+  window.addEventListener("blur", () => {
+    closeMenu();
+    closeGroupMenu();
+  });
+
+  quickCaptureGroupMenu.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-promote-group]");
+    if (!button || !promotingTaskId) return;
+    const group = currentSnapshot.groups.find((item) => item.id === button.dataset.promoteGroup);
+    if (!group) return;
+    button.disabled = true;
+    const result = await bridge.promoteQuickCapture?.({ taskId: promotingTaskId, groupId: group.id });
+    closeGroupMenu();
+    showToast(result?.success ? `已升级为任务并移入「${group.title}」` : "升级失败，请稍后重试");
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") closeGroupMenu();
+  });
 
   document.querySelectorAll("[data-place]").forEach((button) => {
     button.addEventListener("click", async () => {
@@ -260,6 +504,7 @@
   compactToggle.addEventListener("click", async () => {
     const compact = !widget.classList.contains("is-compact");
     widget.classList.toggle("is-compact", compact);
+    widget.classList.remove("is-capture-open");
     compactToggle.title = compact ? "展开" : "收起";
     compactToggle.setAttribute("aria-label", compact ? "展开今日窗口" : "收起今日窗口");
     closeMenu();
@@ -307,7 +552,7 @@
   });
 
   bridge.onSnapshot((value) => {
-    if (completingTaskId) queuedSnapshot = value;
+    if (completingTaskId || editingTaskId) queuedSnapshot = value;
     else renderSnapshot(value);
   });
   bridge.onState(applyWindowState);

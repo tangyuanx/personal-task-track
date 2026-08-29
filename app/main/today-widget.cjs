@@ -20,6 +20,7 @@ const DEFAULT_PREFERENCES = Object.freeze({
   height: 260,
   customBounds: null,
   clickThrough: false,
+  quickCaptureDraft: "",
 });
 
 function normalizeTodayWidgetPreferences(value) {
@@ -38,7 +39,12 @@ function normalizeTodayWidgetPreferences(value) {
     height: normalizeHeight(raw.height),
     customBounds,
     clickThrough: raw.clickThrough === true,
+    quickCaptureDraft: normalizeQuickCaptureDraft(raw.quickCaptureDraft),
   };
+}
+
+function normalizeQuickCaptureDraft(value) {
+  return String(value || "").slice(0, 4000);
 }
 
 function normalizeOpacity(value) {
@@ -108,8 +114,8 @@ function applyTodayWidgetTopmost(window, enabled, platform = process.platform) {
   if (platform === "darwin") {
     window.setVisibleOnAllWorkspaces(topmost, {
       visibleOnFullScreen: topmost,
-      // The widget is already an NSPanel. Keep the host application a regular
-      // foreground app so macOS does not remove its icon from the Dock.
+      // Keep the host application a regular foreground app so macOS does not
+      // remove its icon from the Dock while the widget joins fullscreen Spaces.
       skipTransformProcessType: true,
     });
     window.setHiddenInMissionControl(topmost);
@@ -146,7 +152,9 @@ function createTodayWidgetController({ app, BrowserWindow, globalShortcut, ipcMa
   let moveSaveTimer = null;
   let resizeSaveTimer = null;
   let suppressMoveUntil = 0;
+  let editingText = false;
   const pendingCompletions = new Map();
+  const pendingMutations = new Map();
 
   function widgetState() {
     return {
@@ -195,7 +203,10 @@ function createTodayWidgetController({ app, BrowserWindow, globalShortcut, ipcMa
   }
 
   function applyAlwaysOnTop() {
-    applyTodayWidgetTopmost(widgetWindow, preferences.alwaysOnTop);
+    // A topmost or NSPanel-level widget can cover native IME candidates. While
+    // text is being edited, keep this focused window at the normal OS level;
+    // the system input-method panel can then render above it.
+    applyTodayWidgetTopmost(widgetWindow, preferences.alwaysOnTop && !editingText, process.platform);
   }
 
   function applyClickThrough() {
@@ -225,7 +236,6 @@ function createTodayWidgetController({ app, BrowserWindow, globalShortcut, ipcMa
       maximizable: false,
       fullscreenable: false,
       skipTaskbar: true,
-      type: process.platform === "darwin" ? "panel" : undefined,
       alwaysOnTop: preferences.alwaysOnTop,
       title: "今日任务",
       webPreferences: {
@@ -260,6 +270,7 @@ function createTodayWidgetController({ app, BrowserWindow, globalShortcut, ipcMa
       }, 180);
     });
     widgetWindow.on("closed", () => {
+      editingText = false;
       widgetWindow = null;
       broadcastState();
     });
@@ -296,6 +307,7 @@ function createTodayWidgetController({ app, BrowserWindow, globalShortcut, ipcMa
 
   async function hideWidget() {
     preferences = { ...preferences, visible: false };
+    editingText = false;
     widgetWindow?.hide();
     await persistPreferences();
     broadcastState();
@@ -324,7 +336,7 @@ function createTodayWidgetController({ app, BrowserWindow, globalShortcut, ipcMa
     if (preferences.compact) {
       if (size?.transient !== true) return widgetState();
       currentSize = {
-        width: 296,
+        width: Math.max(296, Math.min(480, Math.round(Number(size?.width) || 296))),
         height: Math.max(49, Math.min(420, Math.round(Number(size?.height) || 49))),
       };
       positionWidget();
@@ -354,6 +366,35 @@ function createTodayWidgetController({ app, BrowserWindow, globalShortcut, ipcMa
   function publishSnapshot(value) {
     snapshot = normalizeSnapshot(value);
     if (widgetWindow && !widgetWindow.isDestroyed()) widgetWindow.webContents.send("today-widget:snapshot", snapshot);
+  }
+
+  async function requestMainMutation(channel, payload) {
+    const mainWindow = await waitForMainWindow();
+    const requestId = crypto.randomUUID();
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        pendingMutations.delete(requestId);
+        resolve({ success: false, code: "TIMEOUT" });
+      }, 5000);
+      pendingMutations.set(requestId, { resolve, timer });
+      mainWindow.webContents.send(channel, { requestId, ...payload });
+    });
+  }
+
+  function resolveMutation(event, value) {
+    if (event.sender !== getMainWindow()?.webContents) return;
+    const requestId = String(value?.requestId || "");
+    const pending = pendingMutations.get(requestId);
+    if (!pending) return;
+    clearTimeout(pending.timer);
+    pendingMutations.delete(requestId);
+    pending.resolve({
+      success: value?.success === true,
+      code: ["CREATED", "UPDATED", "PROMOTED", "TASK_NOT_FOUND", "GROUP_NOT_FOUND", "INVALID_TITLE", "TIMEOUT"].includes(value?.code)
+        ? value.code
+        : "TASK_NOT_FOUND",
+      taskId: normalizeTaskId(value?.taskId),
+    });
   }
 
   async function requestCompletion(taskId) {
@@ -392,13 +433,49 @@ function createTodayWidgetController({ app, BrowserWindow, globalShortcut, ipcMa
     ipcMain.handle("today-widget:show", () => showWidget());
     ipcMain.handle("today-widget:hide", () => hideWidget());
     ipcMain.handle("today-widget:set-preferences", (_event, patch) => updatePreferences(patch));
+    ipcMain.handle("today-widget:set-editing", (event, enabled) => {
+      if (!widgetWindow || widgetWindow.isDestroyed() || event.sender !== widgetWindow.webContents) {
+        return { success: false, editing: editingText };
+      }
+      editingText = enabled === true;
+      applyAlwaysOnTop();
+      return { success: true, editing: editingText };
+    });
     ipcMain.handle("today-widget:resize", (_event, size) => resizeWidget(size));
     ipcMain.handle("today-widget:open-main", (_event, taskId) => showMainWindow(taskId));
     ipcMain.handle("today-widget:complete-task", (_event, taskId) => requestCompletion(taskId));
+    ipcMain.handle("today-widget:create-task", (_event, payload) => {
+      const raw = payload && typeof payload === "object" ? payload : {};
+      const title = String(raw.title || "").trim().slice(0, 240);
+      const description = String(raw.description || "").slice(0, 4000);
+      if (!title) return { success: false, code: "INVALID_TITLE" };
+      return requestMainMutation("today-widget:create-task", {
+        title,
+        description,
+        addToToday: raw.addToToday === true,
+      });
+    });
+    ipcMain.handle("today-widget:update-task-title", (_event, payload) => {
+      const raw = payload && typeof payload === "object" ? payload : {};
+      const taskId = normalizeTaskId(raw.taskId);
+      const title = String(raw.title || "").trim().slice(0, 240);
+      if (!taskId) return { success: false, code: "TASK_NOT_FOUND" };
+      if (!title) return { success: false, code: "INVALID_TITLE" };
+      return requestMainMutation("today-widget:update-task-title", { taskId, title });
+    });
+    ipcMain.handle("today-widget:promote-quick-capture", (_event, payload) => {
+      const raw = payload && typeof payload === "object" ? payload : {};
+      const taskId = normalizeTaskId(raw.taskId);
+      const groupId = normalizeTaskId(raw.groupId);
+      if (!taskId) return { success: false, code: "TASK_NOT_FOUND" };
+      if (!groupId) return { success: false, code: "GROUP_NOT_FOUND" };
+      return requestMainMutation("today-widget:promote-quick-capture", { taskId, groupId });
+    });
     ipcMain.on("today-widget:publish", (event, value) => {
       if (event.sender === getMainWindow()?.webContents) publishSnapshot(value);
     });
     ipcMain.on("today-widget:complete-result", resolveCompletion);
+    ipcMain.on("today-widget:mutation-result", resolveMutation);
   }
 
   async function start() {
@@ -431,6 +508,11 @@ function createTodayWidgetController({ app, BrowserWindow, globalShortcut, ipcMa
       resolve({ success: false, code: "APP_QUITTING" });
     });
     pendingCompletions.clear();
+    pendingMutations.forEach(({ resolve, timer }) => {
+      clearTimeout(timer);
+      resolve({ success: false, code: "APP_QUITTING" });
+    });
+    pendingMutations.clear();
     if (widgetWindow && !widgetWindow.isDestroyed()) widgetWindow.destroy();
     widgetWindow = null;
   }
@@ -454,6 +536,19 @@ function normalizeSnapshot(value) {
       nextText: String(item?.nextText || "补充任务背景或新增第一个节点").slice(0, 500),
       kind: ["normal", "high", "blocked"].includes(item?.kind) ? item.kind : "normal",
     })).filter((item) => item.taskId),
+    quickCaptures: (Array.isArray(raw.quickCaptures) ? raw.quickCaptures : []).map((item) => ({
+      taskId: normalizeTaskId(item?.taskId),
+      title: String(item?.title || "未命名速记").slice(0, 240),
+      createdAt: String(item?.createdAt || "").slice(0, 40),
+      updatedAt: String(item?.updatedAt || "").slice(0, 40),
+      resolvedAt: String(item?.resolvedAt || "").slice(0, 40),
+      status: item?.status === "done" ? "done" : "active",
+    })).filter((item) => item.taskId),
+    quickCaptureTotal: Math.max(0, Math.round(Number(raw.quickCaptureTotal) || 0)),
+    groups: (Array.isArray(raw.groups) ? raw.groups : []).map((group) => ({
+      id: normalizeTaskId(group?.id),
+      title: String(group?.title || "未命名分组").trim().slice(0, 120),
+    })).filter((group) => group.id && group.title),
   };
 }
 

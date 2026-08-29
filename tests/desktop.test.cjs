@@ -2376,6 +2376,18 @@ test("disk normalization creates and preserves a random UUID installation identi
   assert.notEqual(normalizeTaskData({}).installationId, created);
 });
 
+test("disk normalization preserves the virtual all-tasks view without creating a fake group", () => {
+  const normalized = normalizeTaskData({
+    activeGroupId: "group_all",
+    taskGroups: [{ id: "group_inbox", title: "默认", order: 1 }],
+    tasks: [{ id: "task_all_view", title: "汇总任务", groupId: "group_inbox" }],
+  });
+
+  assert.equal(normalized.activeGroupId, "group_all");
+  assert.deepEqual(normalized.taskGroups.map((group) => group.id), ["group_inbox"]);
+  assert.equal(normalized.tasks[0].groupId, "group_inbox");
+});
+
 test("Chinese and English font settings stay isolated in the application font chain", async () => {
   const [styles, app] = await Promise.all([
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "styles.css"), "utf8"),
@@ -2571,6 +2583,7 @@ test("Today widget preferences normalize safely and retain an intentional custom
     height: 260,
     customBounds: null,
     clickThrough: false,
+    quickCaptureDraft: "",
   });
   assert.deepEqual(normalizeTodayWidgetPreferences({
     position: "custom",
@@ -2591,6 +2604,7 @@ test("Today widget preferences normalize safely and retain an intentional custom
     height: 348,
     customBounds: { x: 322, y: 48 },
     clickThrough: false,
+    quickCaptureDraft: "",
   });
   assert.equal(normalizeTodayWidgetPreferences({ position: "custom" }).position, "top-right");
   assert.equal(normalizeTodayWidgetPreferences({ opacity: null }).opacity, 100);
@@ -2712,6 +2726,21 @@ test("production Today widget uses its dedicated frontend and a sandboxed Electr
   assert.match(demo, /\.today-widget\.is-compact \.compact-expand-icon\s*\{\s*display:\s*block;/);
   assert.doesNotMatch(demo, /\.today-widget\.is-compact \.widget-menu[^}]*display:\s*none;/);
   assert.match(runtime, /bridge\.completeTask/);
+  assert.match(runtime, /bridge\.createTask/);
+  assert.match(runtime, /bridge\.updateTaskTitle/);
+  assert.match(runtime, /bridge\.promoteQuickCapture/);
+  assert.match(runtime, /bridge\.setEditing/);
+  assert.match(runtime, /function isTextEditingTarget/);
+  assert.match(runtime, /if \(isTextEditingTarget\(document\.activeElement\)\) return;/);
+  assert.match(runtime, /compositionstart/);
+  assert.match(runtime, /dblclick/);
+  assert.match(demo, /id="quick-capture-input"/);
+  assert.match(demo, /id="quick-capture-list"/);
+  assert.match(demo, /quick-capture-item/);
+  assert.match(demo, /quick-capture-section/);
+  assert.match(demo, /quick-capture-promote/);
+  assert.match(demo, /\.today-task\.quick-capture-item\s*\{[\s\S]*border-style:\s*dashed;[\s\S]*background:\s*rgba\(255, 255, 255, 0\.025\);/);
+  assert.match(demo, /\.today-task\.quick-capture-item:hover\s*\{[\s\S]*border-style:\s*dashed;/);
   assert.match(runtime, /bridge\.setPreferences\(\{ clickThrough: enabled \}\)/);
   assert.match(runtime, /bridge\.openMain/);
   assert.doesNotMatch(runtime, /ResizeObserver/);
@@ -2723,24 +2752,32 @@ test("production Today widget uses its dedicated frontend and a sandboxed Electr
   assert.match(runtime, /bridge\.resize\(\{ height: COMPACT_MENU_WINDOW_HEIGHT, transient: true \}\)/);
   assert.match(runtime, /bridge\.resize\(\{ height: 49, transient: true \}\)/);
   assert.match(widgetMain, /setIgnoreMouseEvents\(preferences\.clickThrough === true, \{ forward: true \}\)/);
+  assert.match(widgetMain, /today-widget:create-task/);
+  assert.match(widgetMain, /today-widget:update-task-title/);
+  assert.match(widgetMain, /today-widget:promote-quick-capture/);
+  assert.match(widgetMain, /today-widget:set-editing/);
+  assert.match(widgetMain, /pendingMutations/);
   assert.match(widgetMain, /CommandOrControl\+Shift\+T/);
   assert.match(demo, /data-widget-resize="top"/);
   assert.match(demo, /data-widget-resize="bottom"/);
-  assert.match(demo, /body\.widget-runtime \.task-list\s*\{[\s\S]*overflow-y:\s*auto;/);
-  assert.match(demo, /body\.widget-runtime \.task-list::\-webkit-scrollbar\s*\{[\s\S]*display:\s*none;/);
+  assert.match(demo, /body\.widget-runtime \.widget-content\s*\{[\s\S]*overflow-y:\s*auto;/);
+  assert.match(demo, /body\.widget-runtime \.widget-content::\-webkit-scrollbar\s*\{[\s\S]*display:\s*none;/);
+  assert.match(demo, /body\.widget-runtime \.task-list\s*\{[\s\S]*overflow:\s*visible;/);
   assert.match(runtime, /function applyAppearance/);
   assert.match(runtime, /document\.documentElement\.dataset\.zhFont/);
   assert.match(runtime, /--widget-font-scale/);
   assert.match(runtime, /function applyOpacity/);
   assert.match(runtime, /setPreferences\(\{ opacity \}\)/);
   assert.match(runtime, /document\.addEventListener\("pointerdown",[\s\S]*closeMenu\(\)/);
-  assert.match(runtime, /window\.addEventListener\("blur", closeMenu\)/);
+  assert.match(runtime, /window\.addEventListener\("blur", \(\) => \{[\s\S]*closeMenu\(\);[\s\S]*closeGroupMenu\(\);/);
   assert.match(widgetMain, /frame: false/);
   assert.match(widgetMain, /acceptFirstMouse: true/);
   assert.match(widgetMain, /transparent: true/);
   assert.match(widgetMain, /hasShadow: false/);
   assert.match(widgetMain, /sandbox: true/);
-  assert.match(widgetMain, /type: process\.platform === "darwin" \? "panel" : undefined/);
+  assert.doesNotMatch(widgetMain, /type: process\.platform === "darwin" \? "panel" : undefined/);
+  assert.match(widgetMain, /preferences\.alwaysOnTop && !editingText/);
+  assert.match(widgetMain, /setAlwaysOnTop\(topmost, topmost \? "screen-saver" : "normal"/);
   assert.match(widgetMain, /visibleOnFullScreen: topmost/);
   assert.match(widgetMain, /skipTransformProcessType: true/);
   assert.match(widgetMain, /setAlwaysOnTop[\s\S]*"screen-saver"/);
@@ -2755,6 +2792,10 @@ test("production Today widget uses its dedicated frontend and a sandboxed Electr
   assert.match(appMain, /await app\.dock\.show\(\)/);
   assert.match(appMain, /app\.on\("did-resign-active"[\s\S]*fullscreenTransitionRefresh/);
   assert.match(preload, /todayWidget:/);
+  assert.match(preload, /createTask: \(payload\)/);
+  assert.match(preload, /updateTaskTitle: \(payload\)/);
+  assert.match(preload, /promoteQuickCapture: \(payload\)/);
+  assert.match(preload, /setEditing: \(enabled\)/);
   assert.match(preload, /app:confirm-destructive/);
   assert.match(appMain, /dialog\.showMessageBox/);
   assert.ok(packageJson.build.files.includes("app/renderer/today-widget.html"));
@@ -3093,6 +3134,88 @@ test("Today widget snapshot reuses the main Today ordering and next-step content
   assert.deepEqual(result.snapshot.items.slice(0, 2).map((item) => item.taskId), ["blocked", "high"]);
   assert.equal(result.snapshot.items.length, 4);
   assert.equal(result.snapshot.items[0].nextText, "解除阻塞");
+});
+
+test("Today widget quick captures reuse tasks, timestamps, source filtering, and compact snapshot limits", async () => {
+  const harness = await rendererHarness();
+  const result = harness.json(`(() => {
+    state.taskGroups = [{ id: "group_inbox", title: "默认", order: 1 }];
+    state.activeGroupId = "group_inbox";
+    state.tasks = normalizeTasks([
+      { id: "capture_old", title: "旧速记", captureSource: "today-widget", createdAt: "2026-08-20T08:00:00.000Z", updatedAt: "2026-08-20T08:00:00.000Z" },
+      { id: "capture_new", title: "新速记", captureSource: "today-widget", createdAt: "2026-08-29T08:00:00.000Z", updatedAt: "2026-08-29T09:00:00.000Z" },
+      { id: "normal_task", title: "普通任务", createdAt: "2026-08-29T07:00:00.000Z", updatedAt: "2026-08-29T07:00:00.000Z" }
+    ]);
+    state.captureSourceFilter = "quick";
+    const quickIds = filteredTasks().map((task) => task.id);
+    const snapshot = todayWidgetSnapshot();
+    return { quickIds, snapshot };
+  })()`);
+  assert.deepEqual(result.quickIds, ["capture_old", "capture_new"]);
+  assert.equal(result.snapshot.quickCaptureTotal, 2);
+  assert.deepEqual(result.snapshot.quickCaptures.map((item) => item.taskId), ["capture_new", "capture_old"]);
+  assert.equal(result.snapshot.quickCaptures[0].createdAt, "2026-08-29T08:00:00.000Z");
+  assert.deepEqual(result.snapshot.groups, [{ id: "group_inbox", title: "默认" }]);
+});
+
+test("quick captures promote into a chosen real group and leave the quick-capture lane", async () => {
+  const harness = await rendererHarness();
+  const result = harness.json(`(() => {
+    state.taskGroups = [
+      { id: "group_inbox", title: "默认", order: 1 },
+      { id: "group_work", title: "工作", order: 2 }
+    ];
+    state.activeGroupId = "group_all";
+    state.tasks = normalizeTasks([{ id: "capture_promote", title: "待升级", captureSource: "today-widget", groupId: "group_inbox" }]);
+    render = () => {};
+    const promoted = promoteQuickCaptureFromWidget("capture_promote", "group_work");
+    const task = state.tasks[0];
+    return { promoted, task: { id: task.id, groupId: task.groupId, captureSource: task.captureSource }, visible: tasksInActiveGroup().map((item) => item.id) };
+  })()`);
+
+  assert.equal(result.promoted.code, "PROMOTED");
+  assert.deepEqual(result.task, { id: "capture_promote", groupId: "group_work", captureSource: "" });
+  assert.deepEqual(result.visible, ["capture_promote"]);
+});
+
+test("the fixed all-tasks group is aggregate-only and new tasks still receive a real group", async () => {
+  const harness = await rendererHarness();
+  const result = harness.json(`(() => {
+    state.taskGroups = [{ id: "group_inbox", title: "默认", order: 1 }, { id: "group_work", title: "工作", order: 2 }];
+    state.tasks = normalizeTasks([
+      { id: "inbox_task", title: "默认任务", groupId: "group_inbox" },
+      { id: "work_task", title: "工作任务", groupId: "group_work" }
+    ]);
+    state.activeGroupId = "group_all";
+    const before = tasksInActiveGroup().map((task) => task.id);
+    const created = createTask("汇总视图新建", false);
+    return { before, createdGroupId: created.groupId, tabs: renderGroupTabs() };
+  })()`);
+
+  assert.deepEqual(result.before, ["inbox_task", "work_task"]);
+  assert.equal(result.createdGroupId, "group_inbox");
+  assert.match(result.tabs, />全部任务<\/button>/);
+  assert.match(result.tabs, /sheet-tab-all active/);
+});
+
+test("repository filters remain compact, aligned, and keep the add control visible", async () => {
+  const [harness, styles] = await Promise.all([
+    rendererHarness(),
+    fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "styles.css"), "utf8"),
+  ]);
+  const sidebar = harness.evaluate(`(() => {
+    state.taskGroups = [{ id: "group_inbox", title: "默认", order: 1 }];
+    state.tasks = [];
+    return renderSidebar();
+  })()`);
+
+  assert.match(sidebar, /<span>类型 ·<\/span>/);
+  assert.match(sidebar, /class="repository-add-task"/);
+  assert.match(styles, /local acceptance — stable Today rail and compact repository controls/);
+  assert.match(styles, /\.today-panel\.today-focus\s*\{\s*flex:\s*0 0 auto;/);
+  assert.match(styles, /\.task-repository-toolbar\s*\{[\s\S]*gap:\s*8px;/);
+  assert.match(styles, /\.task-priority-filter select\s*\{[\s\S]*min-width:\s*47px;/);
+  assert.match(styles, /\.repository-add-task\s*\{[\s\S]*flex:\s*0 0 28px;/);
 });
 
 test("Today widget resizes vertically from either edge and stays inside the display", () => {
