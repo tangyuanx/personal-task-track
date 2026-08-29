@@ -2852,6 +2852,34 @@ test("missing conclusion highlights only the current task without locking task s
   assert.doesNotMatch(styles, /\.conclusion-prompt \{/);
 });
 
+test("task metadata uses shadcn-style badges for priority, status, and active tags", async () => {
+  const [harness, styles] = await Promise.all([
+    rendererHarness(),
+    fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "styles.css"), "utf8"),
+  ]);
+  const page = harness.evaluate(`(() => {
+    const task = normalizeTasks([{
+      id: "badge_task",
+      title: "Badge 样式任务",
+      priority: "high",
+      status: "done",
+      tags: ["today", "blocked"],
+      nodes: [],
+    }])[0];
+    state.tasks = [task];
+    state.activeTaskId = task.id;
+    return renderTaskPage(task);
+  })()`);
+
+  assert.match(page, /class="task-context-item task-context-badge priority high" data-slot="badge">高优先<\/span>/);
+  assert.match(page, /class="task-context-item task-context-badge status resolved" data-slot="badge">已完成<\/span>/);
+  assert.match(page, /class="task-context-item task-context-badge task-tag" data-slot="badge">Today<\/span>/);
+  assert.match(page, /class="task-context-item task-context-badge task-tag" data-slot="badge">卡住<\/span>/);
+  assert.match(styles, /\.meta-line\.page-properties > \.task-context-item\.task-context-badge\s*\{[\s\S]*border-radius:\s*6px;/);
+  assert.match(styles, /task-context-badge\.priority\.high/);
+  assert.match(styles, /task-context-badge\.status\.resolved/);
+});
+
 test("processing flow matches the compact reference tree and opens details only on demand", async () => {
   const [styles, app] = await Promise.all([
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "styles.css"), "utf8"),
@@ -3199,23 +3227,55 @@ test("the fixed all-tasks group is aggregate-only and new tasks still receive a 
 });
 
 test("repository filters remain compact, aligned, and keep the add control visible", async () => {
-  const [harness, styles] = await Promise.all([
+  const [harness, styles, app] = await Promise.all([
     rendererHarness(),
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "styles.css"), "utf8"),
+    fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "app.js"), "utf8"),
   ]);
-  const sidebar = harness.evaluate(`(() => {
+  const sidebars = harness.evaluate(`(() => {
     state.taskGroups = [{ id: "group_inbox", title: "默认", order: 1 }];
     state.tasks = [];
-    return renderSidebar();
+    state.searchOpen = false;
+    const collapsed = renderSidebar();
+    state.searchOpen = true;
+    const expanded = renderSidebar();
+    state.theme = "dark";
+    const dark = renderSidebar();
+    return { light: collapsed, expanded, dark };
   })()`);
 
-  assert.match(sidebar, /<span>类型 ·<\/span>/);
-  assert.match(sidebar, /class="repository-add-task"/);
+  assert.match(sidebars.light, /<span>类型 ·<\/span>/);
+  assert.match(sidebars.light, /class="repository-add-task"/);
+  assert.match(sidebars.light, /class="theme-toggle theme-switch[^"]*"/);
+  assert.match(sidebars.light, /role="switch"/);
+  assert.match(sidebars.light, /aria-checked="false"/);
+  assert.match(sidebars.light, /class="theme-switch-thumb"/);
+  assert.match(sidebars.light, /class="search-box search gooey-search "/);
+  assert.match(sidebars.light, /data-gooey-search[^>]+data-open="false"/);
+  assert.match(sidebars.light, /id="sidebar-gooey-filter"/);
+  assert.match(sidebars.light, /data-gooey-search-trigger aria-expanded="false"/);
+  assert.match(sidebars.light, /id="search"/);
+  assert.match(sidebars.light, /tabindex="-1"/);
+  assert.match(sidebars.expanded, /class="search-box search gooey-search is-open"/);
+  assert.match(sidebars.expanded, /data-gooey-search-trigger aria-expanded="true"/);
+  assert.match(sidebars.expanded, /tabindex="0"/);
+  assert.match(sidebars.dark, /aria-checked="true"/);
   assert.match(styles, /local acceptance — stable Today rail and compact repository controls/);
   assert.match(styles, /\.today-panel\.today-focus\s*\{\s*flex:\s*0 0 auto;/);
   assert.match(styles, /\.task-repository-toolbar\s*\{[\s\S]*gap:\s*8px;/);
   assert.match(styles, /\.task-priority-filter select\s*\{[\s\S]*min-width:\s*47px;/);
   assert.match(styles, /\.repository-add-task\s*\{[\s\S]*flex:\s*0 0 28px;/);
+  assert.match(styles, /\.theme-toggle\.theme-switch\s*\{[\s\S]*border-radius:\s*999px;/);
+  assert.match(styles, /\.theme-toggle\.theme-switch\[aria-checked="true"\] \.theme-switch-thumb\s*\{[\s\S]*transform:\s*translateX\(16px\);/);
+  assert.match(styles, /\.search\.search-box\.gooey-search\s*\{[\s\S]*--gooey-search-collapsed:\s*88px;/);
+  assert.match(styles, /\.gooey-search-filter-wrap\s*\{[\s\S]*filter:\s*url\("#sidebar-gooey-filter"\);/);
+  assert.match(styles, /--gooey-search-surface:\s*var\(--handoff-sidebar\);/);
+  assert.match(styles, /\.gooey-search\.is-open \.gooey-search-trigger\s*\{[\s\S]*width:\s*var\(--gooey-search-bubble\);/);
+  assert.match(styles, /\.gooey-search\.is-open \.gooey-search-field\s*\{[\s\S]*transform:\s*scaleX\(1\);/);
+  assert.match(styles, /@media \(prefers-reduced-motion: reduce\)/);
+  assert.match(app, /function bindGooeySearch\(\)/);
+  assert.match(app, /event\.key !== "Escape"/);
+  assert.match(app, /state\.searchOpen = true;[\s\S]*state\.focusSearch = true;/);
 });
 
 test("Today widget resizes vertically from either edge and stays inside the display", () => {

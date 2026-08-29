@@ -241,6 +241,7 @@ let state = {
   calendarSelectedDate: "",
   taskPane: "flow",
   nodeDetailFullscreen: false,
+  searchOpen: false,
   focusTaskTitleId: "",
   focusNodeTitleId: "",
   focusGroupTitleId: "",
@@ -1634,6 +1635,7 @@ function renderSidebar() {
   const openCount = scopedTasks.filter((task) => task.status !== "done").length;
   const blockedCount = scopedTasks.filter((task) => task.tags.blocked || flatten(task.nodes).some((node) => node.status === "blocked")).length;
   const focusItems = todayFocusItems();
+  const searchOpen = state.searchOpen || Boolean(state.query.trim());
   return `
     <aside class="sidebar rail">
       <span class="sidebar-resizer" data-sidebar-resizer title="调整侧栏宽度"></span>
@@ -1649,11 +1651,27 @@ function renderSidebar() {
       <div class="task-list" data-context="task-list">
         <div class="task-list-head section-label">
           <span class="task-list-count">${visibleCount} / ${scopedTasks.length} 项</span>
-          <label class="search-box search">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 21-4.35-4.35"></path><circle cx="10.8" cy="10.8" r="7.2"></circle></svg>
-            <input id="search" value="${escAttr(state.query)}" placeholder="" aria-label="搜索任务、节点或内容" />
-            <span class="search-shortcut" aria-hidden="true">⌘ K</span>
-          </label>
+          <div class="search-box search gooey-search ${searchOpen ? "is-open" : ""}" data-gooey-search data-open="${searchOpen}">
+            <svg class="gooey-search-filter-defs" aria-hidden="true" width="0" height="0">
+              <defs>
+                <filter id="sidebar-gooey-filter" x="-45%" y="-110%" width="190%" height="320%" color-interpolation-filters="sRGB">
+                  <feGaussianBlur in="SourceGraphic" stdDeviation="4.2" result="blur"></feGaussianBlur>
+                  <feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 19 -8" result="gooey"></feColorMatrix>
+                  <feComposite in="SourceGraphic" in2="gooey" operator="atop"></feComposite>
+                </filter>
+              </defs>
+            </svg>
+            <div class="gooey-search-filter-wrap">
+              <button class="gooey-search-trigger" type="button" data-gooey-search-trigger aria-expanded="${searchOpen}" aria-controls="search" title="搜索任务">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7.2"></circle><path d="m20 20-3.9-3.9"></path></svg>
+                <span class="gooey-search-trigger-label">搜索</span>
+              </button>
+              <label class="gooey-search-field" for="search">
+                <input id="search" type="search" value="${escAttr(state.query)}" placeholder="搜索任务…" aria-label="搜索任务、节点或内容" autocomplete="off" enterkeyhint="search" tabindex="${searchOpen ? "0" : "-1"}" />
+                <span class="search-shortcut" aria-hidden="true">⌘ K</span>
+              </label>
+            </div>
+          </div>
         </div>
         <div class="task-repository-toolbar">
           <div class="task-status-filters" role="group" aria-label="任务状态筛选">
@@ -1685,13 +1703,14 @@ function renderSidebar() {
       <div class="sidebar-foot task-footer">
         <button class="settings-trigger settings-button ${state.settingsOpen ? "active" : ""}" type="button" data-action="toggle-settings" title="设置" aria-label="设置">⚙</button>
         <button
-          class="theme-toggle ${state.theme === "dark" ? "active" : ""}"
+          class="theme-toggle theme-switch ${state.theme === "dark" ? "active" : ""}"
           type="button"
+          role="switch"
           data-action="toggle-theme"
           title="${state.theme === "dark" ? "切换到浅色主题" : "切换到深色主题"}"
           aria-label="${state.theme === "dark" ? "切换到浅色主题" : "切换到深色主题"}"
-          aria-pressed="${state.theme === "dark"}"
-        >${state.theme === "dark" ? `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path></svg>` : `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9Z"></path></svg>`}</button>
+          aria-checked="${state.theme === "dark"}"
+        ><span class="theme-switch-thumb" aria-hidden="true"></span></button>
         <span class="autosave-status">自动保存已开启</span>
         <button class="review-shortcut calendar-shortcut" type="button" data-action="toggle-calendar">日历</button>
       </div>
@@ -1793,6 +1812,84 @@ function refreshTaskRepository() {
   bindTaskRepositoryRows(rows);
 }
 
+function setGooeySearchOpen(control, open, { focusInput = false, focusTrigger = false } = {}) {
+  if (!control) return;
+  const input = control.querySelector("#search");
+  const trigger = control.querySelector("[data-gooey-search-trigger]");
+  const nextOpen = Boolean(open || state.query.trim());
+  state.searchOpen = nextOpen;
+  control.classList.toggle("is-open", nextOpen);
+  control.dataset.open = String(nextOpen);
+  trigger?.setAttribute("aria-expanded", String(nextOpen));
+  if (input) input.tabIndex = nextOpen ? 0 : -1;
+
+  if (focusInput && nextOpen && input) {
+    window.requestAnimationFrame(() => {
+      input.focus({ preventScroll: true });
+      const cursor = Math.min(state.searchCursor || input.value.length, input.value.length);
+      input.setSelectionRange(cursor, cursor);
+    });
+  } else if (focusTrigger && !nextOpen && trigger) {
+    window.requestAnimationFrame(() => trigger.focus({ preventScroll: true }));
+  }
+}
+
+function bindGooeySearch() {
+  const control = document.querySelector("[data-gooey-search]");
+  const search = control?.querySelector("#search");
+  const trigger = control?.querySelector("[data-gooey-search-trigger]");
+  if (!control || !search || !trigger) return;
+
+  let isComposing = false;
+  const refreshSearch = () => {
+    state.query = search.value;
+    state.searchCursor = search.selectionStart ?? search.value.length;
+    refreshTaskRepository();
+  };
+
+  trigger.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    state.searchCursor = search.value.length;
+    setGooeySearchOpen(control, true, { focusInput: true });
+  });
+
+  search.addEventListener("click", (event) => event.stopPropagation());
+  search.addEventListener("compositionstart", () => {
+    isComposing = true;
+  });
+  search.addEventListener("compositionend", () => {
+    isComposing = false;
+    refreshSearch();
+  });
+  search.addEventListener("input", () => {
+    if (!isComposing) refreshSearch();
+  });
+  search.addEventListener("search", () => {
+    if (!isComposing) refreshSearch();
+  });
+  search.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape" || event.isComposing || event.keyCode === 229) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (search.value) {
+      search.value = "";
+      state.query = "";
+      state.searchCursor = 0;
+      refreshTaskRepository();
+      return;
+    }
+    setGooeySearchOpen(control, false, { focusTrigger: true });
+  });
+
+  control.addEventListener("focusout", () => {
+    window.requestAnimationFrame(() => {
+      if (control.contains(document.activeElement) || search.value.trim()) return;
+      setGooeySearchOpen(control, false);
+    });
+  });
+}
+
 function taskSubtitle(task) {
   const nextNode = nextOpenNode(task.nodes);
   if (nextNode?.title?.trim()) return nextNode.title.trim();
@@ -1813,8 +1910,8 @@ function renderTaskPage(task) {
           <input class="page-title" aria-label="任务标题" data-edit-key="title" data-task-id="${task.id}" value="${escAttr(task.title)}" />
           <div class="page-properties meta-line">
             ${renderTaskActiveTagPills(task)}
-            <span class="task-context-item priority ${task.priority}">${priorityLabels[task.priority]}优先</span>
-            <span class="task-context-item status ${task.status === "done" ? "resolved" : "attention"}">${task.status === "done" ? "已完成" : "处理中"}</span>
+            <span class="task-context-item task-context-badge priority ${task.priority}" data-slot="badge">${priorityLabels[task.priority]}优先</span>
+            <span class="task-context-item task-context-badge status ${task.status === "done" ? "resolved" : "attention"}" data-slot="badge">${task.status === "done" ? "已完成" : "处理中"}</span>
             <span class="task-context-progress">${summary.done}/${summary.total || 0} 节点</span>
             <label class="task-context-group"><span>分组</span>${selectHtml("groupId", task.groupId, taskGroupOptions(), task.id)}</label>
             ${renderTaskDeadlineControl(task)}
@@ -1980,7 +2077,7 @@ function renderTaskTagRow(task) {
 function renderTaskActiveTagPills(task) {
   return Object.entries(normalizeTaskTags(task.tags))
     .filter(([, active]) => active)
-    .map(([tag]) => `<span class="task-context-item task-tag">${taskTagLabels[tag]}</span>`)
+    .map(([tag]) => `<span class="task-context-item task-context-badge task-tag" data-slot="badge">${taskTagLabels[tag]}</span>`)
     .join("");
 }
 
@@ -3909,25 +4006,7 @@ function bind() {
     });
   });
 
-  const search = document.querySelector("#search");
-  if (search) {
-    let isComposing = false;
-    const refreshSearch = () => {
-      state.query = search.value;
-      refreshTaskRepository();
-    };
-    search.addEventListener("click", (event) => event.stopPropagation());
-    search.addEventListener("compositionstart", () => {
-      isComposing = true;
-    });
-    search.addEventListener("compositionend", () => {
-      isComposing = false;
-      refreshSearch();
-    });
-    search.addEventListener("input", () => {
-      if (!isComposing) refreshSearch();
-    });
-  }
+  bindGooeySearch();
 
   const taskFilter = document.querySelector("[data-task-filter]");
   if (taskFilter) {
@@ -4402,25 +4481,7 @@ function bindTaskRepositoryRows(scope = document) {
     void submitBugReport();
   });
 
-  const search = document.querySelector("#search");
-  if (search) {
-    let isComposing = false;
-    const refreshSearch = () => {
-      state.query = search.value;
-      refreshTaskRepository();
-    };
-    search.addEventListener("click", (event) => event.stopPropagation());
-    search.addEventListener("compositionstart", () => {
-      isComposing = true;
-    });
-    search.addEventListener("compositionend", () => {
-      isComposing = false;
-      refreshSearch();
-    });
-    search.addEventListener("input", () => {
-      if (!isComposing) refreshSearch();
-    });
-  }
+  bindGooeySearch();
 
   const taskFilter = document.querySelector("[data-task-filter]");
   if (taskFilter) {
@@ -7404,6 +7465,7 @@ window.addEventListener("keydown", (event) => {
   const target = event.target;
   if (target instanceof HTMLTextAreaElement || target?.isContentEditable) return;
   event.preventDefault();
+  state.searchOpen = true;
   state.focusSearch = true;
   state.searchCursor = state.query.length;
   render();

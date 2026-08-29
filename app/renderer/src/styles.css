@@ -3018,6 +3018,140 @@ body.resizing-detail {
   }
 }
 
+/* v0.1.143 — shadcn-style metadata badges for priority, status, and active tags. */
+.meta-line.page-properties > .task-context-item.task-context-badge {
+  display: inline-flex;
+  min-height: 20px;
+  align-items: center;
+  box-sizing: border-box;
+  border: 1px solid var(--handoff-line-strong, var(--line-strong));
+  border-radius: 6px;
+  padding: 2px 7px;
+  background: var(--handoff-surface, var(--surface));
+  color: var(--handoff-muted, var(--muted));
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.15;
+  white-space: nowrap;
+  box-shadow: none;
+}
+
+.meta-line.page-properties > .task-context-item.task-context-badge.priority.high {
+  border-color: color-mix(in srgb, var(--priority-high) 32%, var(--handoff-line-strong, var(--line-strong)));
+  background: var(--priority-high-bg);
+  color: var(--priority-high);
+}
+
+.meta-line.page-properties > .task-context-item.task-context-badge.priority.medium {
+  border-color: color-mix(in srgb, var(--priority-medium) 30%, var(--handoff-line-strong, var(--line-strong)));
+  background: var(--priority-medium-bg);
+  color: var(--priority-medium);
+}
+
+.meta-line.page-properties > .task-context-item.task-context-badge.priority.low {
+  border-color: color-mix(in srgb, var(--priority-low) 30%, var(--handoff-line-strong, var(--line-strong)));
+  background: var(--priority-low-bg);
+  color: var(--priority-low);
+}
+
+.meta-line.page-properties > .task-context-item.task-context-badge.status.attention {
+  border-color: color-mix(in srgb, var(--todo) 30%, var(--handoff-line-strong, var(--line-strong)));
+  background: var(--todo-bg);
+  color: var(--todo);
+}
+
+.meta-line.page-properties > .task-context-item.task-context-badge.status.resolved {
+  border-color: color-mix(in srgb, var(--focus) 30%, var(--handoff-line-strong, var(--line-strong)));
+  background: var(--focus-field);
+  color: var(--focus);
+}
+
+.meta-line.page-properties > .task-context-item.task-context-badge.task-tag {
+  border-color: color-mix(in srgb, var(--focus) 30%, var(--handoff-line-strong, var(--line-strong)));
+  background: color-mix(in srgb, var(--focus) 8%, var(--handoff-surface, var(--surface)));
+  color: var(--focus);
+}
+
+:root[data-theme="dark"] .meta-line.page-properties > .task-context-item.task-context-badge {
+  background: rgba(255, 255, 255, 0.055);
+}
+
+:root[data-theme="dark"] .meta-line.page-properties > .task-context-item.task-context-badge.priority.high {
+  background: var(--priority-high-bg);
+}
+
+:root[data-theme="dark"] .meta-line.page-properties > .task-context-item.task-context-badge.priority.medium {
+  background: var(--priority-medium-bg);
+}
+
+:root[data-theme="dark"] .meta-line.page-properties > .task-context-item.task-context-badge.priority.low {
+  background: var(--priority-low-bg);
+}
+
+:root[data-theme="dark"] .meta-line.page-properties > .task-context-item.task-context-badge.status.attention {
+  background: var(--todo-bg);
+}
+
+:root[data-theme="dark"] .meta-line.page-properties > .task-context-item.task-context-badge.status.resolved {
+  background: var(--focus-field);
+}
+
+/* v0.1.143 — shadcn-style theme switch: a compact track with a sliding thumb. */
+.theme-toggle.theme-switch {
+  display: inline-flex;
+  width: 36px;
+  height: 20px;
+  flex: 0 0 36px;
+  align-items: center;
+  justify-content: flex-start;
+  box-sizing: border-box;
+  border: 1px solid var(--handoff-line-strong);
+  border-radius: 999px;
+  padding: 2px;
+  background: color-mix(in srgb, var(--handoff-line) 72%, var(--handoff-surface));
+  color: var(--handoff-muted);
+  transition: background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.theme-toggle.theme-switch:hover,
+.theme-toggle.theme-switch:focus-visible {
+  border-color: color-mix(in srgb, var(--focus) 52%, var(--handoff-line-strong));
+  outline: 0;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 18%, transparent);
+}
+
+.theme-toggle.theme-switch[aria-checked="true"] {
+  border-color: var(--focus);
+  background: var(--focus);
+}
+
+.theme-switch-thumb {
+  display: block;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+  border-radius: 50%;
+  background: var(--handoff-surface);
+  box-shadow: 0 1px 2px rgba(19, 35, 28, 0.2);
+  transform: translateX(0);
+  transition: background-color 160ms ease, transform 160ms ease;
+}
+
+.theme-toggle.theme-switch[aria-checked="true"] .theme-switch-thumb {
+  background: #ffffff;
+  transform: translateX(16px);
+}
+
+:root[data-theme="dark"] .theme-toggle.theme-switch {
+  border-color: var(--handoff-line-strong);
+  background: color-mix(in srgb, var(--handoff-line-strong) 72%, var(--handoff-surface));
+}
+
+:root[data-theme="dark"] .theme-toggle.theme-switch[aria-checked="true"] {
+  border-color: var(--focus);
+  background: var(--focus);
+}
+
 
 /* ===== NODE DETAIL OVERLAY ===== */
 /* Revised node detail overlay + Milkdown editor */
@@ -11561,6 +11695,210 @@ body.flow-node-reordering * {
   .node-detail-page {
     border-top: 1px solid var(--line-soft);
     border-left: 0;
+  }
+}
+
+/* Aceternity-style Gooey Input. The trigger and field are separate surfaces
+   inside one SVG-filtered layer, so their shared expansion forms a real blob. */
+.section-label.task-list-head .search.search-box.gooey-search {
+  --gooey-search-collapsed: 88px;
+  --gooey-search-expanded: 216px;
+  --gooey-search-height: 32px;
+  --gooey-search-bubble: 32px;
+  --gooey-search-gap: 9px;
+  --gooey-search-surface: var(--handoff-sidebar);
+  --gooey-search-ink: var(--handoff-ink);
+  --gooey-search-border: var(--handoff-line-strong);
+  position: relative;
+  isolation: isolate;
+  width: var(--gooey-search-collapsed);
+  min-height: var(--gooey-search-height);
+  flex: 0 0 var(--gooey-search-collapsed);
+  overflow: visible;
+  margin: 0 0 0 auto;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+  transition: width 440ms cubic-bezier(.2, .86, .24, 1), flex-basis 440ms cubic-bezier(.2, .86, .24, 1);
+}
+
+.section-label.task-list-head .search.search-box.gooey-search.is-open {
+  width: var(--gooey-search-expanded);
+  flex-basis: var(--gooey-search-expanded);
+}
+
+.gooey-search-filter-defs {
+  position: absolute;
+  pointer-events: none;
+}
+
+.gooey-search-filter-wrap {
+  position: relative;
+  width: 100%;
+  height: var(--gooey-search-height);
+  filter: url("#sidebar-gooey-filter");
+}
+
+.gooey-search-trigger,
+.gooey-search-field {
+  position: absolute;
+  top: 0;
+  height: var(--gooey-search-height);
+  box-sizing: border-box;
+  border: 0;
+  border-radius: 999px;
+  color: var(--gooey-search-ink);
+  background: var(--gooey-search-surface);
+  border: 1px solid var(--gooey-search-border);
+  box-shadow: 0 3px 10px rgba(33, 48, 40, 0.08);
+}
+
+.gooey-search-trigger {
+  left: 0;
+  z-index: 2;
+  display: flex;
+  width: var(--gooey-search-collapsed);
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 13px;
+  font-size: 11px;
+  font-weight: 680;
+  line-height: 1;
+  cursor: pointer;
+  transition: width 440ms cubic-bezier(.2, .86, .24, 1), padding 360ms ease, transform 220ms ease;
+}
+
+.gooey-search-trigger svg {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+
+.gooey-search-trigger-label {
+  max-width: 34px;
+  overflow: hidden;
+  opacity: 1;
+  white-space: nowrap;
+  transform: translateX(0);
+  transition: max-width 280ms ease, opacity 180ms ease, transform 280ms ease;
+}
+
+.gooey-search-field {
+  left: calc(var(--gooey-search-collapsed) - 4px);
+  z-index: 1;
+  display: flex;
+  width: 4px;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  padding: 0;
+  opacity: 0;
+  transform: scaleX(.35);
+  transform-origin: left center;
+  pointer-events: none;
+  transition:
+    left 440ms cubic-bezier(.2, .86, .24, 1),
+    width 440ms cubic-bezier(.2, .86, .24, 1),
+    padding 360ms ease,
+    opacity 120ms ease 80ms,
+    transform 440ms cubic-bezier(.2, .86, .24, 1);
+}
+
+.gooey-search-field input {
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  padding: 0;
+  color: var(--gooey-search-ink);
+  background: transparent;
+  outline: 0;
+  font-size: 11px;
+  line-height: 1;
+  appearance: none;
+}
+
+.gooey-search-field input::-webkit-search-cancel-button {
+  opacity: .72;
+  filter: none;
+}
+
+.gooey-search-field input::placeholder {
+  color: color-mix(in srgb, var(--gooey-search-ink) 68%, transparent);
+}
+
+.gooey-search .search-shortcut {
+  flex: 0 0 auto;
+  min-width: 28px;
+  border: 1px solid color-mix(in srgb, var(--gooey-search-ink) 30%, transparent);
+  border-radius: 999px;
+  padding: 2px 5px;
+  color: color-mix(in srgb, var(--gooey-search-ink) 76%, transparent);
+  background: color-mix(in srgb, var(--gooey-search-ink) 10%, transparent);
+  font-size: 8px;
+  line-height: 1;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.gooey-search.is-open .gooey-search-trigger {
+  width: var(--gooey-search-bubble);
+  padding: 0;
+}
+
+.gooey-search.is-open .gooey-search-trigger-label {
+  max-width: 0;
+  opacity: 0;
+  transform: translateX(-7px);
+}
+
+.gooey-search.is-open .gooey-search-field {
+  left: calc(var(--gooey-search-bubble) + var(--gooey-search-gap));
+  width: calc(var(--gooey-search-expanded) - var(--gooey-search-bubble) - var(--gooey-search-gap));
+  padding: 0 8px 0 12px;
+  opacity: 1;
+  transform: scaleX(1);
+  pointer-events: auto;
+  transition-delay: 0ms, 0ms, 0ms, 80ms, 0ms;
+}
+
+.gooey-search-trigger:hover,
+.gooey-search-trigger:focus-visible,
+.gooey-search-field:focus-within {
+  background: color-mix(in srgb, var(--gooey-search-surface) 92%, white);
+}
+
+.gooey-search-trigger:focus-visible,
+.gooey-search-field:focus-within {
+  outline: 2px solid color-mix(in srgb, var(--handoff-focus-800) 32%, transparent);
+  outline-offset: 2px;
+}
+
+:root[data-theme="dark"] .section-label.task-list-head .search.search-box.gooey-search {
+  --gooey-search-surface: var(--handoff-sidebar);
+  --gooey-search-ink: var(--handoff-ink);
+  --gooey-search-border: var(--handoff-line-strong);
+}
+
+:root[data-theme="dark"] .gooey-search-field input::-webkit-search-cancel-button {
+  filter: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .section-label.task-list-head .search.search-box.gooey-search,
+  .gooey-search-trigger,
+  .gooey-search-trigger-label,
+  .gooey-search-field {
+    transition-duration: 0.01ms;
+    transition-delay: 0ms;
   }
 }
 
