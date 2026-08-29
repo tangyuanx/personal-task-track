@@ -23,6 +23,7 @@ const KNOWLEDGE_RECOVERY_MAX_INTERVAL_MS = 5000;
 const DATA_VERSION = 1;
 const KNOWLEDGE_MIGRATION_VERSION = 1;
 const desktopStorage = window.personalTaskTrack?.storage;
+const desktopDataBackup = window.personalTaskTrack?.dataBackup;
 const desktopKnowledgeRecovery = window.personalTaskTrack?.knowledgeRecovery;
 const desktopKnowledgeFile = window.personalTaskTrack?.knowledgeFile;
 const desktopExport = window.personalTaskTrack?.export;
@@ -2613,7 +2614,7 @@ function renderSettingsPanel() {
         <header class="settings-head">
           <div>
             <span>Preferences</span>
-            <h2 id="settings-title">界面设置</h2>
+            <h2 id="settings-title">界面与数据</h2>
           </div>
           <button class="settings-close" type="button" data-action="close-settings" title="关闭">×</button>
         </header>
@@ -2670,6 +2671,20 @@ function renderSettingsPanel() {
                   ${todayWidgetWindowState.clickThrough ? "关闭鼠标穿透" : "开启鼠标穿透"}
                 </button>
                 <span class="settings-help-text">快捷键：⌘/Ctrl + Shift + T${todayWidgetWindowState.clickThrough ? " · 当前已开启" : ""}</span>
+              </div>
+            </section>
+            <section class="settings-group" aria-labelledby="data-backup-title">
+              <div class="settings-group-head">
+                <h3 id="data-backup-title">数据迁移与恢复</h3>
+                <p>导出任务、节点、节点详情、附件与偏好；换电脑或更换安装位置后可完整恢复。</p>
+              </div>
+              <div class="settings-stack settings-backup-stack">
+                <div class="settings-backup-actions">
+                  <button class="settings-inline-action" type="button" data-backup-action="export" ${!desktopDataBackup ? "disabled" : ""}>导出完整备份</button>
+                  <button class="settings-inline-action" type="button" data-backup-action="import-file" ${!desktopDataBackup ? "disabled" : ""}>导入备份文件</button>
+                  <button class="settings-inline-action" type="button" data-backup-action="import-directory" ${!desktopDataBackup ? "disabled" : ""}>从备份目录恢复</button>
+                </div>
+                <span class="settings-help-text" data-backup-status>导入前会自动备份当前数据；校验失败会回滚，不会覆盖原数据。</span>
               </div>
             </section>
             <section class="settings-group settings-update-group" aria-labelledby="software-update-title">
@@ -2952,6 +2967,50 @@ function bindUpdateSettingsControls() {
         return;
       }
       void runUpdateAction(action);
+    });
+  });
+}
+
+async function flushAllDataForTransfer() {
+  captureMountedMilkdownDrafts();
+  flushNodeNoteDrafts({ persist: false });
+  save();
+  if (!(await flushSave())) throw Object.assign(new Error("Task data could not be saved."), { code: "TRANSFER_SAVE_FAILED" });
+  await flushPendingKnowledgeRecoveries({ strict: true });
+}
+
+function bindDataBackupControls() {
+  document.querySelectorAll("[data-backup-action]").forEach((button) => {
+    button.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      if (!desktopDataBackup) return;
+      const action = event.currentTarget.dataset.backupAction;
+      const buttons = Array.from(document.querySelectorAll("[data-backup-action]"));
+      const status = document.querySelector("[data-backup-status]");
+      buttons.forEach((control) => { control.disabled = true; });
+      if (status) status.textContent = action === "export" ? "正在保存并生成完整备份…" : "正在保存当前数据并校验所选备份…";
+      try {
+        await flushAllDataForTransfer();
+        const result = action === "export"
+          ? await desktopDataBackup.export()
+          : action === "import-directory"
+            ? await desktopDataBackup.importDirectory()
+            : await desktopDataBackup.importFile();
+        if (result?.canceled) {
+          if (status) status.textContent = "操作已取消，当前数据未发生变化。";
+        } else if (action === "export") {
+          if (status) status.textContent = `完整备份已保存：${result.destinationPath || "所选位置"}`;
+          globalThis.alert("Loop 完整数据备份已导出并校验成功。");
+        } else if (status) {
+          status.textContent = "数据已恢复并校验成功，Loop 正在重新启动…";
+        }
+      } catch (error) {
+        console.error("Loop data backup operation failed.", error);
+        if (status) status.textContent = `操作失败（${String(error?.code || "DATA_BACKUP_FAILED")}），当前数据已保留。`;
+        globalThis.alert("数据迁移或恢复未完成。Loop 已保留当前数据与安全备份，请检查文件、磁盘空间或目录权限后重试。");
+      } finally {
+        buttons.forEach((control) => { control.disabled = false; });
+      }
     });
   });
 }
@@ -4283,6 +4342,7 @@ function bindTaskRepositoryRows(scope = document) {
   }
 
   bindUpdateSettingsControls();
+  bindDataBackupControls();
 
   const feedbackPanel = document.querySelector(".feedback-panel");
   feedbackPanel?.addEventListener("click", (event) => event.stopPropagation());

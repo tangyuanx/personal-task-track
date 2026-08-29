@@ -31,6 +31,12 @@ const { createTodayWidgetController } = require("./today-widget.cjs");
 const { createDeadlineReminderController } = require("./deadline-reminders.cjs");
 const { createUpdateController } = require("./updater.cjs");
 const { APP_DISPLAY_NAME, configureDesktopIdentity } = require("./app-identity.cjs");
+const {
+  createPreInstallBackup,
+  exportPortableBackup,
+  importBackup,
+  recoverLegacyUserData,
+} = require("./data-continuity.cjs");
 
 configureDesktopIdentity(app);
 
@@ -142,17 +148,35 @@ function requestRecoveryShutdown(event) {
   return true;
 }
 
-function finishUpdateInstallPreparation(success) {
+async function finishUpdateInstallPreparation(success) {
   if (!updateInstallPreparation) return;
+  if (updateInstallPreparation.finalizing) return;
+  updateInstallPreparation.finalizing = true;
   const { resolve, timer } = updateInstallPreparation;
   clearTimeout(timer);
-  updateInstallPreparation = null;
-  if (success) {
-    // `quitAndInstall` closes windows before `before-quit`, so the renderer has
-    // already completed all persistence work when this flag is set.
-    updateInstallPrepared = true;
+  if (!success) {
+    updateInstallPreparation = null;
+    resolve(false);
+    return;
   }
-  resolve(success === true);
+  try {
+    await createPreInstallBackup({
+      appDataPath: app.getPath("appData"),
+      userDataPath: app.getPath("userData"),
+      installDirectory: path.dirname(process.execPath),
+      currentVersion: app.getVersion(),
+      targetVersion: updateController?.getState()?.version,
+    });
+    // `quitAndInstall` closes windows before `before-quit`, so the renderer and
+    // the verified byte-level backup are both complete before this flag is set.
+    updateInstallPrepared = true;
+    resolve(true);
+  } catch (error) {
+    console.error("Unable to create a verified pre-upgrade data backup.", error?.code || error);
+    resolve(false);
+  } finally {
+    updateInstallPreparation = null;
+  }
 }
 
 function requestUpdateInstallPreparation() {
@@ -163,8 +187,8 @@ function requestUpdateInstallPreparation() {
   const promise = new Promise((resolve) => {
     resolvePreparation = resolve;
   });
-  const timer = setTimeout(() => finishUpdateInstallPreparation(false), UPDATE_INSTALL_PREPARATION_TIMEOUT_MS);
-  updateInstallPreparation = { promise, resolve: resolvePreparation, senderId, timer };
+  const timer = setTimeout(() => void finishUpdateInstallPreparation(false), UPDATE_INSTALL_PREPARATION_TIMEOUT_MS);
+  updateInstallPreparation = { promise, resolve: resolvePreparation, senderId, timer, finalizing: false };
   mainWindow.webContents.send("app-update:prepare-install");
   return promise;
 }
@@ -187,6 +211,60 @@ function registerStorageHandlers() {
  * @returns {Promise<{ canceled: boolean, filePath?: string }>}
  */
   ipcMain.handle("task-data:write", (_event, data) => writeTaskData(app.getPath("userData"), data));
+  ipcMain.handle("data-backup:export", async (event) => {
+    const parent = BrowserWindow.fromWebContents(event.sender);
+    const stamp = new Date().toISOString().slice(0, 19).replaceAll(":", "-");
+    const selection = await dialog.showSaveDialog(parent, {
+      title: "导出 Loop 完整数据备份",
+      defaultPath: path.join(app.getPath("documents"), `Loop-backup-${stamp}.loopbackup`),
+      filters: [{ name: "Loop 完整备份", extensions: ["loopbackup"] }],
+      properties: ["createDirectory", "showOverwriteConfirmation"],
+    });
+    if (selection.canceled || !selection.filePath) return { canceled: true };
+    const result = await exportPortableBackup({
+      userDataPath: app.getPath("userData"),
+      destinationPath: selection.filePath,
+      appVersion: app.getVersion(),
+    });
+    return { canceled: false, ...result };
+  });
+  ipcMain.handle("data-backup:import", async (event, value) => {
+    const parent = BrowserWindow.fromWebContents(event.sender);
+    const selectionType = value?.selectionType === "directory" ? "directory" : "file";
+    const selection = await dialog.showOpenDialog(parent, selectionType === "directory" ? {
+      title: "选择 Loop 或 Personal Task Track 备份目录",
+      properties: ["openDirectory"],
+    } : {
+      title: "选择 Loop 完整备份文件",
+      properties: ["openFile"],
+      filters: [{ name: "Loop 完整备份", extensions: ["loopbackup"] }],
+    });
+    const selectedPath = selection.filePaths?.[0];
+    if (selection.canceled || !selectedPath) return { canceled: true };
+    const confirmation = await dialog.showMessageBox(parent, {
+      type: "warning",
+      buttons: ["取消", "备份当前数据并导入"],
+      defaultId: 0,
+      cancelId: 0,
+      title: "确认恢复数据",
+      message: "导入会将当前工作区替换为所选备份。",
+      detail: "Loop 会先完整备份并校验当前数据；导入失败时会自动回滚。成功后应用将重新启动。",
+      noLink: true,
+    });
+    if (confirmation.response !== 1) return { canceled: true };
+    const result = await importBackup({
+      selectedPath,
+      selectionType,
+      appDataPath: app.getPath("appData"),
+      userDataPath: app.getPath("userData"),
+      installDirectory: process.platform === "win32" ? path.dirname(process.execPath) : "",
+    });
+    setTimeout(() => {
+      app.relaunch();
+      app.exit(0);
+    }, 350).unref?.();
+    return { canceled: false, restartScheduled: true, ...result };
+  });
   ipcMain.handle("knowledge-document:save", async (event, payload) => {
     const parent = BrowserWindow.fromWebContents(event.sender);
     const result = await saveKnowledgeDocument(payload, { dialog, parent, platform: process.platform });
@@ -219,7 +297,7 @@ function registerStorageHandlers() {
   });
   ipcMain.on("app-update:prepare-install-complete", (event, success) => {
     if (event.sender.id !== updateInstallPreparation?.senderId) return;
-    finishUpdateInstallPreparation(success === true);
+    void finishUpdateInstallPreparation(success === true);
   });
   ipcMain.handle("app:confirm-destructive", async (event, value) => {
     const message = String(value?.message || "确定删除所选内容？").slice(0, 500);
@@ -493,6 +571,21 @@ function createMenu() {
 
 app.whenReady().then(async () => {
   if (!hasSingleInstanceLock) return;
+  try {
+    await recoverLegacyUserData({
+      appDataPath: app.getPath("appData"),
+      canonicalUserDataPath: app.getPath("userData"),
+      recoverRicherLegacy: process.argv.includes("--updated"),
+    });
+  } catch (error) {
+    console.error("Unable to complete legacy task-data recovery.", error?.code || error);
+    dialog.showErrorBox(
+      "Loop 数据保护已启动",
+      "检测到旧版任务数据，但安全恢复校验未通过。为避免覆盖原数据，Loop 已停止启动；原始数据和备份均未删除。",
+    );
+    app.quit();
+    return;
+  }
   if (isMac) {
     app.setActivationPolicy("regular");
     await app.dock.show();
@@ -522,6 +615,7 @@ app.whenReady().then(async () => {
     ipcMain,
     autoUpdater,
     macUpdatesEnabled: false,
+    installDirectory: process.platform === "win32" ? path.dirname(process.execPath) : "",
     prepareInstall: requestUpdateInstallPreparation,
   });
   autoUpdater.on("error", () => {

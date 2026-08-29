@@ -1,0 +1,113 @@
+!undef APP_FILENAME
+!define APP_FILENAME "Personal Task Track"
+
+!ifndef BUILD_UNINSTALLER
+Var loopUpgradeBackupRoot
+Var loopUpgradeBackupCreated
+
+!macro verifyLoopUpgradeFile SOURCE_FILE DEST_FILE
+  ${IfNot} ${FileExists} "${DEST_FILE}"
+    MessageBox MB_OK|MB_ICONSTOP "Loop 未能校验升级数据备份。安装已停止，原软件和数据不会被删除。"
+    Abort
+  ${EndIf}
+  FileOpen $R7 "${SOURCE_FILE}" r
+  FileSeek $R7 0 END $R8
+  FileClose $R7
+  FileOpen $R7 "${DEST_FILE}" r
+  FileSeek $R7 0 END $R9
+  FileClose $R7
+  ${If} $R8 != $R9
+    MessageBox MB_OK|MB_ICONSTOP "Loop 检测到升级备份大小不一致。安装已停止，原软件和数据不会被删除。"
+    Abort
+  ${EndIf}
+!macroend
+
+!macro copyLoopUpgradeFile SOURCE_DIR DEST_DIR FILE_NAME
+  ${If} ${FileExists} "${SOURCE_DIR}\${FILE_NAME}"
+    ClearErrors
+    CopyFiles /SILENT "${SOURCE_DIR}\${FILE_NAME}" "${DEST_DIR}"
+    ${If} ${Errors}
+      MessageBox MB_OK|MB_ICONSTOP "Loop 无法在升级前备份 ${FILE_NAME}。安装已停止，原软件和数据不会被删除。"
+      Abort
+    ${EndIf}
+    !insertmacro verifyLoopUpgradeFile "${SOURCE_DIR}\${FILE_NAME}" "${DEST_DIR}\${FILE_NAME}"
+    StrCpy $loopUpgradeBackupCreated "1"
+  ${EndIf}
+!macroend
+
+!macro backupLoopUpgradeDirectory SOURCE_DIR LABEL
+  CreateDirectory "$loopUpgradeBackupRoot\${LABEL}"
+  !insertmacro copyLoopUpgradeFile "${SOURCE_DIR}" "$loopUpgradeBackupRoot\${LABEL}" "task-data.json"
+  !insertmacro copyLoopUpgradeFile "${SOURCE_DIR}" "$loopUpgradeBackupRoot\${LABEL}" "knowledge-note-recovery.json"
+  !insertmacro copyLoopUpgradeFile "${SOURCE_DIR}" "$loopUpgradeBackupRoot\${LABEL}" "deadline-reminders.json"
+  !insertmacro copyLoopUpgradeFile "${SOURCE_DIR}" "$loopUpgradeBackupRoot\${LABEL}" "today-widget-preferences.json"
+  !insertmacro copyLoopUpgradeFile "${SOURCE_DIR}" "$loopUpgradeBackupRoot\${LABEL}" "update-preferences.json"
+
+  ${If} ${FileExists} "${SOURCE_DIR}\knowledge-note-recovery\*.*"
+    CreateDirectory "$loopUpgradeBackupRoot\${LABEL}\knowledge-note-recovery"
+    ClearErrors
+    CopyFiles /SILENT "${SOURCE_DIR}\knowledge-note-recovery\*.*" "$loopUpgradeBackupRoot\${LABEL}\knowledge-note-recovery"
+    ${If} ${Errors}
+      MessageBox MB_OK|MB_ICONSTOP "Loop 无法在升级前备份节点详情恢复附件。安装已停止，原软件和数据不会被删除。"
+      Abort
+    ${EndIf}
+    StrCpy $loopUpgradeBackupCreated "1"
+  ${EndIf}
+
+  ${If} ${FileExists} "${SOURCE_DIR}\task-data.corrupt-*.json"
+    ClearErrors
+    CopyFiles /SILENT "${SOURCE_DIR}\task-data.corrupt-*.json" "$loopUpgradeBackupRoot\${LABEL}"
+    ${If} ${Errors}
+      MessageBox MB_OK|MB_ICONSTOP "Loop 无法保留旧任务数据备份。安装已停止，原软件和数据不会被删除。"
+      Abort
+    ${EndIf}
+    StrCpy $loopUpgradeBackupCreated "1"
+  ${EndIf}
+!macroend
+
+!macro customInit
+  StrCpy $loopUpgradeBackupRoot "$APPDATA\Personal Task Track Upgrade Backups\installer-pre-${VERSION}"
+  StrCpy $loopUpgradeBackupCreated "0"
+  CreateDirectory "$loopUpgradeBackupRoot"
+
+  !insertmacro backupLoopUpgradeDirectory "$APPDATA\Personal Task Track" "Personal Task Track"
+  !insertmacro backupLoopUpgradeDirectory "$APPDATA\personal-task-track" "personal-task-track"
+  !insertmacro backupLoopUpgradeDirectory "$APPDATA\PersonalTaskTrack" "PersonalTaskTrack"
+  !insertmacro backupLoopUpgradeDirectory "$APPDATA\Loop" "Loop"
+
+  ${If} ${FileExists} "$INSTDIR\Loop Data Backups\*.*"
+    CreateDirectory "$loopUpgradeBackupRoot\previous-install-backups"
+    ClearErrors
+    CopyFiles /SILENT "$INSTDIR\Loop Data Backups\*.*" "$loopUpgradeBackupRoot\previous-install-backups"
+    ${If} ${Errors}
+      MessageBox MB_OK|MB_ICONSTOP "Loop 无法保护现有升级备份。安装已停止，原软件和数据不会被删除。"
+      Abort
+    ${EndIf}
+    StrCpy $loopUpgradeBackupCreated "1"
+  ${EndIf}
+!macroend
+
+!macro customInstall
+  ${If} $loopUpgradeBackupCreated == "1"
+    CreateDirectory "$INSTDIR\Loop Data Backups\installer-pre-${VERSION}"
+    ClearErrors
+    CopyFiles /SILENT "$loopUpgradeBackupRoot\*.*" "$INSTDIR\Loop Data Backups\installer-pre-${VERSION}"
+    ${If} ${Errors}
+      MessageBox MB_OK|MB_ICONSTOP "Loop 已保护原数据，但无法将备份复制到当前安装目录。安装已停止；安全备份仍保留在 AppData 中。"
+      Abort
+    ${EndIf}
+    ${If} ${FileExists} "$loopUpgradeBackupRoot\Personal Task Track\task-data.json"
+      !insertmacro verifyLoopUpgradeFile "$loopUpgradeBackupRoot\Personal Task Track\task-data.json" "$INSTDIR\Loop Data Backups\installer-pre-${VERSION}\Personal Task Track\task-data.json"
+    ${EndIf}
+    ${If} ${FileExists} "$loopUpgradeBackupRoot\personal-task-track\task-data.json"
+      !insertmacro verifyLoopUpgradeFile "$loopUpgradeBackupRoot\personal-task-track\task-data.json" "$INSTDIR\Loop Data Backups\installer-pre-${VERSION}\personal-task-track\task-data.json"
+    ${EndIf}
+    ${If} ${FileExists} "$loopUpgradeBackupRoot\PersonalTaskTrack\task-data.json"
+      !insertmacro verifyLoopUpgradeFile "$loopUpgradeBackupRoot\PersonalTaskTrack\task-data.json" "$INSTDIR\Loop Data Backups\installer-pre-${VERSION}\PersonalTaskTrack\task-data.json"
+    ${EndIf}
+    ${If} ${FileExists} "$loopUpgradeBackupRoot\Loop\task-data.json"
+      !insertmacro verifyLoopUpgradeFile "$loopUpgradeBackupRoot\Loop\task-data.json" "$INSTDIR\Loop Data Backups\installer-pre-${VERSION}\Loop\task-data.json"
+    ${EndIf}
+  ${EndIf}
+!macroend
+!endif

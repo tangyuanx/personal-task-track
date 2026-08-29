@@ -21,6 +21,7 @@ function createUpdateController({
   autoUpdater,
   platform = process.platform,
   macUpdatesEnabled = false,
+  installDirectory = "",
   startupDelayMs = DEFAULT_STARTUP_DELAY_MS,
   intervalMs = DEFAULT_INTERVAL_MS,
   fileSystem = fs,
@@ -62,6 +63,9 @@ function createUpdateController({
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = false;
   autoUpdater.allowPrerelease = state.currentVersion.includes("-");
+  if (platform === "win32" && supported && typeof installDirectory === "string" && installDirectory.trim()) {
+    autoUpdater.installDirectory = installDirectory;
+  }
 
   const preferencesPath = () => path.join(app.getPath("userData"), PREFERENCES_FILE);
 

@@ -8,6 +8,11 @@ contextBridge.exposeInMainWorld("personalTaskTrack", {
     read: () => ipcRenderer.invoke("task-data:read"),
     write: (data) => ipcRenderer.invoke("task-data:write", data),
   },
+  dataBackup: {
+    export: () => ipcRenderer.invoke("data-backup:export"),
+    importFile: () => ipcRenderer.invoke("data-backup:import", { selectionType: "file" }),
+    importDirectory: () => ipcRenderer.invoke("data-backup:import", { selectionType: "directory" }),
+  },
   knowledgeRecovery: {
     read: () => ipcRenderer.invoke("knowledge-recovery:read"),
     write: (record) => ipcRenderer.invoke("knowledge-recovery:write", record),

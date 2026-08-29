@@ -13,6 +13,7 @@ function createHarness({
   prepareInstallResult = true,
   installThrows = false,
   checkError = null,
+  installDirectory = "C:\\Users\\example\\AppData\\Local\\Programs\\Personal Task Track",
 } = {}) {
   const updates = new EventEmitter();
   const handlers = new Map();
@@ -62,6 +63,7 @@ function createHarness({
     autoUpdater: updates,
     platform,
     macUpdatesEnabled,
+    installDirectory,
     prepareInstall: async () => {
       prepareInstallCount += 1;
       return prepareInstallResult;
@@ -102,6 +104,7 @@ test("one explicit Windows upgrade action downloads, prepares, silently installs
   assert.deepEqual(harness.installArgs(), [true, true]);
   assert.equal(harness.updates.autoDownload, false);
   assert.equal(harness.updates.autoInstallOnAppQuit, false);
+  assert.equal(harness.updates.installDirectory, "C:\\Users\\example\\AppData\\Local\\Programs\\Personal Task Track");
   await fs.rm(harness.userData, { recursive: true, force: true });
 });
 
