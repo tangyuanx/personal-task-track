@@ -2993,6 +2993,29 @@ test("group editing preserves the horizontal group viewport across renders", asy
   assert.match(app, /window\.requestAnimationFrame\(\(\) => \{[\s\S]*restoreGroupScroll\(\);[\s\S]*mountMilkdownEditors\(\)/);
 });
 
+test("workbench group selection uses a ReUI-style trigger and option menu", async () => {
+  const [app, styles] = await Promise.all([
+    fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "app.js"), "utf8"),
+    fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "styles.css"), "utf8"),
+  ]);
+  const harness = await rendererHarness();
+  const html = harness.evaluate(`taskGroupSelectTaskId = "group_picker_task"; renderTaskGroupSelect(normalizeTasks([{ id: "group_picker_task", title: "分组选择", groupId: "group_inbox", nodes: [] }])[0])`);
+
+  assert.match(app, /function renderTaskGroupSelect\(task\)/);
+  assert.match(app, /data-action="toggle-task-group-select"/);
+  assert.match(app, /data-action="select-task-group"/);
+  assert.match(html, /task-group-select-trigger/);
+  assert.match(html, /task-group-select-label.*分组/);
+  assert.match(html, /aria-haspopup="listbox"/);
+  assert.match(html, /task-group-select-content/);
+  assert.match(html, /role="option"/);
+  assert.doesNotMatch(html, /<select[\s>]/);
+  assert.match(styles, /\.task-group-select-trigger\s*\{[\s\S]*border:\s*1px solid transparent/);
+  assert.match(styles, /\.task-group-select-trigger:hover,[\s\S]*border-color:/);
+  assert.match(styles, /\.task-group-select-content\s*\{[\s\S]*position:\s*absolute/);
+  assert.match(styles, /\.task-group-select-option\.selected\s*\{/);
+});
+
 test("task repository follows the approved compact ordering layout", async () => {
   const [app, styles] = await Promise.all([
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "app.js"), "utf8"),

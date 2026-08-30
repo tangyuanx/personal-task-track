@@ -274,6 +274,7 @@ let suppressTaskClickUntil = 0;
 let recurrenceScheduleTimer = 0;
 let recurringTodaySignature = "";
 let recurrencePopoverTaskId = "";
+let taskGroupSelectTaskId = "";
 let deadlinePopoverTaskId = "";
 let deadlinePickerDate = "";
 let deadlinePickerMonth = "";
@@ -1559,6 +1560,7 @@ function render() {
   const task = activeTask();
   if (task) state.activeTaskId = task.id;
   if (recurrencePopoverTaskId && recurrencePopoverTaskId !== task?.id) recurrencePopoverTaskId = "";
+  if (taskGroupSelectTaskId && taskGroupSelectTaskId !== task?.id) taskGroupSelectTaskId = "";
   if (deadlinePopoverTaskId && deadlinePopoverTaskId !== task?.id) deadlinePopoverTaskId = "";
   document.querySelector("#root").innerHTML = `
     <main class="ops-app app" style="--sidebar-width:${normalizeSidebarWidth(state.sidebarWidth)}px">
@@ -1918,7 +1920,7 @@ function renderTaskPage(task) {
             <span class="task-context-item task-context-badge priority ${task.priority}" data-slot="badge">${priorityLabels[task.priority]}优先</span>
             <span class="task-context-item task-context-badge status ${task.status === "done" ? "resolved" : "attention"}" data-slot="badge">${task.status === "done" ? "已完成" : "处理中"}</span>
             <span class="task-context-progress">${summary.done}/${summary.total || 0} 节点</span>
-            <label class="task-context-group"><span>分组</span>${selectHtml("groupId", task.groupId, taskGroupOptions(), task.id)}</label>
+            ${renderTaskGroupSelect(task)}
             ${renderTaskDeadlineControl(task)}
             ${renderTaskRecurrenceControls(task)}
           </div>
@@ -2645,6 +2647,33 @@ function tasksInActiveGroup() {
 
 function taskGroupOptions() {
   return Object.fromEntries(sort(state.taskGroups).map((group) => [group.id, group.title]));
+}
+
+function renderTaskGroupSelect(task) {
+  const options = taskGroupOptions();
+  const selectedId = normalizeActiveGroupId(task.groupId, state.taskGroups);
+  const selectedLabel = options[selectedId] || "选择分组";
+  const open = taskGroupSelectTaskId === task.id;
+  const popoverId = `task-group-select-${task.id}`;
+  return `
+    <div class="task-context-group task-group-select ${open ? "is-open" : ""}" data-task-group-select>
+      <button class="task-group-select-trigger" type="button" data-action="toggle-task-group-select" data-task-id="${task.id}" aria-expanded="${open}" aria-haspopup="listbox" aria-controls="${popoverId}">
+        <span class="task-group-select-label">分组</span>
+        <span class="task-group-select-value">${esc(selectedLabel)}</span>
+        <svg class="task-group-select-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4 4 4-4"></path></svg>
+      </button>
+      ${open ? `
+        <div class="task-group-select-content" id="${popoverId}" role="listbox" aria-label="选择任务分组">
+          ${Object.entries(options).map(([groupId, label]) => `
+            <button class="task-group-select-option ${groupId === selectedId ? "selected" : ""}" type="button" role="option" aria-selected="${groupId === selectedId}" data-action="select-task-group" data-task-id="${task.id}" data-group-id="${groupId}">
+              <span>${esc(label)}</span>
+              ${groupId === selectedId ? `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"></path></svg>` : ""}
+            </button>
+          `).join("")}
+        </div>
+      ` : ""}
+    </div>
+  `;
 }
 
 function todayFocusItems() {
@@ -4618,6 +4647,7 @@ function bindTaskRepositoryRows(scope = document) {
   document.querySelectorAll("[data-recurrence-toggle]").forEach((control) => {
     control.addEventListener("click", (event) => {
       event.stopPropagation();
+      taskGroupSelectTaskId = "";
       deadlinePopoverTaskId = "";
       recurrencePopoverTaskId = recurrencePopoverTaskId === event.currentTarget.dataset.taskId ? "" : event.currentTarget.dataset.taskId;
       render();
@@ -4779,6 +4809,7 @@ function bindTaskRepositoryRows(scope = document) {
       const keepReview = event.target.closest(".review-overlay, .review-trigger");
       const keepContextMenu = event.target.closest(".context-menu");
       const keepRecurrence = event.target.closest(".task-recurrence-controls");
+      const keepTaskGroup = event.target.closest(".task-group-select");
       const keepDeadline = event.target.closest(".task-deadline-picker");
 
       if (state.contextMenu && !keepContextMenu) {
@@ -4800,6 +4831,12 @@ function bindTaskRepositoryRows(scope = document) {
         recurrencePopoverTaskId = "";
         document.querySelector(".task-recurrence-popover")?.remove();
         document.querySelector("[data-recurrence-toggle]")?.setAttribute("aria-expanded", "false");
+      }
+
+      if (taskGroupSelectTaskId && !keepTaskGroup) {
+        taskGroupSelectTaskId = "";
+        document.querySelector(".task-group-select-content")?.remove();
+        document.querySelector("[data-action='toggle-task-group-select']")?.setAttribute("aria-expanded", "false");
       }
 
       if (deadlinePopoverTaskId && !keepDeadline) {
@@ -5864,11 +5901,28 @@ async function action(data, event = null) {
   }
   if (data.action === "toggle-theme") state.theme = state.theme === "dark" ? "light" : "dark";
   if (data.action === "close-settings") state.settingsOpen = false;
+  if (data.action === "toggle-task-group-select") {
+    const task = state.tasks.find((item) => item.id === data.taskId);
+    if (task) {
+      taskGroupSelectTaskId = taskGroupSelectTaskId === task.id ? "" : task.id;
+      recurrencePopoverTaskId = "";
+      deadlinePopoverTaskId = "";
+    }
+  }
+  if (data.action === "select-task-group") {
+    const task = state.tasks.find((item) => item.id === data.taskId);
+    const group = state.taskGroups.find((item) => item.id === data.groupId);
+    if (task && group) {
+      edit({ editKey: "groupId", taskId: task.id }, group.id);
+      taskGroupSelectTaskId = "";
+    }
+  }
   if (data.action === "toggle-deadline-picker") {
     const task = state.tasks.find((item) => item.id === data.taskId);
     if (task) {
       const opening = deadlinePopoverTaskId !== task.id;
       deadlinePopoverTaskId = opening ? task.id : "";
+      taskGroupSelectTaskId = "";
       recurrencePopoverTaskId = "";
       if (opening) initializeDeadlinePicker(task);
     }
@@ -7567,13 +7621,14 @@ window.addEventListener("keydown", (event) => {
       syncContextMenuRoot();
       return;
     }
-    if (state.selectedNodeId || state.settingsOpen || state.calendarOpen || state.reviewOpen || state.feedbackOpen || recurrencePopoverTaskId || deadlinePopoverTaskId) {
+    if (state.selectedNodeId || state.settingsOpen || state.calendarOpen || state.reviewOpen || state.feedbackOpen || recurrencePopoverTaskId || taskGroupSelectTaskId || deadlinePopoverTaskId) {
       event.preventDefault();
       exitNodeDetail();
       state.settingsOpen = false;
       state.calendarOpen = false;
       state.reviewOpen = false;
       recurrencePopoverTaskId = "";
+      taskGroupSelectTaskId = "";
       deadlinePopoverTaskId = "";
       closeBugReport();
       render();
