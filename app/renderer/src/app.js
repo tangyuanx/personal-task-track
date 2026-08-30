@@ -274,6 +274,9 @@ let suppressTaskClickUntil = 0;
 let recurrenceScheduleTimer = 0;
 let recurringTodaySignature = "";
 let recurrencePopoverTaskId = "";
+let deadlinePopoverTaskId = "";
+let deadlinePickerDate = "";
+let deadlinePickerMonth = "";
 const milkdownEditors = new Map();
 const nodeNoteDrafts = new Map();
 const nodeNoteSaveTimers = new Map();
@@ -1556,6 +1559,7 @@ function render() {
   const task = activeTask();
   if (task) state.activeTaskId = task.id;
   if (recurrencePopoverTaskId && recurrencePopoverTaskId !== task?.id) recurrencePopoverTaskId = "";
+  if (deadlinePopoverTaskId && deadlinePopoverTaskId !== task?.id) deadlinePopoverTaskId = "";
   document.querySelector("#root").innerHTML = `
     <main class="ops-app app" style="--sidebar-width:${normalizeSidebarWidth(state.sidebarWidth)}px">
       ${renderSidebar()}
@@ -1587,6 +1591,7 @@ function render() {
   publishDeadlineReminderSnapshot();
   window.requestAnimationFrame(() => {
     restoreGroupScroll();
+    restoreDeadlinePickerTimeScroll();
     mountMilkdownEditors();
   });
 }
@@ -2093,33 +2098,126 @@ function renderTaskDeadlineBadge(task, at = new Date()) {
   return `<time class="task-deadline-badge ${status}" datetime="${escAttr(deadline.toISOString())}" title="截止：${escAttr(formatMinuteStamp(deadline))}">${esc(label)}</time>`;
 }
 
+function deadlineTriggerLabel(date) {
+  const todayKey = localDateKey(new Date());
+  const dateKey = localDateKey(date);
+  const dateText = dateKey === todayKey
+    ? "今天"
+    : new Intl.DateTimeFormat("zh-CN", { month: "numeric", day: "numeric" }).format(date);
+  return `${dateText} ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+}
+
+function initializeDeadlinePicker(task) {
+  const deadline = safeDate(task?.deadlineAt);
+  const initial = deadline || new Date();
+  deadlinePickerDate = localDateKey(initial);
+  deadlinePickerMonth = `${deadlinePickerDate.slice(0, 7)}-01`;
+}
+
+function deadlinePickerMonthDate() {
+  return parseDateInput(deadlinePickerMonth) || parseDateInput(deadlinePickerDate) || new Date();
+}
+
+function deadlineTimeValue(value) {
+  const date = safeDate(value);
+  if (!date) return "";
+  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+}
+
+function deadlineTimeSlots(deadline) {
+  const slots = [];
+  for (let hour = 8; hour <= 22; hour += 1) {
+    slots.push(`${String(hour).padStart(2, "0")}:00`);
+    if (hour < 22) slots.push(`${String(hour).padStart(2, "0")}:30`);
+  }
+  const current = deadlineTimeValue(deadline);
+  if (current && localDateKey(deadline) === deadlinePickerDate && !slots.includes(current)) slots.push(current);
+  return slots.sort();
+}
+
+function renderDeadlinePickerDay(date, month) {
+  const dateKey = localDateKey(date);
+  const classes = [
+    "task-deadline-day",
+    date.getMonth() !== month.getMonth() ? "outside" : "",
+    dateKey === localDateKey(new Date()) ? "today" : "",
+    dateKey === deadlinePickerDate ? "selected" : "",
+  ].filter(Boolean).join(" ");
+  return `<button class="${classes}" type="button" data-action="select-deadline-date" data-task-id="${escAttr(deadlinePopoverTaskId)}" data-date="${dateKey}" aria-label="选择 ${dateKey}" aria-pressed="${dateKey === deadlinePickerDate}">${date.getDate()}</button>`;
+}
+
+function renderTaskDeadlinePopover(task) {
+  const month = deadlinePickerMonthDate();
+  const selectedDate = parseDateInput(deadlinePickerDate) || new Date();
+  const deadline = safeDate(task.deadlineAt);
+  const selectedTime = deadline && localDateKey(deadline) === deadlinePickerDate ? deadlineTimeValue(deadline) : "";
+  const timeSlots = deadlineTimeSlots(deadline);
+  return `
+    <section class="task-deadline-popover" id="task-deadline-popover-${task.id}" role="dialog" aria-label="选择任务截止时间">
+      <div class="task-deadline-calendar-pane">
+        <header class="task-deadline-month-head">
+          <strong>${esc(calendarMonthTitle(month))}</strong>
+          <div>
+            <button type="button" data-action="shift-deadline-picker-month" data-direction="-1" aria-label="上个月">${briefFieldIcon("chevron-left", "task-deadline-nav-icon")}</button>
+            <button type="button" data-action="shift-deadline-picker-month" data-direction="1" aria-label="下个月">${briefFieldIcon("chevron-right", "task-deadline-nav-icon")}</button>
+          </div>
+        </header>
+        <div class="task-deadline-weekdays" aria-hidden="true">${["一", "二", "三", "四", "五", "六", "日"].map((day) => `<span>${day}</span>`).join("")}</div>
+        <div class="task-deadline-grid">${calendarGridDates(month).map((date) => renderDeadlinePickerDay(date, month)).join("")}</div>
+        <footer class="task-deadline-calendar-foot">
+          <button type="button" data-action="deadline-picker-today">今天</button>
+          ${deadline ? `<button type="button" data-action="clear-task-deadline" data-task-id="${task.id}">清除</button>` : ""}
+        </footer>
+      </div>
+      <div class="task-deadline-time-pane">
+        <header>
+          <span>选择时间</span>
+          <strong>${esc(new Intl.DateTimeFormat("zh-CN", { month: "long", day: "numeric", weekday: "short" }).format(selectedDate))}</strong>
+        </header>
+        <div class="task-deadline-time-list" role="listbox" aria-label="截止时间段">
+          ${timeSlots.map((time) => `<button class="task-deadline-time ${selectedTime === time ? "selected" : ""}" type="button" role="option" aria-selected="${selectedTime === time}" data-action="apply-deadline-time" data-task-id="${task.id}" data-time="${time}">${time}</button>`).join("")}
+        </div>
+      </div>
+    </section>
+  `;
+}
+
+function applyTaskDeadlineTime(taskId, time) {
+  const task = state.tasks.find((item) => item.id === taskId);
+  const date = parseDateInput(deadlinePickerDate);
+  const match = /^(\d{2}):(\d{2})$/.exec(time || "");
+  if (!task || !date || !match) return;
+  date.setHours(Number(match[1]), Number(match[2]), 0, 0);
+  task.deadlineAt = date.toISOString();
+  task.updatedAt = now();
+  save();
+}
+
+function restoreDeadlinePickerTimeScroll() {
+  const list = document.querySelector(".task-deadline-time-list");
+  const selected = list?.querySelector(".task-deadline-time.selected");
+  if (!list || !selected) return;
+  list.scrollTop = selected.offsetTop - (list.clientHeight - selected.clientHeight) / 2;
+}
+
 function renderTaskDeadlineControl(task) {
   const deadline = safeDate(task.deadlineAt);
   const status = taskDeadlineStatus(task);
+  const open = deadlinePopoverTaskId === task.id;
   const suggestion = task.priority === "high" && !deadline
     ? `<span class="task-deadline-suggestion">高优任务建议设置截止时间</span>`
     : "";
   return `
-    <label class="task-deadline-control ${status}" title="截止时间可选，不会使用任务创建时间自动推断">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M16 3v4M8 3v4M3 10h18"></path></svg>
-      <span>截止</span>
-      <input type="datetime-local" data-deadline-field data-task-id="${task.id}" value="${escAttr(deadlineInputValue(task.deadlineAt))}" aria-label="任务截止时间（可选）" />
-    </label>
+    <div class="task-deadline-picker ${status} ${deadline ? "has-value" : "is-empty"}">
+      <button class="task-deadline-trigger" type="button" data-action="toggle-deadline-picker" data-task-id="${task.id}" aria-expanded="${open}" aria-controls="task-deadline-popover-${task.id}" title="截止时间可选，不会使用任务创建时间自动推断">
+        <svg class="task-deadline-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M16 3v4M8 3v4M3 10h18"></path></svg>
+        <span>${esc(deadline ? deadlineTriggerLabel(deadline) : "设置截止时间")}</span>
+        <svg class="task-deadline-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4 4 4-4"></path></svg>
+      </button>
+      ${open ? renderTaskDeadlinePopover(task) : ""}
+    </div>
     ${suggestion}
   `;
-}
-
-function deadlineInputValue(value) {
-  const date = safeDate(value);
-  if (!date) return "";
-  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
-  return local.toISOString().slice(0, 16);
-}
-
-function normalizeDeadlineInput(value) {
-  if (!String(value || "").trim()) return "";
-  const date = new Date(value);
-  return Number.isFinite(date.getTime()) ? date.toISOString() : "";
 }
 
 function renderTaskRecurrenceControls(task) {
@@ -4517,21 +4615,10 @@ function bindTaskRepositoryRows(scope = document) {
     });
   }
 
-  document.querySelectorAll("[data-deadline-field]").forEach((control) => {
-    control.addEventListener("click", (event) => event.stopPropagation());
-    control.addEventListener("change", (event) => {
-      const task = state.tasks.find((item) => item.id === event.currentTarget.dataset.taskId);
-      if (!task) return;
-      task.deadlineAt = normalizeDeadlineInput(event.currentTarget.value);
-      task.updatedAt = now();
-      save();
-      render();
-    });
-  });
-
   document.querySelectorAll("[data-recurrence-toggle]").forEach((control) => {
     control.addEventListener("click", (event) => {
       event.stopPropagation();
+      deadlinePopoverTaskId = "";
       recurrencePopoverTaskId = recurrencePopoverTaskId === event.currentTarget.dataset.taskId ? "" : event.currentTarget.dataset.taskId;
       render();
     });
@@ -4692,6 +4779,7 @@ function bindTaskRepositoryRows(scope = document) {
       const keepReview = event.target.closest(".review-overlay, .review-trigger");
       const keepContextMenu = event.target.closest(".context-menu");
       const keepRecurrence = event.target.closest(".task-recurrence-controls");
+      const keepDeadline = event.target.closest(".task-deadline-picker");
 
       if (state.contextMenu && !keepContextMenu) {
         state.contextMenu = null;
@@ -4712,6 +4800,12 @@ function bindTaskRepositoryRows(scope = document) {
         recurrencePopoverTaskId = "";
         document.querySelector(".task-recurrence-popover")?.remove();
         document.querySelector("[data-recurrence-toggle]")?.setAttribute("aria-expanded", "false");
+      }
+
+      if (deadlinePopoverTaskId && !keepDeadline) {
+        deadlinePopoverTaskId = "";
+        document.querySelector(".task-deadline-popover")?.remove();
+        document.querySelector("[data-action='toggle-deadline-picker']")?.setAttribute("aria-expanded", "false");
       }
 
       if (state.selectedNodeId && !keepNodeDetail && exitNodeDetail()) needsRender = true;
@@ -5770,6 +5864,41 @@ async function action(data, event = null) {
   }
   if (data.action === "toggle-theme") state.theme = state.theme === "dark" ? "light" : "dark";
   if (data.action === "close-settings") state.settingsOpen = false;
+  if (data.action === "toggle-deadline-picker") {
+    const task = state.tasks.find((item) => item.id === data.taskId);
+    if (task) {
+      const opening = deadlinePopoverTaskId !== task.id;
+      deadlinePopoverTaskId = opening ? task.id : "";
+      recurrencePopoverTaskId = "";
+      if (opening) initializeDeadlinePicker(task);
+    }
+  }
+  if (data.action === "select-deadline-date") {
+    const selected = normalizeTaskDateFilter(data.date);
+    if (selected) {
+      deadlinePickerDate = selected;
+      deadlinePickerMonth = `${selected.slice(0, 7)}-01`;
+    }
+  }
+  if (data.action === "shift-deadline-picker-month") {
+    const month = deadlinePickerMonthDate();
+    month.setMonth(month.getMonth() + Number(data.direction || 0));
+    deadlinePickerMonth = localDateKey(new Date(month.getFullYear(), month.getMonth(), 1));
+  }
+  if (data.action === "deadline-picker-today") {
+    deadlinePickerDate = localDateKey(new Date());
+    deadlinePickerMonth = `${deadlinePickerDate.slice(0, 7)}-01`;
+  }
+  if (data.action === "apply-deadline-time") applyTaskDeadlineTime(data.taskId, data.time);
+  if (data.action === "clear-task-deadline") {
+    const task = state.tasks.find((item) => item.id === data.taskId);
+    if (task) {
+      task.deadlineAt = "";
+      task.updatedAt = now();
+      deadlinePopoverTaskId = "";
+      save();
+    }
+  }
   if (data.action === "open-feedback") {
     state.settingsOpen = false;
     state.calendarOpen = false;
@@ -7438,13 +7567,14 @@ window.addEventListener("keydown", (event) => {
       syncContextMenuRoot();
       return;
     }
-    if (state.selectedNodeId || state.settingsOpen || state.calendarOpen || state.reviewOpen || state.feedbackOpen || recurrencePopoverTaskId) {
+    if (state.selectedNodeId || state.settingsOpen || state.calendarOpen || state.reviewOpen || state.feedbackOpen || recurrencePopoverTaskId || deadlinePopoverTaskId) {
       event.preventDefault();
       exitNodeDetail();
       state.settingsOpen = false;
       state.calendarOpen = false;
       state.reviewOpen = false;
       recurrencePopoverTaskId = "";
+      deadlinePopoverTaskId = "";
       closeBugReport();
       render();
       return;

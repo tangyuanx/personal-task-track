@@ -3472,7 +3472,7 @@ test("deadline ranges compose with status and order only deadline-scoped results
   assert.deepEqual(result.exact, ["tomorrow-early", "tomorrow-late"]);
 });
 
-test("calendar owns the footer entry, exposes review in its upper-right, and edits an optional deadline", async () => {
+test("calendar owns the footer entry, exposes review, and uses the ReUI-style deadline date and time picker", async () => {
   const [app, styles] = await Promise.all([
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "app.js"), "utf8"),
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "styles.css"), "utf8"),
@@ -3482,10 +3482,54 @@ test("calendar owns the footer entry, exposes review in its upper-right, and edi
   assert.equal((app.match(/data-action="toggle-calendar"/g) || []).length, 1);
   assert.match(app, /function renderCalendarPanel\(\)/);
   assert.match(app, /class="calendar-head-actions"[\s\S]*data-action="open-review-from-calendar"[\s\S]*任务回顾/);
-  assert.match(app, /data-deadline-field/);
+  assert.match(app, /function renderTaskDeadlinePopover\(task\)/);
+  assert.match(app, /data-action="toggle-deadline-picker"/);
+  assert.match(app, /data-action="select-deadline-date"/);
+  assert.match(app, /data-action="apply-deadline-time"/);
+  assert.match(app, /data-action="clear-task-deadline"/);
+  assert.doesNotMatch(app, /data-deadline-field|type="datetime-local"/);
   assert.match(app, /高优任务建议设置截止时间/);
   assert.match(styles, /\.calendar-grid/);
-  assert.match(styles, /\.task-deadline-control/);
+  assert.match(styles, /\.task-deadline-popover/);
+  assert.match(styles, /\.task-deadline-calendar-pane/);
+  assert.match(styles, /\.task-deadline-time-list/);
+});
+
+test("deadline picker follows the documented date-first and time-save flow", async () => {
+  const harness = await rendererHarness();
+  const result = harness.json(`(() => {
+    const localDeadline = new Date(2026, 7, 25, 10, 15, 0, 0);
+    const task = normalizeTasks([{ id: "deadline_picker", title: "截止日期任务", deadlineAt: localDeadline.toISOString(), nodes: [] }])[0];
+    state.tasks = [task];
+    deadlinePopoverTaskId = task.id;
+    initializeDeadlinePicker(task);
+    const originalDate = deadlinePickerDate;
+    const originalSlots = deadlineTimeSlots(new Date(task.deadlineAt));
+    deadlinePickerDate = "2026-08-26";
+    const changedDateSlots = deadlineTimeSlots(new Date(task.deadlineAt));
+    applyTaskDeadlineTime(task.id, "18:30");
+    const saved = new Date(task.deadlineAt);
+    return {
+      originalDate,
+      hasExtraSlot: originalSlots.includes("10:15"),
+      changedDateHasExtraSlot: changedDateSlots.includes("10:15"),
+      savedDate: localDateKey(saved),
+      savedTime: deadlineTimeValue(saved),
+      savedIso: task.deadlineAt,
+      popover: renderTaskDeadlinePopover(task),
+    };
+  })()`);
+
+  assert.equal(result.originalDate, "2026-08-25");
+  assert.equal(result.hasExtraSlot, true);
+  assert.equal(result.changedDateHasExtraSlot, false);
+  assert.equal(result.savedDate, "2026-08-26");
+  assert.equal(result.savedTime, "18:30");
+  assert.match(result.savedIso, /T/);
+  assert.match(result.popover, /task-deadline-calendar-foot/);
+  assert.match(result.popover, /data-action="deadline-picker-today"/);
+  assert.match(result.popover, /role="listbox"/);
+  assert.match(result.popover, /role="option"/);
 });
 
 test("recurring tasks normalize, become due at local time, and reactivate for a new occurrence", async () => {
