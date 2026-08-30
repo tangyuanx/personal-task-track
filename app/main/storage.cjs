@@ -21,6 +21,7 @@ const DATA_VERSION = 1;
 const KNOWLEDGE_MIGRATION_VERSION = 1;
 const DEFAULT_GROUP = { id: "group_inbox", title: "默认", order: 1 };
 const ALL_TASKS_GROUP_ID = "group_all";
+const UNGROUPED_TASKS_GROUP_ID = "group_ungrouped";
 const TASK_STATUSES = new Set(["active", "done"]);
 const NODE_STATUSES = new Set(["todo", "done", "blocked", "later"]);
 const PRIORITIES = new Set(["high", "medium", "low"]);
@@ -112,9 +113,9 @@ function normalizeTaskData(data) {
     knowledgeSchemaVersion: KNOWLEDGE_MIGRATION_VERSION,
     tasks,
     taskGroups,
-    activeGroupId: safeData.activeGroupId === ALL_TASKS_GROUP_ID || taskGroups.some((group) => group.id === safeData.activeGroupId)
+    activeGroupId: safeData.activeGroupId === ALL_TASKS_GROUP_ID || safeData.activeGroupId === UNGROUPED_TASKS_GROUP_ID || taskGroups.some((group) => group.id === safeData.activeGroupId)
       ? safeData.activeGroupId
-      : taskGroups[0]?.id || DEFAULT_GROUP.id,
+      : taskGroups[0]?.id || UNGROUPED_TASKS_GROUP_ID,
     flowWidths: normalizeFlowWidths(safeData.flowWidths),
     sidebarWidth: clampNumber(safeData.sidebarWidth, 390, 370, 560),
     detailHeight: clampNumber(safeData.detailHeight, 58, 50, 82),
@@ -172,7 +173,7 @@ function normalizeTasks(tasks) {
         ...task,
         id: taskId,
         order: normalizeOrder(task.order, index + 1),
-        groupId: normalizeIdentifier(task.groupId) || DEFAULT_GROUP.id,
+        groupId: Object.hasOwn(task, "groupId") ? normalizeIdentifier(task.groupId) : DEFAULT_GROUP.id,
         title: normalizeText(task.title),
         knowledgeNote: knowledgeDocument.normalizeKnowledgeNote(task.knowledgeNote, {
           taskId,
@@ -242,14 +243,14 @@ function normalizeTaskGroups(groups, tasks) {
     })
     .filter(Boolean);
 
-  if (!seen.has(DEFAULT_GROUP.id)) {
-    normalized.unshift({ ...DEFAULT_GROUP });
-    seen.add(DEFAULT_GROUP.id);
-  }
   tasks.forEach((task) => {
-    if (!seen.has(task.groupId)) {
+    if (task.groupId && !seen.has(task.groupId)) {
       seen.add(task.groupId);
-      normalized.push({ id: task.groupId, title: "未命名分组", order: normalized.length + 1 });
+      normalized.push({
+        id: task.groupId,
+        title: task.groupId === DEFAULT_GROUP.id ? DEFAULT_GROUP.title : "未命名分组",
+        order: normalized.length + 1,
+      });
     }
   });
   return normalized

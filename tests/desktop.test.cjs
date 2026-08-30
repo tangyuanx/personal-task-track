@@ -2980,7 +2980,7 @@ test("task repository renders priority without an update timestamp", async () =>
   assert.match(app, /class="task-priority-control \$\{task\.priority\}"/);
   assert.doesNotMatch(app, /formatRepositoryStamp/);
   assert.doesNotMatch(app, /<time datetime="\$\{escAttr\(task\.updatedAt\)\}">/);
-  assert.match(app, /class="repository-add-task" type="button" data-action="add-task"/);
+  assert.match(app, /class="add-task-floating" type="button" data-action="add-task"/);
   assert.match(app, /aria-label="新增任务"/);
 });
 
@@ -3249,6 +3249,94 @@ test("the fixed all-tasks group is aggregate-only and new tasks still receive a 
   assert.match(result.tabs, /sheet-tab-all active/);
 });
 
+test("repository groups render only record scope and personal groups with management actions", async () => {
+  const harness = await rendererHarness();
+  const result = harness.evaluate(`(() => {
+    state.taskGroups = [
+      { id: "group_inbox", title: "默认", order: 1 },
+      { id: "group_work", title: "工作", order: 2 }
+    ];
+    state.activeGroupId = "group_all";
+    state.editingGroupId = "";
+    repositoryGroupQuery = "";
+    const options = renderRepositoryGroupOptions();
+    const scope = renderRepositoryScopeBar();
+    state.contextMenu = { kind: "group", groupId: "group_work", x: 10, y: 20 };
+    const menu = renderContextMenu();
+    startRenameGroup("group_work");
+    const editing = renderRepositoryGroupOptions();
+    return { options, scope, menu, editing, open: repositoryGroupPickerOpen };
+  })()`);
+
+  assert.match(result.options, /repository-group-system[\s\S]*全部记录[\s\S]*未分组/);
+  assert.match(result.options, /repository-group-divider/);
+  assert.match(result.options, /repository-group-personal[\s\S]*个人分组[\s\S]*工作/);
+  assert.doesNotMatch(result.options, />最近</);
+  assert.doesNotMatch(result.options, />全部分组</);
+  assert.doesNotMatch(result.scope, /repository-group-icon/);
+  assert.match(result.menu, /重命名分组/);
+  assert.match(result.menu, /删除分组，任务移至未分组/);
+  assert.match(result.menu, /删除分组及其中任务/);
+  assert.match(result.editing, /data-group-title="group_work"/);
+  assert.equal(result.open, true);
+});
+
+test("quick captures and preserved group deletions remain truly ungrouped across disk normalization", async () => {
+  const disk = normalizeTaskData({
+    activeGroupId: "group_ungrouped",
+    taskGroups: [{ id: "group_inbox", title: "默认", order: 1 }],
+    tasks: [{ id: "capture_disk", title: "速记", groupId: "", captureSource: "today-widget" }],
+  });
+  assert.equal(disk.activeGroupId, "group_ungrouped");
+  assert.equal(disk.tasks[0].groupId, "");
+  assert.deepEqual(disk.taskGroups.map((group) => group.id), ["group_inbox"]);
+  const withoutPersonalGroups = normalizeTaskData({
+    activeGroupId: "group_ungrouped",
+    taskGroups: [],
+    tasks: [{ id: "ungrouped_only", title: "未分组任务", groupId: "" }],
+  });
+  assert.equal(withoutPersonalGroups.activeGroupId, "group_ungrouped");
+  assert.deepEqual(withoutPersonalGroups.taskGroups, []);
+
+  const harness = await rendererHarness();
+  const result = JSON.parse(JSON.stringify(await harness.evaluate(`(async () => {
+    render = () => {};
+    save = () => {};
+    confirmDestructiveAction = async () => true;
+    state.taskGroups = [
+      { id: "group_inbox", title: "默认", order: 1 },
+      { id: "group_keep", title: "保留", order: 2 },
+      { id: "group_delete", title: "删除", order: 3 }
+    ];
+    state.tasks = normalizeTasks([
+      { id: "keep_task", title: "保留任务", groupId: "group_keep" },
+      { id: "delete_task", title: "删除任务", groupId: "group_delete" }
+    ]);
+    state.activeGroupId = "group_all";
+    const capture = createQuickCapture("新速记");
+    await deleteGroup("group_keep", "ungroup");
+    await deleteGroup("group_delete", "delete");
+    await deleteGroup("group_inbox", "ungroup");
+    state.activeGroupId = "group_ungrouped";
+    return {
+      captureId: capture.id,
+      captureGroupId: capture.groupId,
+      taskIds: state.tasks.map((task) => task.id),
+      ungroupedIds: tasksInActiveGroup().map((task) => task.id),
+      keepGroupId: state.tasks.find((task) => task.id === "keep_task")?.groupId,
+      groupIds: state.taskGroups.map((group) => group.id)
+    };
+  })()`)));
+
+  assert.equal(result.captureGroupId, "");
+  assert.deepEqual(result.taskIds.sort(), ["keep_task", result.captureId].sort());
+  assert.equal(result.keepGroupId, "");
+  assert.ok(result.ungroupedIds.includes("keep_task"));
+  assert.ok(result.ungroupedIds.some((id) => id !== "keep_task"));
+  assert.ok(!result.taskIds.includes("delete_task"));
+  assert.deepEqual(result.groupIds, []);
+});
+
 test("repository filters remain compact, aligned, and keep the add control visible", async () => {
   const [harness, styles, app] = await Promise.all([
     rendererHarness(),
@@ -3267,8 +3355,12 @@ test("repository filters remain compact, aligned, and keep the add control visib
     return { light: collapsed, expanded, dark };
   })()`);
 
-  assert.match(sidebars.light, /<span>类型 ·<\/span>/);
-  assert.match(sidebars.light, /class="repository-add-task"/);
+  assert.match(sidebars.light, /class="type-filter-button is-checked"[^>]*data-type="task"/);
+  assert.match(sidebars.light, /class="type-filter-button is-checked"[^>]*data-type="note"/);
+  assert.doesNotMatch(sidebars.light, /全部类型/);
+  assert.match(sidebars.light, /completion-segmented task-status-filters/);
+  assert.match(sidebars.light, /class="repository-fixed-header"[\s\S]*class="repository-scroll-area" data-task-repository-scroll/);
+  assert.match(sidebars.light, /class="add-task-floating"/);
   assert.match(sidebars.light, /class="theme-toggle theme-switch[^"]*"/);
   assert.match(sidebars.light, /role="switch"/);
   assert.match(sidebars.light, /aria-checked="false"/);
@@ -3287,7 +3379,7 @@ test("repository filters remain compact, aligned, and keep the add control visib
   assert.match(styles, /\.today-panel\.today-focus\s*\{\s*flex:\s*0 0 auto;/);
   assert.match(styles, /\.task-repository-toolbar\s*\{[\s\S]*gap:\s*8px;/);
   assert.match(styles, /\.task-priority-filter select\s*\{[\s\S]*min-width:\s*47px;/);
-  assert.match(styles, /\.repository-add-task\s*\{[\s\S]*flex:\s*0 0 28px;/);
+  assert.match(styles, /\.add-task-floating\s*\{[\s\S]*position:\s*absolute;/);
   assert.match(styles, /\.theme-toggle\.theme-switch\s*\{[\s\S]*border-radius:\s*999px;/);
   assert.match(styles, /\.theme-toggle\.theme-switch\[aria-checked="true"\] \.theme-switch-thumb\s*\{[\s\S]*transform:\s*translateX\(16px\);/);
   assert.match(styles, /\.search\.search-box\.gooey-search\s*\{[\s\S]*--gooey-search-collapsed:\s*88px;/);
@@ -3297,8 +3389,14 @@ test("repository filters remain compact, aligned, and keep the add control visib
   assert.match(styles, /background:\s*transparent;\n  border:\s*1px solid var\(--gooey-search-border\);\n  box-shadow:\s*none;/);
   assert.match(styles, /\.gooey-search\.is-open \.gooey-search-trigger\s*\{[\s\S]*width:\s*var\(--gooey-search-bubble\);/);
   assert.match(styles, /\.gooey-search\.is-open \.gooey-search-field\s*\{[\s\S]*transform:\s*scaleX\(1\);/);
+  assert.match(styles, /\.task-list\.task-repository\s*\{[\s\S]*overflow:\s*hidden;/);
+  assert.match(styles, /\.repository-scroll-area\s*\{[\s\S]*overflow-y:\s*auto;/);
+  assert.match(styles, /\.repository-fixed-header\s*\{[\s\S]*flex:\s*0 0 auto;/);
   assert.match(styles, /@media \(prefers-reduced-motion: reduce\)/);
   assert.match(app, /function bindGooeySearch\(\)/);
+  assert.match(app, /function isEditableTarget\(target\)/);
+  assert.match(app, /event\.key !== "Escape" && isEditableTarget\(event\.target\)/);
+  assert.match(app, /if \(event\.isComposing\) return;/);
   assert.match(app, /event\.key !== "Escape"/);
   assert.match(app, /state\.searchOpen = true;[\s\S]*state\.focusSearch = true;/);
 });

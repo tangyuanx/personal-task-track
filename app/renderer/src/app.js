@@ -79,10 +79,10 @@ const captureSourceFilterLabels = {
 };
 
 const repositoryPriorityFilterLabels = {
-  all: "all",
-  high: "high",
-  medium: "medium",
-  low: "low",
+  all: "全部",
+  high: "高",
+  medium: "中",
+  low: "低",
 };
 
 const repositoryPriorityLabels = {
@@ -145,6 +145,7 @@ const flowWidthLimits = {
 
 const defaultTaskGroup = { id: "group_inbox", title: "默认", order: 1 };
 const ALL_TASKS_GROUP_ID = "group_all";
+const UNGROUPED_TASKS_GROUP_ID = "group_ungrouped";
 const defaultSidebarWidth = 390;
 const sidebarWidthLimits = [370, 560];
 const defaultDetailHeight = 58;
@@ -204,13 +205,13 @@ let state = {
 // ============================================================
   tasks: [],
   taskGroups: [{ ...defaultTaskGroup }],
-  activeGroupId: defaultTaskGroup.id,
+  activeGroupId: ALL_TASKS_GROUP_ID,
   editingGroupId: "",
   activeTaskId: "",
   selectedNodeId: "",
   recordDraft: "",
   query: "",
-  taskFilter: "all",
+  taskFilter: "active",
   taskDateFilter: "",
   taskDeadlineFilter: "all",
   priorityFilter: "all",
@@ -275,6 +276,9 @@ let recurrenceScheduleTimer = 0;
 let recurringTodaySignature = "";
 let recurrencePopoverTaskId = "";
 let taskGroupSelectTaskId = "";
+let repositoryGroupPickerOpen = false;
+let repositoryGroupQuery = "";
+let repositoryGroupTriggerLastClickAt = 0;
 let deadlinePopoverTaskId = "";
 let deadlinePickerDate = "";
 let deadlinePickerMonth = "";
@@ -429,7 +433,10 @@ function normalizeTasks(tasks) {
         ...task,
         id: taskId,
         order: normalizeOrder(task.order, index + 1),
-        groupId: normalizeIdentifier(task.groupId) || defaultTaskGroup.id,
+        // An explicit empty groupId means "未分组". Legacy records that did
+        // not contain the field still migrate into the historical default
+        // group, so existing installations keep their previous grouping.
+        groupId: Object.hasOwn(task, "groupId") ? normalizeIdentifier(task.groupId) : defaultTaskGroup.id,
         title: normalizeText(task.title),
         knowledgeNote: knowledgeDocument.normalizeKnowledgeNote(task.knowledgeNote, {
           taskId,
@@ -532,6 +539,16 @@ function normalizeText(value) {
   return typeof value === "string" ? value : value == null ? "" : String(value);
 }
 
+function isEditableTarget(target) {
+  const element = target;
+  return Boolean(element && (
+    element.tagName === "INPUT" ||
+    element.tagName === "TEXTAREA" ||
+    element.isContentEditable ||
+    element.closest?.('[contenteditable="true"]')
+  ));
+}
+
 function normalizeIdentifier(value) {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -585,17 +602,12 @@ function normalizeTaskGroups(groups, tasks = []) {
     })
     .filter(Boolean);
 
-  if (!seen.has(defaultTaskGroup.id)) {
-    normalized.unshift({ ...defaultTaskGroup });
-    seen.add(defaultTaskGroup.id);
-  }
-
   tasks.forEach((task) => {
     if (task.groupId && !seen.has(task.groupId)) {
       seen.add(task.groupId);
       normalized.push({
         id: task.groupId,
-        title: "未命名分组",
+        title: task.groupId === defaultTaskGroup.id ? defaultTaskGroup.title : "未命名分组",
         order: normalized.length + 1,
       });
     }
@@ -605,7 +617,9 @@ function normalizeTaskGroups(groups, tasks = []) {
 }
 
 function normalizeActiveGroupId(value, groups) {
-  return value === ALL_TASKS_GROUP_ID || groups.some((group) => group.id === value) ? value : groups[0]?.id || defaultTaskGroup.id;
+  return value === ALL_TASKS_GROUP_ID || value === UNGROUPED_TASKS_GROUP_ID || groups.some((group) => group.id === value)
+    ? value
+    : groups[0]?.id || UNGROUPED_TASKS_GROUP_ID;
 }
 
 function loadBrowserFlowWidths() {
@@ -631,7 +645,7 @@ function normalizeTheme(value) {
 }
 
 function normalizeTaskFilter(value) {
-  return Object.hasOwn(taskFilterLabels, value) ? value : "all";
+  return Object.hasOwn(taskFilterLabels, value) ? value : "active";
 }
 
 function normalizeTaskDateFilter(value) {
@@ -1376,7 +1390,9 @@ async function loadAppData() {
       const stored = await desktopStorage.read();
       const tasks = stored && Array.isArray(stored.tasks) ? normalizeTasks(stored.tasks) : [];
       const taskGroups = normalizeTaskGroups(stored?.taskGroups, tasks);
-      const activeGroupId = normalizeActiveGroupId(stored?.activeGroupId, taskGroups);
+      const activeGroupId = stored && Object.hasOwn(stored, "activeGroupId")
+        ? normalizeActiveGroupId(stored.activeGroupId, taskGroups)
+        : ALL_TASKS_GROUP_ID;
       const flowWidths = normalizeLoadedFlowWidths(stored?.flowWidths || {});
       const theme = normalizeTheme(stored?.theme);
       const legacy = migrateLegacyFont(stored?.font);
@@ -1406,7 +1422,9 @@ async function loadAppData() {
   return {
     tasks,
     taskGroups,
-    activeGroupId: normalizeActiveGroupId(localStorage.getItem(ACTIVE_GROUP_KEY), taskGroups),
+    activeGroupId: localStorage.getItem(ACTIVE_GROUP_KEY)
+      ? normalizeActiveGroupId(localStorage.getItem(ACTIVE_GROUP_KEY), taskGroups)
+      : ALL_TASKS_GROUP_ID,
     flowWidths: loadBrowserFlowWidths(),
     sidebarWidth: loadBrowserSidebarWidth(),
     detailHeight: loadBrowserDetailHeight(),
@@ -1655,57 +1673,55 @@ function renderSidebar() {
 
       ${renderTodayFocus(focusItems)}
 
-      <div class="task-list" data-context="task-list">
-        <div class="task-list-head section-label">
-          <span class="task-list-count">${visibleCount} / ${scopedTasks.length} 项</span>
-          <div class="search-box search gooey-search ${searchOpen ? "is-open" : ""}" data-gooey-search data-open="${searchOpen}">
-            <svg class="gooey-search-filter-defs" aria-hidden="true" width="0" height="0">
-              <defs>
-                <filter id="sidebar-gooey-filter" x="-45%" y="-110%" width="190%" height="320%" color-interpolation-filters="sRGB">
-                  <feGaussianBlur in="SourceGraphic" stdDeviation="4.2" result="blur"></feGaussianBlur>
-                  <feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 19 -8" result="gooey"></feColorMatrix>
-                  <feComposite in="SourceGraphic" in2="gooey" operator="atop"></feComposite>
-                </filter>
-              </defs>
-            </svg>
-            <div class="gooey-search-filter-wrap">
-              <button class="gooey-search-trigger" type="button" data-gooey-search-trigger aria-expanded="${searchOpen}" aria-controls="search" title="搜索任务">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7.2"></circle><path d="m20 20-3.9-3.9"></path></svg>
-                <span class="gooey-search-trigger-label">搜索</span>
-              </button>
-              <label class="gooey-search-field" for="search">
-                <input id="search" type="search" value="${escAttr(state.query)}" placeholder="搜索任务…" aria-label="搜索任务、节点或内容" autocomplete="off" enterkeyhint="search" tabindex="${searchOpen ? "0" : "-1"}" />
-                <span class="search-shortcut" aria-hidden="true">⌘ K</span>
-              </label>
+      <div class="task-list task-repository" data-context="task-list">
+        <div class="repository-fixed-header">
+          <div class="task-list-head section-label">
+            <span class="task-list-count">${visibleCount} / ${scopedTasks.length} 项</span>
+            <div class="search-box search gooey-search ${searchOpen ? "is-open" : ""}" data-gooey-search data-open="${searchOpen}">
+              <svg class="gooey-search-filter-defs" aria-hidden="true" width="0" height="0">
+                <defs>
+                  <filter id="sidebar-gooey-filter" x="-45%" y="-110%" width="190%" height="320%" color-interpolation-filters="sRGB">
+                    <feGaussianBlur in="SourceGraphic" stdDeviation="4.2" result="blur"></feGaussianBlur>
+                    <feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 19 -8" result="gooey"></feColorMatrix>
+                    <feComposite in="SourceGraphic" in2="gooey" operator="atop"></feComposite>
+                  </filter>
+                </defs>
+              </svg>
+              <div class="gooey-search-filter-wrap">
+                <button class="gooey-search-trigger" type="button" data-gooey-search-trigger aria-expanded="${searchOpen}" aria-controls="search" title="搜索任务">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7.2"></circle><path d="m20 20-3.9-3.9"></path></svg>
+                  <span class="gooey-search-trigger-label">搜索</span>
+                </button>
+                <label class="gooey-search-field" for="search">
+                  <input id="search" type="search" value="${escAttr(state.query)}" placeholder="搜索任务…" aria-label="搜索任务、节点或内容" autocomplete="off" enterkeyhint="search" tabindex="${searchOpen ? "0" : "-1"}" />
+                  <span class="search-shortcut" aria-hidden="true">⌘ K</span>
+                </label>
+              </div>
             </div>
           </div>
-        </div>
-        <div class="task-repository-toolbar">
-          <div class="task-status-filters" role="group" aria-label="任务状态筛选">
-            ${[
+          <div class="task-repository-toolbar">
+            ${renderRepositorySegmentedFilter("completion-segmented task-status-filters", "任务状态筛选", [
               ["all", "全部"],
               ["active", "未完成"],
               ["done", "已完成"],
-            ]
-              .map(
-                ([value, label]) => `<button class="${state.taskFilter === value ? "active" : ""}" type="button" data-setting-button="task-filter" data-value="${value}">${label}</button>`,
-              )
-              .join("")}
+            ], state.taskFilter, "task-filter")}
+            <label class="repository-priority-select" aria-label="优先级筛选">
+              <span>优先级</span>
+              ${filterSelectHtml("priority-filter", state.priorityFilter, repositoryPriorityFilterLabels, "按优先级筛选")}
+            </label>
           </div>
-          <label class="task-priority-filter priority-filter-compact">
-            <span>优先级 ·</span>
-            ${filterSelectHtml("priority-filter", state.priorityFilter, repositoryPriorityFilterLabels, "按优先级筛选")}
-          </label>
-          <label class="task-priority-filter task-source-filter">
-            <span>类型 ·</span>
-            ${filterSelectHtml("capture-source-filter", state.captureSourceFilter, captureSourceFilterLabels, "按类型筛选")}
-          </label>
-          <button class="repository-add-task" type="button" data-action="add-task" title="新增任务" aria-label="新增任务">＋</button>
         </div>
-        <div class="task-repository-rows">${renderTaskRepositoryRows()}</div>
+        <div class="repository-list-wrapper">
+          <div class="repository-scroll-area" data-task-repository-scroll>
+            <div class="task-repository-rows">${renderTaskRepositoryRows()}</div>
+          </div>
+          <button class="add-task-floating" type="button" data-action="add-task" title="新增任务" aria-label="新增任务">
+            <svg class="add-task-floating-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"></rect><path d="M12 8v8M8 12h8"></path></svg>
+          </button>
+        </div>
       </div>
       <section class="group-panel" aria-label="任务分组">
-        ${renderGroupTabs()}
+        ${renderRepositoryScopeBar()}
       </section>
       <div class="sidebar-foot task-footer">
         <button class="settings-trigger settings-button ${state.settingsOpen ? "active" : ""}" type="button" data-action="toggle-settings" title="设置" aria-label="设置">⚙</button>
@@ -1722,6 +1738,14 @@ function renderSidebar() {
         <button class="review-shortcut calendar-shortcut" type="button" data-action="toggle-calendar">日历</button>
       </div>
     </aside>
+  `;
+}
+
+function renderRepositorySegmentedFilter(className, label, options, selected, setting) {
+  return `
+    <div class="repository-segmented ${className}" role="group" aria-label="${escAttr(label)}">
+      ${options.map(([value, text]) => `<button class="${selected === value ? "active" : ""}" type="button" data-setting-button="${setting}" data-value="${value}" data-active="${selected === value}" aria-pressed="${selected === value}">${text}</button>`).join("")}
+  </div>
   `;
 }
 
@@ -1757,28 +1781,78 @@ function renderTodayFocusItem(item) {
   `;
 }
 
+function repositoryTypeSelection() {
+  return {
+    includeTask: state.captureSourceFilter !== "quick",
+    includeNote: state.captureSourceFilter !== "task",
+  };
+}
+
+function repositoryGroupLabel() {
+  if (state.activeGroupId === ALL_TASKS_GROUP_ID) return "全部记录";
+  if (state.activeGroupId === UNGROUPED_TASKS_GROUP_ID) return "未分组";
+  return state.taskGroups.find((group) => group.id === state.activeGroupId)?.title || "全部记录";
+}
+
+function repositoryGroupPickerOptions() {
+  const query = repositoryGroupQuery.trim().toLowerCase();
+  const groups = sort(state.taskGroups).filter((group) => !query || group.title.toLowerCase().includes(query));
+  return { groups };
+}
+
+function renderRepositoryGroupOption(groupId, title) {
+  const selected = state.activeGroupId === groupId;
+  const personalGroup = state.taskGroups.some((group) => group.id === groupId);
+  if (personalGroup && state.editingGroupId === groupId) {
+    return `<div class="repository-group-option is-editing" role="option" aria-selected="${selected}" data-group-id="${groupId}" data-personal-group="true"><input class="repository-group-edit" data-group-title="${groupId}" value="${escAttr(title)}" aria-label="修改分组名称" /></div>`;
+  }
+  return `<button class="repository-group-option ${selected ? "selected" : ""}" type="button" role="option" aria-selected="${selected}" data-action="select-repository-group" data-group-id="${groupId}" ${personalGroup ? 'data-personal-group="true"' : ""}><span>${esc(title)}</span>${selected ? `<span class="repository-group-check" aria-hidden="true">✓</span>` : ""}</button>`;
+}
+
+function renderRepositoryGroupOptions() {
+  const { groups } = repositoryGroupPickerOptions();
+  const query = repositoryGroupQuery.trim().toLowerCase();
+  const showAll = !query || "全部记录".includes(query);
+  const showUngrouped = !query || "未分组".includes(query);
+  const systemOptions = `${showAll ? renderRepositoryGroupOption(ALL_TASKS_GROUP_ID, "全部记录") : ""}${showUngrouped ? renderRepositoryGroupOption(UNGROUPED_TASKS_GROUP_ID, "未分组") : ""}`;
+  const personalOptions = groups.map((group) => renderRepositoryGroupOption(group.id, group.title)).join("") || `<div class="repository-group-empty">没有匹配的个人分组</div>`;
+  return `<div class="repository-group-section repository-group-system">${systemOptions || `<div class="repository-group-empty">没有匹配的记录范围</div>`}</div><div class="repository-group-divider" role="separator"></div><div class="repository-group-section repository-group-personal"><div class="repository-group-heading">个人分组</div>${personalOptions}</div>`;
+}
+
+function renderRepositoryScopeBar() {
+  const types = repositoryTypeSelection();
+  const open = repositoryGroupPickerOpen;
+  return `
+    <div class="repository-scope-bar">
+      <div class="repository-type-toggles" role="group" aria-label="任务类型">
+        <button class="type-filter-button ${types.includeTask ? "is-checked" : ""}" type="button" data-action="toggle-repository-type" data-type="task" aria-pressed="${types.includeTask}"><span class="type-checkbox" aria-hidden="true">✓</span><span>任务</span></button>
+        <button class="type-filter-button ${types.includeNote ? "is-checked" : ""}" type="button" data-action="toggle-repository-type" data-type="note" aria-pressed="${types.includeNote}"><span class="type-checkbox" aria-hidden="true">✓</span><span>速记</span></button>
+      </div>
+      <div class="repository-group-picker ${open ? "is-open" : ""}">
+        <button class="repository-group-trigger" type="button" data-action="toggle-repository-group-picker" aria-expanded="${open}" aria-haspopup="listbox" title="选择分组；双击可修改当前分组名称"><span>${esc(repositoryGroupLabel())}</span><span class="repository-group-chevron" aria-hidden="true">⌄</span></button>
+        ${open ? `
+          <div class="repository-group-popover" role="listbox" aria-label="选择任务分组">
+            <label class="repository-group-search"><span aria-hidden="true">⌕</span><input type="search" value="${escAttr(repositoryGroupQuery)}" placeholder="搜索分组…" aria-label="搜索分组" autocomplete="off" /></label>
+            <div class="repository-group-options">
+              ${renderRepositoryGroupOptions()}
+            </div>
+            <div class="repository-group-footer"><button type="button" data-action="add-group">＋ 新建分组</button></div>
+          </div>
+        ` : ""}
+      </div>
+    </div>
+  `;
+}
+
+// Kept as a compatibility renderer for existing callers/tests; the sidebar
+// uses renderRepositoryScopeBar() so the visible repository no longer shows
+// flat group tabs.
 function renderGroupTabs() {
   return `
     <div class="sheet-bar group-nav" aria-label="任务分组">
       <button class="sheet-nav scroll-button" type="button" data-action="scroll-sheets" data-direction="-1" title="查看前面的分组" aria-label="查看前面的分组">‹</button>
-      <span class="sheet-tab-all-wrap">
-        <button class="sheet-tab sheet-tab-all ${state.activeGroupId === ALL_TASKS_GROUP_ID ? "active" : ""}" type="button" data-action="select-group" data-group-id="${ALL_TASKS_GROUP_ID}" title="查看全部分组中的任务">全部任务</button>
-      </span>
-      <div class="sheet-tabs task-tabs" data-sheet-tabs>
-        ${sort(state.taskGroups)
-          .map(
-            (group) => `
-              <span class="sheet-tab-wrap" draggable="true" data-group-id="${group.id}">
-                ${
-                  state.editingGroupId === group.id
-                    ? `<input class="sheet-edit" data-group-title="${group.id}" value="${escAttr(group.title)}" aria-label="分组名称" />`
-                    : `<button class="sheet-tab ${group.id === state.activeGroupId ? "active" : ""}" type="button" data-action="select-group" data-group-id="${group.id}" title="${escAttr(group.title)}">${esc(group.title)}</button>`
-                }
-              </span>
-            `,
-          )
-          .join("")}
-      </div>
+      <span class="sheet-tab-all-wrap"><button class="sheet-tab sheet-tab-all ${state.activeGroupId === ALL_TASKS_GROUP_ID ? "active" : ""}" type="button" data-action="select-group" data-group-id="${ALL_TASKS_GROUP_ID}" title="查看全部分组中的任务">全部任务</button></span>
+      <div class="sheet-tabs task-tabs" data-sheet-tabs>${sort(state.taskGroups).map((group) => `<span class="sheet-tab-wrap" draggable="true" data-group-id="${group.id}">${state.editingGroupId === group.id ? `<input class="sheet-edit" data-group-title="${group.id}" value="${escAttr(group.title)}" aria-label="分组名称" />` : `<button class="sheet-tab ${group.id === state.activeGroupId ? "active" : ""}" type="button" data-action="select-group" data-group-id="${group.id}" title="${escAttr(group.title)}">${esc(group.title)}</button>`}</span>`).join("")}</div>
       <button class="sheet-nav scroll-button" type="button" data-action="scroll-sheets" data-direction="1" title="查看后面的分组" aria-label="查看后面的分组">›</button>
       <button class="sheet-add add-group-button" type="button" data-action="add-group" title="新增分组" aria-label="新增分组">+</button>
     </div>
@@ -2497,13 +2571,13 @@ function renderContextMenu() {
   }
 
   if (menu.kind === "group") {
-    const isDefault = menu.groupId === defaultTaskGroup.id;
     return `
       <div class="context-menu" style="left:${menu.x}px; top:${menu.y}px">
         <button data-action="select-group" data-group-id="${menu.groupId}">打开分组</button>
-        <button data-action="rename-group" data-group-id="${menu.groupId}" ${isDefault ? "disabled" : ""}>重命名分组</button>
+        <button data-action="rename-group" data-group-id="${menu.groupId}">重命名分组</button>
         <hr />
-        <button class="danger" data-action="delete-group" data-group-id="${menu.groupId}" ${isDefault ? "disabled" : ""}>删除分组</button>
+        <button class="danger" data-action="delete-group-keep-tasks" data-group-id="${menu.groupId}">删除分组，任务移至未分组</button>
+        <button class="danger" data-action="delete-group-with-tasks" data-group-id="${menu.groupId}">删除分组及其中任务</button>
       </div>
     `;
   }
@@ -2564,6 +2638,7 @@ function syncContextMenuRoot() {
 function filteredTasks({ includeQuery = true, at = new Date() } = {}) {
   const q = state.query.trim().toLowerCase();
   const deadlineScoped = state.taskDeadlineFilter !== "all" || Boolean(state.taskDateFilter);
+  const repositoryTypes = repositoryTypeSelection();
   return taskListScopeTasks()
     .filter((task) => {
       const tags = normalizeTaskTags(task.tags);
@@ -2576,8 +2651,9 @@ function filteredTasks({ includeQuery = true, at = new Date() } = {}) {
       if (state.taskFilter === "later" && !tags.later && !hasLater) return false;
       if (!matchesTaskDeadlineFilter(task, at)) return false;
       if (state.priorityFilter !== "all" && task.priority !== state.priorityFilter) return false;
-      if (state.captureSourceFilter === "quick" && task.captureSource !== "today-widget") return false;
-      if (state.captureSourceFilter === "task" && task.captureSource === "today-widget") return false;
+      const isNote = task.captureSource === "today-widget";
+      if (isNote && !repositoryTypes.includeNote) return false;
+      if (!isNote && !repositoryTypes.includeTask) return false;
       if (includeQuery && q) {
         const taskText = `${task.title} ${task.description} ${task.hypothesis} ${task.conclusion}`.toLowerCase();
         const nodeHit = flatten(task.nodes).some((node) => `${node.title} ${node.note}`.toLowerCase().includes(q));
@@ -2642,7 +2718,8 @@ function compareTasksByDeadline(a, b) {
 function tasksInActiveGroup() {
   const groupId = normalizeActiveGroupId(state.activeGroupId, state.taskGroups);
   if (groupId === ALL_TASKS_GROUP_ID) return state.tasks;
-  return state.tasks.filter((task) => (task.groupId || defaultTaskGroup.id) === groupId);
+  if (groupId === UNGROUPED_TASKS_GROUP_ID) return state.tasks.filter((task) => !task.groupId);
+  return state.tasks.filter((task) => task.groupId === groupId);
 }
 
 function taskGroupOptions() {
@@ -3508,11 +3585,11 @@ function renderCalendarCell(date, month, at = new Date()) {
 function renderCalendarAgendaTask(task) {
   const deadline = safeDate(task.deadlineAt);
   const status = taskDeadlineStatus(task);
-  const group = state.taskGroups.find((item) => item.id === (task.groupId || defaultTaskGroup.id));
+  const group = state.taskGroups.find((item) => item.id === task.groupId);
   return `
     <button class="calendar-agenda-task ${status}" type="button" data-action="open-calendar-task" data-task-id="${task.id}">
       <span class="calendar-agenda-time">${deadline ? `${String(deadline.getHours()).padStart(2, "0")}:${String(deadline.getMinutes()).padStart(2, "0")}` : "--:--"}</span>
-      <span><strong>${esc(task.title || "未命名任务")}</strong><small>${esc(group?.title || "默认")} · ${task.status === "done" ? "已完成" : status === "overdue" ? "已逾期" : `${priorityLabels[task.priority]}优先`}</small></span>
+      <span><strong>${esc(task.title || "未命名任务")}</strong><small>${esc(group?.title || "未分组")} · ${task.status === "done" ? "已完成" : status === "overdue" ? "已逾期" : `${priorityLabels[task.priority]}优先`}</small></span>
     </button>
   `;
 }
@@ -3635,7 +3712,7 @@ function selectReviewDateField() {
 }
 
 function renderReviewItem({ task, date }) {
-  const group = state.taskGroups.find((item) => item.id === (task.groupId || defaultTaskGroup.id));
+  const group = state.taskGroups.find((item) => item.id === task.groupId);
   const summary = taskSummary(task);
   return `
     <article class="review-item" role="button" tabindex="0" data-action="open-review-task" data-task-id="${task.id}">
@@ -4400,6 +4477,43 @@ function bindTaskRepositoryRows(scope = document) {
     { passive: false },
   );
 
+  const repositoryGroupSearch = document.querySelector(".repository-group-search input");
+  if (repositoryGroupSearch) {
+    repositoryGroupSearch.addEventListener("input", (event) => {
+      repositoryGroupQuery = event.target.value;
+      const options = document.querySelector(".repository-group-options");
+      if (options) {
+        options.innerHTML = renderRepositoryGroupOptions();
+        bindRepositoryGroupOptionMenus(options);
+      }
+    });
+    repositoryGroupSearch.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        repositoryGroupPickerOpen = false;
+        repositoryGroupQuery = "";
+        render();
+      }
+      if (event.key === "Enter") {
+        const first = document.querySelector(".repository-group-option.is-highlighted") || document.querySelector(".repository-group-option");
+        if (first) {
+          event.preventDefault();
+          action(first.dataset, event);
+        }
+      }
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        event.preventDefault();
+        const options = [...document.querySelectorAll(".repository-group-option")];
+        if (!options.length) return;
+        const highlighted = options.findIndex((option) => option.classList.contains("is-highlighted"));
+        const nextIndex = highlighted < 0 ? 0 : (highlighted + (event.key === "ArrowDown" ? 1 : -1) + options.length) % options.length;
+        options.forEach((option, index) => option.classList.toggle("is-highlighted", index === nextIndex));
+      }
+    });
+  }
+
+  bindRepositoryGroupOptionMenus(document);
+
   document.querySelectorAll("[data-edit-key]").forEach((element) => {
     element.addEventListener("input", (event) => {
       edit(event.target.dataset, event.target.value);
@@ -4811,6 +4925,7 @@ function bindTaskRepositoryRows(scope = document) {
       const keepRecurrence = event.target.closest(".task-recurrence-controls");
       const keepTaskGroup = event.target.closest(".task-group-select");
       const keepDeadline = event.target.closest(".task-deadline-picker");
+      const keepRepositoryGroup = event.target.closest(".repository-group-picker");
 
       if (state.contextMenu && !keepContextMenu) {
         state.contextMenu = null;
@@ -4845,11 +4960,33 @@ function bindTaskRepositoryRows(scope = document) {
         document.querySelector("[data-action='toggle-deadline-picker']")?.setAttribute("aria-expanded", "false");
       }
 
+      if (repositoryGroupPickerOpen && !keepRepositoryGroup) {
+        repositoryGroupPickerOpen = false;
+        repositoryGroupQuery = "";
+        needsRender = true;
+      }
+
       if (state.selectedNodeId && !keepNodeDetail && exitNodeDetail()) needsRender = true;
 
       if (needsRender) render();
     });
   }
+}
+
+function bindRepositoryGroupOptionMenus(scope = document) {
+  scope.querySelectorAll('.repository-group-option[data-personal-group="true"]').forEach((element) => {
+    element.addEventListener("contextmenu", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      state.contextMenu = {
+        kind: "group",
+        groupId: element.dataset.groupId,
+        x: Math.min(event.clientX, window.innerWidth - 250),
+        y: Math.min(event.clientY, window.innerHeight - 220),
+      };
+      syncContextMenuRoot();
+    });
+  });
 }
 
 function activateRepositoryTask(taskId) {
@@ -6020,13 +6157,43 @@ async function action(data, event = null) {
   if (data.action === "open-review-task") openTaskFromGlobalList(data.taskId);
   if (data.action === "reload-app") window.location.reload();
   if (data.action === "select-group") selectGroup(data.groupId);
+  if (data.action === "toggle-repository-type") {
+    const type = data.type === "note" ? "note" : "task";
+    const current = repositoryTypeSelection();
+    const next = { ...current, [type === "task" ? "includeTask" : "includeNote"]: !current[type === "task" ? "includeTask" : "includeNote"] };
+    if (next.includeTask || next.includeNote) {
+      state.captureSourceFilter = next.includeTask && next.includeNote ? "all" : next.includeNote ? "quick" : "task";
+      state.selectedNodeId = "";
+      if (!filteredTasks({ includeQuery: false }).some((task) => task.id === state.activeTaskId)) state.activeTaskId = "";
+      save();
+    }
+  }
+  if (data.action === "toggle-repository-group-picker") {
+    const clickedAt = Date.now();
+    const isDoubleClick = clickedAt - repositoryGroupTriggerLastClickAt < 360;
+    repositoryGroupTriggerLastClickAt = clickedAt;
+    if (isDoubleClick && state.taskGroups.some((group) => group.id === state.activeGroupId)) {
+      repositoryGroupPickerOpen = true;
+      repositoryGroupQuery = "";
+      startRenameGroup(state.activeGroupId);
+    } else {
+      repositoryGroupPickerOpen = !repositoryGroupPickerOpen;
+      repositoryGroupQuery = repositoryGroupPickerOpen ? repositoryGroupQuery : "";
+      if (repositoryGroupPickerOpen) window.requestAnimationFrame(() => document.querySelector(".repository-group-search input")?.focus({ preventScroll: true }));
+    }
+  }
+  if (data.action === "select-repository-group") {
+    selectGroup(data.groupId);
+  }
   if (data.action === "add-group") addGroup();
   if (data.action === "rename-group") {
     startRenameGroup(data.groupId);
     render();
     return;
   }
-  if (data.action === "delete-group" && !(await deleteGroup(data.groupId))) return;
+  if (data.action === "delete-group" && !(await deleteGroup(data.groupId, "ungroup"))) return;
+  if (data.action === "delete-group-keep-tasks" && !(await deleteGroup(data.groupId, "ungroup"))) return;
+  if (data.action === "delete-group-with-tasks" && !(await deleteGroup(data.groupId, "delete"))) return;
   if (data.action === "select-focus") {
     openTaskFromGlobalList(data.taskId, "");
   }
@@ -6219,7 +6386,7 @@ function syncTaskTitleInputs(taskId, value) {
 function openTaskFromGlobalList(taskId, nodeId = "") {
   const task = state.tasks.find((item) => item.id === taskId);
   if (!task) return;
-  state.activeGroupId = task.groupId || defaultTaskGroup.id;
+  state.activeGroupId = task.groupId || UNGROUPED_TASKS_GROUP_ID;
   state.activeTaskId = task.id;
   state.selectedNodeId = nodeId;
   state.recordDraft = nodeId ? findNode(task.nodes, nodeId)?.note || "" : "";
@@ -6262,8 +6429,10 @@ function createTask(title, shouldRender = true) {
     id: taskId,
     order: state.tasks.length + 1,
     groupId: state.activeGroupId === ALL_TASKS_GROUP_ID
-      ? defaultTaskGroup.id
-      : normalizeActiveGroupId(state.activeGroupId, state.taskGroups),
+      ? state.taskGroups[0]?.id || ""
+      : state.activeGroupId === UNGROUPED_TASKS_GROUP_ID
+        ? ""
+        : normalizeActiveGroupId(state.activeGroupId, state.taskGroups),
     title,
     description: "",
     status: "active",
@@ -6303,7 +6472,7 @@ function createQuickCapture(title, description = "", addToToday = false) {
   const previousActiveGroupId = state.activeGroupId;
   const task = createTask(String(title || "").trim(), false);
   if (!task) return null;
-  task.groupId = defaultTaskGroup.id;
+  task.groupId = "";
   task.priority = "low";
   task.captureSource = "today-widget";
   task.description = String(description || "").trim();
@@ -6353,7 +6522,11 @@ function selectGroup(groupId) {
   state.nodeDetailFullscreen = false;
   state.nodeDetailPosition = null;
   state.contextMenu = null;
+  state.editingGroupId = "";
+  state.focusGroupTitleId = "";
   state.query = "";
+  repositoryGroupPickerOpen = false;
+  repositoryGroupQuery = "";
 }
 
 function addGroup() {
@@ -6369,12 +6542,16 @@ function addGroup() {
   state.activeTaskId = "";
   state.selectedNodeId = "";
   state.query = "";
+  repositoryGroupPickerOpen = true;
+  repositoryGroupQuery = "";
 }
 
 function startRenameGroup(groupId) {
   if (!state.taskGroups.some((group) => group.id === groupId)) return;
   state.editingGroupId = groupId;
   state.focusGroupTitleId = groupId;
+  repositoryGroupPickerOpen = true;
+  repositoryGroupQuery = "";
 }
 
 function renameGroup(groupId, value, commit = false) {
@@ -6387,24 +6564,37 @@ function renameGroup(groupId, value, commit = false) {
 }
 
 /**
- * Delete a task group and move its tasks into the protected default group.
+ * Delete a task group and either ungroup or delete the tasks it contains.
  * @param {string} groupId - Group ID to delete
+ * @param {"ungroup"|"delete"} taskPolicy - How to handle tasks in the group
  */
-async function deleteGroup(groupId) {
+async function deleteGroup(groupId, taskPolicy = "ungroup") {
   const group = state.taskGroups.find((item) => item.id === groupId);
-  if (!group || group.id === defaultTaskGroup.id) return false;
-  if (!(await confirmDestructiveAction(`确定删除分组「${group.title}」吗？该分组内任务将移动到默认分组。`))) return false;
+  if (!group) return false;
+  const deleteTasks = taskPolicy === "delete";
+  const prompt = deleteTasks
+    ? `确定删除分组「${group.title}」以及其中的所有任务吗？此操作不可撤销。`
+    : `确定删除分组「${group.title}」吗？其中的任务会保留并移至未分组。`;
+  if (!(await confirmDestructiveAction(prompt))) return false;
 
-  state.tasks.forEach((task) => {
-    if ((task.groupId || defaultTaskGroup.id) === groupId) {
-      task.groupId = defaultTaskGroup.id;
-      task.updatedAt = now();
+  if (deleteTasks) {
+    if (state.tasks.some((task) => task.groupId === groupId && task.id === state.activeTaskId)) {
+      state.activeTaskId = "";
+      state.selectedNodeId = "";
     }
-  });
+    state.tasks = state.tasks.filter((task) => task.groupId !== groupId);
+  } else {
+    state.tasks.forEach((task) => {
+      if (task.groupId === groupId) {
+        task.groupId = "";
+        task.updatedAt = now();
+      }
+    });
+  }
   state.taskGroups = state.taskGroups.filter((item) => item.id !== groupId);
   state.taskGroups = normalizeTaskGroups(state.taskGroups, state.tasks);
   if (state.activeGroupId === groupId) {
-    state.activeGroupId = defaultTaskGroup.id;
+    state.activeGroupId = deleteTasks ? ALL_TASKS_GROUP_ID : UNGROUPED_TASKS_GROUP_ID;
     state.activeTaskId = tasksInActiveGroup()[0]?.id || "";
     state.selectedNodeId = "";
   }
@@ -7614,6 +7804,8 @@ if (desktopUpdates?.onPrepareInstall) {
 }
 
 window.addEventListener("keydown", (event) => {
+  if (event.isComposing) return;
+  if (event.key !== "Escape" && isEditableTarget(event.target)) return;
   if (event.key === "Escape") {
     if (state.contextMenu) {
       event.preventDefault();
@@ -7621,7 +7813,7 @@ window.addEventListener("keydown", (event) => {
       syncContextMenuRoot();
       return;
     }
-    if (state.selectedNodeId || state.settingsOpen || state.calendarOpen || state.reviewOpen || state.feedbackOpen || recurrencePopoverTaskId || taskGroupSelectTaskId || deadlinePopoverTaskId) {
+    if (state.selectedNodeId || state.settingsOpen || state.calendarOpen || state.reviewOpen || state.feedbackOpen || recurrencePopoverTaskId || taskGroupSelectTaskId || deadlinePopoverTaskId || repositoryGroupPickerOpen) {
       event.preventDefault();
       exitNodeDetail();
       state.settingsOpen = false;
@@ -7630,6 +7822,8 @@ window.addEventListener("keydown", (event) => {
       recurrencePopoverTaskId = "";
       taskGroupSelectTaskId = "";
       deadlinePopoverTaskId = "";
+      repositoryGroupPickerOpen = false;
+      repositoryGroupQuery = "";
       closeBugReport();
       render();
       return;
