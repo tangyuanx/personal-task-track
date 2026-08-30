@@ -3386,7 +3386,9 @@ test("repository filters remain compact, aligned, and keep the add control visib
   assert.match(styles, /\.gooey-search-filter-wrap\s*\{[\s\S]*filter:\s*none;/);
   assert.match(styles, /--gooey-search-surface:\s*var\(--handoff-sidebar\);/);
   assert.match(styles, /--gooey-search-border:\s*transparent;/);
-  assert.match(styles, /background:\s*transparent;\n  border:\s*1px solid var\(--gooey-search-border\);\n  box-shadow:\s*none;/);
+  const transparentSearchSurface = /background:\s*transparent;\r?\n  border:\s*1px solid var\(--gooey-search-border\);\r?\n  box-shadow:\s*none;/;
+  assert.match(styles, transparentSearchSurface);
+  assert.match(styles.replace(/\r?\n/g, "\r\n"), transparentSearchSurface);
   assert.match(styles, /\.gooey-search\.is-open \.gooey-search-trigger\s*\{[\s\S]*width:\s*var\(--gooey-search-bubble\);/);
   assert.match(styles, /\.gooey-search\.is-open \.gooey-search-field\s*\{[\s\S]*transform:\s*scaleX\(1\);/);
   assert.match(styles, /\.task-list\.task-repository\s*\{[\s\S]*overflow:\s*hidden;/);
