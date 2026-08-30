@@ -12151,7 +12151,7 @@ body.flow-node-reordering * {
   --gooey-search-gap: 9px;
   --gooey-search-surface: var(--handoff-sidebar);
   --gooey-search-ink: var(--handoff-ink);
-  --gooey-search-border: var(--handoff-line-strong);
+  --gooey-search-border: transparent;
   position: relative;
   isolation: isolate;
   width: var(--gooey-search-collapsed);
@@ -12181,7 +12181,8 @@ body.flow-node-reordering * {
   position: relative;
   width: 100%;
   height: var(--gooey-search-height);
-  filter: url("#sidebar-gooey-filter");
+  /* Transparent surfaces should not pass through the alpha-threshold gooey filter. */
+  filter: none;
 }
 
 .gooey-search-trigger,
@@ -12193,9 +12194,9 @@ body.flow-node-reordering * {
   border: 0;
   border-radius: 999px;
   color: var(--gooey-search-ink);
-  background: var(--gooey-search-surface);
+  background: transparent;
   border: 1px solid var(--gooey-search-border);
-  box-shadow: 0 3px 10px rgba(33, 48, 40, 0.08);
+  box-shadow: none;
 }
 
 .gooey-search-trigger {
@@ -12281,11 +12282,11 @@ body.flow-node-reordering * {
 .gooey-search .search-shortcut {
   flex: 0 0 auto;
   min-width: 28px;
-  border: 1px solid color-mix(in srgb, var(--gooey-search-ink) 30%, transparent);
-  border-radius: 999px;
-  padding: 2px 5px;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
   color: color-mix(in srgb, var(--gooey-search-ink) 76%, transparent);
-  background: color-mix(in srgb, var(--gooey-search-ink) 10%, transparent);
+  background: transparent;
   font-size: 8px;
   line-height: 1;
   text-align: center;
@@ -12316,19 +12317,18 @@ body.flow-node-reordering * {
 .gooey-search-trigger:hover,
 .gooey-search-trigger:focus-visible,
 .gooey-search-field:focus-within {
-  background: color-mix(in srgb, var(--gooey-search-surface) 92%, white);
+  background: transparent;
 }
 
 .gooey-search-trigger:focus-visible,
 .gooey-search-field:focus-within {
-  outline: 2px solid color-mix(in srgb, var(--handoff-focus-800) 32%, transparent);
-  outline-offset: 2px;
+  outline: 0;
 }
 
 :root[data-theme="dark"] .section-label.task-list-head .search.search-box.gooey-search {
   --gooey-search-surface: var(--handoff-sidebar);
   --gooey-search-ink: var(--handoff-ink);
-  --gooey-search-border: var(--handoff-line-strong);
+  --gooey-search-border: transparent;
 }
 
 :root[data-theme="dark"] .gooey-search-field input::-webkit-search-cancel-button {

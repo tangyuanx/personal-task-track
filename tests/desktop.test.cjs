@@ -3291,8 +3291,10 @@ test("repository filters remain compact, aligned, and keep the add control visib
   assert.match(styles, /\.theme-toggle\.theme-switch\s*\{[\s\S]*border-radius:\s*999px;/);
   assert.match(styles, /\.theme-toggle\.theme-switch\[aria-checked="true"\] \.theme-switch-thumb\s*\{[\s\S]*transform:\s*translateX\(16px\);/);
   assert.match(styles, /\.search\.search-box\.gooey-search\s*\{[\s\S]*--gooey-search-collapsed:\s*88px;/);
-  assert.match(styles, /\.gooey-search-filter-wrap\s*\{[\s\S]*filter:\s*url\("#sidebar-gooey-filter"\);/);
+  assert.match(styles, /\.gooey-search-filter-wrap\s*\{[\s\S]*filter:\s*none;/);
   assert.match(styles, /--gooey-search-surface:\s*var\(--handoff-sidebar\);/);
+  assert.match(styles, /--gooey-search-border:\s*transparent;/);
+  assert.match(styles, /background:\s*transparent;\n  border:\s*1px solid var\(--gooey-search-border\);\n  box-shadow:\s*none;/);
   assert.match(styles, /\.gooey-search\.is-open \.gooey-search-trigger\s*\{[\s\S]*width:\s*var\(--gooey-search-bubble\);/);
   assert.match(styles, /\.gooey-search\.is-open \.gooey-search-field\s*\{[\s\S]*transform:\s*scaleX\(1\);/);
   assert.match(styles, /@media \(prefers-reduced-motion: reduce\)/);
