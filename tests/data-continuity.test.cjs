@@ -280,6 +280,33 @@ test("Windows installer backs up before uninstall and preserves the legacy insta
   assert.match(installer, /Abort/);
 });
 
+test("Windows installer never recursively wraps historical installation backups", async () => {
+  const installer = await fs.readFile(path.join(__dirname, "..", "build", "installer.nsh"), "utf8");
+  const customInit = installer.match(/!macro customInit([\s\S]*?)!macroend/)?.[1] ?? "";
+  const customInstall = installer.match(/!macro customInstall([\s\S]*?)!macroend/)?.[1] ?? "";
+  const mirrorDirectory = installer.match(/!macro mirrorLoopUpgradeDirectory LABEL([\s\S]*?)!macroend/)?.[1] ?? "";
+  const allowedLabels = ["Personal Task Track", "personal-task-track", "PersonalTaskTrack", "Loop"];
+
+  assert.notEqual(customInit, "");
+  assert.notEqual(customInstall, "");
+  assert.notEqual(mirrorDirectory, "");
+  assert.equal(installer.includes("previous-install-backups"), false);
+  assert.equal(installer.includes('$INSTDIR\\Loop Data Backups\\*.*'), false);
+  assert.equal(installer.includes('$loopUpgradeBackupRoot\\*.*'), false);
+
+  const backedUpLabels = [...customInit.matchAll(/!insertmacro backupLoopUpgradeDirectory "\$APPDATA\\[^"]+" "([^"]+)"/g)]
+    .map((match) => match[1]);
+  const mirroredLabels = [...customInstall.matchAll(/!insertmacro mirrorLoopUpgradeDirectory "([^"]+)"/g)]
+    .map((match) => match[1]);
+  assert.deepEqual(backedUpLabels, allowedLabels);
+  assert.deepEqual(mirroredLabels, allowedLabels);
+
+  assert.match(mirrorDirectory, /CopyFiles \/SILENT "\$loopUpgradeBackupRoot\\\$\{LABEL\}\\\*\.\*"/);
+  assert.match(mirrorDirectory, /MessageBox MB_OK\|MB_ICONSTOP[\s\S]*Abort/);
+  assert.equal((customInstall.match(/verifyLoopUpgradeFile[^\r\n]*task-data\.json/g) ?? []).length, 4);
+  assert.match(installer, /!macro copyLoopUpgradeFile[\s\S]*task-data\.json[\s\S]*Abort/);
+});
+
 test("settings and preload expose complete backup export plus file and directory restore actions", async () => {
   const root = path.join(__dirname, "..");
   const renderer = await fs.readFile(path.join(root, "app", "renderer", "src", "app.js"), "utf8");

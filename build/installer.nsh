@@ -65,6 +65,18 @@ Var loopUpgradeBackupCreated
   ${EndIf}
 !macroend
 
+!macro mirrorLoopUpgradeDirectory LABEL
+  ${If} ${FileExists} "$loopUpgradeBackupRoot\${LABEL}\*.*"
+    CreateDirectory "$INSTDIR\Loop Data Backups\installer-pre-${VERSION}\${LABEL}"
+    ClearErrors
+    CopyFiles /SILENT "$loopUpgradeBackupRoot\${LABEL}\*.*" "$INSTDIR\Loop Data Backups\installer-pre-${VERSION}\${LABEL}"
+    ${If} ${Errors}
+      MessageBox MB_OK|MB_ICONSTOP "Loop 已在 AppData 中保护原数据，但无法创建安装目录备份副本。安装已停止；安全备份仍保留在 AppData 中。"
+      Abort
+    ${EndIf}
+  ${EndIf}
+!macroend
+
 !macro customInit
   StrCpy $loopUpgradeBackupRoot "$APPDATA\Personal Task Track Upgrade Backups\installer-pre-${VERSION}"
   StrCpy $loopUpgradeBackupCreated "0"
@@ -74,28 +86,15 @@ Var loopUpgradeBackupCreated
   !insertmacro backupLoopUpgradeDirectory "$APPDATA\personal-task-track" "personal-task-track"
   !insertmacro backupLoopUpgradeDirectory "$APPDATA\PersonalTaskTrack" "PersonalTaskTrack"
   !insertmacro backupLoopUpgradeDirectory "$APPDATA\Loop" "Loop"
-
-  ${If} ${FileExists} "$INSTDIR\Loop Data Backups\*.*"
-    CreateDirectory "$loopUpgradeBackupRoot\previous-install-backups"
-    ClearErrors
-    CopyFiles /SILENT "$INSTDIR\Loop Data Backups\*.*" "$loopUpgradeBackupRoot\previous-install-backups"
-    ${If} ${Errors}
-      MessageBox MB_OK|MB_ICONSTOP "Loop 无法保护现有升级备份。安装已停止，原软件和数据不会被删除。"
-      Abort
-    ${EndIf}
-    StrCpy $loopUpgradeBackupCreated "1"
-  ${EndIf}
 !macroend
 
 !macro customInstall
   ${If} $loopUpgradeBackupCreated == "1"
     CreateDirectory "$INSTDIR\Loop Data Backups\installer-pre-${VERSION}"
-    ClearErrors
-    CopyFiles /SILENT "$loopUpgradeBackupRoot\*.*" "$INSTDIR\Loop Data Backups\installer-pre-${VERSION}"
-    ${If} ${Errors}
-      MessageBox MB_OK|MB_ICONSTOP "Loop 已保护原数据，但无法将备份复制到当前安装目录。安装已停止；安全备份仍保留在 AppData 中。"
-      Abort
-    ${EndIf}
+    !insertmacro mirrorLoopUpgradeDirectory "Personal Task Track"
+    !insertmacro mirrorLoopUpgradeDirectory "personal-task-track"
+    !insertmacro mirrorLoopUpgradeDirectory "PersonalTaskTrack"
+    !insertmacro mirrorLoopUpgradeDirectory "Loop"
     ${If} ${FileExists} "$loopUpgradeBackupRoot\Personal Task Track\task-data.json"
       !insertmacro verifyLoopUpgradeFile "$loopUpgradeBackupRoot\Personal Task Track\task-data.json" "$INSTDIR\Loop Data Backups\installer-pre-${VERSION}\Personal Task Track\task-data.json"
     ${EndIf}
