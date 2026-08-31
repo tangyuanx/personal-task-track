@@ -3436,6 +3436,7 @@ test("Today surfaces keep every scheduled task and scroll within bounded content
   assert.doesNotMatch(app, /\.slice\(0, 3\)/);
   assert.doesNotMatch(runtime, /\.slice\(0, 3\)/);
   assert.doesNotMatch(widgetMain, /\.slice\(0, 3\)/);
+  assert.match(styles, /\.today-panel\.today-focus\s*\{\s*flex:\s*0 0 auto;[\s\S]*height:\s*215px;[\s\S]*max-height:\s*215px;[\s\S]*grid-template-rows:\s*auto minmax\(0, 1fr\);/);
   assert.match(styles, /\.today-panel \.focus-stack\s*\{[\s\S]*max-height:\s*192px;[\s\S]*overflow-y:\s*auto;/);
 });
 
@@ -3756,11 +3757,12 @@ test("recurrence settings match the selected compact popover and support multipl
   assert.match(finalRules, /\.task-recurrence-popover\s*\{[\s\S]*width:\s*min\(372px,/);
   assert.match(finalRules, /\.task-recurrence-mode-switch\s*\{[\s\S]*grid-template-columns:\s*repeat\(3,/);
   assert.match(finalRules, /\.task-recurrence-weekday-list\s*\{[\s\S]*grid-template-columns:\s*repeat\(7,/);
-  assert.match(briefCardRules, /\.brief-strip\.task-brief\s*\{[\s\S]*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\);[\s\S]*gap:\s*0;[\s\S]*min-height:\s*176px;[\s\S]*border:\s*1px solid[\s\S]*border-radius:\s*12px;/);
-  assert.match(briefCardRules, /\.brief-cell\.brief-field,[\s\S]*min-height:\s*176px;[\s\S]*padding:\s*13px 17px 15px;[\s\S]*border:\s*0;[\s\S]*border-radius:\s*0;[\s\S]*box-shadow:\s*none;/);
+  assert.match(briefCardRules, /\.brief-strip\.task-brief\s*\{[\s\S]*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\);[\s\S]*gap:\s*0;[\s\S]*min-height:\s*150px;[\s\S]*border:\s*1px solid[\s\S]*border-radius:\s*12px;/);
+  assert.match(briefCardRules, /\.brief-cell\.brief-field,[\s\S]*min-height:\s*150px;[\s\S]*padding:\s*13px 17px 15px;[\s\S]*border:\s*0;[\s\S]*border-radius:\s*0;[\s\S]*box-shadow:\s*none;/);
   assert.match(briefCardRules, /\.brief-cell\.brief-field \+ \.brief-cell\.brief-field\s*\{[\s\S]*border-left:\s*1px solid/);
   assert.match(briefCardRules, /\.brief-cell\.brief-field > \.brief-label\s*\{[\s\S]*min-height:\s*22px;/);
-  assert.match(briefCardRules, /\.task-brief textarea\s*\{[\s\S]*min-height:\s*126px;[\s\S]*height:\s*126px;[\s\S]*margin:\s*4px 0 0;/);
+  assert.match(briefCardRules, /\.brief-progress-ring\s*\{[\s\S]*width:\s*22px;[\s\S]*height:\s*22px;[\s\S]*flex:\s*0 0 22px;/);
+  assert.match(briefCardRules, /\.task-brief textarea\s*\{[\s\S]*min-height:\s*96px;[\s\S]*height:\s*96px;[\s\S]*max-height:\s*96px;[\s\S]*margin:\s*4px 0 0;/);
   assert.match(briefCardRules, /\.brief-label \.brief-stamp\s*\{[\s\S]*display:\s*none;/);
   assert.match(result.pageHtml, /class="brief-field brief-cell background/);
   assert.match(result.pageHtml, /class="brief-field brief-cell hypothesis[\s\S]*class="brief-progress-ring"/);

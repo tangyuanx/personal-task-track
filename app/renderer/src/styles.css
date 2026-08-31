@@ -8110,11 +8110,6 @@ body {
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.24);
 }
 
-:root[data-theme="dark"] .today-panel.today-focus:has(.focus-empty) {
-  height: 153px;
-  max-height: 153px;
-}
-
 /* Today widget restore control — matches the approved standalone demo. */
 .restore-widget {
   position: fixed;
@@ -9793,6 +9788,9 @@ button:not(:disabled):active,
 /* v0.1.142 local acceptance — stable Today rail and compact repository controls */
 .today-panel.today-focus {
   flex: 0 0 auto;
+  height: 215px;
+  max-height: 215px;
+  grid-template-rows: auto minmax(0, 1fr);
 }
 
 .task-repository-toolbar {
@@ -12014,7 +12012,7 @@ body.flow-node-reordering * {
 .brief-strip.task-brief {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0;
-  min-height: 176px;
+  min-height: 150px;
   margin: 22px 38px 0;
   padding: 0;
   overflow: visible;
@@ -12029,7 +12027,7 @@ body.flow-node-reordering * {
 .brief-cell.brief-field:last-child {
   display: flex;
   min-width: 0;
-  min-height: 176px;
+  min-height: 150px;
   flex-direction: column;
   gap: 0;
   padding: 13px 17px 15px;
@@ -12124,9 +12122,9 @@ body.flow-node-reordering * {
   --brief-progress: 0;
   position: relative;
   display: grid;
-  width: 36px;
-  height: 36px;
-  flex: 0 0 36px;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
   place-items: center;
   border-radius: 50%;
   background: conic-gradient(
@@ -12138,7 +12136,7 @@ body.flow-node-reordering * {
 
 .brief-progress-ring::before {
   position: absolute;
-  inset: 3px;
+  inset: 2px;
   border-radius: inherit;
   background: var(--handoff-surface, var(--panel));
   content: "";
@@ -12148,15 +12146,15 @@ body.flow-node-reordering * {
   position: relative;
   z-index: 1;
   font-family: var(--mono);
-  font-size: 8px;
+  font-size: 7px;
   font-weight: 760;
   letter-spacing: -0.03em;
 }
 
 .task-brief textarea {
-  min-height: 126px;
-  height: 126px;
-  max-height: 170px;
+  min-height: 96px;
+  height: 96px;
+  max-height: 96px;
   margin: 4px 0 0;
   padding: 0;
   overflow-y: auto;
