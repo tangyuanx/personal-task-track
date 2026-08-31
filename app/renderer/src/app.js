@@ -549,6 +549,15 @@ function isEditableTarget(target) {
   ));
 }
 
+function isKnowledgeSaveShortcut(event) {
+  return (
+    !event.isComposing &&
+    (event.ctrlKey || event.metaKey) &&
+    !event.altKey &&
+    event.key.toLowerCase() === "s"
+  );
+}
+
 function normalizeIdentifier(value) {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -1566,6 +1575,42 @@ function taskRepositoryViewKey() {
   ]);
 }
 
+function processingFlowViewKey(task = activeTask()) {
+  return JSON.stringify([task?.id || "", "flow"]);
+}
+
+function nodeDetailViewKey(taskId, nodeId) {
+  return JSON.stringify([taskId || "", nodeId || ""]);
+}
+
+function knowledgeViewKey(task = activeTask()) {
+  return JSON.stringify([task?.id || "", "notes"]);
+}
+
+function captureScrollViewport(selector, datasetKey, nextViewKey) {
+  const element = document.querySelector(selector);
+  if (!element) return null;
+
+  return {
+    top: Number(element.scrollTop) || 0,
+    left: Number(element.scrollLeft) || 0,
+    previousViewKey: element.dataset[datasetKey] || "",
+    nextViewKey,
+  };
+}
+
+function restoreScrollViewport(snapshot, selector) {
+  if (!snapshot || snapshot.previousViewKey !== snapshot.nextViewKey) return;
+
+  const element = document.querySelector(selector);
+  if (!element) return;
+
+  const maxTop = Math.max(0, element.scrollHeight - element.clientHeight);
+  const maxLeft = Math.max(0, element.scrollWidth - element.clientWidth);
+  element.scrollTop = Math.min(snapshot.top, maxTop);
+  element.scrollLeft = Math.min(snapshot.left, maxLeft);
+}
+
 
 // ============================================================
 // RENDERING -- main render() and all DOM builders
@@ -1577,13 +1622,29 @@ function taskRepositoryViewKey() {
  * This is called after every state change.
  */
 function render() {
+  const task = activeTask();
   const previousGroupScrollLeft = document.querySelector("[data-sheet-tabs]");
   const groupScrollLeft = previousGroupScrollLeft ? Number(previousGroupScrollLeft.scrollLeft) || 0 : null;
-  const previousRepositoryScroller = document.querySelector("[data-task-repository-scroll]");
-  const repositoryScrollTop = previousRepositoryScroller ? Number(previousRepositoryScroller.scrollTop) || 0 : null;
-  const previousRepositoryViewKey = previousRepositoryScroller?.dataset.taskRepositoryView || "";
-  const nextRepositoryViewKey = taskRepositoryViewKey();
-  const shouldRestoreRepositoryScroll = repositoryScrollTop !== null && previousRepositoryViewKey === nextRepositoryViewKey;
+  const repositoryViewport = captureScrollViewport(
+    "[data-task-repository-scroll]",
+    "taskRepositoryView",
+    taskRepositoryViewKey(),
+  );
+  const flowViewport = captureScrollViewport(
+    "[data-processing-flow-scroll]",
+    "processingFlowView",
+    processingFlowViewKey(task),
+  );
+  const nodeDetailViewport = captureScrollViewport(
+    "[data-node-detail-scroll]",
+    "nodeDetailView",
+    nodeDetailViewKey(task?.id, state.selectedNodeId),
+  );
+  const knowledgeViewport = captureScrollViewport(
+    "[data-knowledge-scroll]",
+    "knowledgeView",
+    knowledgeViewKey(task),
+  );
   captureMountedMilkdownDrafts();
   flushNodeNoteDrafts({ persist: false });
   save();
@@ -1592,7 +1653,6 @@ function render() {
   document.documentElement.dataset.theme = state.theme;
   document.documentElement.dataset.zhFont = state.zhFont;
   document.documentElement.dataset.enFont = state.enFont;
-  const task = activeTask();
   if (task) state.activeTaskId = task.id;
   if (recurrencePopoverTaskId && recurrencePopoverTaskId !== task?.id) recurrencePopoverTaskId = "";
   if (taskGroupSelectTaskId && taskGroupSelectTaskId !== task?.id) taskGroupSelectTaskId = "";
@@ -1621,26 +1681,28 @@ function render() {
     const groupScroller = document.querySelector("[data-sheet-tabs]");
     if (groupScroller) groupScroller.scrollLeft = groupScrollLeft;
   };
-  const restoreRepositoryScroll = () => {
-    if (!shouldRestoreRepositoryScroll) return;
-    const scroller = document.querySelector("[data-task-repository-scroll]");
-    if (!scroller) return;
-    const maxScrollTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
-    scroller.scrollTop = Math.min(repositoryScrollTop, maxScrollTop);
+  const restoreRenderViewports = () => {
+    restoreScrollViewport(repositoryViewport, "[data-task-repository-scroll]");
+    restoreScrollViewport(flowViewport, "[data-processing-flow-scroll]");
+    restoreScrollViewport(nodeDetailViewport, "[data-node-detail-scroll]");
+    restoreScrollViewport(knowledgeViewport, "[data-knowledge-scroll]");
   };
   restoreGroupScroll();
-  restoreRepositoryScroll();
+  restoreRenderViewports();
   focusPendingElement();
   restoreGroupScroll();
-  restoreRepositoryScroll();
+  restoreRenderViewports();
   publishTodayWidgetSnapshot();
   publishDeadlineReminderSnapshot();
   window.requestAnimationFrame(() => {
     restoreGroupScroll();
-    restoreRepositoryScroll();
+    restoreRenderViewports();
     restoreDeadlinePickerTimeScroll();
     mountMilkdownEditors();
-    restoreRepositoryScroll();
+    restoreRenderViewports();
+    window.requestAnimationFrame(() => {
+      restoreRenderViewports();
+    });
   });
 }
 
@@ -2044,7 +2106,7 @@ function renderTaskPage(task) {
 
       <section class="task-workbench lower">
         ${state.taskPane === "flow" ? `<section class="task-workspace flow-workspace ${selectedNode ? "has-node-page" : ""}">
-          <section class="flow-section flow-main" data-context="flow-root" data-task-id="${task.id}">
+          <section class="flow-section flow-main" data-context="flow-root" data-task-id="${task.id}" data-processing-flow-scroll data-processing-flow-view="${escAttr(processingFlowViewKey(task))}">
           ${
             topNodes.length
               ? `<div class="flow-list flow-outline" style="--flow-visible-row-count:${visibleFlowRowCount(topNodes)}" data-context="flow-root" data-task-id="${task.id}">${topNodes.map((node, index) => renderFlowNode(task.id, node, 0, index, [], index === topNodes.length - 1)).join("")}</div>`
@@ -2122,7 +2184,7 @@ function renderTaskKnowledge(task) {
             <button type="button" data-action="save-knowledge-as" data-task-id="${task.id}">另存为</button>
           </div>
         </div>
-        <div class="milkdown-editor-host" data-editor-kind="task" data-task-id="${task.id}">
+        <div class="milkdown-editor-host" data-editor-kind="task" data-task-id="${task.id}" data-knowledge-scroll data-knowledge-view="${escAttr(knowledgeViewKey(task))}">
           <div class="milkdown-loading">正在加载 Milkdown 编辑器...</div>
         </div>
         <div class="milkdown-status">
@@ -2515,7 +2577,7 @@ function renderNodeDetailPage(taskId, node) {
       <header class="node-detail-bar">
         <button class="node-detail-back" type="button" data-action="close-node-detail" aria-label="返回处理流">${briefFieldIcon("arrow-left", "node-detail-back-icon")}<span>返回处理流</span></button>
       </header>
-      <div class="node-detail-scroll">
+      <div class="node-detail-scroll" data-node-detail-scroll data-node-detail-view="${escAttr(nodeDetailViewKey(taskId, node.id))}">
         <header class="node-inspector-header">
         <div class="node-detail-heading">
           <div class="node-detail-title-row">${inputHtml("title", node.title, taskId, "node-detail-title", node.id)}<time class="node-detail-updated" datetime="${escAttr(node.updatedAt)}">最近修改 ${formatShort(node.updatedAt)}</time></div>
@@ -5406,7 +5468,7 @@ function focusPendingElement() {
     const input = document.querySelector(`.flow-title-input[data-node-id="${state.focusNodeTitleId}"]`);
     state.focusNodeTitleId = "";
     if (input) {
-      input.focus();
+      input.focus({ preventScroll: true });
       input.select();
     }
   }
@@ -7833,6 +7895,22 @@ if (desktopUpdates?.onPrepareInstall) {
 
 window.addEventListener("keydown", (event) => {
   if (event.isComposing) return;
+
+  if (isKnowledgeSaveShortcut(event) && state.taskPane === "notes") {
+    const task = activeTask();
+    if (!task) return;
+
+    event.preventDefault();
+
+    void saveKnowledgeTask(task.id, {
+      saveAs: event.shiftKey,
+    }).then((result) => {
+      if (!result?.canceled) render();
+    });
+
+    return;
+  }
+
   if (event.key !== "Escape" && isEditableTarget(event.target)) return;
   if (event.key === "Escape") {
     if (state.contextMenu) {
@@ -7858,16 +7936,6 @@ window.addEventListener("keydown", (event) => {
     }
   }
   if (!(event.metaKey || event.ctrlKey)) return;
-  if (event.key.toLowerCase() === "s") {
-    event.preventDefault();
-    const task = activeTask();
-    if (task) {
-      void saveKnowledgeTask(task.id, { saveAs: event.shiftKey }).then((result) => {
-        if (!result?.canceled) render();
-      });
-    }
-    return;
-  }
   if (event.key.toLowerCase() !== "k") return;
   const target = event.target;
   if (target instanceof HTMLTextAreaElement || target?.isContentEditable) return;

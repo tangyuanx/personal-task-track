@@ -130,6 +130,7 @@ async function waitForCondition(predicate, timeoutMs = 500) {
 function rendererHarness(personalTaskTrack = undefined) {
   const storage = new Map();
   const alerts = [];
+  const windowListeners = new Map();
   const document = {
     activeElement: null,
     body: {
@@ -155,7 +156,11 @@ function rendererHarness(personalTaskTrack = undefined) {
   };
   const window = {
     personalTaskTrack,
-    addEventListener() {},
+    addEventListener(type, listener) {
+      const listeners = windowListeners.get(type) || [];
+      listeners.push(listener);
+      windowListeners.set(type, listeners);
+    },
     clearTimeout,
     setTimeout,
     requestAnimationFrame() {},
@@ -207,6 +212,9 @@ function rendererHarness(personalTaskTrack = undefined) {
         },
         storageValue(key) {
           return storage.get(key) ?? null;
+        },
+        dispatch(type, event) {
+          for (const listener of windowListeners.get(type) || []) listener(event);
         },
         alerts,
       };
@@ -1967,7 +1975,7 @@ test("knowledge UI exposes every document state and the required recovery action
 
   const app = await fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "app.js"), "utf8");
   assert.match(app, /event\.metaKey \|\| event\.ctrlKey/);
-  assert.match(app, /saveKnowledgeTask\(task\.id, \{ saveAs: event\.shiftKey \}\)/);
+  assert.match(app, /saveKnowledgeTask\(task\.id,\s*\{\s*saveAs: event\.shiftKey,?\s*\}\)/);
 });
 
 test("draft removal prompts safely and file binding removal never deletes disk files", async () => {
@@ -2999,12 +3007,165 @@ test("task repository preserves vertical viewport only within the same view", as
   assert.match(app, /function taskRepositoryViewKey\(\) \{[\s\S]*state\.activeGroupId[\s\S]*state\.query\.trim\(\)\.toLowerCase\(\)[\s\S]*state\.taskFilter[\s\S]*state\.taskDateFilter[\s\S]*state\.taskDeadlineFilter[\s\S]*state\.priorityFilter[\s\S]*state\.captureSourceFilter[\s\S]*\}/);
   assert.doesNotMatch(app, /function taskRepositoryViewKey\(\) \{[^}]*state\.activeTaskId/);
   assert.match(app, /data-task-repository-scroll data-task-repository-view="\$\{escAttr\(taskRepositoryViewKey\(\)\)\}"/);
-  assert.match(app, /const previousRepositoryScroller = document\.querySelector\("\[data-task-repository-scroll\]"\)/);
-  assert.match(app, /const repositoryScrollTop = previousRepositoryScroller \? Number\(previousRepositoryScroller\.scrollTop\) \|\| 0 : null/);
-  assert.match(app, /const shouldRestoreRepositoryScroll = repositoryScrollTop !== null && previousRepositoryViewKey === nextRepositoryViewKey/);
-  assert.match(app, /const restoreRepositoryScroll = \(\) => \{[\s\S]*scroller\.scrollTop = Math\.min\(repositoryScrollTop, maxScrollTop\)/);
-  assert.match(app, /previousRepositoryViewKey === nextRepositoryViewKey/);
-  assert.match(app, /window\.requestAnimationFrame\(\(\) => \{[\s\S]*restoreRepositoryScroll\(\);[\s\S]*mountMilkdownEditors\(\);[\s\S]*restoreRepositoryScroll\(\);/);
+  assert.match(app, /const repositoryViewport = captureScrollViewport\([\s\S]*"taskRepositoryView"[\s\S]*taskRepositoryViewKey\(\)/);
+  assert.match(app, /restoreScrollViewport\(repositoryViewport, "\[data-task-repository-scroll\]"\)/);
+  assert.match(app, /element\.scrollTop = Math\.min\(snapshot\.top, maxTop\)/);
+  assert.match(app, /element\.scrollLeft = Math\.min\(snapshot\.left, maxLeft\)/);
+  assert.match(app, /window\.requestAnimationFrame\(\(\) => \{[\s\S]*restoreRenderViewports\(\);[\s\S]*mountMilkdownEditors\(\);[\s\S]*restoreRenderViewports\(\);[\s\S]*window\.requestAnimationFrame/);
+});
+
+test("shared scroll viewport snapshots restore matching vertical and horizontal positions safely", async () => {
+  const harness = await rendererHarness();
+  const result = harness.json(`(() => {
+    const elements = new Map();
+    document.querySelector = (selector) => elements.get(selector) || null;
+    const createScroller = (top, left) => ({
+      scrollTop: top,
+      scrollLeft: left,
+      scrollHeight: 500,
+      clientHeight: 100,
+      scrollWidth: 700,
+      clientWidth: 100,
+      dataset: { taskRepositoryView: "same" },
+    });
+
+    const matching = createScroller(130, 95);
+    elements.set("#matching", matching);
+    const matchingSnapshot = captureScrollViewport("#matching", "taskRepositoryView", "same");
+    matching.scrollTop = 0;
+    matching.scrollLeft = 0;
+    restoreScrollViewport(matchingSnapshot, "#matching");
+
+    const clamped = createScroller(130, 95);
+    elements.set("#clamped", clamped);
+    const clampedSnapshot = captureScrollViewport("#clamped", "taskRepositoryView", "same");
+    clamped.scrollHeight = 150;
+    clamped.scrollWidth = 140;
+    restoreScrollViewport(clampedSnapshot, "#clamped");
+
+    const different = createScroller(77, 88);
+    elements.set("#different", different);
+    const differentSnapshot = captureScrollViewport("#different", "taskRepositoryView", "other");
+    different.scrollTop = 0;
+    different.scrollLeft = 0;
+    restoreScrollViewport(differentSnapshot, "#different");
+
+    const zero = createScroller(0, 0);
+    elements.set("#zero", zero);
+    restoreScrollViewport(captureScrollViewport("#zero", "taskRepositoryView", "same"), "#zero");
+
+    elements.clear();
+    const missing = captureScrollViewport("#missing", "taskRepositoryView", "same");
+    restoreScrollViewport(missing, "#missing");
+    return {
+      matching: [matching.scrollTop, matching.scrollLeft],
+      clamped: [clamped.scrollTop, clamped.scrollLeft],
+      different: [different.scrollTop, different.scrollLeft],
+      zero: [zero.scrollTop, zero.scrollLeft],
+      missing,
+    };
+  })()`);
+
+  assert.deepEqual(result.matching, [130, 95]);
+  assert.deepEqual(result.clamped, [50, 40]);
+  assert.deepEqual(result.different, [0, 0]);
+  assert.deepEqual(result.zero, [0, 0]);
+  assert.equal(result.missing, null);
+});
+
+test("four scrollable regions use isolated task and node view keys", async () => {
+  const [app, harness] = await Promise.all([
+    fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "app.js"), "utf8"),
+    rendererHarness(),
+  ]);
+  const result = harness.json(`(() => {
+    state.tasks = normalizeTasks([
+      { id: "view_task_a", title: "任务 A", nodes: [{ id: "view_node_a", title: "节点 A", children: [] }] },
+      { id: "view_task_b", title: "任务 B", nodes: [] },
+    ]);
+    state.activeTaskId = "view_task_a";
+    const task = activeTask();
+    const repositoryBefore = taskRepositoryViewKey();
+    state.activeTaskId = "view_task_b";
+    const repositoryAfter = taskRepositoryViewKey();
+    return {
+      repositoryStableAcrossTaskSelection: repositoryBefore === repositoryAfter,
+      flow: JSON.parse(processingFlowViewKey(task)),
+      detail: JSON.parse(nodeDetailViewKey("view_task_a", "view_node_a")),
+      knowledge: JSON.parse(knowledgeViewKey(task)),
+    };
+  })()`);
+
+  assert.equal(result.repositoryStableAcrossTaskSelection, true);
+  assert.deepEqual(result.flow, ["view_task_a", "flow"]);
+  assert.deepEqual(result.detail, ["view_task_a", "view_node_a"]);
+  assert.deepEqual(result.knowledge, ["view_task_a", "notes"]);
+  assert.match(app, /data-processing-flow-scroll data-processing-flow-view="\$\{escAttr\(processingFlowViewKey\(task\)\)\}"/);
+  assert.match(app, /class="node-detail-scroll" data-node-detail-scroll data-node-detail-view="\$\{escAttr\(nodeDetailViewKey\(taskId, node\.id\)\)\}"/);
+  assert.match(app, /class="milkdown-editor-host"[^>]*data-knowledge-scroll data-knowledge-view="\$\{escAttr\(knowledgeViewKey\(task\)\)\}"/);
+  assert.doesNotMatch(app.match(/function processingFlowViewKey\(task = activeTask\(\)\) \{[\s\S]*?\n\}/)?.[0] || "", /selectedNodeId|collapsed|recordDraft|updatedAt/);
+  assert.doesNotMatch(app.match(/function knowledgeViewKey\(task = activeTask\(\)\) \{[\s\S]*?\n\}/)?.[0] || "", /documentState|filePath|lastSavedHash|updatedAt|Markdown/);
+});
+
+test("knowledge save shortcuts are handled before editable-target filtering", async () => {
+  const saves = [];
+  const harness = await rendererHarness({
+    knowledgeFile: {
+      save: async (payload) => {
+        saves.push(payload.saveAs);
+        return {
+          success: true,
+          content: "快捷键保存后的正文",
+          filePath: payload.saveAs ? "/tmp/knowledge-save-as.md" : payload.filePath || "/tmp/knowledge.md",
+          lastSavedHash: "shortcut-hash",
+        };
+      },
+    },
+  });
+  harness.evaluate(`document.querySelector = (selector) => selector === "#root" ? { innerHTML: "" } : null`);
+  harness.evaluate(`(() => {
+    state.tasks = normalizeTasks([{ id: "shortcut_task", title: "快捷键任务", notes: "正文", nodes: [] }]);
+    state.activeTaskId = "shortcut_task";
+    state.taskPane = "notes";
+  })()`);
+
+  const createEvent = (overrides = {}) => ({
+    key: "s",
+    ctrlKey: false,
+    metaKey: false,
+    altKey: false,
+    shiftKey: false,
+    isComposing: false,
+    target: { isContentEditable: true },
+    defaultPrevented: false,
+    preventDefault() { this.defaultPrevented = true; },
+    ...overrides,
+  });
+  const ctrl = createEvent({ ctrlKey: true });
+  harness.dispatch("keydown", ctrl);
+  await waitForCondition(() => saves.length === 1);
+  const command = createEvent({ metaKey: true });
+  harness.dispatch("keydown", command);
+  await waitForCondition(() => saves.length === 2);
+  const saveAs = createEvent({ ctrlKey: true, shiftKey: true });
+  harness.dispatch("keydown", saveAs);
+  await waitForCondition(() => saves.length === 3);
+
+  const alt = createEvent({ ctrlKey: true, altKey: true });
+  harness.dispatch("keydown", alt);
+  await new Promise((resolve) => setImmediate(resolve));
+  harness.evaluate(`state.taskPane = "flow"`);
+  const flow = createEvent({ ctrlKey: true });
+  harness.dispatch("keydown", flow);
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.deepEqual(saves, [false, false, true]);
+  assert.equal(ctrl.defaultPrevented, true);
+  assert.equal(command.defaultPrevented, true);
+  assert.equal(saveAs.defaultPrevented, true);
+  assert.equal(alt.defaultPrevented, false);
+  assert.equal(flow.defaultPrevented, false);
+  assert.equal(saves.length, 3);
 });
 
 test("workbench group selection uses a ReUI-style trigger and option menu", async () => {
