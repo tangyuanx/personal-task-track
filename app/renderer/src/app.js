@@ -1554,6 +1554,18 @@ function workbenchStyle() {
   return `--detail-pane-height:${detailHeight}%;--flow-pane-height:${100 - detailHeight}%`;
 }
 
+function taskRepositoryViewKey() {
+  return JSON.stringify([
+    state.activeGroupId,
+    state.query.trim().toLowerCase(),
+    state.taskFilter,
+    state.taskDateFilter,
+    state.taskDeadlineFilter,
+    state.priorityFilter,
+    state.captureSourceFilter,
+  ]);
+}
+
 
 // ============================================================
 // RENDERING -- main render() and all DOM builders
@@ -1567,6 +1579,11 @@ function workbenchStyle() {
 function render() {
   const previousGroupScrollLeft = document.querySelector("[data-sheet-tabs]");
   const groupScrollLeft = previousGroupScrollLeft ? Number(previousGroupScrollLeft.scrollLeft) || 0 : null;
+  const previousRepositoryScroller = document.querySelector("[data-task-repository-scroll]");
+  const repositoryScrollTop = previousRepositoryScroller ? Number(previousRepositoryScroller.scrollTop) || 0 : null;
+  const previousRepositoryViewKey = previousRepositoryScroller?.dataset.taskRepositoryView || "";
+  const nextRepositoryViewKey = taskRepositoryViewKey();
+  const shouldRestoreRepositoryScroll = repositoryScrollTop !== null && previousRepositoryViewKey === nextRepositoryViewKey;
   captureMountedMilkdownDrafts();
   flushNodeNoteDrafts({ persist: false });
   save();
@@ -1604,15 +1621,26 @@ function render() {
     const groupScroller = document.querySelector("[data-sheet-tabs]");
     if (groupScroller) groupScroller.scrollLeft = groupScrollLeft;
   };
+  const restoreRepositoryScroll = () => {
+    if (!shouldRestoreRepositoryScroll) return;
+    const scroller = document.querySelector("[data-task-repository-scroll]");
+    if (!scroller) return;
+    const maxScrollTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+    scroller.scrollTop = Math.min(repositoryScrollTop, maxScrollTop);
+  };
   restoreGroupScroll();
+  restoreRepositoryScroll();
   focusPendingElement();
   restoreGroupScroll();
+  restoreRepositoryScroll();
   publishTodayWidgetSnapshot();
   publishDeadlineReminderSnapshot();
   window.requestAnimationFrame(() => {
     restoreGroupScroll();
+    restoreRepositoryScroll();
     restoreDeadlinePickerTimeScroll();
     mountMilkdownEditors();
+    restoreRepositoryScroll();
   });
 }
 
@@ -1712,7 +1740,7 @@ function renderSidebar() {
           </div>
         </div>
         <div class="repository-list-wrapper">
-          <div class="repository-scroll-area" data-task-repository-scroll>
+          <div class="repository-scroll-area" data-task-repository-scroll data-task-repository-view="${escAttr(taskRepositoryViewKey())}">
             <div class="task-repository-rows">${renderTaskRepositoryRows()}</div>
           </div>
           <button class="add-task-floating" type="button" data-action="add-task" title="新增任务" aria-label="新增任务">

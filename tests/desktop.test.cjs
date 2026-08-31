@@ -2993,6 +2993,20 @@ test("group editing preserves the horizontal group viewport across renders", asy
   assert.match(app, /window\.requestAnimationFrame\(\(\) => \{[\s\S]*restoreGroupScroll\(\);[\s\S]*mountMilkdownEditors\(\)/);
 });
 
+test("task repository preserves vertical viewport only within the same view", async () => {
+  const app = await fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "app.js"), "utf8");
+
+  assert.match(app, /function taskRepositoryViewKey\(\) \{[\s\S]*state\.activeGroupId[\s\S]*state\.query\.trim\(\)\.toLowerCase\(\)[\s\S]*state\.taskFilter[\s\S]*state\.taskDateFilter[\s\S]*state\.taskDeadlineFilter[\s\S]*state\.priorityFilter[\s\S]*state\.captureSourceFilter[\s\S]*\}/);
+  assert.doesNotMatch(app, /function taskRepositoryViewKey\(\) \{[^}]*state\.activeTaskId/);
+  assert.match(app, /data-task-repository-scroll data-task-repository-view="\$\{escAttr\(taskRepositoryViewKey\(\)\)\}"/);
+  assert.match(app, /const previousRepositoryScroller = document\.querySelector\("\[data-task-repository-scroll\]"\)/);
+  assert.match(app, /const repositoryScrollTop = previousRepositoryScroller \? Number\(previousRepositoryScroller\.scrollTop\) \|\| 0 : null/);
+  assert.match(app, /const shouldRestoreRepositoryScroll = repositoryScrollTop !== null && previousRepositoryViewKey === nextRepositoryViewKey/);
+  assert.match(app, /const restoreRepositoryScroll = \(\) => \{[\s\S]*scroller\.scrollTop = Math\.min\(repositoryScrollTop, maxScrollTop\)/);
+  assert.match(app, /previousRepositoryViewKey === nextRepositoryViewKey/);
+  assert.match(app, /window\.requestAnimationFrame\(\(\) => \{[\s\S]*restoreRepositoryScroll\(\);[\s\S]*mountMilkdownEditors\(\);[\s\S]*restoreRepositoryScroll\(\);/);
+});
+
 test("workbench group selection uses a ReUI-style trigger and option menu", async () => {
   const [app, styles] = await Promise.all([
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "app.js"), "utf8"),
