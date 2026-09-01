@@ -108,7 +108,7 @@ try {
         }
         $productVersion = (Get-Item -LiteralPath $loopExecutable).VersionInfo.ProductVersion
         if (-not $productVersion.StartsWith($expectedVersion, [System.StringComparison]::OrdinalIgnoreCase)) {
-            throw "Unexpected installed version after upgrading v$installedVersion: $productVersion"
+            throw "Unexpected installed version after upgrading v${installedVersion}: $productVersion"
         }
         if ((Get-FileHash -Algorithm SHA256 -LiteralPath $taskDataPath).Hash -ne $beforeHash) {
             throw "Task data changed while upgrading v$installedVersion."
