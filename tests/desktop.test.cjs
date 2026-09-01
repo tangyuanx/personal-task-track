@@ -3204,12 +3204,20 @@ test("task repository follows the approved compact ordering layout", async () =>
   }])[0], 3)`);
 
   assert.match(app, /\.map\(\(task, index\) => renderTaskItem\(task, index \+ 1\)\)/);
+  assert.match(app, /<ul class="list bg-base-100 rounded-box shadow-md task-repository-rows" aria-label="任务仓库列表">/);
+  assert.match(app, /<li class="p-4 pb-2 text-xs opacity-60 tracking-wide task-repository-heading">任务仓库<\/li>/);
   assert.doesNotMatch(app, /class="task-repository-columns"/);
-  assert.match(html, /task-sequence" aria-hidden="true">03/);
+  assert.match(html, /<li class="list-row task-item task-row/);
+  assert.match(html, /<div><img class="size-10 rounded-box" alt="任务列表项" src="https:\/\/img\.daisyui\.com\/images\/profile\/demo\/3@94\.webp" \/><\/div>/);
+  assert.doesNotMatch(html, /task-sequence/);
   assert.match(html, /draggable="true"/);
-  assert.match(html, /repository-complete/);
+  assert.match(html, /class="btn btn-square btn-ghost task-repository-open"/);
+  assert.match(html, /class="btn btn-square btn-ghost task-check repository-complete/);
+  assert.match(html, /M6 3L20 12 6 21 6 3z/);
+  assert.match(html, /M19 14c1\.49-1\.46 3-3\.21 3-5\.5A5\.5 5\.5 0 0 0 16\.5 3/);
   assert.doesNotMatch(html, /task-drag-handle/);
-  assert.match(styles, /grid-template-columns: 42px minmax\(0, 1fr\) 82px 34px;/);
+  assert.match(styles, /grid-auto-flow: column;[\s\S]*grid-template-columns: auto minmax\(0, 1fr\) auto auto;/);
+  assert.match(styles, /\.btn\.btn-square\.btn-ghost\.task-repository-open,[\s\S]*\.btn\.btn-square\.btn-ghost\.repository-complete/);
   assert.match(styles, /\.task-row\.task-item \{[\s\S]*min-height: 48px;[\s\S]*border: 0;/);
 });
 
@@ -3221,7 +3229,8 @@ test("repository and flow cleanup leave no inherited separators or duplicate hea
 
   assert.doesNotMatch(app, /<strong>任务分组<\/strong>/);
   assert.doesNotMatch(app, /<div class="section-heading flow-head">[\s\S]*?<h2>处理流<\/h2>/);
-  assert.match(styles, /\.task-row\.task-item \{[\s\S]*grid-template-columns: 32px minmax\(0, 1fr\) max-content 16px;[\s\S]*column-gap: 6px;[\s\S]*border-bottom: 0;/);
+  assert.match(styles, /\.task-repository-rows\.list\.bg-base-100\.rounded-box\.shadow-md[\s\S]*list-style: none;/);
+  assert.match(styles, /\.rail\.sidebar \.repository-scroll-area \.task-repository-rows > \.list-row\.task-row\.task-item \{[\s\S]*grid-template-columns: auto minmax\(0, 1fr\) auto auto;[\s\S]*gap: 1rem;[\s\S]*border: 0;/);
   assert.match(styles, /\.task-row\.task-item:last-child \{[\s\S]*border-bottom: 0;/);
   assert.match(styles, /\.repository-complete:not\(\.is-checked\)::after \{[\s\S]*display: none;/);
   assert.match(styles, /\.group-panel,[\s\S]*\.task-footer\.sidebar-foot \{[\s\S]*border-top: 0;/);

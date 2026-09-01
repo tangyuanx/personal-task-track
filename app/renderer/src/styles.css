@@ -13004,3 +13004,157 @@ body.flow-node-reordering * {
 .repository-group-edit { width:100%; min-width:0; height:25px; border:1px solid var(--handoff-focus-800); border-radius:6px; padding:0 7px; background:var(--handoff-surface); color:var(--handoff-ink); font:inherit; outline:0; }
 .context-menu button[data-action="delete-group-keep-tasks"],
 .context-menu button[data-action="delete-group-with-tasks"] { white-space:nowrap; }
+
+/* DaisyUI List example applied to the task repository. */
+.rail.sidebar .repository-scroll-area .task-repository-rows.list.bg-base-100.rounded-box.shadow-md {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0 0 52px;
+  list-style: none;
+  overflow: visible;
+  border: 0;
+  border-radius: 1rem;
+  background: var(--handoff-surface);
+  box-shadow: 0 4px 6px -1px rgba(20, 44, 35, 0.1), 0 2px 4px -2px rgba(20, 44, 35, 0.1);
+}
+
+.rail.sidebar .repository-scroll-area .task-repository-heading {
+  padding: 1rem 1rem 0.5rem;
+  color: var(--handoff-ink);
+  font-family: var(--app-font);
+  font-size: 0.75rem;
+  font-weight: 650;
+  letter-spacing: 0.025em;
+  line-height: 1rem;
+  opacity: 0.6;
+}
+
+.rail.sidebar .repository-scroll-area .task-repository-rows > .list-row.task-row.task-item {
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  gap: 1rem;
+  align-items: center;
+  min-height: 0;
+  height: auto;
+  padding: 0.5rem 1rem;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.rail.sidebar .repository-scroll-area .task-repository-rows > .list-row.task-row.task-item > div:first-child {
+  min-width: 0;
+}
+
+.rail.sidebar .repository-scroll-area .task-repository-rows > .list-row.task-row.task-item > div:first-child img.size-10.rounded-box {
+  display: block;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.5rem;
+  object-fit: cover;
+}
+
+.rail.sidebar .repository-scroll-area .task-repository-rows .task-title-wrap.row-title {
+  display: grid;
+  min-width: 0;
+  gap: 0.125rem;
+  padding: 0;
+}
+
+.rail.sidebar .repository-scroll-area .task-repository-rows .task-repository-subtitle {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.5rem;
+  overflow: hidden;
+  color: var(--handoff-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1rem;
+  opacity: 0.6;
+  text-transform: uppercase;
+}
+
+.rail.sidebar .repository-scroll-area .task-repository-rows .task-repository-subtitle .task-next-line {
+  min-width: 0;
+  overflow: hidden;
+  margin: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rail.sidebar .repository-scroll-area .task-repository-rows .task-repository-subtitle .task-priority-control {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  min-width: 0;
+}
+
+.rail.sidebar .repository-scroll-area .task-repository-rows .task-repository-subtitle .task-priority-control select {
+  width: auto;
+  height: 1.25rem;
+  min-width: 2rem;
+  padding: 0 1rem 0 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  outline: 0;
+}
+
+.rail.sidebar .repository-scroll-area .task-repository-rows .btn.btn-square.btn-ghost.task-repository-open,
+.rail.sidebar .repository-scroll-area .task-repository-rows .btn.btn-square.btn-ghost.repository-complete {
+  display: grid;
+  width: 2.5rem;
+  height: 2.5rem;
+  min-width: 2.5rem;
+  min-height: 2.5rem;
+  place-items: center;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0.5rem;
+  background: transparent;
+  color: var(--handoff-muted);
+  box-shadow: none;
+}
+
+.rail.sidebar .repository-scroll-area .task-repository-rows .btn.btn-square.btn-ghost.task-repository-open:hover,
+.rail.sidebar .repository-scroll-area .task-repository-rows .btn.btn-square.btn-ghost.repository-complete:hover {
+  background: color-mix(in srgb, var(--handoff-focus-800) 10%, transparent);
+  color: var(--handoff-focus-800);
+}
+
+.rail.sidebar .repository-scroll-area .task-repository-rows .task-repository-open svg,
+.rail.sidebar .repository-scroll-area .task-repository-rows .repository-complete svg {
+  display: block;
+  width: 1.2em;
+  height: 1.2em;
+  fill: none;
+  stroke: currentColor;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  stroke-width: 2;
+}
+
+.rail.sidebar .repository-scroll-area .task-repository-rows .repository-complete.is-checked {
+  background: color-mix(in srgb, var(--handoff-focus-800) 18%, transparent);
+  color: var(--handoff-focus-800);
+}
+
+.rail.sidebar .repository-scroll-area .task-repository-rows .repository-complete::after,
+.rail.sidebar .repository-scroll-area .task-repository-rows .repository-complete.is-checked::after {
+  display: none;
+  content: none;
+}
+
+@media (max-width: 600px) {
+  .rail.sidebar .repository-scroll-area .task-repository-rows > .list-row.task-row.task-item {
+    gap: 0.625rem;
+    padding-right: 0.625rem;
+    padding-left: 0.625rem;
+  }
+}
