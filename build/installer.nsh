@@ -4,6 +4,9 @@
 !ifndef BUILD_UNINSTALLER
 Var loopUpgradeBackupRoot
 Var loopUpgradeBackupCreated
+Var loopLegacyInstallBackupsSource
+Var loopLegacyInstallBackupsQuarantine
+Var loopRegisteredInstallLocation
 
 !macro verifyLoopUpgradeFile SOURCE_FILE DEST_FILE
   ${IfNot} ${FileExists} "${DEST_FILE}"
@@ -77,6 +80,56 @@ Var loopUpgradeBackupCreated
   ${EndIf}
 !macroend
 
+!macro quarantineLegacyInstallBackups
+  StrCpy $loopLegacyInstallBackupsSource "$INSTDIR\Loop Data Backups"
+  ${IfNot} ${FileExists} "$loopLegacyInstallBackupsSource\*.*"
+    Goto loopLegacyInstallBackupsDone
+  ${EndIf}
+
+  ReadRegStr $loopRegisteredInstallLocation SHELL_CONTEXT "${INSTALL_REGISTRY_KEY}" InstallLocation
+  ${If} $loopRegisteredInstallLocation == ""
+    MessageBox MB_OK|MB_ICONSTOP "Loop 检测到旧版历史升级备份，但无法验证原安装目录。安装已停止，原软件和数据不会被删除。"
+    Abort
+  ${EndIf}
+  ${If} $loopRegisteredInstallLocation != $INSTDIR
+    MessageBox MB_OK|MB_ICONSTOP "Loop 检测到安装目录与系统登记不一致。为避免处理错误目录，安装已停止，原软件和数据不会被删除。"
+    Abort
+  ${EndIf}
+  ${IfNot} ${FileExists} "$INSTDIR\Loop.exe"
+    ${IfNot} ${FileExists} "$INSTDIR\Uninstall Loop.exe"
+      MessageBox MB_OK|MB_ICONSTOP "Loop 无法确认旧安装目录属于本软件。安装已停止，原软件和数据不会被删除。"
+      Abort
+    ${EndIf}
+  ${EndIf}
+
+  StrCpy $loopLegacyInstallBackupsQuarantine "$INSTDIR.legacy-loop-backups-pre-${VERSION}"
+  ${If} ${FileExists} "$loopLegacyInstallBackupsQuarantine\*.*"
+    MessageBox MB_OK|MB_ICONSTOP "Loop 已发现同版本的历史升级备份隔离目录。为避免覆盖或合并旧数据，安装已停止；请保留现场并反馈。"
+    Abort
+  ${EndIf}
+
+  ClearErrors
+  Rename "$loopLegacyInstallBackupsSource" "$loopLegacyInstallBackupsQuarantine"
+  ${If} ${Errors}
+    MessageBox MB_OK|MB_ICONSTOP "Loop 无法将旧版本的历史升级备份移出安装目录。安装已停止，原软件和数据不会被删除。"
+    Abort
+  ${EndIf}
+  ${If} ${FileExists} "$loopLegacyInstallBackupsSource\*.*"
+    MessageBox MB_OK|MB_ICONSTOP "Loop 未能确认历史升级备份已安全移出安装目录。安装已停止，原软件和数据不会被删除。"
+    Abort
+  ${EndIf}
+  ${IfNot} ${FileExists} "$loopLegacyInstallBackupsQuarantine\*.*"
+    MessageBox MB_OK|MB_ICONSTOP "Loop 未能校验历史升级备份隔离目录。安装已停止，原软件和数据不会被删除。"
+    Abort
+  ${EndIf}
+
+  FileOpen $R6 "$loopUpgradeBackupRoot\legacy-install-backups-location.txt" w
+  FileWrite $R6 "$loopLegacyInstallBackupsQuarantine$\r$\n"
+  FileClose $R6
+
+  loopLegacyInstallBackupsDone:
+!macroend
+
 !macro customInit
   StrCpy $loopUpgradeBackupRoot "$APPDATA\Personal Task Track Upgrade Backups\installer-pre-${VERSION}"
   StrCpy $loopUpgradeBackupCreated "0"
@@ -86,6 +139,7 @@ Var loopUpgradeBackupCreated
   !insertmacro backupLoopUpgradeDirectory "$APPDATA\personal-task-track" "personal-task-track"
   !insertmacro backupLoopUpgradeDirectory "$APPDATA\PersonalTaskTrack" "PersonalTaskTrack"
   !insertmacro backupLoopUpgradeDirectory "$APPDATA\Loop" "Loop"
+  !insertmacro quarantineLegacyInstallBackups
 !macroend
 
 !macro customInstall

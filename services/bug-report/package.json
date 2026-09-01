@@ -10,7 +10,7 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
-    "test": "tsx --test test/*.test.ts",
+    "test": "node --import tsx --test test/app.test.ts",
     "check": "npm run build && npm test"
   },
   "dependencies": {

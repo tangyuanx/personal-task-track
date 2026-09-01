@@ -307,6 +307,24 @@ test("Windows installer never recursively wraps historical installation backups"
   assert.match(installer, /!macro copyLoopUpgradeFile[\s\S]*task-data\.json[\s\S]*Abort/);
 });
 
+test("Windows installer quarantines legacy installation backups before invoking the old uninstaller", async () => {
+  const installer = await fs.readFile(path.join(__dirname, "..", "build", "installer.nsh"), "utf8");
+  const quarantine = installer.match(/!macro quarantineLegacyInstallBackups([\s\S]*?)!macroend/)?.[1] ?? "";
+  const customInit = installer.match(/!macro customInit([\s\S]*?)!macroend/)?.[1] ?? "";
+
+  assert.notEqual(quarantine, "");
+  assert.match(customInit, /backupLoopUpgradeDirectory[\s\S]*quarantineLegacyInstallBackups/);
+  assert.match(quarantine, /ReadRegStr \$loopRegisteredInstallLocation SHELL_CONTEXT "\$\{INSTALL_REGISTRY_KEY\}" InstallLocation/);
+  assert.match(quarantine, /\$loopRegisteredInstallLocation != \$INSTDIR[\s\S]*Abort/);
+  assert.match(quarantine, /\$INSTDIR\\Loop\.exe/);
+  assert.match(quarantine, /\$INSTDIR\.legacy-loop-backups-pre-\$\{VERSION\}/);
+  assert.match(quarantine, /Rename "\$loopLegacyInstallBackupsSource" "\$loopLegacyInstallBackupsQuarantine"/);
+  assert.match(quarantine, /legacy-install-backups-location\.txt/);
+  assert.doesNotMatch(quarantine, /CopyFiles|RMDir\s+\/r|robocopy|DeleteRegValue|DeleteRegKey/);
+  assert.match(quarantine, /同版本的历史升级备份隔离目录[\s\S]*Abort/);
+  assert.match(quarantine, /无法将旧版本的历史升级备份移出安装目录[\s\S]*Abort/);
+});
+
 test("settings and preload expose complete backup export plus file and directory restore actions", async () => {
   const root = path.join(__dirname, "..");
   const renderer = await fs.readFile(path.join(root, "app", "renderer", "src", "app.js"), "utf8");

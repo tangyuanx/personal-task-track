@@ -1835,6 +1835,8 @@ test("knowledge file IPC exposes read, relocate, and watcher lifecycle", async (
   assert.match(main, /knowledge-recovery:flush-and-quit/);
   assert.match(main, /knowledge-recovery:flush-complete/);
   assert.match(main, /before-quit[\s\S]*knowledgeWatcher\.closeAll\(\)/);
+  assert.match(main, /stopRuntimeForUpdateInstall[\s\S]*knowledgeWatcher\.closeAll\(\)[\s\S]*todayWidgetController\?\.stop\(\)[\s\S]*await deadlineReminderController\?\.stop\(\)/);
+  assert.match(main, /createPreInstallBackup[\s\S]*await stopRuntimeForUpdateInstall\(\)[\s\S]*updateInstallPrepared = true/);
   assert.match(main, /requestSingleInstanceLock/);
   assert.match(main, /second-instance/);
   assert.match(preload, /onChange: \(callback\) => subscribe\("knowledge-file:changed", callback\)/);

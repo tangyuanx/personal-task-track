@@ -48,3 +48,11 @@ jobs:
         run: ${{ matrix.script }}
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      - name: Test Windows installer upgrade matrix
+        if: matrix.platform == 'Windows'
+        shell: pwsh
+        run: |
+          $candidate = Get-ChildItem release -Filter "Loop-*-x64-setup.exe" | Select-Object -First 1
+          if (-not $candidate) { throw "Windows installer was not produced." }
+          ./tests/windows-upgrade-installer.test.ps1 -CandidateInstaller $candidate.FullName

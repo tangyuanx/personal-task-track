@@ -148,6 +148,13 @@ function requestRecoveryShutdown(event) {
   return true;
 }
 
+async function stopRuntimeForUpdateInstall() {
+  knowledgeWatcher.closeAll();
+  updateController?.stop();
+  todayWidgetController?.stop();
+  await deadlineReminderController?.stop();
+}
+
 async function finishUpdateInstallPreparation(success) {
   if (!updateInstallPreparation) return;
   if (updateInstallPreparation.finalizing) return;
@@ -167,6 +174,10 @@ async function finishUpdateInstallPreparation(success) {
       currentVersion: app.getVersion(),
       targetVersion: updateController?.getState()?.version,
     });
+    // Stop auxiliary windows, shortcuts, watchers, and timers before the
+    // updater launches NSIS. This shortens the interval in which a Loop child
+    // process can keep the previous installation directory locked.
+    await stopRuntimeForUpdateInstall();
     // `quitAndInstall` closes windows before `before-quit`, so the renderer and
     // the verified byte-level backup are both complete before this flag is set.
     updateInstallPrepared = true;
