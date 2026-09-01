@@ -7630,7 +7630,7 @@ function todayWidgetSnapshot() {
       nextText,
       kind,
     })),
-    quickCaptures: todayQuickCaptureItems().filter((item) => item.status !== "done").filter((_item, index) => index < 3),
+    quickCaptures: todayQuickCaptureItems().filter((item) => item.status !== "done"),
     quickCaptureTotal: todayQuickCaptureItems().filter((item) => item.status !== "done").length,
     groups: sort(state.taskGroups).map((group) => ({ id: group.id, title: group.title })),
   };

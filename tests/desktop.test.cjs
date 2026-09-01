@@ -3364,7 +3364,7 @@ test("Today widget snapshot reuses the main Today ordering and next-step content
   assert.equal(result.snapshot.items[0].nextText, "解除阻塞");
 });
 
-test("Today widget quick captures reuse tasks, timestamps, source filtering, and compact snapshot limits", async () => {
+test("Today widget quick captures reuse tasks, timestamps, source filtering, and full snapshot ordering", async () => {
   const harness = await rendererHarness();
   const result = harness.json(`(() => {
     state.taskGroups = [{ id: "group_inbox", title: "默认", order: 1 }];
@@ -3372,6 +3372,9 @@ test("Today widget quick captures reuse tasks, timestamps, source filtering, and
     state.tasks = normalizeTasks([
       { id: "capture_old", title: "旧速记", captureSource: "today-widget", createdAt: "2026-08-20T08:00:00.000Z", updatedAt: "2026-08-20T08:00:00.000Z" },
       { id: "capture_new", title: "新速记", captureSource: "today-widget", createdAt: "2026-08-29T08:00:00.000Z", updatedAt: "2026-08-29T09:00:00.000Z" },
+      { id: "capture_third", title: "第三条速记", captureSource: "today-widget", createdAt: "2026-08-28T08:00:00.000Z", updatedAt: "2026-08-28T09:00:00.000Z" },
+      { id: "capture_fourth", title: "第四条速记", captureSource: "today-widget", createdAt: "2026-08-27T08:00:00.000Z", updatedAt: "2026-08-27T09:00:00.000Z" },
+      { id: "capture_fifth", title: "第五条速记", captureSource: "today-widget", createdAt: "2026-08-26T08:00:00.000Z", updatedAt: "2026-08-26T09:00:00.000Z" },
       { id: "normal_task", title: "普通任务", createdAt: "2026-08-29T07:00:00.000Z", updatedAt: "2026-08-29T07:00:00.000Z" }
     ]);
     state.captureSourceFilter = "quick";
@@ -3379,9 +3382,9 @@ test("Today widget quick captures reuse tasks, timestamps, source filtering, and
     const snapshot = todayWidgetSnapshot();
     return { quickIds, snapshot };
   })()`);
-  assert.deepEqual(result.quickIds, ["capture_old", "capture_new"]);
-  assert.equal(result.snapshot.quickCaptureTotal, 2);
-  assert.deepEqual(result.snapshot.quickCaptures.map((item) => item.taskId), ["capture_new", "capture_old"]);
+  assert.deepEqual(result.quickIds, ["capture_old", "capture_new", "capture_third", "capture_fourth", "capture_fifth"]);
+  assert.equal(result.snapshot.quickCaptureTotal, 5);
+  assert.deepEqual(result.snapshot.quickCaptures.map((item) => item.taskId), ["capture_new", "capture_third", "capture_fourth", "capture_fifth", "capture_old"]);
   assert.equal(result.snapshot.quickCaptures[0].createdAt, "2026-08-29T08:00:00.000Z");
   assert.deepEqual(result.snapshot.groups, [{ id: "group_inbox", title: "默认" }]);
 });
