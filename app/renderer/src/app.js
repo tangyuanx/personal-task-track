@@ -2585,7 +2585,7 @@ function renderNodeDetailPage(taskId, node) {
         </div>
         </header>
         <section class="node-inspector-section node-inspector-hierarchy"><div class="node-inspector-breadcrumb"><span>路径</span><strong>${esc(path.map((item) => item.title || "未命名").join(" / ") || "—")}</strong></div></section>
-        <section class="node-inspector-section"><label>记录<textarea class="record-modal-textarea node-inspector-note" data-record-input placeholder="记录该节点的处理过程、关键数据、判断依据、结果或后续事项……">${esc(state.recordDraft)}</textarea></label><button class="node-inspector-save" type="button" data-action="save-node-detail">保存</button></section>
+        <section class="node-inspector-section"><label>记录<textarea class="record-modal-textarea node-inspector-note" data-record-input data-task-id="${taskId}" data-node-id="${node.id}" placeholder="记录该节点的处理过程、关键数据、判断依据、结果或后续事项……">${esc(state.recordDraft)}</textarea></label><button class="node-inspector-save" type="button" data-action="save-node-detail">保存</button></section>
       </div>
     </aside>
   `;
@@ -4958,6 +4958,9 @@ function bindTaskRepositoryRows(scope = document) {
   if (recordInput) {
     recordInput.addEventListener("input", (event) => {
       state.recordDraft = event.target.value;
+      const taskId = event.target.dataset.taskId;
+      const nodeId = event.target.dataset.nodeId;
+      if (taskId && nodeId) updateNodeNoteDraft(taskId, nodeId, state.recordDraft);
     });
     recordInput.addEventListener("keydown", (event) => {
       if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
