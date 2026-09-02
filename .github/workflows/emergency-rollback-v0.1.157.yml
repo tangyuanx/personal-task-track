@@ -1,0 +1,144 @@
+name: Emergency Rollback Release v0.1.157
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/emergency-rollback-v0.1.157.yml
+
+concurrency:
+  group: emergency-rollback-v0.1.157
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify one-time rollback source
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.package.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify exact rollback release
+        id: package
+        shell: bash
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          test "$version" = "0.1.157"
+          test ! -e ".rollback-v0.1.157-published"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build rollback ${{ matrix.platform }}
+    needs: verify
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macOS
+            os: macos-latest
+            script: npm run dist:mac -- --x64 --arm64 --publish never
+            artifact: rollback-release-macos
+          - platform: Windows
+            os: windows-latest
+            script: npm run dist:win -- --publish never
+            artifact: rollback-release-windows
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check JavaScript
+        run: npm run check
+
+      - name: Build app
+        run: ${{ matrix.script }}
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      - name: Test Windows installer upgrade matrix
+        if: matrix.platform == 'Windows'
+        shell: pwsh
+        run: |
+          $candidate = Get-ChildItem release -Filter "Loop-*-x64-setup.exe" | Select-Object -First 1
+          if (-not $candidate) { throw "Windows installer was not produced." }
+          ./tests/windows-upgrade-installer.test.ps1 -CandidateInstaller $candidate.FullName
+
+      - name: Verify update metadata
+        run: node tools/verify-update-artifacts.cjs release
+
+      - name: Stage rollback release assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            release/*.dmg
+            release/*.zip
+            release/*.exe
+            release/*.blockmap
+            release/latest.yml
+            release/latest-mac.yml
+          if-no-files-found: error
+          retention-days: 2
+
+  publish:
+    name: Publish one-time rollback release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Refuse to replace an existing tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          if gh api "repos/${{ github.repository }}/git/ref/tags/v0.1.157" >/dev/null 2>&1; then
+            echo "v0.1.157 already exists; refusing to replace it."
+            exit 1
+          fi
+
+      - name: Collect rollback release assets
+        uses: actions/download-artifact@v4
+        with:
+          pattern: rollback-release-*
+          path: release
+          merge-multiple: true
+
+      - name: Verify complete cross-platform update feed
+        run: node tools/verify-update-artifacts.cjs release --require-all-platforms
+
+      - name: Publish v0.1.157 rollback release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v0.1.157
+          target_commitish: ${{ github.sha }}
+          name: v0.1.157
+          body: |
+            Emergency rollback release.
+
+            Program behavior is restored to v0.1.155 while retaining version 0.1.157 so users on v0.1.156 can upgrade safely.
+          make_latest: true
+          files: |
+            release/*.dmg
+            release/*.zip
+            release/*.exe
+            release/*.blockmap
+            release/latest.yml
+            release/latest-mac.yml
