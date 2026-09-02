@@ -2984,6 +2984,42 @@ test("processing flow matches the compact reference tree and opens details only 
   assert.match(finalFlowRules, /@media \(max-width: 760px\)[\s\S]*\.node-detail-page\s*\{[\s\S]*overflow-y:\s*auto;/);
 });
 
+test("node detail records autosave to the original node before selection changes", async () => {
+  const app = await fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "app.js"), "utf8");
+  const harness = await rendererHarness();
+  const result = harness.json(`(() => {
+    const task = normalizeTasks([{
+      id: "autosave_task",
+      nodes: [
+        { id: "first_node", title: "第一个节点", note: "", children: [] },
+        { id: "second_node", title: "第二个节点", note: "", children: [] }
+      ]
+    }])[0];
+    state.tasks = [task];
+    state.activeTaskId = task.id;
+    state.selectedNodeId = "first_node";
+    state.recordDraft = "切换节点后也要保留";
+    updateNodeNoteDraft(task.id, "first_node", state.recordDraft);
+    selectNodeForInspector(task.id, "second_node");
+    const changed = flushNodeNoteDrafts({ persist: false });
+    return {
+      changed,
+      firstNote: findNode(task.nodes, "first_node").note,
+      selectedNodeId: state.selectedNodeId,
+      recordDraft: state.recordDraft
+    };
+  })()`);
+
+  assert.match(app, /data-record-input data-task-id="\$\{taskId\}" data-node-id="\$\{node\.id\}"/);
+  assert.match(app, /recordInput\.addEventListener\("input"[\s\S]*updateNodeNoteDraft\(taskId, nodeId, state\.recordDraft\)/);
+  assert.deepEqual(result, {
+    changed: true,
+    firstNote: "切换节点后也要保留",
+    selectedNodeId: "second_node",
+    recordDraft: "",
+  });
+});
+
 test("task repository renders priority without an update timestamp", async () => {
   const app = await fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "app.js"), "utf8");
 
