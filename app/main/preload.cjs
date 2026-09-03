@@ -1,4 +1,15 @@
 const { contextBridge, ipcRenderer } = require("electron");
+const crypto = require("node:crypto");
+
+const WORK_RHYTHM_PASSWORD_SHA256 = "091af679ab7c82f0d20e8e13cc68ebb5b51cec80b457c4acd1e56c7f38dbabf4";
+
+function verifyWorkRhythmPassword(value) {
+  const input = String(value || "");
+  const digest = crypto.createHash("sha256").update(input, "utf8").digest("hex");
+  const actual = Buffer.from(digest, "utf8");
+  const expected = Buffer.from(WORK_RHYTHM_PASSWORD_SHA256, "utf8");
+  return actual.length === expected.length && crypto.timingSafeEqual(actual, expected);
+}
 
 contextBridge.exposeInMainWorld("personalTaskTrack", {
   platform: process.platform,
@@ -49,6 +60,9 @@ contextBridge.exposeInMainWorld("personalTaskTrack", {
     getState: () => ipcRenderer.invoke("deadline-reminders:get-state"),
     onOpenTask: (callback) => subscribe("deadline-reminders:open-task", callback),
     onOpenCalendar: (callback) => subscribe("deadline-reminders:open-calendar", callback),
+  },
+  workRhythm: {
+    verifyPassword: async (password) => verifyWorkRhythmPassword(password),
   },
   updates: {
     getState: () => ipcRenderer.invoke("app-update:get-state"),
