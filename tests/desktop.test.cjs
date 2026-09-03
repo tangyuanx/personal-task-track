@@ -3764,19 +3764,24 @@ test("exact deadline-date filtering composes with task status and remains transi
 test("optional deadlines normalize consistently and invalid values stay unset", async () => {
   const normalized = normalizeTaskData({
     tasks: [
-      { id: "valid", deadlineAt: "2026-08-25T10:30:00.000Z" },
-      { id: "invalid", deadlineAt: "not-a-date" },
-      { id: "missing" },
+      { id: "valid", deadlineAt: "2026-08-25T10:30:00.000Z", deadlineReminderMinutes: 30 },
+      { id: "invalid", deadlineAt: "not-a-date", deadlineReminderMinutes: 999 },
+      { id: "missing", deadlineReminderMinutes: null },
     ],
   }).tasks;
 
   assert.equal(normalized[0].deadlineAt, "2026-08-25T10:30:00.000Z");
   assert.equal(normalized[1].deadlineAt, "");
   assert.equal(normalized[2].deadlineAt, "");
+  assert.equal(normalized[0].deadlineReminderMinutes, 30);
+  assert.equal(normalized[1].deadlineReminderMinutes, 60);
+  assert.equal(normalized[2].deadlineReminderMinutes, null);
 
   const harness = await rendererHarness();
   assert.equal(harness.evaluate(`normalizeTasks([{ id: "renderer", deadlineAt: "2026-08-25T10:30:00.000Z" }])[0].deadlineAt`), "2026-08-25T10:30:00.000Z");
   assert.equal(harness.evaluate(`normalizeTasks([{ id: "renderer-invalid", deadlineAt: "invalid" }])[0].deadlineAt`), "");
+  assert.equal(harness.evaluate(`normalizeTasks([{ id: "renderer", deadlineReminderMinutes: 1440 }])[0].deadlineReminderMinutes`), 1440);
+  assert.equal(harness.evaluate(`normalizeTasks([{ id: "renderer", deadlineReminderMinutes: null }])[0].deadlineReminderMinutes`), null);
 });
 
 test("deadline ranges compose with status and order only deadline-scoped results", async () => {
@@ -3829,12 +3834,15 @@ test("calendar owns the footer entry, exposes review, and uses the ReUI-style de
   assert.match(app, /data-action="select-deadline-date"/);
   assert.match(app, /data-action="apply-deadline-time"/);
   assert.match(app, /data-action="clear-task-deadline"/);
+  assert.match(app, /data-deadline-reminder/);
+  assert.match(app, /提前 1 周/);
   assert.doesNotMatch(app, /data-deadline-field|type="datetime-local"/);
   assert.match(app, /高优任务建议设置截止时间/);
   assert.match(styles, /\.calendar-grid/);
   assert.match(styles, /\.task-deadline-popover/);
   assert.match(styles, /\.task-deadline-calendar-pane/);
   assert.match(styles, /\.task-deadline-time-list/);
+  assert.match(styles, /\.task-deadline-reminder-control/);
 });
 
 test("deadline picker follows the documented date-first and time-save flow", async () => {
@@ -3858,6 +3866,7 @@ test("deadline picker follows the documented date-first and time-save flow", asy
       savedDate: localDateKey(saved),
       savedTime: deadlineTimeValue(saved),
       savedIso: task.deadlineAt,
+      reminderMinutes: task.deadlineReminderMinutes,
       popover: renderTaskDeadlinePopover(task),
     };
   })()`);
@@ -3872,6 +3881,9 @@ test("deadline picker follows the documented date-first and time-save flow", asy
   assert.match(result.popover, /data-action="deadline-picker-today"/);
   assert.match(result.popover, /role="listbox"/);
   assert.match(result.popover, /role="option"/);
+  assert.equal(result.reminderMinutes, 60);
+  assert.match(result.popover, /data-deadline-reminder/);
+  assert.match(result.popover, /提前 1 小时/);
 });
 
 test("recurring tasks normalize, become due at local time, and reactivate for a new occurrence", async () => {

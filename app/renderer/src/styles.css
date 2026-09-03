@@ -11327,9 +11327,12 @@ body.flow-node-reordering * {
   left: 0;
   z-index: 42;
   display: grid;
-  grid-template-columns: minmax(300px, 1fr) 154px;
-  width: min(474px, calc(100vw - 64px));
-  height: 356px;
+  grid-template:
+    "calendar time" 356px
+    "reminder reminder" 64px
+    / minmax(316px, 1fr) 166px;
+  width: min(506px, calc(100vw - 64px));
+  height: 420px;
   overflow: hidden;
   border: 1px solid var(--handoff-line-strong, var(--line-strong));
   border-radius: 14px;
@@ -11339,6 +11342,7 @@ body.flow-node-reordering * {
 }
 
 .task-deadline-calendar-pane {
+  grid-area: calendar;
   display: grid;
   min-height: 0;
   min-width: 0;
@@ -11484,6 +11488,7 @@ body.flow-node-reordering * {
 }
 
 .task-deadline-time-pane {
+  grid-area: time;
   display: grid;
   min-height: 0;
   min-width: 0;
@@ -11547,6 +11552,72 @@ body.flow-node-reordering * {
   color: #ffffff;
 }
 
+.task-deadline-reminder-control {
+  grid-area: reminder;
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--handoff-line, var(--line));
+  background: color-mix(in srgb, var(--handoff-surface, var(--panel)) 94%, var(--focus) 6%);
+}
+
+.task-deadline-reminder-copy {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 9px;
+}
+
+.task-deadline-reminder-copy > span {
+  display: grid;
+  gap: 2px;
+}
+
+.task-deadline-reminder-copy strong {
+  color: var(--handoff-ink, var(--ink));
+  font-size: 12px;
+  font-weight: 680;
+}
+
+.task-deadline-reminder-copy small {
+  color: var(--handoff-muted, var(--muted));
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.task-deadline-reminder-icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: var(--focus);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
+}
+
+.task-deadline-reminder-control select {
+  width: 142px;
+  height: 34px;
+  flex: 0 0 auto;
+  border: 1px solid var(--handoff-line-strong, var(--line-strong));
+  border-radius: 7px;
+  padding: 0 30px 0 10px;
+  background: var(--handoff-surface, var(--panel));
+  color: var(--handoff-ink, var(--ink));
+  font-size: 11px;
+  outline: 0;
+}
+
+.task-deadline-reminder-control select:focus-visible {
+  border-color: var(--focus);
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
 :root[data-theme="dark"] .task-deadline-popover {
   box-shadow: 0 20px 52px rgba(0, 0, 0, 0.42);
 }
@@ -11574,8 +11645,11 @@ body.flow-node-reordering * {
     width: auto;
     height: auto;
     max-height: calc(100dvh - 24px);
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto minmax(160px, 1fr);
+    grid-template:
+      "calendar" auto
+      "time" minmax(160px, 1fr)
+      "reminder" auto
+      / minmax(0, 1fr);
     overflow-y: auto;
   }
 
@@ -11593,6 +11667,16 @@ body.flow-node-reordering * {
   .task-deadline-time-list {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     max-height: 180px;
+  }
+
+  .task-deadline-reminder-control {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .task-deadline-reminder-control select {
+    width: 100%;
   }
 
   .task-deadline-suggestion {

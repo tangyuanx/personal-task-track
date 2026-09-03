@@ -156,6 +156,20 @@ const recurrenceFrequencyLabels = {
   daily: "每天",
   weekly: "每周",
 };
+const deadlineReminderMinuteValues = new Set([0, 5, 15, 30, 60, 120, 1440, 2880, 10080]);
+const defaultDeadlineReminderMinutes = 60;
+const deadlineReminderLabels = {
+  none: "不提醒",
+  0: "截止时",
+  5: "提前 5 分钟",
+  15: "提前 15 分钟",
+  30: "提前 30 分钟",
+  60: "提前 1 小时",
+  120: "提前 2 小时",
+  1440: "提前 1 天",
+  2880: "提前 2 天",
+  10080: "提前 1 周",
+};
 const recurrenceWeekdayOrder = [1, 2, 3, 4, 5, 6, 0];
 const recurrenceWeekdayLabels = {
   1: "周一",
@@ -459,6 +473,7 @@ function normalizeTasks(tasks) {
         createdAt,
         updatedAt,
         deadlineAt: normalizeOptionalDateValue(task.deadlineAt),
+        deadlineReminderMinutes: normalizeDeadlineReminderMinutes(task.deadlineReminderMinutes),
         resolvedAt: normalizeOptionalDateValue(task.resolvedAt),
         nodes: normalizeNodes(task.nodes, taskId),
       };
@@ -581,6 +596,12 @@ function normalizeDateValue(value, fallback) {
 
 function normalizeOptionalDateValue(value, fallback = "") {
   return value ? normalizeDateValue(value, fallback) : fallback;
+}
+
+function normalizeDeadlineReminderMinutes(value) {
+  if (value === null || value === false || value === "none") return null;
+  const minutes = Number(value);
+  return deadlineReminderMinuteValues.has(minutes) ? minutes : defaultDeadlineReminderMinutes;
 }
 
 function normalizeAttachments(value) {
@@ -2317,6 +2338,9 @@ function renderTaskDeadlinePopover(task) {
   const selectedDate = parseDateInput(deadlinePickerDate) || new Date();
   const deadline = safeDate(task.deadlineAt);
   const selectedTime = deadline && localDateKey(deadline) === deadlinePickerDate ? deadlineTimeValue(deadline) : "";
+  const reminderValue = task.deadlineReminderMinutes === null
+    ? "none"
+    : String(normalizeDeadlineReminderMinutes(task.deadlineReminderMinutes));
   const timeSlots = deadlineTimeSlots(deadline);
   return `
     <section class="task-deadline-popover" id="task-deadline-popover-${task.id}" role="dialog" aria-label="选择任务截止时间">
@@ -2344,6 +2368,15 @@ function renderTaskDeadlinePopover(task) {
           ${timeSlots.map((time) => `<button class="task-deadline-time ${selectedTime === time ? "selected" : ""}" type="button" role="option" aria-selected="${selectedTime === time}" data-action="apply-deadline-time" data-task-id="${task.id}" data-time="${time}">${time}</button>`).join("")}
         </div>
       </div>
+      <label class="task-deadline-reminder-control">
+        <span class="task-deadline-reminder-copy">
+          <svg class="task-deadline-reminder-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"></path><path d="M10 21h4"></path></svg>
+          <span><strong>系统提醒</strong><small>到达所选时间后发送一次通知</small></span>
+        </span>
+        <select data-deadline-reminder data-task-id="${task.id}" aria-label="选择截止前提醒时间">
+          ${Object.entries(deadlineReminderLabels).map(([value, label]) => `<option value="${value}" ${value === reminderValue ? "selected" : ""}>${label}</option>`).join("")}
+        </select>
+      </label>
     </section>
   `;
 }
@@ -4729,6 +4762,20 @@ function bindTaskRepositoryRows(scope = document) {
     });
   });
 
+  document.querySelectorAll("[data-deadline-reminder]").forEach((element) => {
+    element.addEventListener("click", (event) => event.stopPropagation());
+    element.addEventListener("change", (event) => {
+      const task = state.tasks.find((item) => item.id === event.target.dataset.taskId);
+      if (!task) return;
+      task.deadlineReminderMinutes = event.target.value === "none"
+        ? null
+        : normalizeDeadlineReminderMinutes(event.target.value);
+      task.updatedAt = now();
+      save();
+      render();
+    });
+  });
+
   document.querySelectorAll("[data-review-date-field]").forEach((element) => {
     element.addEventListener("click", (event) => event.stopPropagation());
     element.addEventListener("change", (event) => {
@@ -6378,6 +6425,7 @@ function taskMarkdown(task) {
     `- 状态：${task.status === "done" ? "已完成" : "处理中"}`,
     `- 节点：${summary.done}/${summary.total || 0}`,
     ...(task.deadlineAt ? [`- 截止时间：${formatMinuteStamp(task.deadlineAt)}`] : []),
+    ...(task.deadlineAt ? [`- 截止提醒：${deadlineReminderLabels[task.deadlineReminderMinutes === null ? "none" : normalizeDeadlineReminderMinutes(task.deadlineReminderMinutes)]}`] : []),
     `- 创建时间：${formatShort(task.createdAt)}`,
     `- 更新时间：${formatShort(task.updatedAt)}`,
     ...(tags.length ? [`- 标记：${tags.join("、")}`] : []),
@@ -6536,6 +6584,7 @@ function createTask(title, shouldRender = true) {
     hypothesisUpdatedAt: "",
     conclusion: "",
     deadlineAt: "",
+    deadlineReminderMinutes: defaultDeadlineReminderMinutes,
     notes: "",
     knowledgeNote: knowledgeDocument.createKnowledgeNoteMetadata({
       noteId: id("note"),
@@ -7652,6 +7701,7 @@ function deadlineReminderSnapshot() {
       status: task.status,
       priority: task.priority,
       deadlineAt: task.deadlineAt,
+      deadlineReminderMinutes: task.deadlineReminderMinutes,
     }));
 }
 

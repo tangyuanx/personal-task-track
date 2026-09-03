@@ -4,9 +4,20 @@
 Maintain the personal task management app through scoped, low-risk improvements while preserving existing task flow behavior and release discipline.
 
 ## Current Phase
-Phase 34
+Phase 35
 
 ## Phases
+
+### Phase 35: Configurable Deadline Reminder Timing
+- [x] Confirm the latest remote baseline and release workflow
+- [x] Replace fixed reminder stages with one per-task lead-time setting
+- [x] Default new and legacy tasks to a reminder one hour before the deadline
+- [x] Preserve restart deduplication and migrate legacy reminder records safely
+- [x] Add the setting to the deadline picker and provide an interactive demo
+- [x] Add focused persistence, scheduling, migration, and renderer regressions
+- [x] Run focused checks and prepare patch release `0.1.159`
+- [x] Commit, push `main`, tag `v0.1.159`, and trigger the release workflow
+- **Status:** complete
 
 ### Phase 34: Integrated Calendar, Optional Deadlines, and Reminders
 - [x] Confirm the latest clean remote baseline and preserve the established compact visual system

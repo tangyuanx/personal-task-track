@@ -1,5 +1,16 @@
 # Findings & Decisions
 
+## Phase 35 Configurable Deadline Reminder Timing (2026-09-03)
+- Each task owns one optional `deadlineReminderMinutes` value. Supported values are due time (`0`), 5/15/30 minutes, 1/2 hours, 1/2 days, and 1 week before the deadline; `null` disables the reminder.
+- The product default is 60 minutes before the deadline. Storage normalization supplies this default when the field is absent, so existing tasks and newly created tasks behave consistently without a destructive data migration.
+- Reminder editing belongs inside the existing deadline popover. Setting or clearing a deadline and choosing a reminder remain one compact task-property workflow.
+- Only incomplete tasks with a valid explicit deadline are eligible. If the app is not running at the exact notification time, the next scan after reopening performs catch-up delivery rather than losing the reminder.
+- Reminder delivery state is stored separately in atomic `deadline-reminders.json` state. Version 2 records notified task/offset pairs and migrates legacy stage records conservatively to prevent duplicate notifications after upgrade.
+- A due-date or reminder edit changes the task's reminder key, allowing the new schedule to notify normally without clearing unrelated reminder history.
+- The packaged Windows app sets its application user model ID before constructing notification controllers so system notifications use the correct desktop identity.
+- The interactive demo in `prototypes/demos/deadline-reminder-demo.html` defaults to “提前 1 小时” and demonstrates task-level preset selection and notification preview.
+- The repository's formal publication path remains an annotated `v*` tag: `main` pushes run cross-platform CI, while the tag starts the macOS/Windows release workflow and publishes GitHub Release artifacts.
+
 ## Phase 34 Integrated Calendar, Optional Deadlines, and Reminders (2026-08-24)
 - The user explicitly requested implementation and formal publication after local verification.
 - Before final publication, remote `main` advanced by four release commits from `v0.1.125` to `v0.1.129`. These releases make update publication atomic, add Today-list scrolling, keep compact Today-widget controls visible, and make knowledge-conflict actions transactional; the calendar work must be replayed onto that baseline rather than push the obsolete `0.1.126` candidate.

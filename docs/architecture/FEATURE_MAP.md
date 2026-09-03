@@ -1,6 +1,6 @@
 # Personal Task Track 功能地图
 
-> 最近核对：2026-08-16，面向 v0.1.116 之后的目录整理版本。
+> 最近核对：2026-09-03，面向 v0.1.159 截至提醒配置版本。
 >
 > 本文使用函数名和文件职责定位，不再维护容易漂移的行号。查找实现时优先运行
 > `rg -n "function 函数名|data-action=\"动作名\"" app tests tools`。
@@ -12,9 +12,10 @@ app/renderer/index.html
 ├─ app/renderer/src/styles.css                 主题、布局、响应式、无障碍状态
 ├─ app/renderer/src/vendor/milkdown-editor.*  由 esbuild 生成的 Milkdown 浏览器资源
 └─ app/renderer/src/app.js                    渲染进程的状态、DOM、事件和业务逻辑
-   ├─ app/main/preload.cjs       安全 contextBridge
-   ├─ app/main/main.cjs          BrowserWindow、IPC、剪贴板、导出
-   └─ app/main/storage.cjs       数据规范化、损坏备份、原子读写
+   ├─ app/main/preload.cjs                  安全 contextBridge
+   ├─ app/main/main.cjs                     BrowserWindow、IPC、剪贴板、导出
+   ├─ app/main/deadline-reminders.cjs       截至提醒调度、去重与通知分组
+   └─ app/main/storage.cjs                  数据规范化、损坏备份、原子读写
 ```
 
 核心数据流：
@@ -39,6 +40,7 @@ app/renderer/index.html
 | `app/renderer/src/styles.css` | 浅色/深色主题、桌面/窄屏布局、组件状态、键盘焦点、减少动效 |
 | `app/renderer/src/milkdown-editor.entry.js` | Milkdown/Crepe 封装、持久化图片上传、图片命令 |
 | `app/main/main.cjs` | 窗口安全配置、IPC、系统剪贴板、Markdown/PDF 导出 |
+| `app/main/deadline-reminders.cjs` | 截至提醒扫描、提前量计算、持久化去重、系统通知及点击路由 |
 | `app/main/preload.cjs` | 向渲染进程暴露最小化存储、剪贴板和导出 API |
 | `app/main/storage.cjs` | 任务数据规范化、旧字体迁移、损坏 JSON 备份、原子写入 |
 | `tests/desktop.test.cjs` | Node 回归测试与渲染脚本 VM 测试夹具 |
@@ -69,6 +71,8 @@ interface Task {
   createdAt: string;
   updatedAt: string;
   resolvedAt: string;
+  deadlineAt: string;
+  deadlineReminderMinutes: 0 | 5 | 15 | 30 | 60 | 120 | 1440 | 2880 | 10080 | null;
   nodes: TaskNode[];
 }
 ```

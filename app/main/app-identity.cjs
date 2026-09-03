@@ -19,6 +19,7 @@ function configureDesktopIdentity(app, pathApi = path) {
   const userDataPath = legacyUserDataPath(app.getPath("appData"), pathApi);
   app.setName(APP_DISPLAY_NAME);
   app.setPath("userData", userDataPath);
+  app.setAppUserModelId?.(DESKTOP_APP_ID);
   return { appId: DESKTOP_APP_ID, name: APP_DISPLAY_NAME, userDataPath };
 }
 

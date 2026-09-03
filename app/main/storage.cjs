@@ -26,6 +26,8 @@ const TASK_STATUSES = new Set(["active", "done"]);
 const NODE_STATUSES = new Set(["todo", "done", "blocked", "later"]);
 const PRIORITIES = new Set(["high", "medium", "low"]);
 const RECURRENCE_FREQUENCIES = new Set(["none", "daily", "weekly"]);
+const DEADLINE_REMINDER_MINUTES = new Set([0, 5, 15, 30, 60, 120, 1440, 2880, 10080]);
+const DEFAULT_DEADLINE_REMINDER_MINUTES = 60;
 const TASK_FILTERS = new Set(["all", "today", "active", "done", "blocked", "later"]);
 const PRIORITY_FILTERS = new Set(["all", "high", "medium", "low"]);
 const CAPTURE_SOURCE_FILTERS = new Set(["all", "task", "quick"]);
@@ -196,6 +198,7 @@ function normalizeTasks(tasks) {
         createdAt,
         updatedAt,
         deadlineAt: normalizeOptionalDateValue(task.deadlineAt),
+        deadlineReminderMinutes: normalizeDeadlineReminderMinutes(task.deadlineReminderMinutes),
         resolvedAt: normalizeOptionalDateValue(task.resolvedAt),
         nodes: normalizeTaskNodes(task.nodes, taskId),
       };
@@ -369,6 +372,12 @@ function normalizeDateValue(value, fallback) {
 
 function normalizeOptionalDateValue(value, fallback = "") {
   return value ? normalizeDateValue(value, fallback) : fallback;
+}
+
+function normalizeDeadlineReminderMinutes(value) {
+  if (value === null || value === false || value === "none") return null;
+  const minutes = Number(value);
+  return DEADLINE_REMINDER_MINUTES.has(minutes) ? minutes : DEFAULT_DEADLINE_REMINDER_MINUTES;
 }
 
 function normalizeInstallationId(value) {

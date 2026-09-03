@@ -3,9 +3,10 @@ const path = require("node:path");
 const crypto = require("node:crypto");
 
 const REMINDER_STATE_FILE = "deadline-reminders.json";
-const REMINDER_STATE_VERSION = 1;
+const REMINDER_STATE_VERSION = 2;
 const REMINDER_SCAN_INTERVAL_MS = 60_000;
-const STAGE_ORDER = ["due-day", "due-soon", "overdue"];
+const DEADLINE_REMINDER_MINUTES = new Set([0, 5, 15, 30, 60, 120, 1440, 2880, 10080]);
+const DEFAULT_DEADLINE_REMINDER_MINUTES = 60;
 
 function reminderStateFilePath(userDataPath) {
   return path.join(userDataPath, REMINDER_STATE_FILE);
@@ -22,7 +23,14 @@ function normalizeReminderTask(value) {
     status: raw.status === "done" ? "done" : "active",
     priority: ["high", "medium", "low"].includes(raw.priority) ? raw.priority : "medium",
     deadlineAt: deadline.toISOString(),
+    deadlineReminderMinutes: normalizeDeadlineReminderMinutes(raw.deadlineReminderMinutes),
   };
+}
+
+function normalizeDeadlineReminderMinutes(value) {
+  if (value === null || value === false || value === "none") return null;
+  const minutes = Number(value);
+  return DEADLINE_REMINDER_MINUTES.has(minutes) ? minutes : DEFAULT_DEADLINE_REMINDER_MINUTES;
 }
 
 function normalizeReminderTasks(value) {
@@ -44,9 +52,15 @@ function normalizeReminderState(value) {
     if (!record || typeof record !== "object") return;
     const deadline = new Date(record.deadlineAt || "");
     if (!taskId || !Number.isFinite(deadline.getTime())) return;
+    const legacyStages = Array.isArray(record.stages) ? record.stages : [];
+    const notifiedMinutes = Array.isArray(record.notifiedMinutes)
+      ? record.notifiedMinutes.map(Number).filter((minutes) => DEADLINE_REMINDER_MINUTES.has(minutes))
+      : [];
+    if (legacyStages.includes("due-day")) notifiedMinutes.push(1440);
+    if (legacyStages.includes("due-soon") || legacyStages.includes("overdue")) notifiedMinutes.push(60, 120);
     tasks[String(taskId).slice(0, 160)] = {
       deadlineAt: deadline.toISOString(),
-      stages: Array.from(new Set(Array.isArray(record.stages) ? record.stages.filter((stage) => STAGE_ORDER.includes(stage)) : [])),
+      notifiedMinutes: Array.from(new Set(notifiedMinutes)),
     };
   });
   return { version: REMINDER_STATE_VERSION, tasks };
@@ -84,24 +98,31 @@ async function writeDeadlineReminderState(userDataPath, value) {
 }
 
 function deadlineReminderStage(task, at = new Date()) {
-  if (!task || task.status === "done") return "";
+  if (!task || task.status === "done" || task.deadlineReminderMinutes === null) return "";
   const now = at instanceof Date ? at : new Date(at);
   const deadline = new Date(task.deadlineAt || "");
   if (!Number.isFinite(now.getTime()) || !Number.isFinite(deadline.getTime())) return "";
+  const reminderMinutes = normalizeDeadlineReminderMinutes(task.deadlineReminderMinutes);
+  if (reminderMinutes === null) return "";
   const remaining = deadline.getTime() - now.getTime();
-  if (remaining <= 0) return "overdue";
-  if (remaining <= 2 * 60 * 60 * 1000) return "due-soon";
-  if (remaining <= 24 * 60 * 60 * 1000) return "due-day";
-  return "";
+  if (remaining > reminderMinutes * 60 * 1000) return "";
+  return remaining <= 0 ? "overdue" : "upcoming";
 }
 
-function reminderCopy(stage, tasks) {
+function reminderOffsetLabel(minutes) {
+  if (minutes === 0) return "截止时";
+  if (minutes < 60) return `${minutes} 分钟`;
+  if (minutes < 1440) return `${minutes / 60} 小时`;
+  if (minutes < 10080) return `${minutes / 1440} 天`;
+  return `${minutes / 10080} 周`;
+}
+
+function reminderCopy(stage, tasks, reminderMinutes) {
   const titles = tasks.slice(0, 3).map((task) => `「${task.title}」`);
   const more = tasks.length > 3 ? `等 ${tasks.length} 项任务` : tasks.length > 1 ? `${tasks.length} 项任务` : "";
   const subject = more || titles.join("、");
-  if (stage === "overdue") return { title: "任务已逾期", body: `${subject}尚未完成，请尽快处理。` };
-  if (stage === "due-soon") return { title: "任务即将截止", body: `${subject}将在 2 小时内截止。` };
-  return { title: "任务截止提醒", body: `${subject}将在 24 小时内截止。` };
+  if (stage === "overdue") return { title: "任务已到截止时间", body: `${subject}尚未完成，请尽快处理。` };
+  return { title: "任务截止提醒", body: `${subject}将在 ${reminderOffsetLabel(reminderMinutes)}内截止。` };
 }
 
 function createDeadlineReminderController({
@@ -141,17 +162,19 @@ function createDeadlineReminderController({
     tasks.forEach((task) => {
       const stage = deadlineReminderStage(task, at);
       if (!stage) return;
+      const reminderMinutes = normalizeDeadlineReminderMinutes(task.deadlineReminderMinutes);
+      if (reminderMinutes === null) return;
       const record = state.tasks[task.id];
-      if (record?.deadlineAt === task.deadlineAt && record.stages.includes(stage)) return;
-      if (!groups.has(stage)) groups.set(stage, []);
-      groups.get(stage).push(task);
+      if (record?.deadlineAt === task.deadlineAt && record.notifiedMinutes.includes(reminderMinutes)) return;
+      const groupKey = `${stage}:${reminderMinutes}`;
+      if (!groups.has(groupKey)) groups.set(groupKey, { stage, reminderMinutes, tasks: [] });
+      groups.get(groupKey).tasks.push(task);
     });
 
     let notified = 0;
-    for (const stage of STAGE_ORDER) {
-      const dueTasks = groups.get(stage) || [];
-      if (!dueTasks.length) continue;
-      const copy = reminderCopy(stage, dueTasks);
+    for (const group of groups.values()) {
+      const { stage, reminderMinutes, tasks: dueTasks } = group;
+      const copy = reminderCopy(stage, dueTasks, reminderMinutes);
       let notification;
       try {
         notification = new Notification({ title: copy.title, body: copy.body, silent: false });
@@ -168,8 +191,8 @@ function createDeadlineReminderController({
         continue;
       }
       dueTasks.forEach((task) => {
-        const existing = state.tasks[task.id]?.deadlineAt === task.deadlineAt ? state.tasks[task.id].stages : [];
-        state.tasks[task.id] = { deadlineAt: task.deadlineAt, stages: Array.from(new Set([...existing, stage])) };
+        const existing = state.tasks[task.id]?.deadlineAt === task.deadlineAt ? state.tasks[task.id].notifiedMinutes : [];
+        state.tasks[task.id] = { deadlineAt: task.deadlineAt, notifiedMinutes: Array.from(new Set([...existing, reminderMinutes])) };
       });
       notified += dueTasks.length;
     }
@@ -184,7 +207,7 @@ function createDeadlineReminderController({
 
   async function sync(value) {
     tasks = normalizeReminderTasks(value);
-    const active = new Map(tasks.filter((task) => task.status !== "done").map((task) => [task.id, task]));
+    const active = new Map(tasks.filter((task) => task.status !== "done" && task.deadlineReminderMinutes !== null).map((task) => [task.id, task]));
     let changed = false;
     Object.keys(state.tasks).forEach((taskId) => {
       const task = active.get(taskId);
@@ -224,9 +247,11 @@ function createDeadlineReminderController({
 module.exports = {
   createDeadlineReminderController,
   deadlineReminderStage,
+  normalizeDeadlineReminderMinutes,
   normalizeReminderState,
   normalizeReminderTasks,
   readDeadlineReminderState,
+  reminderOffsetLabel,
   reminderStateFilePath,
   writeDeadlineReminderState,
 };

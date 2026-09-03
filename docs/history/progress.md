@@ -1,5 +1,21 @@
 # Progress Log
 
+## Session: 2026-09-03 Configurable Deadline Reminder Release
+
+### Phase 35: Per-task reminder timing and v0.1.159 publication
+- **Status:** complete
+- Actions taken:
+  - Fetched `origin/main` and tags, confirming the implementation branch is based on the current `v0.1.158` release commit with no remote divergence.
+  - Replaced the fixed 24-hour, 2-hour, and overdue reminder stages with one configurable reminder lead time per task.
+  - Added presets for no reminder, due time, 5/15/30 minutes, 1/2 hours, 1/2 days, and 1 week; new and legacy tasks default to 1 hour before the deadline.
+  - Added reminder configuration to the existing deadline picker without introducing a second task-editing workflow.
+  - Upgraded reminder delivery state to version 2 with atomic persistence and legacy-stage migration so upgrading does not duplicate already-issued reminders.
+  - Kept reminders limited to incomplete tasks with valid deadlines, retained catch-up delivery after reopening the app, and preserved notification click-through to a task or grouped calendar view.
+  - Set the Windows application user model ID before notification use so packaged Windows notifications resolve to the desktop app identity.
+  - Added an interactive deadline-reminder demo and expanded regression coverage for defaults, normalization, scheduling, deduplication, migration, and renderer wiring.
+  - Passed the focused reminder/desktop suite with 132 tests before the final release check.
+  - Prepared patch release `0.1.159` / `v0.1.159` for the repository's standard `main` and `v*` CI/release workflow.
+
 ## Session: 2026-08-24 User-confirmed Seamless In-app Update
 
 ### Phase 33: Baseline and updater safety audit
