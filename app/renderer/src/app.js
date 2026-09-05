@@ -279,6 +279,8 @@ let state = {
 };
 
 let saveTimer = 0;
+let activeSettingsPage = "appearance";
+let settingsMotion = "none";
 let pendingPayload = null;
 let saveInFlight = false;
 let saveInFlightPromise = null;
@@ -1696,6 +1698,7 @@ function render() {
   `;
   restoreCachedKnowledgePane(task);
   bind();
+  settingsMotion = "none";
   resizeTaskBriefTextareas();
   const restoreGroupScroll = () => {
     if (groupScrollLeft === null) return;
@@ -3062,109 +3065,101 @@ function filterSelectHtml(kind, value, options, title = "") {
 // SETTINGS PANEL
 // ============================================================
 function renderSettingsPanel() {
+  const pages = {
+    appearance: ["外观", "调整界面主题与字体。"],
+    tasks: ["任务与浮窗", "管理任务的默认显示与今日浮窗。"],
+    data: ["数据", "迁移、恢复或保存完整的本地数据。"],
+    updates: ["软件更新", "检查新版本，并由你决定是否安装。"],
+    advanced: ["高级功能", "管理需要主动开启的扩展能力。"],
+    help: ["帮助与反馈", "报告问题或查看应用信息。"],
+  };
+  const page = Object.hasOwn(pages, activeSettingsPage) ? activeSettingsPage : "appearance";
+  const row = (label, control, extraClass = "") => `
+    <div class="settings-row ${extraClass}">
+      <div class="settings-row-copy"><strong>${label}</strong></div>
+      <div class="settings-row-control">${control}</div>
+    </div>
+  `;
+  const selectRow = (label, key, value, options) => row(label, settingsSelectHtml(key, value, options), "settings-row-select");
+  const pageBody = {
+    appearance: `
+      <h3 class="settings-section-label">界面</h3>
+      <section class="settings-list">
+        ${row("显示模式", settingsOptionGroup("theme", state.theme, themeLabels))}
+        ${selectRow("中文字体", "zh-font", state.zhFont, zhFontLabels)}
+        ${selectRow("英文字体", "en-font", state.enFont, enFontLabels)}
+      </section>
+      <div class="settings-preview" aria-label="字体预览">
+        <strong class="settings-preview-zh">任务流中文字体预览</strong>
+        <span class="settings-preview-en">Task flow English 123</span>
+      </div>
+    `,
+    tasks: `
+      <h3 class="settings-section-label">任务视图</h3>
+      <section class="settings-list">
+        ${selectRow("任务范围", "task-filter", state.taskFilter, taskFilterLabels)}
+        ${selectRow("优先级范围", "priority-filter", state.priorityFilter, priorityFilterLabels)}
+        ${selectRow("新任务优先级", "new-task-priority", state.newTaskPriority, priorityLabels)}
+        ${row("鼠标穿透", `
+          <button class="settings-switch" type="button" role="switch" aria-checked="${todayWidgetWindowState.clickThrough === true}" data-action="toggle-today-widget-click-through" aria-label="今日任务浮窗鼠标穿透" ${!desktopTodayWidget ? "disabled" : ""}></button>
+        `)}
+      </section>
+      <p class="settings-page-note">快捷键：⌘/Ctrl + Shift + T</p>
+    `,
+    data: `
+      <h3 class="settings-section-label" id="data-backup-title">备份与恢复</h3>
+      <section class="settings-list" aria-labelledby="data-backup-title">
+        ${row("完整备份", `<button class="settings-inline-action primary" type="button" data-backup-action="export" ${!desktopDataBackup ? "disabled" : ""}>导出备份</button>`)}
+        ${row("恢复备份文件", `<button class="settings-inline-action" type="button" data-backup-action="import-file" ${!desktopDataBackup ? "disabled" : ""}>选择文件</button>`)}
+        ${row("从备份目录恢复", `<button class="settings-inline-action" type="button" data-backup-action="import-directory" ${!desktopDataBackup ? "disabled" : ""}>选择目录</button>`)}
+      </section>
+      <p class="settings-page-note" data-backup-status>导入前会自动备份当前数据；校验失败将回滚。</p>
+    `,
+    updates: `
+      <h3 id="software-update-title">软件更新</h3>
+      <section class="settings-list settings-update-list" aria-labelledby="software-update-title">
+        <div class="settings-update-slot">${renderUpdateSettingsControls()}</div>
+      </section>
+    `,
+    advanced: `
+      <h3 class="settings-section-label">扩展能力</h3>
+      <div class="settings-advanced-slot" data-settings-advanced-slot></div>
+    `,
+    help: `
+      <h3 class="settings-section-label">支持</h3>
+      <section class="settings-list">
+        ${row("反馈问题", `<button class="settings-inline-action primary" type="button" data-action="open-feedback">打开反馈</button>`)}
+        ${row("应用信息", `<span class="settings-current-value">Loop ${APP_VERSION ? `v${esc(APP_VERSION)}` : "开发预览"}</span>`)}
+      </section>
+    `,
+  }[page];
+  const navItems = [
+    ["appearance", "外观"],
+    ["tasks", "任务与浮窗"],
+    ["data", "数据"],
+    ["updates", "软件更新"],
+    ["advanced", "高级功能"],
+    ["help", "帮助与反馈"],
+  ];
   return `
-    <div class="settings-overlay" role="presentation">
-      <section class="settings-panel" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+    <div class="settings-overlay ${settingsMotion === "open" ? "settings-overlay-opening" : ""}" role="presentation">
+      <section class="settings-panel ${settingsMotion === "open" ? "settings-panel-opening" : ""} ${settingsMotion === "page" ? "settings-page-swap" : ""}" role="dialog" aria-modal="true" aria-labelledby="settings-title">
         <header class="settings-head">
-          <div>
-            <span>Preferences</span>
-            <h2 id="settings-title">界面与数据</h2>
-          </div>
-          <button class="settings-close" type="button" data-action="close-settings" title="关闭">×</button>
+          <h2 id="settings-title">设置</h2>
+          <button class="settings-close" type="button" data-action="close-settings" title="关闭" aria-label="关闭设置">×</button>
         </header>
-        <div class="settings-body">
-          <div class="settings-content">
-            <section class="settings-group">
-              <div class="settings-group-head">
-                <h3>显示模式</h3>
-                <p>选择浅色或深色界面。</p>
-              </div>
-              ${settingsOptionGroup("theme", state.theme, themeLabels)}
-            </section>
-            <section class="settings-group">
-              <div class="settings-group-head">
-                <h3>中文字体</h3>
-                <p>适配 macOS 与 Windows 的常用中文字体。</p>
-              </div>
-              ${settingsSelectHtml("zh-font", state.zhFont, zhFontLabels)}
-            </section>
-            <section class="settings-group">
-              <div class="settings-group-head">
-                <h3>英文字体</h3>
-                <p>用于英文、数字和拉丁字符。</p>
-              </div>
-              ${settingsSelectHtml("en-font", state.enFont, enFontLabels)}
-            </section>
-            <section class="settings-group">
-              <div class="settings-group-head">
-                <h3>任务视图</h3>
-                <p>设置左侧任务标签和默认新任务优先级。</p>
-              </div>
-              <div class="settings-stack">
-                <label>
-                  <span>任务范围</span>
-                  ${settingsSelectHtml("task-filter", state.taskFilter, taskFilterLabels)}
-                </label>
-                <label>
-                  <span>优先级范围</span>
-                  ${settingsSelectHtml("priority-filter", state.priorityFilter, priorityFilterLabels)}
-                </label>
-                <label>
-                  <span>新任务优先级</span>
-                  ${settingsSelectHtml("new-task-priority", state.newTaskPriority, priorityLabels)}
-                </label>
-              </div>
-            </section>
-            <section class="settings-group">
-              <div class="settings-group-head">
-                <h3>今日任务浮窗</h3>
-                <p>让浮窗像歌词一样只显示内容，不影响下方软件操作。</p>
-              </div>
-              <div class="settings-stack">
-                <button class="settings-inline-action" type="button" data-action="toggle-today-widget-click-through" ${!desktopTodayWidget ? "disabled" : ""}>
-                  ${todayWidgetWindowState.clickThrough ? "关闭鼠标穿透" : "开启鼠标穿透"}
-                </button>
-                <span class="settings-help-text">快捷键：⌘/Ctrl + Shift + T${todayWidgetWindowState.clickThrough ? " · 当前已开启" : ""}</span>
-              </div>
-            </section>
-            <section class="settings-group" aria-labelledby="data-backup-title">
-              <div class="settings-group-head">
-                <h3 id="data-backup-title">数据迁移与恢复</h3>
-                <p>导出任务、节点、节点详情、附件与偏好；换电脑或更换安装位置后可完整恢复。</p>
-              </div>
-              <div class="settings-stack settings-backup-stack">
-                <div class="settings-backup-actions">
-                  <button class="settings-inline-action" type="button" data-backup-action="export" ${!desktopDataBackup ? "disabled" : ""}>导出完整备份</button>
-                  <button class="settings-inline-action" type="button" data-backup-action="import-file" ${!desktopDataBackup ? "disabled" : ""}>导入备份文件</button>
-                  <button class="settings-inline-action" type="button" data-backup-action="import-directory" ${!desktopDataBackup ? "disabled" : ""}>从备份目录恢复</button>
-                </div>
-                <span class="settings-help-text" data-backup-status>导入前会自动备份当前数据；校验失败会回滚，不会覆盖原数据。</span>
-              </div>
-            </section>
-            <section class="settings-group settings-update-group" aria-labelledby="software-update-title">
-              <div class="settings-group-head">
-                <h3 id="software-update-title">软件更新</h3>
-                <p>发现新版本后，由你确认升级；应用会在后台完成并自动重启。</p>
-              </div>
-              <div class="settings-update-slot">
-                ${renderUpdateSettingsControls()}
-              </div>
-            </section>
-            <section class="settings-group">
-              <div class="settings-group-head">
-                <h3>帮助与反馈</h3>
-                <p>遇到问题时，可以提交信息供后续定位。</p>
-              </div>
-              <div class="settings-stack">
-                <button class="settings-inline-action" type="button" data-action="open-feedback">反馈问题</button>
-              </div>
-            </section>
-            <div class="settings-preview">
-              <span>Preview</span>
-              <strong class="settings-preview-zh">任务流中文字体预览</strong>
-              <strong class="settings-preview-en">Task flow English 123</strong>
-              <p>背景、当前判断、结论保持轻量，处理流保持主视线。</p>
-            </div>
+        <div class="settings-layout">
+          <nav class="settings-nav" aria-label="设置分类">
+            ${navItems.map(([value, label]) => `<button class="${value === page ? "active" : ""} ${value === "help" ? "settings-nav-help" : ""}" type="button" data-settings-page="${value}" aria-current="${value === page ? "page" : "false"}">${label}</button>`).join("")}
+          </nav>
+          <div class="settings-body">
+            <main class="settings-content" data-settings-content>
+              <header class="settings-page-head">
+                <h3>${pages[page][0]}</h3>
+                <p>${pages[page][1]}</p>
+              </header>
+              ${pageBody}
+            </main>
           </div>
         </div>
       </section>
@@ -4753,6 +4748,17 @@ function bindTaskRepositoryRows(scope = document) {
     });
   });
 
+  document.querySelectorAll("[data-settings-page]").forEach((element) => {
+    element.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const page = event.currentTarget.dataset.settingsPage;
+      if (!["appearance", "tasks", "data", "updates", "advanced", "help"].includes(page) || page === activeSettingsPage) return;
+      activeSettingsPage = page;
+      settingsMotion = "page";
+      render();
+    });
+  });
+
   document.querySelectorAll("[data-setting-button]").forEach((element) => {
     element.addEventListener("click", (event) => {
       event.stopPropagation();
@@ -6171,6 +6177,7 @@ async function action(data, event = null) {
   if (data.action === "toggle-settings") {
     state.settingsOpen = !state.settingsOpen;
     if (state.settingsOpen) {
+      settingsMotion = "open";
       state.calendarOpen = false;
       state.reviewOpen = false;
       state.feedbackOpen = false;

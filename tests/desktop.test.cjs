@@ -2430,6 +2430,28 @@ test("Today widget uses the main Today focus surface treatment", async () => {
   assert.match(widget, /NotoSansCJKsc-Bold\.otf/);
 });
 
+test("settings use the selected categorized modal, grouped rows, mixed controls, and spring motion", async () => {
+  const [app, styles, workRhythm] = await Promise.all([
+    fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "app.js"), "utf8"),
+    fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "styles.css"), "utf8"),
+    fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "work-rhythm.js"), "utf8"),
+  ]);
+
+  assert.match(app, /activeSettingsPage = "appearance"/);
+  assert.match(app, /data-settings-page="\$\{value\}"/);
+  assert.match(app, /\["appearance", "tasks", "data", "updates", "advanced", "help"\]/);
+  assert.match(app, /class="settings-list"/);
+  assert.match(app, /class="settings-switch"[^>]+role="switch"/);
+  assert.match(app, /data-settings-advanced-slot/);
+  assert.doesNotMatch(app, /<h2 id="settings-title">界面与数据<\/h2>/);
+  assert.match(styles, /\.settings-layout\s*\{[\s\S]*grid-template-columns:\s*178px minmax\(0, 1fr\)/);
+  assert.match(styles, /\.settings-list\s*\{[\s\S]*border-radius:\s*14px/);
+  assert.match(styles, /@keyframes settings-panel-spring-in/);
+  assert.match(styles, /@media \(prefers-reduced-motion: reduce\)[\s\S]*settings-panel\.settings-panel-opening/);
+  assert.match(workRhythm, /data-wr-settings-profile/);
+  assert.match(workRhythm, /data-settings-advanced-slot/);
+});
+
 test("settings expose one-confirmation background update with a safe silent restart handshake", async () => {
   const [app, styles, preload, updater, main] = await Promise.all([
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "app.js"), "utf8"),

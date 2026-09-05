@@ -13088,3 +13088,504 @@ body.flow-node-reordering * {
 .repository-group-edit { width:100%; min-width:0; height:25px; border:1px solid var(--handoff-focus-800); border-radius:6px; padding:0 7px; background:var(--handoff-surface); color:var(--handoff-ink); font:inherit; outline:0; }
 .context-menu button[data-action="delete-group-keep-tasks"],
 .context-menu button[data-action="delete-group-with-tasks"] { white-space:nowrap; }
+
+/* v0.1.165 Settings — A1 / L1 / C3 / W1 / V1 / P2 */
+.settings-overlay {
+  z-index: 1300;
+  padding: 28px;
+  background: rgba(18, 27, 22, 0.28);
+  backdrop-filter: saturate(130%) blur(7px);
+  -webkit-backdrop-filter: saturate(130%) blur(7px);
+}
+
+.settings-overlay.settings-overlay-opening {
+  animation: settings-backdrop-in 260ms ease-out both;
+}
+
+.settings-panel {
+  width: min(850px, calc(100vw - 56px));
+  height: min(590px, calc(100vh - 56px));
+  height: min(590px, calc(100dvh - 56px));
+  max-height: none;
+  border: 1px solid var(--handoff-line-strong, var(--line));
+  border-radius: 18px;
+  background: var(--handoff-surface, var(--panel));
+  box-shadow: 0 28px 82px rgba(28, 48, 38, 0.22), 0 4px 14px rgba(28, 48, 38, 0.08);
+  transform-origin: center;
+}
+
+.settings-panel.settings-panel-opening {
+  animation: settings-panel-spring-in 430ms cubic-bezier(.18, .9, .22, 1.16) both;
+}
+
+.settings-panel.settings-page-swap .settings-content {
+  animation: settings-page-spring-in 270ms cubic-bezier(.2, .9, .2, 1) both;
+}
+
+.settings-head {
+  min-height: 68px;
+  padding: 0 21px;
+  border-bottom: 1px solid var(--handoff-line-soft, var(--line-soft));
+}
+
+.settings-head h2 {
+  margin: 0;
+  color: var(--handoff-ink, var(--heading));
+  font-size: 19px;
+  font-weight: 650;
+  letter-spacing: -0.025em;
+}
+
+.settings-close {
+  display: grid;
+  width: 33px;
+  height: 33px;
+  place-items: center;
+  border: 0;
+  border-radius: 10px;
+  padding: 0 0 2px;
+  background: var(--handoff-sidebar, var(--field));
+  color: var(--handoff-muted, var(--muted));
+  font-size: 21px;
+  font-weight: 400;
+}
+
+.settings-close:hover,
+.settings-close:focus-visible {
+  border: 0;
+  background: color-mix(in srgb, var(--handoff-focus-800, var(--focus)) 10%, var(--handoff-sidebar, var(--field)));
+  color: var(--handoff-ink, var(--heading));
+  outline: 0;
+  outline: 3px solid color-mix(in srgb, var(--handoff-focus-800, var(--focus)) 12%, transparent);
+  outline-offset: 0;
+}
+
+.settings-layout {
+  display: grid;
+  min-height: 0;
+  flex: 1 1 auto;
+  grid-template-columns: 178px minmax(0, 1fr);
+}
+
+.settings-nav {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: 2px;
+  padding: 13px 11px;
+  border-right: 1px solid var(--handoff-line-soft, var(--line-soft));
+  background: color-mix(in srgb, var(--handoff-sidebar, var(--paper)) 92%, var(--handoff-surface, var(--panel)));
+}
+
+.settings-nav button {
+  width: 100%;
+  min-height: 39px;
+  border: 0;
+  border-radius: 10px;
+  padding: 0 12px;
+  background: transparent;
+  color: var(--handoff-muted, var(--muted));
+  font-size: 12px;
+  font-weight: 540;
+  text-align: left;
+}
+
+.settings-nav button:hover {
+  background: color-mix(in srgb, var(--handoff-focus-800, var(--focus)) 5%, transparent);
+  color: var(--handoff-ink, var(--heading));
+}
+
+.settings-nav button.active,
+.settings-nav button[aria-current="page"] {
+  background: color-mix(in srgb, var(--handoff-focus-800, var(--focus)) 11%, transparent);
+  color: var(--handoff-focus-800, var(--focus));
+  font-weight: 680;
+}
+
+.settings-nav button:focus-visible {
+  outline: 0;
+  outline: 3px solid color-mix(in srgb, var(--handoff-focus-800, var(--focus)) 14%, transparent);
+  outline-offset: 0;
+}
+
+.settings-nav-help {
+  margin-top: auto;
+}
+
+.settings-body,
+.settings-panel .settings-body {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.settings-content,
+.settings-panel .settings-content {
+  display: block;
+  height: auto;
+  min-height: 100%;
+  overflow: visible;
+  padding: 25px 29px 32px;
+}
+
+.settings-page-head {
+  margin-bottom: 19px;
+}
+
+.settings-page-head h3 {
+  color: var(--handoff-ink, var(--heading));
+  font-size: 22px;
+  font-weight: 650;
+  line-height: 1.25;
+  letter-spacing: -0.03em;
+}
+
+.settings-page-head p {
+  margin-top: 5px;
+  color: var(--handoff-muted, var(--muted));
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.settings-section-label,
+#software-update-title {
+  margin: 0 0 8px 2px;
+  color: var(--handoff-muted, var(--muted));
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.settings-list {
+  overflow: hidden;
+  border: 1px solid var(--handoff-line-strong, var(--line));
+  border-radius: 14px;
+  background: var(--handoff-surface, var(--panel));
+}
+
+.settings-row {
+  display: flex;
+  min-height: 56px;
+  align-items: center;
+  gap: 18px;
+  margin-left: 15px;
+  padding: 8px 15px 8px 0;
+}
+
+.settings-row + .settings-row {
+  border-top: 1px solid var(--handoff-line-soft, var(--line-soft));
+}
+
+button.settings-row {
+  width: calc(100% - 15px);
+  border-right: 0;
+  border-bottom: 0;
+  border-left: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
+button.settings-row:hover .settings-row-copy strong {
+  color: var(--handoff-focus-800, var(--focus));
+}
+
+.settings-row-copy {
+  min-width: 140px;
+  flex: 1 1 auto;
+}
+
+.settings-row-copy strong {
+  color: var(--handoff-ink, var(--heading));
+  font-size: 12px;
+  font-weight: 590;
+}
+
+.settings-row-control {
+  display: flex;
+  min-width: 0;
+  flex: 0 1 auto;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.settings-current-value {
+  color: var(--handoff-muted, var(--muted));
+  font-size: 11px;
+}
+
+.settings-panel .settings-row select {
+  width: 184px;
+  height: 34px;
+  min-height: 34px;
+  border-color: transparent;
+  border-radius: 9px;
+  padding: 0 30px 0 10px;
+  background-color: var(--handoff-sidebar, var(--field));
+  color: var(--handoff-muted, var(--muted));
+  font-size: 11px;
+  text-align: right;
+}
+
+.settings-panel .settings-row select:hover,
+.settings-panel .settings-row select:focus {
+  border-color: var(--handoff-line-strong, var(--line));
+  color: var(--handoff-ink, var(--heading));
+}
+
+.settings-row .settings-options {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 10px;
+  background: var(--handoff-sidebar, var(--field));
+}
+
+.settings-row .settings-options button {
+  min-height: 27px;
+  border: 0;
+  border-radius: 8px;
+  padding: 0 12px;
+  background: transparent;
+  color: var(--handoff-muted, var(--muted));
+  font-size: 11px;
+}
+
+.settings-row .settings-options button.active {
+  border: 0;
+  background: var(--handoff-surface, var(--panel));
+  color: var(--handoff-ink, var(--heading));
+  box-shadow: 0 1px 4px rgba(28, 48, 38, 0.14);
+}
+
+.settings-switch,
+.settings-update-switch {
+  position: relative;
+  width: 42px;
+  height: 25px;
+  flex: 0 0 42px;
+  border: 0;
+  border-radius: 999px;
+  padding: 0;
+  background: color-mix(in srgb, var(--handoff-muted, var(--muted)) 34%, var(--handoff-sidebar, var(--field)));
+}
+
+.settings-switch::after,
+.settings-update-switch::after {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 21px;
+  height: 21px;
+  border-radius: 50%;
+  background: var(--handoff-surface, var(--panel));
+  box-shadow: 0 1px 4px rgba(28, 48, 38, 0.2);
+  content: "";
+  transition: transform 180ms cubic-bezier(.2, .9, .2, 1);
+}
+
+.settings-switch[aria-checked="true"],
+.settings-update-switch[aria-checked="true"] {
+  background: var(--handoff-focus-800, var(--focus));
+}
+
+.settings-switch[aria-checked="true"]::after,
+.settings-update-switch[aria-checked="true"]::after {
+  transform: translateX(17px);
+}
+
+.settings-switch:focus-visible,
+.settings-update-switch:focus-visible {
+  outline: 0;
+  outline: 3px solid color-mix(in srgb, var(--handoff-focus-800, var(--focus)) 14%, transparent);
+  outline-offset: 0;
+}
+
+.settings-inline-action {
+  min-height: 33px;
+  height: auto;
+  border: 1px solid var(--handoff-line-strong, var(--line));
+  border-radius: 9px;
+  padding: 0 12px;
+  background: var(--handoff-surface, var(--panel));
+  color: var(--handoff-ink, var(--heading));
+  font-size: 11px;
+  font-weight: 620;
+}
+
+.settings-inline-action.primary {
+  border-color: var(--handoff-focus-800, var(--focus));
+  background: var(--handoff-focus-800, var(--focus));
+  color: #fff;
+}
+
+.settings-inline-action:hover,
+.settings-inline-action:focus-visible {
+  border-color: var(--handoff-focus-800, var(--focus));
+  outline: 0;
+  outline: 3px solid color-mix(in srgb, var(--handoff-focus-800, var(--focus)) 10%, transparent);
+  outline-offset: 0;
+}
+
+.settings-preview {
+  display: grid;
+  gap: 4px;
+  margin-top: 13px;
+  border: 0;
+  border-left: 0;
+  border-radius: 12px;
+  padding: 14px;
+  background: color-mix(in srgb, var(--handoff-focus-800, var(--focus)) 9%, transparent);
+}
+
+.settings-preview strong {
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.settings-preview span {
+  color: var(--handoff-muted, var(--muted));
+  font-family: var(--en-font), sans-serif;
+  font-size: 11px;
+  text-transform: none;
+}
+
+.settings-page-note {
+  margin: 10px 2px 0;
+  color: var(--handoff-muted, var(--muted));
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.settings-update-list {
+  padding: 0 15px;
+}
+
+.settings-update-slot {
+  min-width: 0;
+}
+
+.settings-update-preference,
+.settings-update-action-row {
+  min-height: 56px;
+  padding: 8px 0;
+}
+
+.settings-update-preference {
+  border-bottom: 1px solid var(--handoff-line-soft, var(--line-soft));
+}
+
+.settings-update-action-row {
+  padding-top: 8px;
+}
+
+.settings-update-preference strong,
+.settings-update-action-row strong {
+  font-weight: 590;
+}
+
+.settings-advanced-slot:empty::before {
+  display: block;
+  min-height: 112px;
+  border: 1px solid var(--handoff-line-strong, var(--line));
+  border-radius: 14px;
+  background: var(--handoff-surface, var(--panel));
+  content: "";
+}
+
+.work-rhythm-profile-row .settings-row-control {
+  gap: 8px;
+  color: var(--handoff-muted, var(--muted));
+}
+
+.work-rhythm-profile-row em {
+  font-size: 11px;
+  font-style: normal;
+}
+
+.work-rhythm-profile-row b {
+  color: var(--handoff-muted, var(--muted));
+  font-size: 17px;
+  font-weight: 400;
+}
+
+.work-rhythm-settings-unlock {
+  padding: 12px 14px 14px;
+  border-top: 1px solid var(--handoff-line-soft, var(--line-soft));
+  background: color-mix(in srgb, var(--handoff-focus-800, var(--focus)) 5%, transparent);
+}
+
+.work-rhythm-settings-unlock .work-rhythm-settings-nav {
+  margin-bottom: 8px;
+}
+
+@keyframes settings-backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes settings-panel-spring-in {
+  0% { opacity: 0; transform: translateY(14px) scale(.91); }
+  72% { opacity: 1; transform: translateY(-2px) scale(1.012); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes settings-page-spring-in {
+  0% { opacity: 0; transform: translateX(10px); }
+  75% { opacity: 1; transform: translateX(-1px); }
+  100% { opacity: 1; transform: translateX(0); }
+}
+
+:root[data-theme="dark"] .settings-nav {
+  background: color-mix(in srgb, var(--handoff-sidebar) 92%, #172019);
+}
+
+:root[data-theme="dark"] .settings-panel .settings-row select,
+:root[data-theme="dark"] .settings-row .settings-options,
+:root[data-theme="dark"] .settings-close {
+  border-color: var(--handoff-line-strong);
+  background-color: #243029;
+}
+
+:root[data-theme="dark"] .settings-row .settings-options button.active {
+  background: #34443b;
+}
+
+@media (max-width: 760px) {
+  .settings-overlay { padding: 12px; }
+  .settings-panel {
+    width: calc(100vw - 24px);
+    height: calc(100dvh - 24px);
+  }
+  .settings-layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  .settings-nav {
+    flex-direction: row;
+    gap: 4px;
+    overflow-x: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--handoff-line-soft, var(--line-soft));
+    padding: 8px;
+  }
+  .settings-nav button { width: auto; min-width: max-content; padding: 0 11px; }
+  .settings-nav-help { margin-top: 0; }
+  .settings-content,
+  .settings-panel .settings-content { padding: 20px 17px 26px; }
+  .settings-row { gap: 10px; }
+  .settings-panel .settings-row select { width: min(184px, 42vw); }
+}
+
+@media (max-width: 480px) {
+  .settings-row { align-items: flex-start; flex-direction: column; }
+  .settings-row-control { width: 100%; justify-content: flex-start; }
+  .settings-panel .settings-row select { width: 100%; text-align: left; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-overlay.settings-overlay-opening,
+  .settings-panel.settings-panel-opening,
+  .settings-panel.settings-page-swap .settings-content {
+    animation: none;
+  }
+  .settings-switch::after,
+  .settings-update-switch::after { transition: none; }
+}

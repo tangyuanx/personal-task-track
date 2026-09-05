@@ -24,26 +24,25 @@ function recs(){const r=read(K.records,[]);return Array.isArray(r)?r:[]}
 function barHtml(){const x=phase();return`<div class="work-rhythm-rail"><button class="work-rhythm-pill" type="button" data-wr-open><i></i><strong>${esc(phaseName(x))}</strong><span>·</span><span>${esc(remain(x))}</span><em>· ${esc(x.s?.[3]||"")}</em><b>⌄</b></button></div>`}
 function syncBar(){const w=document.querySelector(".workspace");if(!w)return;const old=w.querySelector(":scope>.work-rhythm-rail");if(!rt.enabled){old?.remove();return}if(!old){w.insertAdjacentHTML("afterbegin",barHtml());w.querySelector("[data-wr-open]")?.addEventListener("click",e=>{e.stopPropagation();openPanel()})}else{const fresh=document.createElement("div");fresh.innerHTML=barHtml();const n=fresh.firstElementChild;if(old.innerHTML!==n.innerHTML){old.replaceWith(n);n.querySelector("[data-wr-open]")?.addEventListener("click",e=>{e.stopPropagation();openPanel()})}}}
 function settingsHtml() {
-  return `<section class="settings-group work-rhythm-settings">
-    <div data-wr-settings-home>
-      <button class="work-rhythm-settings-entry" type="button" data-wr-advanced>
-        <span><strong>高级功能</strong><small>${rt.enabled ? "1 项已开启" : "1 项可用"}</small></span><b aria-hidden="true">›</b>
-      </button>
-    </div>
-    <div data-wr-settings-advanced hidden>
-      <div class="work-rhythm-settings-nav"><button type="button" data-wr-settings-home-back aria-label="返回设置">‹</button><strong>高级功能</strong><span></span></div>
-      <div class="work-rhythm-settings-card">
-        <div class="work-rhythm-settings-title">
-          <div><strong>时间导航</strong><span>${rt.enabled ? "已开启" : "已锁定"}</span></div>
-          ${rt.enabled
-            ? '<button class="work-rhythm-disable" type="button" data-wr-disable>关闭</button>'
-            : '<button type="button" data-wr-request-unlock>解锁</button>'}
-        </div>
-        <p>${rt.enabled ? `当前方案：${esc(activeProfile().name)}` : "验证后仅在当前设备启用。"}</p>
+  return `<section class="settings-list work-rhythm-settings" data-wr-advanced data-wr-settings-home data-wr-settings-advanced>
+    <div class="settings-row">
+      <div class="settings-row-copy"><strong>时间导航</strong></div>
+      <div class="settings-row-control">
+        ${rt.enabled
+          ? '<button class="settings-switch work-rhythm-disable" type="button" role="switch" aria-checked="true" aria-label="关闭时间导航" data-wr-disable></button>'
+          : '<button class="settings-switch" type="button" role="switch" aria-checked="false" aria-label="开启时间导航" data-wr-request-unlock></button>'}
       </div>
     </div>
-    <div data-wr-settings-unlock hidden>
-      <div class="work-rhythm-settings-nav"><button type="button" data-wr-settings-advanced-back aria-label="返回高级功能">‹</button><strong>时间导航</strong><span></span></div>
+    <button class="settings-row work-rhythm-profile-row" type="button" data-wr-settings-profile>
+      <span class="settings-row-copy"><strong>时间方案</strong></span>
+      <span class="settings-row-control"><em>${esc(activeProfile().name)}</em><b aria-hidden="true">›</b></span>
+    </button>
+    <div class="settings-row">
+      <div class="settings-row-copy"><strong>访问保护</strong></div>
+      <div class="settings-row-control"><span class="settings-current-value">${rt.enabled ? "已开启" : "需要验证"}</span></div>
+    </div>
+    <div class="work-rhythm-settings-unlock" data-wr-settings-unlock hidden>
+      <div class="work-rhythm-settings-nav"><button type="button" data-wr-settings-advanced-back aria-label="返回高级功能">‹</button><strong>开启时间导航</strong><span></span></div>
       <div class="work-rhythm-settings-card">
         <div class="work-rhythm-settings-title"><div><strong>输入访问密码</strong><span>设备验证</span></div></div>
         <div class="work-rhythm-password-row"><input type="password" data-wr-password placeholder="访问密码" autocomplete="off"><button type="button" data-wr-unlock>开启</button></div>
@@ -52,21 +51,22 @@ function settingsHtml() {
     </div>
   </section>`;
 }
-function syncSettings(initialView = "home") {
-  const content = document.querySelector(".settings-panel .settings-content");
-  if (!content || content.querySelector(".work-rhythm-settings")) return;
-  content.insertAdjacentHTML("beforeend", settingsHtml());
-  const section = content.querySelector(".work-rhythm-settings");
-  const show = (view) => {
-    section.querySelector("[data-wr-settings-home]").hidden = view !== "home";
-    section.querySelector("[data-wr-settings-advanced]").hidden = view !== "advanced";
-    section.querySelector("[data-wr-settings-unlock]").hidden = view !== "unlock";
+function syncSettings(initialView = "advanced") {
+  const slot = document.querySelector("[data-settings-advanced-slot]");
+  if (!slot || slot.querySelector(".work-rhythm-settings")) return;
+  slot.innerHTML = settingsHtml();
+  const section = slot.querySelector(".work-rhythm-settings");
+  const unlockPanel = section.querySelector("[data-wr-settings-unlock]");
+  const showUnlock = (visible) => {
+    if (!unlockPanel) return;
+    unlockPanel.hidden = !visible;
+    section.classList.toggle("is-unlocking", visible);
+    if (visible) window.requestAnimationFrame(() => section.querySelector("[data-wr-password]")?.focus());
   };
-  section.querySelector("[data-wr-advanced]")?.addEventListener("click", () => show("advanced"));
-  section.querySelector("[data-wr-settings-home-back]")?.addEventListener("click", () => show("home"));
-  section.querySelector("[data-wr-request-unlock]")?.addEventListener("click", () => show("unlock"));
-  section.querySelector("[data-wr-settings-advanced-back]")?.addEventListener("click", () => show("advanced"));
+  section.querySelector("[data-wr-request-unlock]")?.addEventListener("click", () => showUnlock(true));
+  section.querySelector("[data-wr-settings-advanced-back]")?.addEventListener("click", () => showUnlock(false));
   section.querySelector("[data-wr-unlock]")?.addEventListener("click", unlock);
+  section.querySelector("[data-wr-settings-profile]")?.addEventListener("click", profileDrawer);
   section.querySelector("[data-wr-password]")?.addEventListener("keydown", (event) => {
     if (event.key === "Enter") unlock();
   });
@@ -75,7 +75,7 @@ function syncSettings(initialView = "home") {
     if (error) error.hidden = true;
   });
   section.querySelector("[data-wr-disable]")?.addEventListener("click", disable);
-  show(initialView);
+  showUnlock(initialView === "unlock");
 }
 function disable() {
   rt.enabled = false;
