@@ -27,8 +27,8 @@ jobs:
           node --check app/renderer/src/app.js
           node --check app/renderer/src/work-rhythm.js
           node --test tests/work-rhythm-ui.test.cjs
-          grep -q 'data-settings-page="appearance"' app/renderer/src/app.js
-          grep -q 'data-settings-page="advanced"' app/renderer/src/app.js
+          grep -Fq '["appearance", "外观"]' app/renderer/src/app.js
+          grep -Fq '["advanced", "高级功能"]' app/renderer/src/app.js
           grep -q 'data-settings-advanced-slot' app/renderer/src/app.js
           grep -q 'settings-layout' app/renderer/src/styles.css
           grep -q 'settings-page-spring' app/renderer/src/styles.css
