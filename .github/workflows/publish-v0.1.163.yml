@@ -31,7 +31,7 @@ jobs:
       - name: Verify release source
         shell: bash
         run: |
-          test "$(node -p 'require(\"./package.json\").version')" = "0.1.163"
+          test "$(node -p 'require("./package.json").version')" = "0.1.163"
           node --check app/renderer/src/work-rhythm-refine.js
           ! grep -q "wr2-summary\|wr2-timeline-backdrop\|打开主任务" app/renderer/src/work-rhythm-refine.js
       - run: npm ci
