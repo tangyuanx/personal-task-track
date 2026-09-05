@@ -23,9 +23,89 @@ function context(){const w=document.querySelector(".workspace"),h=w?.querySelect
 function recs(){const r=read(K.records,[]);return Array.isArray(r)?r:[]}
 function barHtml(){const x=phase();return`<div class="work-rhythm-rail"><button class="work-rhythm-pill" type="button" data-wr-open><i></i><strong>${esc(phaseName(x))}</strong><span>·</span><span>${esc(remain(x))}</span><em>· ${esc(x.s?.[3]||"")}</em><b>⌄</b></button></div>`}
 function syncBar(){const w=document.querySelector(".workspace");if(!w)return;const old=w.querySelector(":scope>.work-rhythm-rail");if(!rt.enabled){old?.remove();return}if(!old){w.insertAdjacentHTML("afterbegin",barHtml());w.querySelector("[data-wr-open]")?.addEventListener("click",e=>{e.stopPropagation();openPanel()})}else{const fresh=document.createElement("div");fresh.innerHTML=barHtml();const n=fresh.firstElementChild;if(old.innerHTML!==n.innerHTML){old.replaceWith(n);n.querySelector("[data-wr-open]")?.addEventListener("click",e=>{e.stopPropagation();openPanel()})}}}
-function settingsHtml(){return`<section class="settings-group work-rhythm-settings"><div class="settings-group-head"><h3>高级功能 · Work Rhythm</h3><p>默认关闭。包含静默导航、时间轴、固定模板、阶段记录、交接导出与节奏方案。</p></div><div class="work-rhythm-settings-card"><div class="work-rhythm-settings-title"><div><strong>工作节奏</strong><span>${rt.enabled?"已开启":"已锁定"}</span></div>${rt.enabled?'<button data-wr-disable>关闭功能</button>':""}</div>${rt.enabled?`<p>当前方案：${esc(activeProfile().name)}。关闭后主界面完全隐藏。</p>`:`<div class="work-rhythm-password-row"><input type="password" data-wr-password placeholder="输入访问密码" autocomplete="off"><button data-wr-unlock>验证并开启</button></div><p class="work-rhythm-password-error" data-wr-error hidden>密码不正确。</p>`}</div></section>`}
-function syncSettings(){const c=document.querySelector(".settings-panel .settings-content");if(!c||c.querySelector(".work-rhythm-settings"))return;c.insertAdjacentHTML("beforeend",settingsHtml());c.querySelector("[data-wr-unlock]")?.addEventListener("click",unlock);c.querySelector("[data-wr-password]")?.addEventListener("keydown",e=>{if(e.key==="Enter")unlock()});c.querySelector("[data-wr-disable]")?.addEventListener("click",()=>{rt.enabled=false;localStorage.setItem(K.enabled,"0");c.querySelector(".work-rhythm-settings")?.remove();syncSettings();syncBar()})}
-async function unlock(){const i=document.querySelector("[data-wr-password]"),er=document.querySelector("[data-wr-error]");let ok=false;try{ok=await gate?.verifyPassword(i?.value||"")}catch{}if(!ok){if(er)er.hidden=false;i?.focus();return}rt.enabled=true;localStorage.setItem(K.enabled,"1");document.querySelector(".work-rhythm-settings")?.remove();syncSettings();syncBar()}
+function settingsHtml() {
+  return `<section class="settings-group work-rhythm-settings">
+    <div data-wr-settings-home>
+      <button class="work-rhythm-settings-entry" type="button" data-wr-advanced>
+        <span><strong>高级功能</strong><small>${rt.enabled ? "1 项已开启" : "1 项可用"}</small></span><b aria-hidden="true">›</b>
+      </button>
+    </div>
+    <div data-wr-settings-advanced hidden>
+      <div class="work-rhythm-settings-nav"><button type="button" data-wr-settings-home-back aria-label="返回设置">‹</button><strong>高级功能</strong><span></span></div>
+      <div class="work-rhythm-settings-card">
+        <div class="work-rhythm-settings-title">
+          <div><strong>时间导航</strong><span>${rt.enabled ? "已开启" : "已锁定"}</span></div>
+          ${rt.enabled
+            ? '<button class="work-rhythm-disable" type="button" data-wr-disable>关闭</button>'
+            : '<button type="button" data-wr-request-unlock>解锁</button>'}
+        </div>
+        <p>${rt.enabled ? `当前方案：${esc(activeProfile().name)}` : "验证后仅在当前设备启用。"}</p>
+      </div>
+    </div>
+    <div data-wr-settings-unlock hidden>
+      <div class="work-rhythm-settings-nav"><button type="button" data-wr-settings-advanced-back aria-label="返回高级功能">‹</button><strong>时间导航</strong><span></span></div>
+      <div class="work-rhythm-settings-card">
+        <div class="work-rhythm-settings-title"><div><strong>输入访问密码</strong><span>设备验证</span></div></div>
+        <div class="work-rhythm-password-row"><input type="password" data-wr-password placeholder="访问密码" autocomplete="off"><button type="button" data-wr-unlock>开启</button></div>
+        <p class="work-rhythm-password-error" data-wr-error hidden>密码不正确，请重试。</p>
+      </div>
+    </div>
+  </section>`;
+}
+function syncSettings(initialView = "home") {
+  const content = document.querySelector(".settings-panel .settings-content");
+  if (!content || content.querySelector(".work-rhythm-settings")) return;
+  content.insertAdjacentHTML("beforeend", settingsHtml());
+  const section = content.querySelector(".work-rhythm-settings");
+  const show = (view) => {
+    section.querySelector("[data-wr-settings-home]").hidden = view !== "home";
+    section.querySelector("[data-wr-settings-advanced]").hidden = view !== "advanced";
+    section.querySelector("[data-wr-settings-unlock]").hidden = view !== "unlock";
+  };
+  section.querySelector("[data-wr-advanced]")?.addEventListener("click", () => show("advanced"));
+  section.querySelector("[data-wr-settings-home-back]")?.addEventListener("click", () => show("home"));
+  section.querySelector("[data-wr-request-unlock]")?.addEventListener("click", () => show("unlock"));
+  section.querySelector("[data-wr-settings-advanced-back]")?.addEventListener("click", () => show("advanced"));
+  section.querySelector("[data-wr-unlock]")?.addEventListener("click", unlock);
+  section.querySelector("[data-wr-password]")?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") unlock();
+  });
+  section.querySelector("[data-wr-password]")?.addEventListener("input", () => {
+    const error = section.querySelector("[data-wr-error]");
+    if (error) error.hidden = true;
+  });
+  section.querySelector("[data-wr-disable]")?.addEventListener("click", disable);
+  show(initialView);
+}
+function disable() {
+  rt.enabled = false;
+  localStorage.setItem(K.enabled, "0");
+  closeAll();
+  document.querySelector(".work-rhythm-settings")?.remove();
+  syncSettings("advanced");
+  syncBar();
+  toast("时间导航已关闭");
+}
+async function unlock() {
+  const input = document.querySelector("[data-wr-password]");
+  const error = document.querySelector("[data-wr-error]");
+  let ok = false;
+  try {
+    ok = await gate?.verifyPassword(input?.value || "");
+  } catch {}
+  if (!ok) {
+    if (error) error.hidden = false;
+    input?.focus();
+    input?.select();
+    return;
+  }
+  rt.enabled = true;
+  localStorage.setItem(K.enabled, "1");
+  document.querySelector(".work-rhythm-settings")?.remove();
+  syncSettings("advanced");
+  syncBar();
+  toast("时间导航已开启");
+}
 function fields(s){return templates[s?.[4]]||["当前目标","已有结果","下一步"]}
 function shell(body){return`<div class="work-rhythm-panel"><header><nav>${[["current","当前阶段"],["timeline","今日时间轴"],["templates","固定模板"],["export","导出给 ChatGPT"],["profiles","节奏方案"]].map(([i,l])=>`<button data-wr-tab="${i}" class="${rt.tab===i?"active":""}">${l}</button>`).join("")}</nav><button data-wr-close>×</button></header><main>${body}</main></div>`}
 function currentView(){const x=phase();if(!x.s)return"<p>当前方案没有时间段。</p>";return`<div class="wr-eyebrow">当前阶段 · ${esc(x.p.name)}</div><div class="wr-current"><div><h3>${esc(phaseName(x))}</h3><p>${esc(x.s[4])}</p></div><span>${esc(remain(x))}</span></div><div class="wr-goal"><span>这段时间只做</span><strong>${esc(x.s[3])}</strong></div><div class="wr-preview">${fields(x.s).slice(0,3).map(f=>`<div><span>固定字段</span><strong>${esc(f)}</strong></div>`).join("")}</div><div class="wr-actions"><button data-wr-go="timeline">查看全天</button><button data-wr-go="profiles">切换方案</button><button data-wr-go="export">导出交接</button>${x.s[4]!=="无"?'<button class="primary" data-wr-record>记录本阶段</button>':""}</div>`}
@@ -44,6 +124,7 @@ function slotRows(p){return p.slots.map((s,i)=>`<div class="wr-slot-row"><input 
 function bindDrawer(id){const d=rt.drawer;if(!d)return;const close=()=>{d.remove();rt.drawer=null};d.querySelector("[data-wr-dx]").onclick=close;d.querySelector("[data-wr-dcancel]").onclick=close;d.querySelectorAll("[data-wr-pick]").forEach(b=>b.onclick=()=>{localStorage.setItem(K.active,b.dataset.wrPick);close();profileDrawer();syncBar()});d.querySelectorAll("[data-wr-del]").forEach(b=>b.onclick=()=>b.closest(".wr-slot-row").remove());d.querySelector("[data-wr-add]").onclick=()=>{d.querySelector("[data-wr-slots]").insertAdjacentHTML("beforeend",`<div class="wr-slot-row"><input value="18:10"><input value="18:30"><input value="新阶段"><input value="填写此时只做什么"><select>${Object.keys(templates).map(n=>`<option>${esc(n)}</option>`).join("")}</select><button data-wr-del>×</button></div>`);d.querySelectorAll("[data-wr-del]").forEach(b=>b.onclick=()=>b.closest(".wr-slot-row").remove())};d.querySelector("[data-wr-new]").onclick=()=>{const ps=profiles(),nid=`custom-${Date.now()}`;ps.push({id:nid,name:"我的方案",desc:"自定义工作节奏。",slots:[["09:00","10:00","新阶段","填写此时只做什么","无"]]});write(K.profiles,ps);localStorage.setItem(K.active,nid);close();profileDrawer();syncBar()};d.querySelector("[data-wr-copy-profile]").onclick=()=>{const ps=profiles(),src=ps.find(p=>p.id===id);if(!src)return;const cp=structuredClone(src);cp.id=`copy-${Date.now()}`;cp.name+=` 副本`;ps.push(cp);write(K.profiles,ps);localStorage.setItem(K.active,cp.id);close();profileDrawer()};d.querySelector("[data-wr-psave]").onclick=()=>{const ps=profiles(),p=ps.find(p=>p.id===id);if(!p)return;p.name=d.querySelector("[data-wr-pname]").value.trim()||"未命名方案";p.desc=d.querySelector("[data-wr-pdesc]").value.trim();p.slots=Array.from(d.querySelectorAll(".wr-slot-row")).map(r=>Array.from(r.querySelectorAll("input,select")).map(e=>e.value.trim()));write(K.profiles,ps);close();syncBar();toast("工作节奏方案已保存")}}
 function closeAll(){rt.panel?.remove();rt.modal?.remove();rt.drawer?.remove();rt.panel=rt.modal=rt.drawer=null}
 function toast(s){document.querySelector(".work-rhythm-toast")?.remove();const n=document.createElement("div");n.className="work-rhythm-toast";n.textContent=s;document.body.append(n);setTimeout(()=>n.remove(),1500)}
+document.addEventListener("loop-work-rhythm:disable",disable);
 document.addEventListener("pointerdown",e=>{if(rt.panel&&!rt.panel.contains(e.target)&&!e.target.closest("[data-wr-open]")){rt.panel.remove();rt.panel=null}if(rt.modal&&e.target===rt.modal){rt.modal.remove();rt.modal=null}if(rt.drawer&&e.target===rt.drawer){rt.drawer.remove();rt.drawer=null}});document.addEventListener("keydown",e=>{if(e.key!=="Escape")return;if(rt.modal){rt.modal.remove();rt.modal=null}else if(rt.drawer){rt.drawer.remove();rt.drawer=null}else if(rt.panel){rt.panel.remove();rt.panel=null}});
 const root=document.getElementById("root");new MutationObserver(()=>{syncBar();syncSettings()}).observe(root,{childList:true,subtree:false});setInterval(syncBar,30000);syncBar();syncSettings();
 })();

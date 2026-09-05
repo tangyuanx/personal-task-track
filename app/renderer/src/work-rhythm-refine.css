@@ -1,4 +1,4 @@
-/* v0.1.163 Work Rhythm — Apple-inspired hierarchy and restraint */
+/* v0.1.164 Work Rhythm — Apple-inspired hierarchy and restraint */
 :root {
   --wr3-ink: #17251f;
   --wr3-secondary: #66736c;
@@ -75,7 +75,12 @@
   backdrop-filter: saturate(160%) blur(28px);
   -webkit-backdrop-filter: saturate(160%) blur(28px);
   transform-origin: top center;
-  animation: wr3-enter 220ms cubic-bezier(.2, .8, .2, 1);
+  animation: wr4-panel-in 260ms cubic-bezier(.2, .8, .2, 1);
+  will-change: opacity, transform;
+}
+
+.work-rhythm-panel.wr3-surface.wr3-view-swap {
+  animation: none;
 }
 
 .work-rhythm-panel.wr3-surface > header[hidden] {
@@ -157,17 +162,31 @@
   stroke-linejoin: round;
 }
 
-.wr3-task-title {
+.wr3-task-copy {
   align-self: center;
+  display: grid;
+  gap: 6px;
   max-width: 335px;
   margin: 21px auto 28px;
+  text-align: center;
+}
+
+.wr3-task-title {
+  margin: 0;
   color: var(--wr3-ink);
   font-size: clamp(22px, 3vw, 27px);
   font-weight: 650;
   line-height: 1.28;
   letter-spacing: -0.035em;
-  text-align: center;
   text-wrap: balance;
+}
+
+.wr3-task-support {
+  margin: 0;
+  color: var(--wr3-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+  letter-spacing: -0.01em;
 }
 
 .wr3-status {
@@ -190,6 +209,11 @@
   font-size: 16px;
   font-weight: 650;
   letter-spacing: -0.025em;
+}
+
+.wr3-remaining.is-empty {
+  min-height: 21px;
+  visibility: hidden;
 }
 
 .wr3-next {
@@ -402,13 +426,119 @@ button.wr3-setting-row:hover { color: var(--wr3-accent); }
   margin-right: 18px;
 }
 
-@keyframes wr3-enter {
-  from { opacity: 0; transform: translateY(-5px) scale(.985); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
+/* Main settings: reveal the protected feature progressively. */
+.work-rhythm-settings {
+  overflow: hidden;
+}
+
+.work-rhythm-settings-entry {
+  width: 100%;
+  min-height: 54px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 2px;
+  border: 0;
+  background: transparent;
+  color: var(--wr3-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.work-rhythm-settings-entry > span {
+  min-width: 0;
+  flex: 1;
+  display: grid;
+  gap: 3px;
+}
+
+.work-rhythm-settings-entry strong,
+.work-rhythm-settings-nav strong {
+  font-size: 13px;
+  font-weight: 640;
+  letter-spacing: -0.015em;
+}
+
+.work-rhythm-settings-entry small {
+  color: var(--wr3-tertiary);
+  font-size: 10px;
+}
+
+.work-rhythm-settings-entry > b {
+  color: var(--wr3-tertiary);
+  font-size: 19px;
+  font-weight: 400;
+}
+
+.work-rhythm-settings-nav {
+  min-height: 42px;
+  display: grid;
+  grid-template-columns: 32px 1fr 32px;
+  align-items: center;
+  margin-bottom: 10px;
+  text-align: center;
+}
+
+.work-rhythm-settings-nav button {
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--wr3-secondary);
+  font-size: 22px;
+  cursor: pointer;
+}
+
+.work-rhythm-settings-nav button:hover,
+.work-rhythm-settings-entry:hover {
+  color: var(--wr3-accent);
+}
+
+.work-rhythm-settings .work-rhythm-settings-card {
+  border-color: var(--wr3-line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, .7);
+  padding: 14px;
+}
+
+.work-rhythm-settings .work-rhythm-settings-title {
+  align-items: center;
+}
+
+.work-rhythm-settings .work-rhythm-settings-title > div {
+  display: grid;
+  gap: 4px;
+}
+
+.work-rhythm-settings .work-rhythm-settings-title span {
+  width: max-content;
+}
+
+.work-rhythm-settings .work-rhythm-settings-card p {
+  font-size: 11px;
+}
+
+.work-rhythm-settings .work-rhythm-password-row input,
+.work-rhythm-settings .work-rhythm-password-row button,
+.work-rhythm-settings .work-rhythm-settings-title button {
+  min-height: 34px;
+}
+
+/* The top rail is the spatial source; keep the panel horizontally anchored. */
+@keyframes wr4-panel-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(-12px) scale(.985); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+}
+
+@keyframes wr4-panel-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .work-rhythm-panel.wr3-surface { animation: none; }
+  .work-rhythm-panel.wr3-surface { animation: wr4-panel-fade 120ms ease-out; }
   .wr3-tools button, .wr3-subhead button { transition: none; }
 }
 
@@ -429,6 +559,7 @@ button.wr3-setting-row:hover { color: var(--wr3-accent); }
 
 @media (max-width: 520px) {
   .wr3-current-shell { min-height: 238px; padding: 16px; }
+  .wr3-task-copy { margin: 18px auto 24px; }
   .wr3-task-title { font-size: 22px; }
   .wr3-timeline { --wr3-axis-x: 82px; padding-left: 12px; padding-right: 12px; }
   .wr3-timeline::before, .wr3-timeline::after { left: calc(12px + var(--wr3-axis-x)); }

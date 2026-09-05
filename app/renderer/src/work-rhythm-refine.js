@@ -1,12 +1,12 @@
-/* v0.1.163 Work Rhythm — focused navigation */
+/* v0.1.164 Work Rhythm — focused navigation */
 (function () {
   "use strict";
 
   const K = {
-    enabled: "personal-task-track.work-rhythm.enabled",
-    profiles: "personal-task-track.work-rhythm.profiles",
-    active: "personal-task-track.work-rhythm.active",
-    records: "personal-task-track.work-rhythm.records",
+    enabled: "loop-work-rhythm-v1:enabled",
+    profiles: "loop-work-rhythm-v1:profiles",
+    active: "loop-work-rhythm-v1:active",
+    records: "loop-work-rhythm-v1:records",
   };
 
   const canonicalDefault = {
@@ -41,6 +41,9 @@
 
   let panelMode = "current";
   let activePanel = null;
+  let lastPhaseSignature = null;
+  let transitionCue = null;
+  let viewTransitionToken = 0;
 
   function escapeHtml(value) {
     return String(value ?? "").replace(/[&<>\"']/g, (character) => ({
@@ -116,6 +119,115 @@
     return title || state.slot[3] || state.slot[2] || "当前任务";
   }
 
+  function phaseSignature(state) {
+    return [state.profile.id, state.index, state.mode, state.slot[0], state.slot[2]].join("|");
+  }
+
+  function isRest(state) {
+    return state.mode === "active" && /休息|午休|短休/.test(state.slot[2]);
+  }
+
+  function presentation(state) {
+    if (state.mode === "ended") {
+      return { title: "收好现场，今天到这里", support: "明日可从恢复卡继续" };
+    }
+    if (isRest(state)) {
+      return { title: "离开屏幕，休息一下", support: "无需处理新输入" };
+    }
+    if (state.mode === "next") {
+      return { title: "稍后继续", support: "" };
+    }
+    const cueActive = transitionCue
+      && transitionCue.signature === phaseSignature(state)
+      && transitionCue.until > Date.now();
+    if (cueActive) {
+      const task = currentTask(state);
+      return {
+        title: /^继续/.test(task) ? task : `继续${task}`,
+        support: state.slot[2],
+      };
+    }
+    return { title: currentTask(state), support: "" };
+  }
+
+  function reducedMotion() {
+    return window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+  }
+
+  function viewFrames(direction, incoming) {
+    if (reducedMotion()) return incoming
+      ? [{ opacity: 0 }, { opacity: 1 }]
+      : [{ opacity: 1 }, { opacity: 0 }];
+    const distance = direction === "forward" ? 18 : -18;
+    return incoming
+      ? [{ opacity: 0.35, transform: `translateX(${distance}px)` }, { opacity: 1, transform: "translateX(0)" }]
+      : [{ opacity: 1, transform: "translateX(0)" }, { opacity: 0.35, transform: `translateX(${-distance}px)` }];
+  }
+
+  function animateIncoming(direction) {
+    requestAnimationFrame(() => {
+      const main = document.querySelector(".work-rhythm-panel > main");
+      if (!main?.animate) return;
+      main.getAnimations().forEach((animation) => animation.cancel());
+      main.animate(viewFrames(direction, true), {
+        duration: reducedMotion() ? 120 : 150,
+        easing: "cubic-bezier(.2,.8,.2,1)",
+      });
+    });
+  }
+
+  function transitionView(panel, direction, render) {
+    const main = panel?.querySelector("main");
+    const token = ++viewTransitionToken;
+    const finish = () => {
+      if (token !== viewTransitionToken) return;
+      render();
+      animateIncoming(direction);
+    };
+    if (!main?.animate) {
+      finish();
+      return;
+    }
+    main.getAnimations().forEach((animation) => animation.cancel());
+    const animation = main.animate(viewFrames(direction, false), {
+      duration: reducedMotion() ? 120 : 110,
+      easing: "cubic-bezier(.4,0,1,1)",
+      fill: "forwards",
+    });
+    animation.finished.then(finish).catch(() => {});
+  }
+
+  function transitionCurrentPhase(panel) {
+    const shell = panel?.querySelector(".wr3-current-shell");
+    if (!shell?.animate) {
+      activePanel = null;
+      if (panel) delete panel.dataset.wr3View;
+      renderCurrent(panel);
+      return;
+    }
+    shell.getAnimations().forEach((animation) => animation.cancel());
+    const outgoing = reducedMotion()
+      ? [{ opacity: 1 }, { opacity: 0 }]
+      : [{ opacity: 1, transform: "translateY(0)" }, { opacity: 0, transform: "translateY(-10px)" }];
+    const incoming = reducedMotion()
+      ? [{ opacity: 0 }, { opacity: 1 }]
+      : [{ opacity: 0, transform: "translateY(10px)" }, { opacity: 1, transform: "translateY(0)" }];
+    const animation = shell.animate(outgoing, {
+      duration: reducedMotion() ? 120 : 110,
+      easing: "cubic-bezier(.4,0,1,1)",
+      fill: "forwards",
+    });
+    animation.finished.then(() => {
+      activePanel = null;
+      delete panel.dataset.wr3View;
+      renderCurrent(panel);
+      panel.querySelector(".wr3-current-shell")?.animate(incoming, {
+        duration: reducedMotion() ? 120 : 150,
+        easing: "cubic-bezier(.2,.8,.2,1)",
+      });
+    }).catch(() => {});
+  }
+
   function originalTab(panel, name) {
     return panel.querySelector(`[data-wr-tab="${name}"]`);
   }
@@ -130,7 +242,10 @@
   function openBaseView(panel, tab, mode) {
     panelMode = mode;
     const button = originalTab(panel, tab);
-    if (button) button.click();
+    if (button) {
+      button.click();
+      document.querySelector(".work-rhythm-panel")?.classList.add("wr3-view-swap");
+    }
   }
 
   function restoreCurrent(panel) {
@@ -143,12 +258,18 @@
     panel.dataset.wr3View = "current";
     const state = phaseState();
     const next = nextSlot(state);
+    const content = presentation(state);
     const main = panel.querySelector("main");
     if (!main) return;
     const originalRecord = main.querySelector("[data-wr-record]");
-    const remainingLabel = state.mode === "active" ? "剩余" : state.mode === "next" ? "距离开始" : "今日阶段";
-    const remainingValue = state.mode === "ended" ? "已结束" : `${remaining(state)} 分钟`;
-    const nextText = next ? `下一阶段 · ${next[0]} ${next[2]}` : state.mode === "ended" ? state.profile.name : "最后一个阶段";
+    const remainingLabel = state.mode === "active" ? "剩余" : "距离开始";
+    const remainingValue = state.mode === "ended" ? "" : `${remaining(state)} 分钟`;
+    const first = state.slots[0];
+    const nextText = next
+      ? `下一阶段 · ${next[0]} ${next[2]}`
+      : state.mode === "ended" && first
+        ? `明日 · ${first[0]} ${first[2]}`
+        : "最后一个阶段";
 
     main.innerHTML = `
       <div class="wr3-current-shell">
@@ -159,9 +280,12 @@
             <button type="button" data-wr3-settings aria-label="打开设置">${icon.settings}</button>
           </div>
         </div>
-        <h2 class="wr3-task-title">${escapeHtml(currentTask(state))}</h2>
+        <div class="wr3-task-copy">
+          <h2 class="wr3-task-title">${escapeHtml(content.title)}</h2>
+          <p class="wr3-task-support"${content.support ? "" : " hidden"}>${escapeHtml(content.support)}</p>
+        </div>
         <div class="wr3-status" aria-label="阶段状态">
-          <div class="wr3-remaining"><span>${remainingLabel}</span><strong>${escapeHtml(remainingValue)}</strong></div>
+          <div class="wr3-remaining${remainingValue ? "" : " is-empty"}"><span>${remainingValue ? remainingLabel : ""}</span><strong>${escapeHtml(remainingValue)}</strong></div>
           <div class="wr3-next">${escapeHtml(nextText)}</div>
         </div>
       </div>`;
@@ -178,8 +302,12 @@
     } else {
       main.querySelector("[data-wr3-record]")?.remove();
     }
-    main.querySelector("[data-wr3-timeline]")?.addEventListener("click", () => renderTimeline(panel));
-    main.querySelector("[data-wr3-settings]")?.addEventListener("click", () => renderSettings(panel));
+    main.querySelector("[data-wr3-timeline]")?.addEventListener("click", () => {
+      transitionView(panel, "forward", () => renderTimeline(panel));
+    });
+    main.querySelector("[data-wr3-settings]")?.addEventListener("click", () => {
+      transitionView(panel, "forward", () => renderSettings(panel));
+    });
   }
 
   function timelineProgress(state) {
@@ -215,7 +343,9 @@
         <span></span>
       </div>
       <ol class="wr3-timeline" style="--wr3-progress:${timelineProgress(state)}%">${rows}</ol>`;
-    main.querySelector("[data-wr3-back]")?.addEventListener("click", () => restoreCurrent(panel));
+    main.querySelector("[data-wr3-back]")?.addEventListener("click", () => {
+      transitionView(panel, "back", () => restoreCurrent(panel));
+    });
     requestAnimationFrame(() => main.querySelector(".wr3-timeline-row.is-current")?.scrollIntoView({ block: "center", behavior: "smooth" }));
   }
 
@@ -253,13 +383,17 @@
           <div class="wr3-setting-row"><span>访问保护</span><em class="wr3-ok">已开启</em></div>
         </section>
       </div>`;
-    main.querySelector("[data-wr3-back]")?.addEventListener("click", () => restoreCurrent(panel));
-    main.querySelector("[data-wr3-profile]")?.addEventListener("click", () => openBaseView(panel, "profiles", "detail"));
-    main.querySelector("[data-wr3-template]")?.addEventListener("click", () => openBaseView(panel, "templates", "detail"));
+    main.querySelector("[data-wr3-back]")?.addEventListener("click", () => {
+      transitionView(panel, "back", () => restoreCurrent(panel));
+    });
+    main.querySelector("[data-wr3-profile]")?.addEventListener("click", () => {
+      transitionView(panel, "forward", () => openBaseView(panel, "profiles", "detail"));
+    });
+    main.querySelector("[data-wr3-template]")?.addEventListener("click", () => {
+      transitionView(panel, "forward", () => openBaseView(panel, "templates", "detail"));
+    });
     main.querySelector("[data-wr3-toggle]")?.addEventListener("click", () => {
-      localStorage.setItem(K.enabled, "0");
-      document.querySelector(".work-rhythm-rail")?.remove();
-      panel.remove();
+      document.dispatchEvent(new CustomEvent("loop-work-rhythm:disable"));
     });
   }
 
@@ -273,7 +407,9 @@
     head.className = "wr3-subhead wr3-detail-head";
     head.innerHTML = `<button type="button" data-wr3-settings-back aria-label="返回设置">${icon.back}</button><h2>${escapeHtml(main.querySelector("h2, h3")?.textContent || "设置")}</h2><span></span>`;
     main.prepend(head);
-    head.querySelector("button")?.addEventListener("click", () => renderSettings(panel));
+    head.querySelector("button")?.addEventListener("click", () => {
+      transitionView(panel, "back", () => renderSettings(panel));
+    });
   }
 
   function decoratePanel(panel) {
@@ -285,22 +421,36 @@
     else renderCurrent(panel);
   }
 
-  function decorateRail() {
+  function decorateRail(state = phaseState()) {
     const button = document.querySelector(".work-rhythm-pill");
     if (!button) return;
-    const state = phaseState();
-    const value = state.mode === "ended" ? "已结束" : `${remaining(state)} 分钟`;
-    const signature = `${state.slot[2]}|${value}|${state.mode}`;
+    const value = state.mode === "ended" ? "" : `${remaining(state)} 分钟`;
+    const title = state.mode === "ended" ? "今日已结束" : state.mode === "next" ? `下一阶段 ${state.slot[2]}` : state.slot[2];
+    const signature = `${title}|${value}|${state.mode}`;
     if (button.dataset.wr3Signature === signature) return;
     button.dataset.wr3Signature = signature;
     button.classList.add("wr3-pill");
-    button.innerHTML = `<i aria-hidden="true"></i><strong>${escapeHtml(state.slot[2])}</strong><span>${escapeHtml(value)}</span>${icon.down}`;
+    button.innerHTML = `<i aria-hidden="true"></i><strong>${escapeHtml(title)}</strong>${value ? `<span>${escapeHtml(value)}</span>` : ""}${icon.down}`;
   }
 
   function inspect() {
-    decorateRail();
+    const state = phaseState();
+    const signature = phaseSignature(state);
     const panel = document.querySelector(".work-rhythm-panel");
-    if (panel) decoratePanel(panel);
+    const phaseChanged = lastPhaseSignature && lastPhaseSignature !== signature;
+    const cueExpired = transitionCue && transitionCue.until <= Date.now();
+    if (phaseChanged) {
+      transitionCue = { signature, until: Date.now() + 4000 };
+    } else if (cueExpired) {
+      transitionCue = null;
+    }
+    lastPhaseSignature = signature;
+    decorateRail(state);
+    if (panel && panel.dataset.wr3View === "current" && (phaseChanged || cueExpired)) {
+      transitionCurrentPhase(panel);
+    } else if (panel) {
+      decoratePanel(panel);
+    }
   }
 
   seedCanonicalDefault();
@@ -311,6 +461,6 @@
     }
   }, true);
   new MutationObserver(inspect).observe(document.documentElement, { childList: true, subtree: true });
-  setInterval(inspect, 30000);
+  setInterval(inspect, 10000);
   inspect();
 })();

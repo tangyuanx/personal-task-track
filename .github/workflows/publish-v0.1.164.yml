@@ -1,19 +1,19 @@
-name: Publish v0.1.163
+name: Publish v0.1.164
 
 on:
   push:
     branches:
       - main
     paths:
-      - .github/workflows/publish-v0.1.163.yml
+      - .github/workflows/publish-v0.1.164.yml
 
 concurrency:
-  group: publish-v0.1.163
+  group: publish-v0.1.164
   cancel-in-progress: false
 
 jobs:
   verify:
-    name: Verify v0.1.163 source
+    name: Verify v0.1.164 source
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -23,12 +23,17 @@ jobs:
         shell: bash
         run: |
           version="$(node -p "require('./package.json').version")"
-          test "$version" = "0.1.163"
+          test "$version" = "0.1.164"
+          node --check app/renderer/src/work-rhythm.js
           node --check app/renderer/src/work-rhythm-refine.js
-          ! grep -q "wr2-summary\|wr2-timeline-backdrop\|打开主任务" app/renderer/src/work-rhythm-refine.js
+          node --test tests/work-rhythm-ui.test.cjs
+          grep -q "data-wr-settings-unlock" app/renderer/src/work-rhythm.js
+          grep -q "loop-work-rhythm:disable" app/renderer/src/work-rhythm.js
+          grep -q "收好现场，今天到这里" app/renderer/src/work-rhythm-refine.js
+          ! grep -q "personal-task-track.work-rhythm\|wr2-summary\|wr2-timeline-backdrop\|打开主任务" app/renderer/src/work-rhythm-refine.js
 
   build:
-    name: Build v0.1.163 ${{ matrix.platform }}
+    name: Build v0.1.164 ${{ matrix.platform }}
     needs: verify
     runs-on: ${{ matrix.os }}
     strategy:
@@ -38,11 +43,11 @@ jobs:
           - platform: macOS
             os: macos-latest
             script: npm run dist:mac -- --x64 --arm64 --publish never
-            artifact: v0.1.163-macos
+            artifact: v0.1.164-macos
           - platform: Windows
             os: windows-latest
             script: npm run dist:win -- --publish never
-            artifact: v0.1.163-windows
+            artifact: v0.1.164-windows
 
     steps:
       - name: Checkout
@@ -76,7 +81,7 @@ jobs:
       - name: Verify update metadata
         run: node tools/verify-update-artifacts.cjs release
 
-      - name: Stage v0.1.163 release assets
+      - name: Stage v0.1.164 release assets
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
@@ -91,7 +96,7 @@ jobs:
           retention-days: 2
 
   publish:
-    name: Publish v0.1.163 release
+    name: Publish v0.1.164 release
     needs: build
     runs-on: ubuntu-latest
     permissions:
@@ -106,34 +111,34 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          if gh api "repos/${{ github.repository }}/git/ref/tags/v0.1.163" >/dev/null 2>&1; then
-            echo "v0.1.163 already exists; refusing to replace it."
+          if gh api "repos/${{ github.repository }}/git/ref/tags/v0.1.164" >/dev/null 2>&1; then
+            echo "v0.1.164 already exists; refusing to replace it."
             exit 1
           fi
 
-      - name: Collect v0.1.163 release assets
+      - name: Collect v0.1.164 release assets
         uses: actions/download-artifact@v4
         with:
-          pattern: v0.1.163-*
+          pattern: v0.1.164-*
           path: release
           merge-multiple: true
 
       - name: Verify complete cross-platform update feed
         run: node tools/verify-update-artifacts.cjs release --require-all-platforms
 
-      - name: Publish v0.1.163
+      - name: Publish v0.1.164
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v0.1.163
+          tag_name: v0.1.164
           target_commitish: ${{ github.sha }}
-          name: v0.1.163
+          name: v0.1.164
           body: |
-            ## 工作节奏导航重设计
+            ## 时间导航完整交互
 
-            - 当前阶段只突出当前任务，剩余时间与下一阶段统一收束到底部。
-            - 时钟入口打开 C1 分段式今日时间轴，只保留时间与阶段名称。
-            - 设置入口采用 S2 分组层级，集中时间方案、固定模板与访问保护。
-            - 保留现有本地数据、时间方案、恢复卡与访问密码兼容性。
+            - 增加阶段切换、休息中与今日结束三类边界状态，保留底部时间与下一阶段锚点。
+            - 时间导航移入“设置 → 高级功能”，通过密码解锁并仅在当前设备保持启用。
+            - 打开、前进、返回和阶段切换采用方向一致且可中断的轻量动效。
+            - 完整支持“减少动态效果”，并修复启用状态与时间方案使用不同存储键的问题。
           make_latest: true
           files: |
             release/*.dmg
