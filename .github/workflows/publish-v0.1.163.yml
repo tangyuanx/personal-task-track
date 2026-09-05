@@ -1,0 +1,71 @@
+name: Publish v0.1.163
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/publish-v0.1.163.yml
+
+concurrency:
+  group: publish-v0.1.163
+  cancel-in-progress: false
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            artifact: personal-task-track-windows
+          - os: macos-latest
+            artifact: personal-task-track-macos
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Verify release source
+        shell: bash
+        run: |
+          test "$(node -p 'require(\"./package.json\").version')" = "0.1.163"
+          node --check app/renderer/src/work-rhythm-refine.js
+          ! grep -q "wr2-summary\|wr2-timeline-backdrop\|打开主任务" app/renderer/src/work-rhythm-refine.js
+      - run: npm ci
+      - run: npm run check
+      - run: npm run dist
+      - name: Verify installer upgrade metadata
+        shell: bash
+        run: node scripts/check-installer-upgrade.cjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: release/*
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v0.1.163
+          target_commitish: ${{ github.sha }}
+          name: v0.1.163
+          make_latest: true
+          generate_release_notes: false
+          body: |
+            - 当前阶段只突出当前任务，剩余时间与下一阶段统一收束到底部。
+            - 时钟入口打开 C1 分段式今日时间轴，只保留时间与阶段名称。
+            - 设置入口采用 S2 分组层级，集中时间方案、固定模板与访问保护。
+            - 保留现有本地数据、时间方案、恢复卡与访问密码兼容性。
+          files: artifacts/*

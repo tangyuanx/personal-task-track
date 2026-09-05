@@ -1,340 +1,316 @@
-(() => {
+/* v0.1.163 Work Rhythm — focused navigation */
+(function () {
   "use strict";
 
   const K = {
-    enabled: "loop-work-rhythm-v1:enabled",
-    profiles: "loop-work-rhythm-v1:profiles",
-    active: "loop-work-rhythm-v1:active",
-    records: "loop-work-rhythm-v1:records",
-    execution: "loop-work-rhythm-v2:execution",
+    enabled: "personal-task-track.work-rhythm.enabled",
+    profiles: "personal-task-track.work-rhythm.profiles",
+    active: "personal-task-track.work-rhythm.active",
+    records: "personal-task-track.work-rhythm.records",
   };
 
   const canonicalDefault = {
     id: "default",
     name: "默认工作日",
-    desc: "稳定执行主线工作的标准节奏。",
     slots: [
-      ["09:40","09:55","今日启动","确定今日唯一主结果、完成标准和第一动作","今日启动"],
-      ["09:55","11:15","深度工作 A","推进今日主结果，不切换问题","Debug / 开发"],
-      ["11:15","11:30","验证与收束","固定上午结果并留下下一步","阶段总结"],
-      ["11:30","11:40","上午收尾","固定上午现场并留下下午恢复入口","阶段总结"],
-      ["11:40","13:10","午休","离开工作现场，完整休息","无"],
-      ["13:10","13:25","可选轻学习","只做低负担阅读或知识补齐","学习任务"],
-      ["13:25","13:40","过渡 / 自由","清理杂项并准备下午启动","无"],
-      ["13:40","13:55","下午重启","读取恢复卡，重建上下文","恢复卡"],
-      ["13:55","15:15","深度工作 B","继续今日主结果","Debug / 开发"],
-      ["15:15","15:30","休息","离开屏幕 / 喝水 / 活动","无"],
-      ["15:30","16:15","协作 / 次要任务","处理必要协作和低认知任务","任务记录"],
-      ["16:15","17:15","交付验证","验证、复现并固定结果","交付验证"],
-      ["17:15","17:35","缓冲","处理必要收尾，不主动开启新的主问题","任务记录"],
-      ["17:35","17:55","代码与知识沉淀","整理改动并提炼今天可复用的工程经验","知识沉淀"],
-      ["17:55","18:10","每日关闭","确认今日结果并留下明日第一动作","每日关闭"],
+      ["08:50", "09:00", "到岗准备", "打开环境并确认今日唯一结果", "完成启动清单"],
+      ["09:00", "09:15", "今日启动", "确定今日唯一主结果", "写下结果、完成标准和第一动作"],
+      ["09:15", "10:00", "深度工作 A", "推进今日最高价值交付", "记录阶段结果"],
+      ["10:00", "10:10", "阶段记录", "保存深度工作 A 的证据", "写一张恢复卡"],
+      ["10:10", "10:20", "短休息", "离开屏幕并恢复注意力", "不处理新输入"],
+      ["10:20", "11:05", "深度工作 B", "继续推进主任务", "记录关键发现"],
+      ["11:05", "11:15", "阶段记录", "保存深度工作 B 的证据", "写一张恢复卡"],
+      ["11:15", "11:25", "短休息", "离开屏幕并恢复注意力", "不处理新输入"],
+      ["11:25", "12:00", "协作窗口", "集中处理沟通与阻塞", "清空必要协作"],
+      ["13:30", "14:00", "下午重启", "恢复上下文并选定下一步", "更新恢复卡"],
+      ["14:00", "14:45", "深度工作 C", "完成下午核心推进", "记录阶段结果"],
+      ["14:45", "15:00", "阶段记录", "保存深度工作 C 的证据", "写一张恢复卡"],
+      ["15:00", "15:15", "机动处理", "处理必要的小任务", "不扩展任务范围"],
+      ["15:15", "15:30", "休息", "恢复注意力", "离开屏幕"],
+      ["15:30", "17:30", "收束与交付", "完成交付、复盘并准备明日", "关闭开放回路"],
     ],
   };
 
-  let settingsMode = false;
-  let timeline = null;
+  const icon = {
+    clock: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.25"></circle><path d="M12 7.6v4.8l3.2 2"></path></svg>',
+    settings: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="2.6"></circle><path d="M19.1 13.7a7.5 7.5 0 0 0 0-3.4l2-1.5-2-3.4-2.5 1a8 8 0 0 0-3-1.7L13.2 2H9.3L9 4.7a8 8 0 0 0-3 1.7l-2.5-1-2 3.4 2 1.5a7.5 7.5 0 0 0 0 3.4l-2 1.5 2 3.4 2.5-1a8 8 0 0 0 3 1.7l.4 2.7h3.9l.4-2.7a8 8 0 0 0 3-1.7l2.5 1 2-3.4-2-1.5Z"></path></svg>',
+    back: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14.5 6-6 6 6 6"></path></svg>',
+    chevron: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3.5 4.5 4.5L6 12.5"></path></svg>',
+    down: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4"></path></svg>',
+  };
 
-  const esc = (value) =>
-    String(value ?? "").replace(/[&<>"']/g, (c) => ({
-      "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
-    })[c]);
+  let panelMode = "current";
+  let activePanel = null;
 
-  const read = (key, fallback) => {
+  function escapeHtml(value) {
+    return String(value ?? "").replace(/[&<>\"']/g, (character) => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;",
+    })[character]);
+  }
+
+  function readJson(key, fallback) {
     try {
-      const raw = localStorage.getItem(key);
-      return raw ? JSON.parse(raw) : fallback;
-    } catch {
+      const value = JSON.parse(localStorage.getItem(key));
+      return value == null ? fallback : value;
+    } catch (_) {
       return fallback;
     }
-  };
-
-  const write = (key, value) => localStorage.setItem(key, JSON.stringify(value));
-  const hm = (value) => {
-    const [h,m] = String(value || "00:00").split(":").map(Number);
-    return h * 60 + m;
-  };
-  const nowMin = (date = new Date()) => date.getHours() * 60 + date.getMinutes();
-  const dateKey = (date = new Date()) =>
-    `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`;
+  }
 
   function seedCanonicalDefault() {
-    if (localStorage.getItem(K.profiles)) return;
-    const debug = {
-      id:"debug", name:"Debug 日", desc:"复杂问题定位，减少切换。",
-      slots:[
-        ["09:40","09:55","问题启动","明确现象、边界和今日要排除的范围","Debug 启动"],
-        ["09:55","11:30","深度 Debug A","只围绕主问题做最小区分实验","问题定位 / Debug"],
-        ["11:30","11:40","证据固定","整理上午事实、证据和被推翻假设","阶段总结"],
-        ["13:40","13:50","恢复上下文","读取恢复卡和上午证据","恢复卡"],
-        ["13:50","15:30","深度 Debug B","继续收敛根因，不处理支线","问题定位 / Debug"],
-        ["15:30","15:45","休息","离开屏幕","无"],
-        ["15:45","17:10","复现 / 修复验证","构造稳定复现并验证修复","交付验证"],
-        ["17:10","17:45","知识沉淀","把根因链和判断方法写成知识卡","知识沉淀"],
-        ["17:45","18:10","关闭现场","形成恢复卡和明日第一动作","每日关闭"],
-      ]
-    };
-    const learn = {
-      id:"learn", name:"学习日", desc:"技术学习、手册阅读和小实验。",
-      slots:[
-        ["09:30","09:45","学习启动","明确今天要补齐的一个知识缺口","学习启动"],
-        ["09:45","11:15","概念学习","阅读核心材料并建立概念框架","学习任务"],
-        ["11:15","11:45","最小实验","用代码 / 命令验证刚学内容","学习实验"],
-        ["13:30","15:00","深度学习 B","继续第二块核心内容","学习任务"],
-        ["15:20","16:30","工程连接","把知识与当前项目问题连接起来","知识沉淀"],
-        ["16:30","17:00","知识卡","整理机制、证据、边界和例子","知识卡"],
-        ["17:00","17:15","学习关闭","记录仍不理解的问题和下一次入口","每日关闭"],
-      ]
-    };
-    write(K.profiles, [canonicalDefault, debug, learn]);
+    const saved = readJson(K.profiles, null);
+    if (!Array.isArray(saved) || !saved.length) {
+      localStorage.setItem(K.profiles, JSON.stringify([canonicalDefault]));
+      localStorage.setItem(K.active, canonicalDefault.id);
+    }
   }
 
   function profiles() {
-    const value = read(K.profiles, [canonicalDefault]);
-    return Array.isArray(value) && value.length ? value : [canonicalDefault];
+    const saved = readJson(K.profiles, []);
+    return Array.isArray(saved) && saved.length ? saved : [canonicalDefault];
   }
 
   function activeProfile() {
     const list = profiles();
-    const id = localStorage.getItem(K.active) || "default";
-    return list.find((p) => p.id === id) || list[0];
+    const id = localStorage.getItem(K.active);
+    return list.find((profile) => profile.id === id) || list[0];
   }
 
-  function slotKey(profile, slot, index) {
-    return `${profile.id}:${index}:${slot[0]}:${slot[1]}:${slot[2]}`;
+  function minutes(value) {
+    const [hours, mins] = String(value || "0:0").split(":").map(Number);
+    return hours * 60 + mins;
   }
 
-  function currentSlot(profile = activeProfile()) {
-    const now = nowMin();
-    const index = profile.slots.findIndex((s) => now >= hm(s[0]) && now < hm(s[1]));
-    return index >= 0 ? { slot: profile.slots[index], index } : null;
+  function nowMinutes() {
+    const now = new Date();
+    return now.getHours() * 60 + now.getMinutes();
   }
 
-  function execution() {
-    const today = dateKey();
-    const value = read(K.execution, null);
-    if (!value || value.date !== today) {
-      const fresh = { date: today, activeKey: null, slots: {} };
-      write(K.execution, fresh);
-      return fresh;
-    }
-    return value;
-  }
-
-  function track() {
-    if (localStorage.getItem(K.enabled) !== "1") return;
+  function phaseState() {
     const profile = activeProfile();
-    const current = currentSlot(profile);
-    const state = execution();
-    const now = new Date().toISOString();
-
-    if (!current) {
-      if (state.activeKey && state.slots[state.activeKey] && !state.slots[state.activeKey].endedAt) {
-        state.slots[state.activeKey].endedAt = now;
-        state.activeKey = null;
-        write(K.execution, state);
-      }
-      return;
-    }
-
-    const key = slotKey(profile, current.slot, current.index);
-    if (state.activeKey && state.activeKey !== key && state.slots[state.activeKey] && !state.slots[state.activeKey].endedAt) {
-      state.slots[state.activeKey].endedAt = now;
-    }
-    if (!state.slots[key]) state.slots[key] = { startedAt: now, endedAt: null };
-    state.activeKey = key;
-    write(K.execution, state);
+    const slots = Array.isArray(profile.slots) ? profile.slots : [];
+    const now = nowMinutes();
+    const activeIndex = slots.findIndex((slot) => now >= minutes(slot[0]) && now < minutes(slot[1]));
+    if (activeIndex >= 0) return { profile, slots, index: activeIndex, slot: slots[activeIndex], mode: "active", now };
+    const nextIndex = slots.findIndex((slot) => now < minutes(slot[0]));
+    if (nextIndex >= 0) return { profile, slots, index: nextIndex, slot: slots[nextIndex], mode: "next", now };
+    const index = Math.max(0, slots.length - 1);
+    return { profile, slots, index, slot: slots[index] || ["", "", "今日阶段", "", ""], mode: "ended", now };
   }
 
-  function todayRecords() {
-    return (read(K.records, []) || []).filter((r) => {
-      const d = new Date(r.createdAt);
-      return !Number.isNaN(d.getTime()) && dateKey(d) === dateKey();
-    });
+  function remaining(state) {
+    if (state.mode === "ended") return 0;
+    const target = state.mode === "active" ? minutes(state.slot[1]) : minutes(state.slot[0]);
+    return Math.max(0, target - state.now);
   }
 
-  function recordFor(profile, slot) {
-    const list = todayRecords();
-    return list.find((r) => r.profileId === profile.id && r.phase === slot[2]) ||
-           list.find((r) => r.phase === slot[2]) || null;
+  function nextSlot(state) {
+    if (state.mode === "active") return state.slots[state.index + 1] || null;
+    if (state.mode === "next") return state.slot;
+    return null;
   }
 
-  function clock(value) {
-    if (!value) return "";
-    const d = new Date(value);
-    return Number.isNaN(d.getTime()) ? "" :
-      `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
+  function currentTask(state) {
+    const field = document.querySelector(".workspace .page-title");
+    const title = field && "value" in field ? field.value.trim() : "";
+    return title || state.slot[3] || state.slot[2] || "当前任务";
   }
 
-  function minute(value) {
-    if (!value) return null;
-    const d = new Date(value);
-    return Number.isNaN(d.getTime()) ? null : nowMin(d);
+  function originalTab(panel, name) {
+    return panel.querySelector(`[data-wr-tab="${name}"]`);
   }
 
-  function statusFor(profile, slot, index) {
-    const now = nowMin();
-    const start = hm(slot[0]), end = hm(slot[1]);
-    const state = execution().slots[slotKey(profile, slot, index)] || null;
-    const record = recordFor(profile, slot);
-    const current = currentSlot(profile);
-
-    if (now < start) return { kind:"future", label:"尚未开始", actual:`计划 ${slot[0]}–${slot[1]}` };
-
-    if (current?.index === index) {
-      const elapsed = state?.startedAt
-        ? Math.max(0, Math.floor((Date.now() - new Date(state.startedAt).getTime()) / 60000))
-        : Math.max(0, now - start);
-      return { kind:"current", label:"● 进行中", actual:`已进行 ${elapsed} 分钟` };
-    }
-
-    if (now < end) return { kind:"future", label:"尚未开始", actual:`计划 ${slot[0]}–${slot[1]}` };
-    if (slot[4] === "无") return { kind:"done", label:"✓ 已结束", actual:"无需阶段结果" };
-
-    const started = minute(state?.startedAt);
-    const ended = minute(state?.endedAt) ?? minute(record?.createdAt);
-    const delay = started === null ? null : Math.max(0, started - start);
-    const over = ended === null ? 0 : Math.max(0, ended - end);
-
-    if (!state?.startedAt && !record)
-      return { kind:"deviation", label:"↗ 未按计划执行", actual:"未检测到执行或结果" };
-
-    if (!record) {
-      let actual = state?.startedAt ? `实际 ${clock(state.startedAt)} 开始` : "阶段已过去";
-      if (state?.endedAt) actual += ` · ${clock(state.endedAt)} 结束`;
-      return { kind:"noresult", label:"! 无结果", actual };
-    }
-
-    if (over > 2)
-      return { kind:"overtime", label:`+${over}m 超时`, actual:`${clock(record.createdAt)} 完成 · 有结果` };
-
-    if (delay !== null && delay > 5)
-      return { kind:"deviation", label:"↗ 偏离计划", actual:`实际 ${clock(state.startedAt)} 开始 · 有结果` };
-
-    return { kind:"done", label:"✓ 已完成", actual:`${clock(record.createdAt)} 完成 · 有结果` };
-  }
-
-  function timelineHtml() {
-    const profile = activeProfile();
-    const summary = { done:0, overtime:0, deviation:0, noresult:0, current:0 };
-    const rows = profile.slots.map((slot, index) => {
-      const s = statusFor(profile, slot, index);
-      if (summary[s.kind] !== undefined) summary[s.kind]++;
-      return `<article class="wr2-timeline-row ${s.kind}">
-        <div class="wr2-time"><strong>${esc(slot[0])}</strong><span>– ${esc(slot[1])}</span><small>${esc(s.actual)}</small></div>
-        <div class="wr2-phase"><strong>${esc(slot[2])}</strong><p>${esc(slot[3])}</p><small>${slot[4] === "无" ? "无需阶段记录" : `记录模板：${esc(slot[4])}`}</small></div>
-        <div class="wr2-state"><span class="wr2-status ${s.kind}">${esc(s.label)}</span></div>
-      </article>`;
-    }).join("");
-
-    return `<div class="wr2-timeline-backdrop" data-wr2>
-      <section class="wr2-timeline-panel">
-        <header><div><h3>今日时间轴</h3><p>${esc(profile.name)} · 计划与实际执行对照</p></div><button type="button" data-wr2-close>×</button></header>
-        <div class="wr2-summary">
-          <div><span>已完成</span><strong>${summary.done}</strong></div>
-          <div><span>超时</span><strong>${summary.overtime}</strong></div>
-          <div><span>偏离计划</span><strong>${summary.deviation}</strong></div>
-          <div><span>无结果</span><strong>${summary.noresult}</strong></div>
-          <div><span>进行中</span><strong>${summary.current}</strong></div>
-        </div>
-        <div class="wr2-timeline-list">${rows}</div>
-      </section>
-    </div>`;
-  }
-
-  function openTimeline() {
-    closeTimeline();
-    document.querySelector(".work-rhythm-panel")?.remove();
-    document.body.insertAdjacentHTML("beforeend", timelineHtml());
-    timeline = document.querySelector(".wr2-timeline-backdrop");
-    timeline?.querySelector("[data-wr2-close]")?.addEventListener("click", closeTimeline);
-  }
-
-  function closeTimeline() {
-    timeline?.remove();
-    timeline = null;
-  }
-
-  function decorateMinimal(panel) {
-    if (panel.dataset.wr2Mode === "minimal") return;
-    panel.dataset.wr2Mode = "minimal";
-    panel.classList.add("wr2-minimal");
-    panel.querySelector(":scope > header")?.setAttribute("hidden", "");
-
-    const current = panel.querySelector(".wr-current");
-    if (!current) return;
-
-    const title = current.querySelector(":scope > div");
-    const remain = current.querySelector(":scope > span");
-    title?.querySelector("p")?.setAttribute("hidden", "");
-    if (remain && title) {
-      const p = document.createElement("p");
-      p.className = "wr2-remain";
-      p.textContent = remain.textContent;
-      title.append(p);
-      remain.remove();
-    }
-
-    const tools = document.createElement("div");
-    tools.className = "wr2-tools";
-    tools.innerHTML = `
-      <button type="button" class="wr2-tool" data-wr2-timeline title="今日时间轴" aria-label="今日时间轴"><span class="wr2-clock"></span></button>
-      <button type="button" class="wr2-tool wr2-gear" data-wr2-settings title="Work Rhythm 设置" aria-label="Work Rhythm 设置">⚙</button>`;
-    current.append(tools);
-
-    panel.querySelector("[data-wr2-timeline]")?.addEventListener("click", (e) => {
-      e.stopPropagation();
-      settingsMode = false;
-      openTimeline();
-    });
-    panel.querySelector("[data-wr2-settings]")?.addEventListener("click", (e) => {
-      e.stopPropagation();
-      settingsMode = true;
-      const profileTab = panel.querySelector('[data-wr-tab="profiles"]');
-      profileTab?.click();
-    });
-  }
-
-  function decorateSettings(panel) {
-    panel.dataset.wr2Mode = "settings";
-    panel.classList.remove("wr2-minimal");
+  function resetPanel(panel) {
+    panel.classList.remove("wr3-current-mode", "wr3-timeline-mode", "wr3-settings-mode", "wr3-detail-mode");
+    panel.classList.add("wr3-surface");
     const header = panel.querySelector(":scope > header");
-    header?.removeAttribute("hidden");
-    const nav = panel.querySelector("nav");
-    nav?.querySelector('[data-wr-tab="current"]')?.setAttribute("hidden", "");
-    nav?.querySelector('[data-wr-tab="timeline"]')?.setAttribute("hidden", "");
-    if (nav && !nav.querySelector(".wr2-settings-title")) {
-      const title = document.createElement("span");
-      title.className = "wr2-settings-title";
-      title.textContent = "Work Rhythm 设置";
-      nav.prepend(title);
-    }
+    if (header) header.hidden = true;
   }
 
-  function inspectPanel() {
+  function openBaseView(panel, tab, mode) {
+    panelMode = mode;
+    const button = originalTab(panel, tab);
+    if (button) button.click();
+  }
+
+  function restoreCurrent(panel) {
+    openBaseView(panel, "current", "current");
+  }
+
+  function renderCurrent(panel) {
+    resetPanel(panel);
+    panel.classList.add("wr3-current-mode");
+    panel.dataset.wr3View = "current";
+    const state = phaseState();
+    const next = nextSlot(state);
+    const main = panel.querySelector("main");
+    if (!main) return;
+    const originalRecord = main.querySelector("[data-wr-record]");
+    const remainingLabel = state.mode === "active" ? "剩余" : state.mode === "next" ? "距离开始" : "今日阶段";
+    const remainingValue = state.mode === "ended" ? "已结束" : `${remaining(state)} 分钟`;
+    const nextText = next ? `下一阶段 · ${next[0]} ${next[2]}` : state.mode === "ended" ? state.profile.name : "最后一个阶段";
+
+    main.innerHTML = `
+      <div class="wr3-current-shell">
+        <div class="wr3-head">
+          <button class="wr3-recovery" type="button" data-wr3-record>记录恢复卡</button>
+          <div class="wr3-tools" aria-label="阶段工具">
+            <button type="button" data-wr3-timeline aria-label="打开今日时间轴">${icon.clock}</button>
+            <button type="button" data-wr3-settings aria-label="打开设置">${icon.settings}</button>
+          </div>
+        </div>
+        <h2 class="wr3-task-title">${escapeHtml(currentTask(state))}</h2>
+        <div class="wr3-status" aria-label="阶段状态">
+          <div class="wr3-remaining"><span>${remainingLabel}</span><strong>${escapeHtml(remainingValue)}</strong></div>
+          <div class="wr3-next">${escapeHtml(nextText)}</div>
+        </div>
+      </div>`;
+
+    if (originalRecord) {
+      originalRecord.hidden = true;
+      originalRecord.tabIndex = -1;
+      main.append(originalRecord);
+      main.querySelector("[data-wr3-record]")?.addEventListener("click", () => {
+        activePanel = null;
+        delete panel.dataset.wr3View;
+        originalRecord.click();
+      });
+    } else {
+      main.querySelector("[data-wr3-record]")?.remove();
+    }
+    main.querySelector("[data-wr3-timeline]")?.addEventListener("click", () => renderTimeline(panel));
+    main.querySelector("[data-wr3-settings]")?.addEventListener("click", () => renderSettings(panel));
+  }
+
+  function timelineProgress(state) {
+    if (!state.slots.length) return 0;
+    if (state.mode === "ended") return 100;
+    if (state.mode === "next") return Math.max(0, (state.index / state.slots.length) * 100);
+    const start = minutes(state.slot[0]);
+    const end = minutes(state.slot[1]);
+    const fraction = end > start ? (state.now - start) / (end - start) : 0;
+    return Math.min(100, ((state.index + fraction) / state.slots.length) * 100);
+  }
+
+  function renderTimeline(panel) {
+    panelMode = "timeline";
+    resetPanel(panel);
+    panel.classList.add("wr3-timeline-mode");
+    panel.dataset.wr3View = "timeline";
+    const state = phaseState();
+    const main = panel.querySelector("main");
+    if (!main) return;
+    const rows = state.slots.map((slot, index) => {
+      const rowState = index < state.index || state.mode === "ended" ? "past" : index === state.index && state.mode === "active" ? "current" : "future";
+      return `<li class="wr3-timeline-row is-${rowState}">
+        <time>${escapeHtml(slot[0])}–${escapeHtml(slot[1])}</time>
+        <span class="wr3-marker" aria-hidden="true"></span>
+        <strong>${escapeHtml(slot[2])}</strong>
+      </li>`;
+    }).join("");
+    main.innerHTML = `
+      <div class="wr3-subhead">
+        <button type="button" data-wr3-back aria-label="返回当前阶段">${icon.back}</button>
+        <h2>今日时间轴</h2>
+        <span></span>
+      </div>
+      <ol class="wr3-timeline" style="--wr3-progress:${timelineProgress(state)}%">${rows}</ol>`;
+    main.querySelector("[data-wr3-back]")?.addEventListener("click", () => restoreCurrent(panel));
+    requestAnimationFrame(() => main.querySelector(".wr3-timeline-row.is-current")?.scrollIntoView({ block: "center", behavior: "smooth" }));
+  }
+
+  function renderSettings(panel) {
+    panelMode = "settings";
+    resetPanel(panel);
+    panel.classList.add("wr3-settings-mode");
+    panel.dataset.wr3View = "settings";
+    const state = phaseState();
+    const main = panel.querySelector("main");
+    if (!main) return;
+    const template = state.slot[4] || "当前阶段";
+    main.innerHTML = `
+      <div class="wr3-subhead">
+        <button type="button" data-wr3-back aria-label="返回当前阶段">${icon.back}</button>
+        <h2>设置</h2>
+        <span></span>
+      </div>
+      <div class="wr3-settings">
+        <section class="wr3-settings-group" aria-labelledby="wr3-time-title">
+          <h3 id="wr3-time-title">时间</h3>
+          <div class="wr3-setting-row">
+            <span>时间导航</span>
+            <button class="wr3-switch is-on" type="button" role="switch" aria-checked="true" data-wr3-toggle><i></i></button>
+          </div>
+          <button class="wr3-setting-row" type="button" data-wr3-profile>
+            <span>时间方案</span><em>${escapeHtml(state.profile.name)}</em>${icon.chevron}
+          </button>
+        </section>
+        <section class="wr3-settings-group" aria-labelledby="wr3-record-title">
+          <h3 id="wr3-record-title">记录与安全</h3>
+          <button class="wr3-setting-row" type="button" data-wr3-template>
+            <span>固定模板</span><em>${escapeHtml(template)}</em>${icon.chevron}
+          </button>
+          <div class="wr3-setting-row"><span>访问保护</span><em class="wr3-ok">已开启</em></div>
+        </section>
+      </div>`;
+    main.querySelector("[data-wr3-back]")?.addEventListener("click", () => restoreCurrent(panel));
+    main.querySelector("[data-wr3-profile]")?.addEventListener("click", () => openBaseView(panel, "profiles", "detail"));
+    main.querySelector("[data-wr3-template]")?.addEventListener("click", () => openBaseView(panel, "templates", "detail"));
+    main.querySelector("[data-wr3-toggle]")?.addEventListener("click", () => {
+      localStorage.setItem(K.enabled, "0");
+      document.querySelector(".work-rhythm-rail")?.remove();
+      panel.remove();
+    });
+  }
+
+  function renderDetail(panel) {
+    resetPanel(panel);
+    panel.classList.add("wr3-detail-mode");
+    panel.dataset.wr3View = "detail";
+    const main = panel.querySelector("main");
+    if (!main || main.querySelector(".wr3-detail-head")) return;
+    const head = document.createElement("div");
+    head.className = "wr3-subhead wr3-detail-head";
+    head.innerHTML = `<button type="button" data-wr3-settings-back aria-label="返回设置">${icon.back}</button><h2>${escapeHtml(main.querySelector("h2, h3")?.textContent || "设置")}</h2><span></span>`;
+    main.prepend(head);
+    head.querySelector("button")?.addEventListener("click", () => renderSettings(panel));
+  }
+
+  function decoratePanel(panel) {
+    if (!panel || panel === activePanel && panel.dataset.wr3View === panelMode) return;
+    activePanel = panel;
+    if (panelMode === "timeline") renderTimeline(panel);
+    else if (panelMode === "settings") renderSettings(panel);
+    else if (panelMode === "detail") renderDetail(panel);
+    else renderCurrent(panel);
+  }
+
+  function decorateRail() {
+    const button = document.querySelector(".work-rhythm-pill");
+    if (!button) return;
+    const state = phaseState();
+    const value = state.mode === "ended" ? "已结束" : `${remaining(state)} 分钟`;
+    const signature = `${state.slot[2]}|${value}|${state.mode}`;
+    if (button.dataset.wr3Signature === signature) return;
+    button.dataset.wr3Signature = signature;
+    button.classList.add("wr3-pill");
+    button.innerHTML = `<i aria-hidden="true"></i><strong>${escapeHtml(state.slot[2])}</strong><span>${escapeHtml(value)}</span>${icon.down}`;
+  }
+
+  function inspect() {
+    decorateRail();
     const panel = document.querySelector(".work-rhythm-panel");
-    if (!panel) return;
-    if (settingsMode) decorateSettings(panel);
-    else decorateMinimal(panel);
+    if (panel) decoratePanel(panel);
   }
 
   seedCanonicalDefault();
-  track();
-
-  const observer = new MutationObserver(() => inspectPanel());
-  observer.observe(document.body, { childList:true, subtree:true });
-  setInterval(track, 30000);
-
-  document.addEventListener("pointerdown", (e) => {
-    if (timeline && e.target === timeline) closeTimeline();
-  });
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && timeline) closeTimeline();
-  });
-
-  document.addEventListener("click", (e) => {
-    if (e.target.closest("[data-wr-open]")) settingsMode = false;
+  document.addEventListener("click", (event) => {
+    if (event.target.closest("[data-wr-open]")) {
+      panelMode = "current";
+      activePanel = null;
+    }
   }, true);
-
-  inspectPanel();
+  new MutationObserver(inspect).observe(document.documentElement, { childList: true, subtree: true });
+  setInterval(inspect, 30000);
+  inspect();
 })();
