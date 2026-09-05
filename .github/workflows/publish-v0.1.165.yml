@@ -1,0 +1,150 @@
+name: Publish v0.1.165
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/publish-v0.1.165.yml
+
+concurrency:
+  group: publish-v0.1.165
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify v0.1.165 source
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify release source and settings redesign
+        shell: bash
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          test "$version" = "0.1.165"
+          node --check app/renderer/src/app.js
+          node --check app/renderer/src/work-rhythm.js
+          node --test tests/work-rhythm-ui.test.cjs
+          grep -q 'data-settings-page="appearance"' app/renderer/src/app.js
+          grep -q 'data-settings-page="advanced"' app/renderer/src/app.js
+          grep -q 'data-settings-advanced-slot' app/renderer/src/app.js
+          grep -q 'settings-layout' app/renderer/src/styles.css
+          grep -q 'settings-page-spring' app/renderer/src/styles.css
+
+  build:
+    name: Build v0.1.165 ${{ matrix.platform }}
+    needs: verify
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macOS
+            os: macos-latest
+            script: npm run dist:mac -- --x64 --arm64 --publish never
+            artifact: v0.1.165-macos
+          - platform: Windows
+            os: windows-latest
+            script: npm run dist:win -- --publish never
+            artifact: v0.1.165-windows
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check JavaScript and tests
+        run: npm run check
+
+      - name: Build app
+        run: ${{ matrix.script }}
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      - name: Test Windows installer upgrade matrix
+        if: matrix.platform == 'Windows'
+        shell: pwsh
+        run: |
+          $candidate = Get-ChildItem release -Filter "Loop-*-x64-setup.exe" | Select-Object -First 1
+          if (-not $candidate) { throw "Windows installer was not produced." }
+          ./tests/windows-upgrade-installer.test.ps1 -CandidateInstaller $candidate.FullName
+
+      - name: Verify update metadata
+        run: node tools/verify-update-artifacts.cjs release
+
+      - name: Stage v0.1.165 release assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            release/*.dmg
+            release/*.zip
+            release/*.exe
+            release/*.blockmap
+            release/latest.yml
+            release/latest-mac.yml
+          if-no-files-found: error
+          retention-days: 2
+
+  publish:
+    name: Publish v0.1.165 release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Refuse to replace an existing tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          if gh api "repos/${{ github.repository }}/git/ref/tags/v0.1.165" >/dev/null 2>&1; then
+            echo "v0.1.165 already exists; refusing to replace it."
+            exit 1
+          fi
+
+      - name: Collect v0.1.165 release assets
+        uses: actions/download-artifact@v4
+        with:
+          pattern: v0.1.165-*
+          path: release
+          merge-multiple: true
+
+      - name: Verify complete cross-platform update feed
+        run: node tools/verify-update-artifacts.cjs release --require-all-platforms
+
+      - name: Publish v0.1.165
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v0.1.165
+          target_commitish: ${{ github.sha }}
+          name: v0.1.165
+          body: |
+            ## 设置界面重设计
+
+            - 设置改为左侧分类导航与右侧分组内容，降低长页面的信息密度。
+            - 常用选项直接操作，数据、更新和高级功能按使用频率分层。
+            - 时间导航与访问保护统一收纳至高级功能，保留原有配置能力。
+            - 增加轻量弹性切换、深色模式和减少动态效果支持。
+          make_latest: true
+          files: |
+            release/*.dmg
+            release/*.zip
+            release/*.exe
+            release/*.blockmap
+            release/latest.yml
+            release/latest-mac.yml
