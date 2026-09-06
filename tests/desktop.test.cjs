@@ -2952,6 +2952,7 @@ test("processing flow matches the compact reference tree and opens details only 
     return { defaultPage, selectedPage, tree, detail, cycleStatuses };
   })()`);
   const finalFlowRules = styles.slice(styles.lastIndexOf("v0.1.135 — reference-matched processing tree"));
+  const finalNodeDetailRules = styles.slice(styles.lastIndexOf("v0.1.166 — floating, record-first processing-node detail"));
 
   assert.match(result.tree, /flow-node-marker flow-status-bullet status-todo/);
   assert.match(result.tree, /feather-sprite\.svg#disc/);
@@ -2965,15 +2966,19 @@ test("processing flow matches the compact reference tree and opens details only 
   assert.doesNotMatch(result.defaultPage, /node-detail-page|node-inspector-empty|has-node-page/);
   assert.match(result.selectedPage, /flow-workspace has-node-page/);
   assert.match(result.selectedPage, /class="node-detail-page"/);
-  assert.match(result.selectedPage, /aria-label="返回处理流"/);
-  assert.match(result.detail, /class="node-detail-updated"[^>]*>最近修改 /);
-  assert.match(result.detail, /class="node-detail-bar"[\s\S]*返回处理流[\s\S]*class="node-detail-scroll"/);
-  assert.match(result.detail, /node-detail-title-row/);
-  assert.match(result.detail, /node-detail-current-status flow-status-badge status-later">doing</);
-  assert.doesNotMatch(result.detail, /node-detail-status-section|node-detail-status-options|node-detail-status-option/);
-  assert.match(result.detail, /node-inspector-breadcrumb"><span>路径<\/span>/);
-  assert.match(result.detail, /data-action="save-node-detail">保存<\/button>/);
-  assert.doesNotMatch(result.detail, /保存记录/);
+  assert.match(result.selectedPage, /aria-label="关闭节点详情"/);
+  assert.match(result.detail, /class="node-detail-header"[\s\S]*class="node-detail-scroll"/);
+  assert.match(result.detail, /class="node-detail-info"[\s\S]*aria-label="查看节点路径"/);
+  assert.match(result.detail, /class="node-detail-info-popover">[\s\S]*<span>路径<\/span>/);
+  assert.match(result.detail, /node-detail-status-trigger status-later"[^>]*>进行中/);
+  assert.match(result.detail, /class="node-detail-status-options"/);
+  assert.match(result.detail, /data-action="mark-node-status"[\s\S]*data-status="done"/);
+  assert.match(result.detail, /<label for="node-detail-record-child_doing">详情<\/label>/);
+  assert.match(result.detail, /data-node-detail-save-state>[\s\S]*已自动保存/);
+  assert.match(result.detail, /class="node-detail-pagination"[\s\S]*上一节点[\s\S]*2 \/ 3[\s\S]*下一节点/);
+  assert.match(result.detail, /data-action="navigate-node-detail"[^>]*data-node-id="root_todo"/);
+  assert.match(result.detail, /data-action="navigate-node-detail"[^>]*data-node-id="leaf_done"/);
+  assert.doesNotMatch(result.detail, /node-detail-updated|node-detail-bar|node-inspector-breadcrumb|data-action="save-node-detail"|返回处理流|最近修改/);
   assert.doesNotMatch(result.detail, /节点详情<\/span>|父节点|第 2 层|创建时间|状态变化|完成时间|新增下级节点|新增同级节点|删除节点/);
   assert.match(app, /selectedNode \? renderNodeDetailPage\(task\.id, selectedNode\) : ""/);
   assert.doesNotMatch(app, /element\.classList\.contains\("flow-title-input"\)[\s\S]*selectNodeForInspector\(element\.dataset\.taskId, element\.dataset\.nodeId\);[\s\S]*render\(\);/);
@@ -2984,6 +2989,7 @@ test("processing flow matches the compact reference tree and opens details only 
   assert.match(app, /\.flow-main\[data-context="flow-root"\]/);
   assert.match(app, /if \(element\.dataset\.context === "flow-root"\) return;/);
   assert.match(app, /data-action="open-node-detail"[\s\S]*aria-label="打开节点详情"/);
+  assert.match(app, /data\.action === "navigate-node-detail"[\s\S]*selectNodeForInspector/);
   assert.doesNotMatch(app, /data\.action === "open-node-menu"/);
   assert.match(app, /row\.querySelector\("\.flow-title-input"\)\?\.focus\(\{ preventScroll: true \}\);/);
   assert.match(app, /row\.addEventListener\("dblclick"[\s\S]*selectNodeForInspector\(row\.dataset\.taskId, row\.dataset\.nodeId\);/);
@@ -2993,17 +2999,17 @@ test("processing flow matches the compact reference tree and opens details only 
   assert.match(app, /recordInput\.focus\(\{ preventScroll: true \}\);/);
   assert.match(finalFlowRules, /\.flow-outline-row\s*\{[\s\S]*min-height:\s*29px;[\s\S]*gap:\s*8px;[\s\S]*var\(--tree-depth\) \* 48px/);
   assert.match(finalFlowRules, /\.flow-status-badge\s*\{[\s\S]*height:\s*19px;[\s\S]*border-radius:\s*2px;/);
-  assert.match(finalFlowRules, /\.flow-workspace\.has-node-page\s*\{[\s\S]*grid-template-columns:/);
-  assert.match(finalFlowRules, /\.node-detail-updated\s*\{[\s\S]*font-size:\s*12px;[\s\S]*font-weight:\s*520;/);
-  assert.doesNotMatch(finalFlowRules, /\.node-detail-status-options\s*\{/);
-  assert.match(finalFlowRules, /\.node-detail-page \.node-inspector-save\s*\{[\s\S]*border-radius:\s*6px;[\s\S]*background:\s*#4f766d;/);
   assert.match(finalFlowRules, /\.flow-node-marker\.flow-status-bullet\s*\{[\s\S]*border-radius:\s*50%;[\s\S]*background:\s*currentColor;/);
   assert.match(finalFlowRules, /\.flow-node-marker-icon\s*\{\s*display:\s*none;/);
-  assert.match(finalFlowRules, /\.node-detail-page\s*\{[\s\S]*overscroll-behavior:\s*contain;/);
   assert.match(finalFlowRules, /\.task-workbench:has\(\.flow-workspace\)\s*\{[\s\S]*grid-template-rows:\s*minmax\(0, 1fr\);/);
-  assert.match(finalFlowRules, /\.node-detail-page\s*\{[\s\S]*grid-template-rows:\s*auto minmax\(0, 1fr\);[\s\S]*overflow:\s*hidden;/);
-  assert.match(finalFlowRules, /\.node-detail-scroll\s*\{[\s\S]*overflow-y:\s*auto;/);
-  assert.match(finalFlowRules, /@media \(max-width: 760px\)[\s\S]*\.node-detail-page\s*\{[\s\S]*overflow-y:\s*auto;/);
+  assert.match(finalNodeDetailRules, /\.flow-workspace\.has-node-page\s*\{[\s\S]*grid-template-columns:\s*none;/);
+  assert.match(finalNodeDetailRules, /\.node-detail-page\s*\{[\s\S]*position:\s*absolute;[\s\S]*width:\s*min\(560px,[\s\S]*backdrop-filter:\s*blur\(20px\)/);
+  assert.match(finalNodeDetailRules, /\.node-detail-status-trigger\s*\{[\s\S]*background:\s*color-mix\(in srgb, var\(--focus\) 6\.5%, transparent\)/);
+  const paginationRules = finalNodeDetailRules.match(/\.node-detail-pagination\s*\{([\s\S]*?)\}/)?.[1] || "";
+  assert.match(paginationRules, /margin-top:\s*14px;/);
+  assert.doesNotMatch(paginationRules, /border/);
+  assert.match(finalNodeDetailRules, /\.node-detail-page \.node-inspector-note\s*\{[\s\S]*flex:\s*1 1 auto;/);
+  assert.match(finalNodeDetailRules, /@media \(prefers-reduced-transparency: reduce\)/);
 });
 
 test("node detail records autosave to the original node before selection changes", async () => {

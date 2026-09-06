@@ -279,6 +279,7 @@ let state = {
 };
 
 let saveTimer = 0;
+let nodeDetailSaveFeedbackTimer = 0;
 let activeSettingsPage = "appearance";
 let settingsMotion = "none";
 let pendingPayload = null;
@@ -2608,23 +2609,70 @@ function renderNodeDetailPage(taskId, node) {
   if (!node) return "";
   const task = state.tasks.find((item) => item.id === taskId);
   const path = task ? getNodePath(task.nodes, node.id) : [];
+  const orderedNodes = task ? orderedFlowNodes(task.nodes) : [];
+  const nodeIndex = Math.max(0, orderedNodes.findIndex((item) => item.id === node.id));
+  const previousNode = nodeIndex > 0 ? orderedNodes[nodeIndex - 1] : null;
+  const nextNode = nodeIndex < orderedNodes.length - 1 ? orderedNodes[nodeIndex + 1] : null;
+  const statusOptions = [
+    ["todo", "待处理"],
+    ["later", "进行中"],
+    ["done", "已完成"],
+    ["blocked", "已阻塞"],
+  ];
   return `
     <aside class="node-detail-page" data-task-id="${taskId}" data-node-id="${node.id}" aria-label="节点详情页面">
-      <header class="node-detail-bar">
-        <button class="node-detail-back" type="button" data-action="close-node-detail" aria-label="返回处理流">${briefFieldIcon("arrow-left", "node-detail-back-icon")}<span>返回处理流</span></button>
+      <header class="node-detail-header">
+        <div class="node-detail-heading">
+          ${inputHtml("title", node.title, taskId, "node-detail-title", node.id)}
+        </div>
+        <div class="node-detail-header-actions">
+          <details class="node-detail-info">
+            <summary class="node-detail-icon-button" aria-label="查看节点路径">${briefFieldIcon("info", "node-detail-action-icon")}</summary>
+            <div class="node-detail-info-popover">
+              <span>路径</span>
+              <strong>${esc(path.map((item) => item.title || "未命名").join(" / ") || "—")}</strong>
+            </div>
+          </details>
+          <details class="node-detail-status-menu">
+            <summary class="node-detail-status-trigger status-${node.status}" aria-label="修改节点状态">${nodeDetailStatusText(node.status)}${briefFieldIcon("chevron-down", "node-detail-status-chevron")}</summary>
+            <div class="node-detail-status-options" role="menu" aria-label="节点状态">
+              ${statusOptions
+                .map(
+                  ([status, label]) => `<button class="node-detail-status-option ${node.status === status ? "selected" : ""}" type="button" role="menuitemradio" aria-checked="${node.status === status}" data-action="mark-node-status" data-task-id="${taskId}" data-node-id="${node.id}" data-status="${status}"><span>${label}</span>${node.status === status ? briefFieldIcon("check", "node-detail-status-check") : ""}</button>`,
+                )
+                .join("")}
+            </div>
+          </details>
+          <button class="node-detail-icon-button" type="button" data-action="close-node-detail" aria-label="关闭节点详情">${briefFieldIcon("x", "node-detail-action-icon")}</button>
+        </div>
       </header>
       <div class="node-detail-scroll" data-node-detail-scroll data-node-detail-view="${escAttr(nodeDetailViewKey(taskId, node.id))}">
-        <header class="node-inspector-header">
-        <div class="node-detail-heading">
-          <div class="node-detail-title-row">${inputHtml("title", node.title, taskId, "node-detail-title", node.id)}<time class="node-detail-updated" datetime="${escAttr(node.updatedAt)}">最近修改 ${formatShort(node.updatedAt)}</time></div>
-          <span class="node-detail-current-status flow-status-badge status-${node.status}">${nodeStatusBadgeText(node.status)}</span>
-        </div>
-        </header>
-        <section class="node-inspector-section node-inspector-hierarchy"><div class="node-inspector-breadcrumb"><span>路径</span><strong>${esc(path.map((item) => item.title || "未命名").join(" / ") || "—")}</strong></div></section>
-        <section class="node-inspector-section"><label>记录<textarea class="record-modal-textarea node-inspector-note" data-record-input data-task-id="${taskId}" data-node-id="${node.id}" placeholder="记录该节点的处理过程、关键数据、判断依据、结果或后续事项……">${esc(state.recordDraft)}</textarea></label><button class="node-inspector-save" type="button" data-action="save-node-detail">保存</button></section>
+        <section class="node-detail-record">
+          <div class="node-detail-record-head">
+            <label for="node-detail-record-${escAttr(node.id)}">详情</label>
+            <span class="node-detail-save-state" data-node-detail-save-state><span aria-hidden="true"></span><b>已自动保存</b></span>
+          </div>
+          <textarea id="node-detail-record-${escAttr(node.id)}" class="record-modal-textarea node-inspector-note" data-record-input data-task-id="${taskId}" data-node-id="${node.id}" placeholder="记录必要的处理过程、关键数据或下一步……">${esc(state.recordDraft)}</textarea>
+        </section>
+        <nav class="node-detail-pagination" aria-label="切换处理流节点">
+          <button type="button" data-action="navigate-node-detail" data-task-id="${taskId}" data-node-id="${previousNode?.id || ""}" ${previousNode ? "" : "disabled"}>${briefFieldIcon("arrow-left", "node-detail-nav-icon")}<span>上一节点</span></button>
+          <span>${orderedNodes.length ? nodeIndex + 1 : 0} / ${orderedNodes.length}</span>
+          <button type="button" data-action="navigate-node-detail" data-task-id="${taskId}" data-node-id="${nextNode?.id || ""}" ${nextNode ? "" : "disabled"}><span>下一节点</span>${briefFieldIcon("arrow-right", "node-detail-nav-icon")}</button>
+        </nav>
       </div>
     </aside>
   `;
+}
+
+function orderedFlowNodes(nodes) {
+  return sort(nodes || []).flatMap((node) => [node, ...orderedFlowNodes(node.children)]);
+}
+
+function nodeDetailStatusText(status) {
+  if (status === "done") return "已完成";
+  if (status === "blocked") return "已阻塞";
+  if (status === "later") return "进行中";
+  return "待处理";
 }
 
 function nodeDetailPositionStyle() {
@@ -5013,13 +5061,28 @@ function bindTaskRepositoryRows(scope = document) {
       state.recordDraft = event.target.value;
       const taskId = event.target.dataset.taskId;
       const nodeId = event.target.dataset.nodeId;
-      if (taskId && nodeId) updateNodeNoteDraft(taskId, nodeId, state.recordDraft);
+      if (taskId && nodeId) {
+        updateNodeNoteDraft(taskId, nodeId, state.recordDraft);
+        const saveState = document.querySelector("[data-node-detail-save-state] b");
+        if (saveState) saveState.textContent = "正在保存…";
+        window.clearTimeout(nodeDetailSaveFeedbackTimer);
+        nodeDetailSaveFeedbackTimer = window.setTimeout(() => {
+          const currentInput = document.querySelector("[data-record-input]");
+          const currentSaveState = document.querySelector("[data-node-detail-save-state] b");
+          if (currentInput?.dataset.taskId === taskId && currentInput?.dataset.nodeId === nodeId && currentSaveState) {
+            currentSaveState.textContent = "已自动保存";
+          }
+        }, 550);
+      }
     });
     recordInput.addEventListener("keydown", (event) => {
       if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
         event.preventDefault();
-        saveSelectedNodeRecord();
-        render();
+        const taskId = event.target.dataset.taskId;
+        const nodeId = event.target.dataset.nodeId;
+        if (taskId && nodeId) flushNodeNoteDraft(noteDraftKey(taskId, nodeId), { persist: true });
+        const saveState = document.querySelector("[data-node-detail-save-state] b");
+        if (saveState) saveState.textContent = "已自动保存";
       }
       if (event.key === "Escape") {
         event.preventDefault();
@@ -6367,6 +6430,11 @@ async function action(data, event = null) {
   if (data.action === "mark-node-status") markNodeStatus(data.taskId, data.nodeId, data.status);
   if (data.action === "cycle-node-status") cycleNodeStatus(data.taskId, data.nodeId);
   if (data.action === "open-node-detail") {
+    selectNodeForInspector(data.taskId, data.nodeId);
+    render();
+    return;
+  }
+  if (data.action === "navigate-node-detail" && data.nodeId) {
     selectNodeForInspector(data.taskId, data.nodeId);
     render();
     return;
