@@ -13078,6 +13078,369 @@ body.flow-node-reordering * {
 :root[data-theme="dark"] .rail.sidebar .repository-scroll-area .task-row.task-item.active::before,
 :root[data-theme="dark"] .rail.sidebar .repository-scroll-area .task-row.task-item.selected::before { background:color-mix(in srgb,var(--handoff-focus-800) 19%,transparent); }
 .rail.sidebar .group-panel { margin-top:-4px; padding:0; }
+
+/* v0.1.167 - J1 workbench header and continuous three-column brief. */
+.work-surface.task-page {
+  grid-template-rows: auto auto auto minmax(0, 1fr);
+}
+
+.topbar.page-header {
+  gap: 24px;
+  padding: 25px 42px 19px;
+  border-bottom-color: color-mix(in srgb, var(--handoff-line, var(--line)) 72%, transparent);
+}
+
+.title-block.page-title-block {
+  width: 100%;
+}
+
+.page-title {
+  min-height: 35px;
+  color: var(--handoff-ink, var(--ink));
+  font-family: var(--app-font);
+  font-size: 28px;
+  font-weight: 650;
+  line-height: 1.24;
+  letter-spacing: -0.025em;
+  font-optical-sizing: auto;
+}
+
+.page-title:focus {
+  background: transparent;
+  box-shadow: none;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--focus) 38%, transparent);
+  text-underline-offset: 8px;
+}
+
+.meta-line.page-properties {
+  gap: 5px 0;
+  margin-top: 12px;
+  color: var(--handoff-muted, var(--muted));
+  font-family: var(--app-font);
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.meta-line.page-properties > .task-context-item.task-context-badge,
+.meta-line.page-properties > .task-context-progress,
+.meta-line.page-properties > .task-context-group {
+  display: inline-flex;
+  min-height: 26px;
+  align-items: center;
+  border: 0;
+  border-radius: 0;
+  padding: 0 8px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--handoff-muted, var(--muted));
+  font-family: var(--app-font);
+  font-size: 12px;
+  font-weight: 520;
+  line-height: 1.3;
+}
+
+.meta-line.page-properties > .task-context-item.task-context-badge.priority.high,
+.meta-line.page-properties > .task-context-item.task-context-badge.priority.medium,
+.meta-line.page-properties > .task-context-item.task-context-badge.priority.low,
+.meta-line.page-properties > .task-context-item.task-context-badge.status.attention,
+.meta-line.page-properties > .task-context-item.task-context-badge.status.resolved {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.meta-line.page-properties > .task-context-item.task-context-badge.task-tag.today {
+  min-height: 22px;
+  border: 0;
+  border-radius: 6px;
+  padding: 0 7px;
+  background: color-mix(in srgb, var(--focus) 9%, var(--handoff-surface, var(--surface)));
+  color: var(--focus);
+  font-weight: 650;
+}
+
+.meta-line.page-properties > .task-context-item.task-context-badge.priority.high {
+  color: var(--priority-high, #9a6b26);
+}
+
+.meta-line.page-properties > .task-context-item.task-context-badge.priority.medium {
+  color: var(--priority-medium, var(--handoff-muted, var(--muted)));
+}
+
+.meta-line.page-properties > .task-context-item.task-context-badge.priority.low {
+  color: var(--priority-low, var(--focus));
+}
+
+.meta-line.page-properties > .task-context-item.task-context-badge.status.attention,
+.meta-line.page-properties > .task-context-item.task-context-badge.status.resolved {
+  color: var(--focus);
+}
+
+:root[data-theme="dark"] .meta-line.page-properties > .task-context-item.task-context-badge,
+:root[data-theme="dark"] .meta-line.page-properties > .task-context-item.task-context-badge.priority.high,
+:root[data-theme="dark"] .meta-line.page-properties > .task-context-item.task-context-badge.priority.medium,
+:root[data-theme="dark"] .meta-line.page-properties > .task-context-item.task-context-badge.priority.low,
+:root[data-theme="dark"] .meta-line.page-properties > .task-context-item.task-context-badge.status.attention,
+:root[data-theme="dark"] .meta-line.page-properties > .task-context-item.task-context-badge.status.resolved {
+  border: 0;
+  background: transparent;
+}
+
+:root[data-theme="dark"] .meta-line.page-properties > .task-context-item.task-context-badge.task-tag.today {
+  background: color-mix(in srgb, var(--focus) 12%, var(--handoff-surface, var(--surface)));
+}
+
+.meta-line.page-properties > .task-context-progress {
+  color: var(--handoff-muted, var(--muted));
+  font-variant-numeric: tabular-nums;
+}
+
+.meta-line.page-properties > .task-context-divider {
+  width: 1px;
+  height: 13px;
+  min-height: 0;
+  flex: 0 0 1px;
+  margin: 0 2px;
+  padding: 0;
+  background: var(--handoff-line-strong, var(--line-strong));
+}
+
+.meta-line.page-properties > .task-deadline-picker,
+.meta-line.page-properties > .task-recurrence-controls {
+  min-height: 26px;
+  margin: 0;
+  padding: 0;
+}
+
+.meta-line.page-properties > .task-recurrence-controls::before {
+  display: none;
+  content: none;
+}
+
+.meta-line.page-properties .task-deadline-trigger,
+.meta-line.page-properties .task-recurrence-trigger,
+.meta-line.page-properties .task-group-select-trigger {
+  min-height: 26px;
+  height: 26px;
+  gap: 5px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  padding: 0 8px;
+  background: transparent;
+  color: var(--handoff-muted, var(--muted));
+  font-family: var(--app-font);
+  font-size: 12px;
+  font-weight: 520;
+  line-height: 1;
+}
+
+.meta-line.page-properties .task-deadline-picker.has-value .task-deadline-trigger,
+.meta-line.page-properties .task-recurrence-controls.is-active .task-recurrence-trigger {
+  color: var(--handoff-muted, var(--muted));
+  font-weight: 520;
+}
+
+.meta-line.page-properties .task-deadline-trigger:hover,
+.meta-line.page-properties .task-deadline-trigger:focus-visible,
+.meta-line.page-properties .task-deadline-trigger[aria-expanded="true"],
+.meta-line.page-properties .task-recurrence-trigger:hover,
+.meta-line.page-properties .task-recurrence-trigger:focus-visible,
+.meta-line.page-properties .task-recurrence-trigger[aria-expanded="true"],
+.meta-line.page-properties .task-group-select-trigger:hover,
+.meta-line.page-properties .task-group-select-trigger:focus-visible,
+.meta-line.page-properties .task-group-select.is-open .task-group-select-trigger {
+  border-color: transparent;
+  background: var(--handoff-surface, var(--surface));
+  color: var(--handoff-ink, var(--ink));
+  outline: 0;
+}
+
+.meta-line.page-properties .task-group-select {
+  min-width: 0;
+  max-width: min(280px, 100%);
+}
+
+.meta-line.page-properties .task-group-select-label {
+  color: var(--handoff-soft, var(--faint));
+  font-size: 12px;
+}
+
+.meta-line.page-properties .task-group-select-value {
+  max-width: 190px;
+}
+
+.meta-line.page-properties > .task-deadline-suggestion {
+  display: none;
+}
+
+.brief-strip.task-brief {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 4fr) minmax(0, 3fr);
+  gap: 0;
+  min-height: 206px;
+  margin: 24px 42px 0;
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.brief-cell.brief-field,
+.brief-cell.brief-field.conclusion,
+.brief-cell.brief-field:first-child,
+.brief-cell.brief-field:last-child {
+  display: flex;
+  min-width: 0;
+  min-height: 206px;
+  height: 206px;
+  flex-direction: column;
+  gap: 0;
+  padding: 17px 21px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.brief-cell.brief-field:first-child {
+  padding-left: 0;
+}
+
+.brief-cell.brief-field:last-child {
+  padding-right: 0;
+}
+
+.brief-cell.brief-field + .brief-cell.brief-field {
+  border-left: 1px solid var(--handoff-line, var(--line));
+}
+
+.brief-cell.brief-field:hover,
+.brief-cell.brief-field:focus-within {
+  background: transparent;
+}
+
+.brief-cell.brief-field.needs-attention {
+  background: color-mix(in srgb, var(--attention-bg) 24%, transparent);
+}
+
+.brief-cell.brief-field > .brief-label {
+  display: flex;
+  width: 100%;
+  min-height: 21px;
+  align-items: center;
+  margin: 0;
+  border: 0;
+  padding: 0;
+  color: var(--handoff-muted, var(--muted));
+  background: transparent;
+}
+
+.brief-label-title {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0;
+}
+
+.brief-label b {
+  color: inherit;
+  font-family: var(--app-font);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.4;
+  letter-spacing: 0.01em;
+}
+
+.brief-label-action,
+.brief-field-icon,
+.brief-progress-ring,
+.brief-edit-icon,
+.brief-label .brief-stamp {
+  display: none;
+}
+
+.task-brief textarea {
+  min-height: 147px;
+  height: 147px;
+  max-height: 147px;
+  margin: 10px 0 0;
+  padding: 0 6px 0 0;
+  overflow-y: auto;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: color-mix(in srgb, var(--handoff-ink, var(--ink)) 84%, var(--handoff-muted, var(--muted)));
+  font-family: var(--app-font);
+  font-size: 14px;
+  font-weight: 450;
+  line-height: 1.62;
+  letter-spacing: 0;
+  outline: 0;
+  resize: none;
+}
+
+.task-brief textarea:focus,
+:root[data-theme="dark"] .task-brief textarea:focus {
+  background: transparent;
+  box-shadow: none;
+}
+
+.brief-cell.brief-field:focus-within .brief-label {
+  color: var(--focus);
+}
+
+:root[data-theme="dark"] .brief-strip.task-brief {
+  border: 0;
+  background: transparent;
+}
+
+@media (max-width: 980px) {
+  .brief-strip.task-brief {
+    grid-template-columns: minmax(210px, 3fr) minmax(280px, 4fr) minmax(210px, 3fr);
+    overflow-x: auto;
+  }
+}
+
+@media (max-width: 760px) {
+  .topbar.page-header {
+    padding: 25px 22px 20px;
+  }
+
+  .page-title {
+    font-size: 27px;
+  }
+
+  .brief-strip.task-brief {
+    grid-template-columns: minmax(0, 1fr);
+    margin: 24px 22px 0;
+    overflow: visible;
+  }
+
+  .brief-cell.brief-field,
+  .brief-cell.brief-field.conclusion,
+  .brief-cell.brief-field:first-child,
+  .brief-cell.brief-field:last-child {
+    min-height: 174px;
+    height: auto;
+    padding: 18px 0;
+    border-top: 1px solid var(--handoff-line, var(--line));
+    border-left: 0;
+  }
+
+  .brief-cell.brief-field:first-child {
+    border-top: 0;
+  }
+
+  .task-brief textarea {
+    min-height: 116px;
+    height: 116px;
+    max-height: 116px;
+    font-size: 16px;
+  }
+}
 .rail.sidebar > .task-footer.sidebar-foot { min-height:30px; margin-top:-3px; padding-top:0; }
 .section-label.task-list-head .task-list-count { font-size:11px; font-weight:580; }
 .gooey-search-trigger,

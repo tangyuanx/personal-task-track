@@ -2884,7 +2884,7 @@ test("missing conclusion highlights only the current task without locking task s
   assert.doesNotMatch(styles, /\.conclusion-prompt \{/);
 });
 
-test("task metadata uses shadcn-style badges for priority, status, and active tags", async () => {
+test("task metadata keeps complete context with lightweight tags and variable-width group last", async () => {
   const [harness, styles] = await Promise.all([
     rendererHarness(),
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "styles.css"), "utf8"),
@@ -2905,11 +2905,19 @@ test("task metadata uses shadcn-style badges for priority, status, and active ta
 
   assert.match(page, /class="task-context-item task-context-badge priority high" data-slot="badge">高优先<\/span>/);
   assert.match(page, /class="task-context-item task-context-badge status resolved" data-slot="badge">已完成<\/span>/);
-  assert.match(page, /class="task-context-item task-context-badge task-tag" data-slot="badge">Today<\/span>/);
-  assert.match(page, /class="task-context-item task-context-badge task-tag" data-slot="badge">卡住<\/span>/);
-  assert.match(styles, /\.meta-line\.page-properties > \.task-context-item\.task-context-badge\s*\{[\s\S]*border-radius:\s*6px;/);
-  assert.match(styles, /task-context-badge\.priority\.high/);
-  assert.match(styles, /task-context-badge\.status\.resolved/);
+  assert.match(page, /class="task-context-item task-context-badge task-tag today" data-slot="badge">Today<\/span>/);
+  assert.match(page, /class="task-context-item task-context-badge task-tag blocked" data-slot="badge">卡住<\/span>/);
+  assert.ok(page.indexOf("task-context-progress") < page.indexOf("task-deadline-picker"));
+  assert.ok(page.indexOf("task-deadline-picker") < page.indexOf("task-recurrence-controls"));
+  assert.ok(page.indexOf("task-recurrence-controls") < page.indexOf("task-group-select"));
+
+  const finalRules = styles.slice(styles.lastIndexOf("v0.1.167 - J1 workbench header"));
+  assert.match(finalRules, /\.meta-line\.page-properties\s*\{[\s\S]*gap:\s*5px 0;[\s\S]*margin-top:\s*12px;[\s\S]*font-size:\s*12px;/);
+  assert.match(finalRules, /task-context-badge\.task-tag\.today\s*\{[\s\S]*border-radius:\s*6px;[\s\S]*background:\s*color-mix/);
+  assert.match(finalRules, /task-context-badge\.priority\.high,[\s\S]*task-context-badge\.status\.resolved\s*\{[\s\S]*background:\s*transparent/);
+  assert.match(finalRules, /task-context-item\.task-context-badge,[\s\S]*border-radius:\s*0;[\s\S]*background:\s*transparent/);
+  assert.match(finalRules, /task-context-divider\s*\{[\s\S]*height:\s*13px;/);
+  assert.match(finalRules, /task-group-select-value\s*\{[\s\S]*max-width:\s*190px;/);
 });
 
 test("processing flow matches the compact reference tree and opens details only on demand", async () => {
@@ -3996,7 +4004,7 @@ test("recurrence settings match the selected compact popover and support multipl
     };
   })()`);
   const finalRules = styles.slice(styles.lastIndexOf("v0.1.109 — demo-matched recurrence popover"));
-  const briefCardRules = styles.slice(styles.lastIndexOf("v0.1.139 — continuous task brief"));
+  const briefRules = styles.slice(styles.lastIndexOf("v0.1.167 - J1 workbench header"));
 
   assert.match(result.html, /class="task-recurrence-trigger"/);
   assert.match(result.html, /aria-expanded="true"/);
@@ -4013,16 +4021,16 @@ test("recurrence settings match the selected compact popover and support multipl
   assert.match(finalRules, /\.task-recurrence-popover\s*\{[\s\S]*width:\s*min\(372px,/);
   assert.match(finalRules, /\.task-recurrence-mode-switch\s*\{[\s\S]*grid-template-columns:\s*repeat\(3,/);
   assert.match(finalRules, /\.task-recurrence-weekday-list\s*\{[\s\S]*grid-template-columns:\s*repeat\(7,/);
-  assert.match(briefCardRules, /\.brief-strip\.task-brief\s*\{[\s\S]*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\);[\s\S]*gap:\s*0;[\s\S]*min-height:\s*150px;[\s\S]*border:\s*1px solid[\s\S]*border-radius:\s*12px;/);
-  assert.match(briefCardRules, /\.brief-cell\.brief-field,[\s\S]*min-height:\s*150px;[\s\S]*padding:\s*13px 17px 15px;[\s\S]*border:\s*0;[\s\S]*border-radius:\s*0;[\s\S]*box-shadow:\s*none;/);
-  assert.match(briefCardRules, /\.brief-cell\.brief-field \+ \.brief-cell\.brief-field\s*\{[\s\S]*border-left:\s*1px solid/);
-  assert.match(briefCardRules, /\.brief-cell\.brief-field > \.brief-label\s*\{[\s\S]*min-height:\s*22px;/);
-  assert.match(briefCardRules, /\.brief-progress-ring\s*\{[\s\S]*width:\s*22px;[\s\S]*height:\s*22px;[\s\S]*flex:\s*0 0 22px;/);
-  assert.match(briefCardRules, /\.task-brief textarea\s*\{[\s\S]*min-height:\s*96px;[\s\S]*height:\s*96px;[\s\S]*max-height:\s*96px;[\s\S]*margin:\s*4px 0 0;/);
-  assert.match(briefCardRules, /\.brief-label \.brief-stamp\s*\{[\s\S]*display:\s*none;/);
+  assert.match(briefRules, /\.brief-strip\.task-brief\s*\{[\s\S]*grid-template-columns:\s*minmax\(0, 3fr\) minmax\(0, 4fr\) minmax\(0, 3fr\);[\s\S]*min-height:\s*206px;[\s\S]*border:\s*0;[\s\S]*background:\s*transparent;/);
+  assert.match(briefRules, /\.brief-cell\.brief-field,[\s\S]*min-height:\s*206px;[\s\S]*height:\s*206px;[\s\S]*padding:\s*17px 21px;[\s\S]*background:\s*transparent;/);
+  assert.match(briefRules, /\.brief-cell\.brief-field \+ \.brief-cell\.brief-field\s*\{[\s\S]*border-left:\s*1px solid/);
+  assert.match(briefRules, /\.brief-cell\.brief-field > \.brief-label\s*\{[\s\S]*min-height:\s*21px;/);
+  assert.match(briefRules, /\.task-brief textarea\s*\{[\s\S]*min-height:\s*147px;[\s\S]*height:\s*147px;[\s\S]*max-height:\s*147px;[\s\S]*margin:\s*10px 0 0;[\s\S]*font-size:\s*14px;[\s\S]*line-height:\s*1\.62;/);
+  assert.match(briefRules, /\.brief-cell\.brief-field:focus-within \.brief-label\s*\{[\s\S]*color:\s*var\(--focus\);/);
   assert.match(result.pageHtml, /class="brief-field brief-cell background/);
-  assert.match(result.pageHtml, /class="brief-field brief-cell hypothesis[\s\S]*class="brief-progress-ring"/);
-  assert.match(result.pageHtml, /src\/assets\/feather\/feather-sprite\.svg#(?:file-text|bar-chart-2|check-square|edit-3)/);
+  assert.match(result.pageHtml, /class="brief-field brief-cell hypothesis/);
+  assert.doesNotMatch(result.pageHtml, /brief-progress-ring|brief-edit-icon/);
+  assert.doesNotMatch(result.pageHtml, /src\/assets\/feather\/feather-sprite\.svg#(?:file-text|bar-chart-2|check-square|edit-3)/);
 });
 
 test("group and node mutations do not steal repository title focus", async () => {

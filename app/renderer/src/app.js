@@ -2107,11 +2107,14 @@ function renderTaskPage(task) {
           <div class="page-properties meta-line">
             ${renderTaskActiveTagPills(task)}
             <span class="task-context-item task-context-badge priority ${task.priority}" data-slot="badge">${priorityLabels[task.priority]}优先</span>
+            <span class="task-context-divider" aria-hidden="true"></span>
             <span class="task-context-item task-context-badge status ${task.status === "done" ? "resolved" : "attention"}" data-slot="badge">${task.status === "done" ? "已完成" : "处理中"}</span>
             <span class="task-context-progress">${summary.done}/${summary.total || 0} 节点</span>
-            ${renderTaskGroupSelect(task)}
+            <span class="task-context-divider" aria-hidden="true"></span>
             ${renderTaskDeadlineControl(task)}
             ${renderTaskRecurrenceControls(task)}
+            <span class="task-context-divider" aria-hidden="true"></span>
+            ${renderTaskGroupSelect(task)}
           </div>
         </div>
         <div class="actions">
@@ -2122,9 +2125,9 @@ function renderTaskPage(task) {
       </header>
 
       <section class="task-brief brief-strip" aria-label="任务简报">
-        ${renderBriefField("背景", textareaHtml("description", task.description, task.id), "", false, "background")}
-        ${renderBriefField("进展", textareaHtml("hypothesis", task.hypothesis, task.id), task.hypothesisUpdatedAt, false, "hypothesis", summary)}
-        ${renderBriefField("结论", textareaHtml("conclusion", task.conclusion, task.id), "", needsConclusion, "conclusion")}
+        ${renderBriefField("背景", textareaHtml("description", task.description, task.id), false, "background")}
+        ${renderBriefField("进展", textareaHtml("hypothesis", task.hypothesis, task.id), false, "hypothesis")}
+        ${renderBriefField("结论", textareaHtml("conclusion", task.conclusion, task.id), needsConclusion, "conclusion")}
       </section>
 
       ${renderTaskPaneTabs(task)}
@@ -2273,7 +2276,7 @@ function renderTaskTagRow(task) {
 function renderTaskActiveTagPills(task) {
   return Object.entries(normalizeTaskTags(task.tags))
     .filter(([, active]) => active)
-    .map(([tag]) => `<span class="task-context-item task-context-badge task-tag" data-slot="badge">${taskTagLabels[tag]}</span>`)
+    .map(([tag]) => `<span class="task-context-item task-context-badge task-tag ${tag}" data-slot="badge">${taskTagLabels[tag]}</span>`)
     .join("");
 }
 
@@ -2495,30 +2498,11 @@ function briefFieldIcon(name, className = "brief-field-icon") {
   return `<svg class="${className}" viewBox="0 0 24 24" aria-hidden="true"><use href="src/assets/feather/feather-sprite.svg#${name}"></use></svg>`;
 }
 
-function renderBriefProgress(summary) {
-  const total = Math.max(0, Number(summary?.total) || 0);
-  const done = Math.min(total, Math.max(0, Number(summary?.done) || 0));
-  const percent = total ? Math.round((done / total) * 100) : 0;
-  return `<span class="brief-progress-ring" style="--brief-progress:${percent}" role="img" aria-label="节点完成进度 ${percent}%"><span>${percent}%</span></span>`;
-}
-
-function renderBriefField(label, control, timestamp = "", attention = false, variant = "", summary = null) {
-  const iconNames = {
-    background: "file-text",
-    hypothesis: "bar-chart-2",
-    conclusion: "check-square",
-  };
-  const headerAction =
-    variant === "hypothesis"
-      ? renderBriefProgress(summary)
-      : variant === "conclusion"
-        ? briefFieldIcon("edit-3", "brief-field-icon brief-edit-icon")
-        : "";
+function renderBriefField(label, control, attention = false, variant = "") {
   return `
     <label class="brief-field brief-cell ${variant} ${attention ? "needs-attention" : ""}">
       <span class="brief-label">
-        <span class="brief-label-title">${briefFieldIcon(iconNames[variant] || "file-text")}<b>${label}</b></span>
-        <span class="brief-label-action">${timestamp ? `<time class="brief-stamp">${formatShort(timestamp)}</time>` : ""}${headerAction}</span>
+        <span class="brief-label-title"><b>${label}</b></span>
       </span>
       ${control}
     </label>
