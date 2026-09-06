@@ -2911,7 +2911,7 @@ test("task metadata keeps complete context with lightweight tags and variable-wi
   assert.ok(page.indexOf("task-deadline-picker") < page.indexOf("task-recurrence-controls"));
   assert.ok(page.indexOf("task-recurrence-controls") < page.indexOf("task-group-select"));
 
-  const finalRules = styles.slice(styles.lastIndexOf("v0.1.167 - J1 workbench header"));
+  const finalRules = styles.slice(styles.lastIndexOf("v0.1.168 - J1 workbench header"));
   assert.match(finalRules, /\.meta-line\.page-properties\s*\{[\s\S]*gap:\s*5px 0;[\s\S]*margin-top:\s*12px;[\s\S]*font-size:\s*12px;/);
   assert.match(finalRules, /task-context-badge\.task-tag\.today\s*\{[\s\S]*border-radius:\s*6px;[\s\S]*background:\s*color-mix/);
   assert.match(finalRules, /task-context-badge\.priority\.high,[\s\S]*task-context-badge\.status\.resolved\s*\{[\s\S]*background:\s*transparent/);
@@ -4004,7 +4004,7 @@ test("recurrence settings match the selected compact popover and support multipl
     };
   })()`);
   const finalRules = styles.slice(styles.lastIndexOf("v0.1.109 — demo-matched recurrence popover"));
-  const briefRules = styles.slice(styles.lastIndexOf("v0.1.167 - J1 workbench header"));
+  const briefRules = styles.slice(styles.lastIndexOf("v0.1.168 - J1 workbench header"));
 
   assert.match(result.html, /class="task-recurrence-trigger"/);
   assert.match(result.html, /aria-expanded="true"/);
@@ -4021,11 +4021,11 @@ test("recurrence settings match the selected compact popover and support multipl
   assert.match(finalRules, /\.task-recurrence-popover\s*\{[\s\S]*width:\s*min\(372px,/);
   assert.match(finalRules, /\.task-recurrence-mode-switch\s*\{[\s\S]*grid-template-columns:\s*repeat\(3,/);
   assert.match(finalRules, /\.task-recurrence-weekday-list\s*\{[\s\S]*grid-template-columns:\s*repeat\(7,/);
-  assert.match(briefRules, /\.brief-strip\.task-brief\s*\{[\s\S]*grid-template-columns:\s*minmax\(0, 3fr\) minmax\(0, 4fr\) minmax\(0, 3fr\);[\s\S]*min-height:\s*206px;[\s\S]*border:\s*0;[\s\S]*background:\s*transparent;/);
-  assert.match(briefRules, /\.brief-cell\.brief-field,[\s\S]*min-height:\s*206px;[\s\S]*height:\s*206px;[\s\S]*padding:\s*17px 21px;[\s\S]*background:\s*transparent;/);
+  assert.match(briefRules, /\.brief-strip\.task-brief\s*\{[\s\S]*grid-template-columns:\s*minmax\(0, 3fr\) minmax\(0, 4fr\) minmax\(0, 3fr\);[\s\S]*min-height:\s*132px;[\s\S]*border:\s*0;[\s\S]*background:\s*transparent;/);
+  assert.match(briefRules, /\.brief-cell\.brief-field,[\s\S]*min-height:\s*132px;[\s\S]*height:\s*132px;[\s\S]*padding:\s*12px 21px 13px;[\s\S]*background:\s*transparent;/);
   assert.match(briefRules, /\.brief-cell\.brief-field \+ \.brief-cell\.brief-field\s*\{[\s\S]*border-left:\s*1px solid/);
   assert.match(briefRules, /\.brief-cell\.brief-field > \.brief-label\s*\{[\s\S]*min-height:\s*21px;/);
-  assert.match(briefRules, /\.task-brief textarea\s*\{[\s\S]*min-height:\s*147px;[\s\S]*height:\s*147px;[\s\S]*max-height:\s*147px;[\s\S]*margin:\s*10px 0 0;[\s\S]*font-size:\s*14px;[\s\S]*line-height:\s*1\.62;/);
+  assert.match(briefRules, /\.task-brief textarea\s*\{[\s\S]*min-height:\s*79px;[\s\S]*height:\s*79px;[\s\S]*max-height:\s*79px;[\s\S]*margin:\s*7px 0 0;[\s\S]*font-size:\s*14px;[\s\S]*line-height:\s*1\.62;/);
   assert.match(briefRules, /\.brief-cell\.brief-field:focus-within \.brief-label\s*\{[\s\S]*color:\s*var\(--focus\);/);
   assert.match(result.pageHtml, /class="brief-field brief-cell background/);
   assert.match(result.pageHtml, /class="brief-field brief-cell hypothesis/);

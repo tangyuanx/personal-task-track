@@ -13079,7 +13079,7 @@ body.flow-node-reordering * {
 :root[data-theme="dark"] .rail.sidebar .repository-scroll-area .task-row.task-item.selected::before { background:color-mix(in srgb,var(--handoff-focus-800) 19%,transparent); }
 .rail.sidebar .group-panel { margin-top:-4px; padding:0; }
 
-/* v0.1.167 - J1 workbench header and continuous three-column brief. */
+/* v0.1.168 - J1 workbench header and compact, Today-aligned three-column brief. */
 .work-surface.task-page {
   grid-template-rows: auto auto auto minmax(0, 1fr);
 }
@@ -13279,7 +13279,7 @@ body.flow-node-reordering * {
   display: grid;
   grid-template-columns: minmax(0, 3fr) minmax(0, 4fr) minmax(0, 3fr);
   gap: 0;
-  min-height: 206px;
+  min-height: 132px;
   margin: 24px 42px 0;
   padding: 0;
   overflow: visible;
@@ -13294,11 +13294,11 @@ body.flow-node-reordering * {
 .brief-cell.brief-field:last-child {
   display: flex;
   min-width: 0;
-  min-height: 206px;
-  height: 206px;
+  min-height: 132px;
+  height: 132px;
   flex-direction: column;
   gap: 0;
-  padding: 17px 21px;
+  padding: 12px 21px 13px;
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -13363,10 +13363,10 @@ body.flow-node-reordering * {
 }
 
 .task-brief textarea {
-  min-height: 147px;
-  height: 147px;
-  max-height: 147px;
-  margin: 10px 0 0;
+  min-height: 79px;
+  height: 79px;
+  max-height: 79px;
+  margin: 7px 0 0;
   padding: 0 6px 0 0;
   overflow-y: auto;
   border: 0;
