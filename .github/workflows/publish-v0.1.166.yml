@@ -1,0 +1,150 @@
+name: Publish v0.1.166
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/publish-v0.1.166.yml
+
+concurrency:
+  group: publish-v0.1.166
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify v0.1.166 source
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify release source and node detail redesign
+        shell: bash
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          test "$version" = "0.1.166"
+          node --check app/renderer/src/app.js
+          node --test tests/desktop.test.cjs
+          grep -q 'class="node-detail-page"' app/renderer/src/app.js
+          grep -q 'data-node-detail-save-state' app/renderer/src/app.js
+          grep -q 'data-action="navigate-node-detail"' app/renderer/src/app.js
+          grep -q 'backdrop-filter: blur(20px)' app/renderer/src/styles.css
+          ! grep -q 'data-action="save-node-detail">保存' app/renderer/src/app.js
+
+  build:
+    name: Build v0.1.166 ${{ matrix.platform }}
+    needs: verify
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macOS
+            os: macos-latest
+            script: npm run dist:mac -- --x64 --arm64 --publish never
+            artifact: v0.1.166-macos
+          - platform: Windows
+            os: windows-latest
+            script: npm run dist:win -- --publish never
+            artifact: v0.1.166-windows
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check JavaScript and tests
+        run: npm run check
+
+      - name: Build app
+        run: ${{ matrix.script }}
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      - name: Test Windows installer upgrade matrix
+        if: matrix.platform == 'Windows'
+        shell: pwsh
+        run: |
+          $candidate = Get-ChildItem release -Filter "Loop-*-x64-setup.exe" | Select-Object -First 1
+          if (-not $candidate) { throw "Windows installer was not produced." }
+          ./tests/windows-upgrade-installer.test.ps1 -CandidateInstaller $candidate.FullName
+
+      - name: Verify update metadata
+        run: node tools/verify-update-artifacts.cjs release
+
+      - name: Stage v0.1.166 release assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            release/*.dmg
+            release/*.zip
+            release/*.exe
+            release/*.blockmap
+            release/latest.yml
+            release/latest-mac.yml
+          if-no-files-found: error
+          retention-days: 2
+
+  publish:
+    name: Publish v0.1.166 release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Refuse to replace an existing tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          if gh api "repos/${{ github.repository }}/git/ref/tags/v0.1.166" >/dev/null 2>&1; then
+            echo "v0.1.166 already exists; refusing to replace it."
+            exit 1
+          fi
+
+      - name: Collect v0.1.166 release assets
+        uses: actions/download-artifact@v4
+        with:
+          pattern: v0.1.166-*
+          path: release
+          merge-multiple: true
+
+      - name: Verify complete cross-platform update feed
+        run: node tools/verify-update-artifacts.cjs release --require-all-platforms
+
+      - name: Publish v0.1.166
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v0.1.166
+          target_commitish: ${{ github.sha }}
+          name: v0.1.166
+          body: |
+            ## 处理流节点详情重新设计
+
+            - 节点详情改为右侧宽屏浮动面板，打开详情时不再压缩处理流。
+            - 以“详情”记录为主体，保留自动保存反馈，移除手动保存、重复时间和常驻路径信息。
+            - 节点路径收进标题右侧信息按钮，状态改为浅色紧凑菜单。
+            - 底部增加上一节点、下一节点切换，并保持节点记录在切换前可靠保存。
+            - 使用纯白平衡玻璃材质、轻量进入动效，并支持减少动态效果和减少透明度。
+          make_latest: true
+          files: |
+            release/*.dmg
+            release/*.zip
+            release/*.exe
+            release/*.blockmap
+            release/latest.yml
+            release/latest-mac.yml
