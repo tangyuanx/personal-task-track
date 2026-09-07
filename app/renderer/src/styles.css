@@ -14606,3 +14606,231 @@ button.settings-row:hover .settings-row-copy strong {
   .rail.sidebar .repository-group-trigger { max-width:calc(172px + var(--font-inline-space)); }
   .rail.sidebar .repository-priority-select { min-width:0; padding:0 11px 0 1px; }
 }
+
+/* v0.1.172 final cascade: collision-proof grid and one shared geometry for
+   repository search/add actions. Search swaps atomically instead of crushing
+   its label during expansion. */
+.rail.sidebar .repository-primary-row.task-list-head {
+  --repository-search-track:60px;
+  position:relative;
+  display:grid;
+  min-width:0;
+  min-height:34px;
+  grid-template-columns:minmax(0,1fr) max-content var(--repository-search-track) 1px 60px;
+  column-gap:7px;
+  align-items:center;
+  padding:0 var(--repository-padding-x);
+  transition:none;
+}
+
+.rail.sidebar .repository-primary-row:has(.gooey-search.is-open) {
+  --repository-search-track:min(216px,46%);
+  grid-template-columns:minmax(42px,1fr) var(--repository-search-track) 1px 60px;
+  padding-right:var(--repository-padding-x);
+}
+
+.rail.sidebar .repository-primary-row .repository-group-slot {
+  grid-column:1;
+  min-width:0;
+}
+
+.rail.sidebar .repository-group-trigger {
+  width:100%;
+  max-width:100%;
+}
+
+.rail.sidebar .repository-primary-row .task-list-count {
+  grid-column:2;
+}
+
+.rail.sidebar .repository-primary-row:has(.gooey-search.is-open) .task-list-count {
+  display:none;
+}
+
+.rail.sidebar .repository-primary-row .search.search-box.gooey-search {
+  --gooey-search-collapsed:60px;
+  position:relative;
+  top:auto;
+  right:auto;
+  grid-column:3;
+  align-self:center;
+  width:100%;
+  min-width:0;
+  height:32px;
+  min-height:32px;
+  flex:none;
+  margin:0;
+  overflow:visible;
+  transition:none;
+}
+
+.rail.sidebar .repository-primary-row:has(.gooey-search.is-open) .search.search-box.gooey-search {
+  grid-column:2;
+  width:100%;
+  flex:none;
+}
+
+.rail.sidebar .repository-primary-row .gooey-search-filter-wrap {
+  width:100%;
+  height:32px;
+}
+
+.rail.sidebar .repository-primary-row .gooey-search-trigger,
+.rail.sidebar .repository-primary-row .add-task-floating {
+  position:static;
+  display:inline-flex;
+  width:100%;
+  min-width:0;
+  height:32px;
+  min-height:32px;
+  align-items:center;
+  justify-content:center;
+  gap:5px;
+  border:0;
+  border-radius:7px;
+  padding:0 4px;
+  overflow:visible;
+  background:transparent;
+  color:color-mix(in srgb,var(--handoff-ink) 78%,transparent);
+  font-size:calc(11 * var(--font-unit));
+  font-weight:500;
+  line-height:1;
+  white-space:nowrap;
+  box-shadow:none;
+  transform:none;
+  transition:color 120ms ease,background-color 120ms ease,transform 80ms ease;
+}
+
+.rail.sidebar .repository-primary-row .gooey-search-trigger:hover,
+.rail.sidebar .repository-primary-row .gooey-search-trigger:focus-visible,
+.rail.sidebar .repository-primary-row .add-task-floating:hover,
+.rail.sidebar .repository-primary-row .add-task-floating:focus-visible {
+  border-color:transparent;
+  background:color-mix(in srgb,var(--handoff-ink) 4%,transparent);
+  color:var(--handoff-focus-800);
+}
+
+.rail.sidebar .repository-primary-row .gooey-search-trigger:active,
+.rail.sidebar .repository-primary-row .add-task-floating:active {
+  transform:scale(.97);
+}
+
+.rail.sidebar .repository-primary-row .gooey-search-trigger svg,
+.rail.sidebar .repository-primary-row .add-task-floating-icon,
+.rail.sidebar .repository-primary-row .gooey-search-field-icon {
+  display:block;
+  width:14px;
+  height:14px;
+  flex:0 0 14px;
+  fill:none;
+  stroke:currentColor;
+  stroke-linecap:round;
+  stroke-linejoin:round;
+  stroke-width:1.7;
+}
+
+.rail.sidebar .repository-primary-row .gooey-search-trigger-label,
+.rail.sidebar .repository-primary-row .add-task-floating > span {
+  display:block;
+  max-width:none;
+  flex:0 0 auto;
+  overflow:visible;
+  opacity:1;
+  line-height:1;
+  white-space:nowrap;
+  transform:none;
+  transition:none;
+}
+
+.rail.sidebar .repository-primary-row .gooey-search.is-open .gooey-search-trigger {
+  display:none;
+}
+
+.rail.sidebar .repository-primary-row .gooey-search-field {
+  display:none;
+}
+
+.rail.sidebar .repository-primary-row .gooey-search.is-open .gooey-search-field {
+  position:relative;
+  top:auto;
+  left:auto;
+  z-index:1;
+  display:flex;
+  width:100%;
+  height:32px;
+  align-items:center;
+  gap:6px;
+  overflow:hidden;
+  border:1px solid var(--handoff-line-strong);
+  border-radius:8px;
+  padding:0 8px;
+  opacity:1;
+  background:var(--handoff-sidebar);
+  box-shadow:0 8px 20px color-mix(in srgb,var(--handoff-ink) 9%,transparent);
+  transform:none;
+  transform-origin:center;
+  pointer-events:auto;
+  transition:none;
+}
+
+.rail.sidebar .repository-primary-row .gooey-search-field-icon {
+  color:var(--handoff-muted);
+}
+
+.rail.sidebar .repository-primary-row .gooey-search-field input {
+  min-width:0;
+  flex:1;
+  font-size:calc(11 * var(--font-unit));
+  line-height:1;
+}
+
+.rail.sidebar .repository-primary-row .repository-action-divider {
+  position:static;
+  grid-column:4;
+  width:1px;
+  height:14px;
+  align-self:center;
+  justify-self:center;
+}
+
+.rail.sidebar .repository-primary-row .add-task-floating {
+  grid-column:5;
+}
+
+.rail.sidebar .repository-primary-row:has(.gooey-search.is-open) .repository-action-divider {
+  grid-column:3;
+}
+
+.rail.sidebar .repository-primary-row:has(.gooey-search.is-open) .add-task-floating {
+  grid-column:4;
+}
+
+:root[data-theme="dark"] .rail.sidebar .repository-primary-row .gooey-search.is-open .gooey-search-field {
+  background:var(--handoff-sidebar);
+}
+
+:root[data-theme="dark"] .rail.sidebar .repository-primary-row .add-task-floating,
+:root[data-theme="dark"] .rail.sidebar .repository-primary-row .add-task-floating:hover {
+  border-color:transparent;
+  background:transparent;
+}
+
+@media (max-width:480px) {
+  .rail.sidebar .repository-primary-row.task-list-head {
+    --repository-search-track:60px;
+    padding-inline:8px;
+  }
+
+  .rail.sidebar .repository-primary-row:has(.gooey-search.is-open) {
+    --repository-search-track:min(176px,46%);
+    grid-template-columns:minmax(34px,1fr) var(--repository-search-track) 1px 60px;
+    padding-right:8px;
+  }
+}
+
+@media (prefers-reduced-motion:reduce) {
+  .rail.sidebar .repository-primary-row .gooey-search-trigger,
+  .rail.sidebar .repository-primary-row .add-task-floating {
+    transition:none;
+  }
+}

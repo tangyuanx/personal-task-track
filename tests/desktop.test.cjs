@@ -3692,6 +3692,15 @@ test("repository filters remain compact, aligned, and keep the add control visib
   assert.match(repositoryV171, /\.rail\.sidebar \.repository-action-divider \{[^}]*width:1px;[^}]*height:14px;[^}]*background:var\(--handoff-line-strong\);/);
   assert.match(repositoryV171, /\.rail\.sidebar \.repository-primary-row \.add-task-floating \{[^}]*width:52px;[^}]*border:0;[^}]*background:transparent;[^}]*font-weight:500;/);
   assert.match(repositoryV171, /\.rail\.sidebar \.repository-priority-select \{[^}]*border:0;[^}]*background:transparent;[^}]*font-size:calc\(11 \* var\(--font-unit\)\);[^}]*font-weight:500;/);
+  const repositoryV172 = styles.slice(styles.lastIndexOf("v0.1.172 final cascade"));
+  assert.match(repositoryV172, /\.rail\.sidebar \.repository-primary-row\.task-list-head \{[^}]*display:grid;[^}]*grid-template-columns:minmax\(0,1fr\) max-content var\(--repository-search-track\) 1px 60px;[^}]*padding:0 var\(--repository-padding-x\);/);
+  assert.match(repositoryV172, /\.rail\.sidebar \.repository-primary-row \.search\.search-box\.gooey-search \{[^}]*position:relative;[^}]*top:auto;[^}]*right:auto;[^}]*grid-column:3;/);
+  assert.match(repositoryV172, /\.rail\.sidebar \.repository-primary-row \.gooey-search-trigger,[\s\S]*\.rail\.sidebar \.repository-primary-row \.add-task-floating \{[^}]*height:32px;[^}]*align-items:center;[^}]*font-size:calc\(11 \* var\(--font-unit\)\);[^}]*line-height:1;[^}]*white-space:nowrap;/);
+  assert.match(repositoryV172, /\.rail\.sidebar \.repository-primary-row \.gooey-search-trigger-label,[\s\S]*\.add-task-floating > span \{[^}]*max-width:none;[^}]*overflow:visible;[^}]*opacity:1;[^}]*transition:none;/);
+  assert.match(repositoryV172, /\.rail\.sidebar \.repository-primary-row \.gooey-search\.is-open \.gooey-search-trigger \{[^}]*display:none;/);
+  assert.match(repositoryV172, /\.rail\.sidebar \.repository-primary-row \.gooey-search\.is-open \.gooey-search-field \{[^}]*position:relative;[^}]*display:flex;[^}]*width:100%;[^}]*height:32px;/);
+  assert.match(repositoryV172, /\.rail\.sidebar \.repository-primary-row \.add-task-floating \{[^}]*grid-column:5;/);
+  assert.match(app, /class="gooey-search-trigger-label">搜索[\s\S]*class="gooey-search-field-icon"/);
   assert.match(app, /function bindGooeySearch\(\)/);
   assert.match(app, /function renderRepositoryGroupPicker\(\)[\s\S]*placeholder="搜索分组…"[\s\S]*data-action="add-group">＋ 新建分组/);
   assert.match(app, /function bindRepositoryGroupOptionMenus\(scope = document\)[\s\S]*kind: "group"/);

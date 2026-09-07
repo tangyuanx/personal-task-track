@@ -1829,6 +1829,7 @@ function renderSidebar() {
                   <span class="gooey-search-trigger-label">搜索</span>
                 </button>
                 <label class="gooey-search-field" for="search">
+                  <svg class="gooey-search-field-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7.2"></circle><path d="m20 20-3.9-3.9"></path></svg>
                   <input id="search" type="search" value="${escAttr(state.query)}" placeholder="搜索任务…" aria-label="搜索任务、节点或内容" autocomplete="off" enterkeyhint="search" tabindex="${searchOpen ? "0" : "-1"}" />
                   <span class="search-shortcut" aria-hidden="true">⌘ K</span>
                 </label>
