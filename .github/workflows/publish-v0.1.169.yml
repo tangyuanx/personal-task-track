@@ -1,0 +1,159 @@
+name: Publish v0.1.169
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/publish-v0.1.169.yml
+
+concurrency:
+  group: publish-v0.1.169
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify v0.1.169 source
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify repository relocation and V1 layout
+        shell: bash
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          test "$version" = "0.1.169"
+          node --check app/renderer/src/app.js
+          node --test tests/desktop.test.cjs
+          grep -q 'v0.1.169 final cascade' app/renderer/src/styles.css
+          grep -q 'class="repository-group-slot"' app/renderer/src/app.js
+          grep -q 'function renderRepositoryGroupPicker' app/renderer/src/app.js
+          grep -q 'data-action="add-group"' app/renderer/src/app.js
+          grep -q 'height:58px' app/renderer/src/styles.css
+
+  build:
+    name: Build v0.1.169 ${{ matrix.platform }}
+    needs: verify
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macOS
+            os: macos-latest
+            script: npm run dist:mac -- --x64 --arm64 --publish never
+            artifact: v0.1.169-macos
+          - platform: Windows
+            os: windows-latest
+            script: npm run dist:win -- --publish never
+            artifact: v0.1.169-windows
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check JavaScript and tests
+        run: npm run check
+
+      - name: Build app
+        run: ${{ matrix.script }}
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      - name: Test Windows installer upgrade matrix
+        if: matrix.platform == 'Windows'
+        shell: pwsh
+        run: |
+          $candidate = Get-ChildItem release -Filter "Loop-*-x64-setup.exe" | Select-Object -First 1
+          if (-not $candidate) { throw "Windows installer was not produced." }
+          ./tests/windows-upgrade-installer.test.ps1 -CandidateInstaller $candidate.FullName
+
+      - name: Verify update metadata
+        run: node tools/verify-update-artifacts.cjs release
+
+      - name: Stage v0.1.169 release assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            release/*.dmg
+            release/*.zip
+            release/*.exe
+            release/*.blockmap
+            release/latest.yml
+            release/latest-mac.yml
+          if-no-files-found: error
+          retention-days: 2
+
+  publish:
+    name: Publish v0.1.169 release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Refuse to replace an existing tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          if gh api "repos/${{ github.repository }}/git/ref/tags/v0.1.169" >/dev/null 2>&1; then
+            echo "v0.1.169 already exists; refusing to replace it."
+            exit 1
+          fi
+
+      - name: Collect v0.1.169 release assets
+        uses: actions/download-artifact@v4
+        with:
+          pattern: v0.1.169-*
+          path: release
+          merge-multiple: true
+
+      - name: Verify complete cross-platform update feed
+        run: node tools/verify-update-artifacts.cjs release --require-all-platforms
+
+      - name: Publish v0.1.169
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v0.1.169
+          target_commitish: ${{ github.sha }}
+          name: v0.1.169
+          body: |
+            ## 任务仓库界面重整
+
+            - 将原有完整分组控件迁移到任务仓库左上角，分组搜索、新建、选择、重命名、右键删除及键盘操作保持不变。
+            - 状态、优先级与原有“任务 / 速记”勾选控件集中到第二行，不增加“类型”标题。
+            - 保留原搜索交互，并将新增任务按钮固定在右上角，不再随搜索框展开移动。
+            - 任务行采用 58px 紧凑双行排版，截止时间位于优先级上方，使用短分隔线、轻选中底色和绿色短边线。
+            - 完成态仅降低内容权重并保留绿色完成框，与任务选中态清晰区分；深色模式及窄屏同步适配。
+          make_latest: true
+          files: |
+            release/*.dmg
+            release/*.zip
+            release/*.exe
+            release/*.blockmap
+            release/latest.yml
+            release/latest-mac.yml

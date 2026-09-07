@@ -1790,7 +1790,10 @@ function renderSidebar() {
 
       <div class="task-list task-repository" data-context="task-list">
         <div class="repository-fixed-header">
-          <div class="task-list-head section-label">
+          <div class="repository-primary-row task-list-head section-label">
+            <div class="repository-group-slot" aria-label="任务分组">
+              ${renderRepositoryGroupPicker()}
+            </div>
             <span class="task-list-count">${visibleCount} / ${scopedTasks.length} 项</span>
             <div class="search-box search gooey-search ${searchOpen ? "is-open" : ""}" data-gooey-search data-open="${searchOpen}">
               <svg class="gooey-search-filter-defs" aria-hidden="true" width="0" height="0">
@@ -1813,6 +1816,9 @@ function renderSidebar() {
                 </label>
               </div>
             </div>
+            <button class="add-task-floating" type="button" data-action="add-task" title="新增任务" aria-label="新增任务">
+              <svg class="add-task-floating-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"></rect><path d="M12 8v8M8 12h8"></path></svg>
+            </button>
           </div>
           <div class="task-repository-toolbar">
             ${renderRepositorySegmentedFilter("completion-segmented task-status-filters", "任务状态筛选", [
@@ -1824,20 +1830,15 @@ function renderSidebar() {
               <span>优先级</span>
               ${filterSelectHtml("priority-filter", state.priorityFilter, repositoryPriorityFilterLabels, "按优先级筛选")}
             </label>
+            ${renderRepositoryTypeToggles()}
           </div>
         </div>
         <div class="repository-list-wrapper">
           <div class="repository-scroll-area" data-task-repository-scroll data-task-repository-view="${escAttr(taskRepositoryViewKey())}">
             <div class="task-repository-rows">${renderTaskRepositoryRows()}</div>
           </div>
-          <button class="add-task-floating" type="button" data-action="add-task" title="新增任务" aria-label="新增任务">
-            <svg class="add-task-floating-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"></rect><path d="M12 8v8M8 12h8"></path></svg>
-          </button>
         </div>
       </div>
-      <section class="group-panel" aria-label="任务分组">
-        ${renderRepositoryScopeBar()}
-      </section>
       <div class="sidebar-foot task-footer">
         <button class="settings-trigger settings-button ${state.settingsOpen ? "active" : ""}" type="button" data-action="toggle-settings" title="设置" aria-label="设置">⚙</button>
         <button
@@ -1934,34 +1935,46 @@ function renderRepositoryGroupOptions() {
   return `<div class="repository-group-section repository-group-system">${systemOptions || `<div class="repository-group-empty">没有匹配的记录范围</div>`}</div><div class="repository-group-divider" role="separator"></div><div class="repository-group-section repository-group-personal"><div class="repository-group-heading">个人分组</div>${personalOptions}</div>`;
 }
 
-function renderRepositoryScopeBar() {
+function renderRepositoryTypeToggles() {
   const types = repositoryTypeSelection();
-  const open = repositoryGroupPickerOpen;
   return `
-    <div class="repository-scope-bar">
-      <div class="repository-type-toggles" role="group" aria-label="任务类型">
-        <button class="type-filter-button ${types.includeTask ? "is-checked" : ""}" type="button" data-action="toggle-repository-type" data-type="task" aria-pressed="${types.includeTask}"><span class="type-checkbox" aria-hidden="true">✓</span><span>任务</span></button>
-        <button class="type-filter-button ${types.includeNote ? "is-checked" : ""}" type="button" data-action="toggle-repository-type" data-type="note" aria-pressed="${types.includeNote}"><span class="type-checkbox" aria-hidden="true">✓</span><span>速记</span></button>
-      </div>
-      <div class="repository-group-picker ${open ? "is-open" : ""}">
-        <button class="repository-group-trigger" type="button" data-action="toggle-repository-group-picker" aria-expanded="${open}" aria-haspopup="listbox" title="选择分组；双击可修改当前分组名称"><span>${esc(repositoryGroupLabel())}</span><span class="repository-group-chevron" aria-hidden="true">⌄</span></button>
-        ${open ? `
-          <div class="repository-group-popover" role="listbox" aria-label="选择任务分组">
-            <label class="repository-group-search"><span aria-hidden="true">⌕</span><input type="search" value="${escAttr(repositoryGroupQuery)}" placeholder="搜索分组…" aria-label="搜索分组" autocomplete="off" /></label>
-            <div class="repository-group-options">
-              ${renderRepositoryGroupOptions()}
-            </div>
-            <div class="repository-group-footer"><button type="button" data-action="add-group">＋ 新建分组</button></div>
-          </div>
-        ` : ""}
-      </div>
+    <div class="repository-type-toggles" role="group" aria-label="任务类型">
+      <button class="type-filter-button ${types.includeTask ? "is-checked" : ""}" type="button" data-action="toggle-repository-type" data-type="task" aria-pressed="${types.includeTask}"><span class="type-checkbox" aria-hidden="true">✓</span><span>任务</span></button>
+      <button class="type-filter-button ${types.includeNote ? "is-checked" : ""}" type="button" data-action="toggle-repository-type" data-type="note" aria-pressed="${types.includeNote}"><span class="type-checkbox" aria-hidden="true">✓</span><span>速记</span></button>
     </div>
   `;
 }
 
-// Kept as a compatibility renderer for existing callers/tests; the sidebar
-// uses renderRepositoryScopeBar() so the visible repository no longer shows
-// flat group tabs.
+function renderRepositoryGroupPicker() {
+  const open = repositoryGroupPickerOpen;
+  return `
+    <div class="repository-group-picker ${open ? "is-open" : ""}">
+      <button class="repository-group-trigger" type="button" data-action="toggle-repository-group-picker" aria-expanded="${open}" aria-haspopup="listbox" title="选择分组；双击可修改当前分组名称"><span>${esc(repositoryGroupLabel())}</span><span class="repository-group-chevron" aria-hidden="true">⌄</span></button>
+      ${open ? `
+        <div class="repository-group-popover" role="listbox" aria-label="选择任务分组">
+          <label class="repository-group-search"><span aria-hidden="true">⌕</span><input type="search" value="${escAttr(repositoryGroupQuery)}" placeholder="搜索分组…" aria-label="搜索分组" autocomplete="off" /></label>
+          <div class="repository-group-options">
+            ${renderRepositoryGroupOptions()}
+          </div>
+          <div class="repository-group-footer"><button type="button" data-action="add-group">＋ 新建分组</button></div>
+        </div>
+      ` : ""}
+    </div>
+  `;
+}
+
+function renderRepositoryScopeBar() {
+  return `
+    <div class="repository-scope-bar">
+      ${renderRepositoryTypeToggles()}
+      ${renderRepositoryGroupPicker()}
+    </div>
+  `;
+}
+
+// Kept as a compatibility renderer for existing callers/tests. The sidebar
+// now places the same group picker in its primary row and the unchanged type
+// toggles in its filter row.
 function renderGroupTabs() {
   return `
     <div class="sheet-bar group-nav" aria-label="任务分组">

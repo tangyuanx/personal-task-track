@@ -3060,6 +3060,7 @@ test("task repository renders priority without an update timestamp", async () =>
   const app = await fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "app.js"), "utf8");
 
   assert.match(app, /class="task-priority-control \$\{task\.priority\}"/);
+  assert.match(app, /class="task-row-meta">[\s\S]*renderTaskDeadlineBadge\(task\)[\s\S]*class="task-priority-control/);
   assert.doesNotMatch(app, /formatRepositoryStamp/);
   assert.doesNotMatch(app, /<time datetime="\$\{escAttr\(task\.updatedAt\)\}">/);
   assert.match(app, /class="add-task-floating" type="button" data-action="add-task"/);
@@ -3511,13 +3512,15 @@ test("repository groups render only record scope and personal groups with manage
     state.activeGroupId = "group_all";
     state.editingGroupId = "";
     repositoryGroupQuery = "";
+    repositoryGroupPickerOpen = true;
     const options = renderRepositoryGroupOptions();
     const scope = renderRepositoryScopeBar();
+    const sidebar = renderSidebar();
     state.contextMenu = { kind: "group", groupId: "group_work", x: 10, y: 20 };
     const menu = renderContextMenu();
     startRenameGroup("group_work");
     const editing = renderRepositoryGroupOptions();
-    return { options, scope, menu, editing, open: repositoryGroupPickerOpen };
+    return { options, scope, sidebar, menu, editing, open: repositoryGroupPickerOpen };
   })()`);
 
   assert.match(result.options, /repository-group-system[\s\S]*全部记录[\s\S]*未分组/);
@@ -3526,6 +3529,10 @@ test("repository groups render only record scope and personal groups with manage
   assert.doesNotMatch(result.options, />最近</);
   assert.doesNotMatch(result.options, />全部分组</);
   assert.doesNotMatch(result.scope, /repository-group-icon/);
+  assert.match(result.sidebar, /class="repository-primary-row task-list-head section-label"[\s\S]*class="repository-group-slot"[\s\S]*class="repository-group-picker is-open"/);
+  assert.match(result.sidebar, /placeholder="搜索分组…"/);
+  assert.match(result.sidebar, /data-action="add-group">＋ 新建分组/);
+  assert.doesNotMatch(result.sidebar, /<section class="group-panel"/);
   assert.match(result.menu, /重命名分组/);
   assert.match(result.menu, /删除分组，任务移至未分组/);
   assert.match(result.menu, /删除分组及其中任务/);
@@ -3611,6 +3618,9 @@ test("repository filters remain compact, aligned, and keep the add control visib
   assert.match(sidebars.light, /class="type-filter-button is-checked"[^>]*data-type="note"/);
   assert.doesNotMatch(sidebars.light, /全部类型/);
   assert.match(sidebars.light, /completion-segmented task-status-filters/);
+  assert.match(sidebars.light, /class="task-repository-toolbar"[\s\S]*class="repository-priority-select"[\s\S]*class="repository-type-toggles"/);
+  assert.match(sidebars.light, /class="repository-primary-row task-list-head section-label"[\s\S]*class="repository-group-slot"[\s\S]*class="task-list-count"[\s\S]*class="search-box search gooey-search [^"]*"[\s\S]*class="add-task-floating"/);
+  assert.ok(sidebars.light.indexOf('class="add-task-floating"') < sidebars.light.indexOf('class="repository-list-wrapper"'));
   assert.match(sidebars.light, /class="repository-fixed-header"[\s\S]*class="repository-scroll-area" data-task-repository-scroll/);
   assert.match(sidebars.light, /class="add-task-floating"/);
   assert.match(sidebars.light, /class="theme-toggle theme-switch[^"]*"/);
@@ -3647,7 +3657,16 @@ test("repository filters remain compact, aligned, and keep the add control visib
   assert.match(styles, /\.repository-scroll-area\s*\{[\s\S]*overflow-y:\s*auto;/);
   assert.match(styles, /\.repository-fixed-header\s*\{[\s\S]*flex:\s*0 0 auto;/);
   assert.match(styles, /@media \(prefers-reduced-motion: reduce\)/);
+  const repositoryV1 = styles.slice(styles.lastIndexOf("v0.1.169 final cascade"));
+  assert.match(repositoryV1, /\.rail\.sidebar \.repository-group-popover \{[^}]*top:calc\(100% \+ 6px\);[^}]*right:auto;[^}]*bottom:auto;[^}]*left:0;/);
+  assert.match(repositoryV1, /\.rail\.sidebar \.repository-primary-row \.add-task-floating \{[^}]*position:absolute;[^}]*top:1px;[^}]*right:var\(--repository-padding-x\);[^}]*bottom:auto;/);
+  assert.match(repositoryV1, /\.rail\.sidebar \.repository-scroll-area \.task-row\.task-item \{[^}]*height:58px;[^}]*min-height:58px;[^}]*grid-template-columns:25px minmax\(0,1fr\) 61px 18px;/);
+  assert.match(repositoryV1, /\.rail\.sidebar \.repository-scroll-area \.task-row\.task-item::after \{[^}]*right:34px;[^}]*left:33px;/);
+  assert.match(repositoryV1, /\.rail\.sidebar \.task-row\.task-item \.task-row-meta \{[^}]*display:grid;[^}]*grid-column:3;/);
+  assert.match(repositoryV1, /\.rail\.sidebar \.task-row\.task-item\.done \{[^}]*background-color:transparent;[^}]*opacity:1;/);
   assert.match(app, /function bindGooeySearch\(\)/);
+  assert.match(app, /function renderRepositoryGroupPicker\(\)[\s\S]*placeholder="搜索分组…"[\s\S]*data-action="add-group">＋ 新建分组/);
+  assert.match(app, /function bindRepositoryGroupOptionMenus\(scope = document\)[\s\S]*kind: "group"/);
   assert.match(app, /function isEditableTarget\(target\)/);
   assert.match(app, /event\.key !== "Escape" && isEditableTarget\(event\.target\)/);
   assert.match(app, /if \(event\.isComposing\) return;/);
