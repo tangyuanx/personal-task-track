@@ -199,7 +199,7 @@ const editFieldLabels = {
   hypothesis: "当前判断与进展",
   conclusion: "结果与总结",
   priority: "优先级",
-  groupId: "任务分组",
+  groupId: "分组",
 };
 
 const reviewPresetLabels = {
@@ -1809,7 +1809,7 @@ function renderSidebar() {
       <div class="task-list task-repository" data-context="task-list">
         <div class="repository-fixed-header">
           <div class="repository-primary-row task-list-head section-label">
-            <div class="repository-group-slot" aria-label="任务分组">
+            <div class="repository-group-slot" aria-label="分组">
               ${renderRepositoryGroupPicker()}
             </div>
             <span class="task-list-count">${visibleCount} / ${scopedTasks.length} 项</span>
@@ -1970,9 +1970,9 @@ function renderRepositoryGroupPicker() {
   const open = repositoryGroupPickerOpen;
   return `
     <div class="repository-group-picker ${open ? "is-open" : ""}">
-      <button class="repository-group-trigger" type="button" data-action="toggle-repository-group-picker" aria-expanded="${open}" aria-haspopup="listbox" title="选择分组；双击可修改当前分组名称"><span class="repository-group-prefix">任务分组 ·</span><span class="repository-group-value">${esc(repositoryGroupLabel())}</span><span class="repository-group-chevron" aria-hidden="true">⌄</span></button>
+      <button class="repository-group-trigger" type="button" data-action="toggle-repository-group-picker" aria-expanded="${open}" aria-haspopup="listbox" title="选择分组；双击可修改当前分组名称"><span class="repository-group-prefix">分组 ·</span><span class="repository-group-value">${esc(repositoryGroupLabel())}</span><span class="repository-group-chevron" aria-hidden="true">⌄</span></button>
       ${open ? `
-        <div class="repository-group-popover" role="listbox" aria-label="选择任务分组">
+        <div class="repository-group-popover" role="listbox" aria-label="选择分组">
           <label class="repository-group-search"><span aria-hidden="true">⌕</span><input type="search" value="${escAttr(repositoryGroupQuery)}" placeholder="搜索分组…" aria-label="搜索分组" autocomplete="off" /></label>
           <div class="repository-group-options">
             ${renderRepositoryGroupOptions()}
@@ -1998,7 +1998,7 @@ function renderRepositoryScopeBar() {
 // toggles in its filter row.
 function renderGroupTabs() {
   return `
-    <div class="sheet-bar group-nav" aria-label="任务分组">
+    <div class="sheet-bar group-nav" aria-label="分组">
       <button class="sheet-nav scroll-button" type="button" data-action="scroll-sheets" data-direction="-1" title="查看前面的分组" aria-label="查看前面的分组">‹</button>
       <span class="sheet-tab-all-wrap"><button class="sheet-tab sheet-tab-all ${state.activeGroupId === ALL_TASKS_GROUP_ID ? "active" : ""}" type="button" data-action="select-group" data-group-id="${ALL_TASKS_GROUP_ID}" title="查看全部分组中的任务">全部任务</button></span>
       <div class="sheet-tabs task-tabs" data-sheet-tabs>${sort(state.taskGroups).map((group) => `<span class="sheet-tab-wrap" draggable="true" data-group-id="${group.id}">${state.editingGroupId === group.id ? `<input class="sheet-edit" data-group-title="${group.id}" value="${escAttr(group.title)}" aria-label="分组名称" />` : `<button class="sheet-tab ${group.id === state.activeGroupId ? "active" : ""}" type="button" data-action="select-group" data-group-id="${group.id}" title="${escAttr(group.title)}">${esc(group.title)}</button>`}</span>`).join("")}</div>
@@ -2932,7 +2932,7 @@ function renderTaskGroupSelect(task) {
         <svg class="task-group-select-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4 4 4-4"></path></svg>
       </button>
       ${open ? `
-        <div class="task-group-select-content" id="${popoverId}" role="listbox" aria-label="选择任务分组">
+        <div class="task-group-select-content" id="${popoverId}" role="listbox" aria-label="选择分组">
           ${Object.entries(options).map(([groupId, label]) => `
             <button class="task-group-select-option ${groupId === selectedId ? "selected" : ""}" type="button" role="option" aria-selected="${groupId === selectedId}" data-action="select-task-group" data-task-id="${task.id}" data-group-id="${groupId}">
               <span>${esc(label)}</span>

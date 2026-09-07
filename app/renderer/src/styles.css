@@ -13286,6 +13286,18 @@ body.flow-node-reordering * {
   line-height: 1;
 }
 
+/* Recurrence copy must not inherit the legacy page-property pill surface. */
+.meta-line.page-properties .task-recurrence-trigger > span {
+  display: inline;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+
 .meta-line.page-properties .task-deadline-picker.has-value .task-deadline-trigger,
 .meta-line.page-properties .task-recurrence-controls.is-active .task-recurrence-trigger {
   color: var(--handoff-muted, var(--muted));

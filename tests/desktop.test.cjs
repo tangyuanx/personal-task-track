@@ -3638,7 +3638,8 @@ test("repository filters remain compact, aligned, and keep the add control visib
   assert.match(sidebars.light, /completion-segmented task-status-filters/);
   assert.match(sidebars.light, /class="task-repository-toolbar"[\s\S]*class="repository-priority-select"[\s\S]*class="repository-type-toggles"/);
   assert.match(sidebars.light, /class="repository-primary-row task-list-head section-label"[\s\S]*class="repository-group-slot"[\s\S]*class="task-list-count"[\s\S]*class="search-box search gooey-search [^"]*"[\s\S]*class="add-task-floating"/);
-  assert.match(sidebars.light, /class="repository-group-prefix">任务分组 ·<\/span><span class="repository-group-value">/);
+  assert.match(sidebars.light, /class="repository-group-prefix">分组 ·<\/span><span class="repository-group-value">/);
+  assert.doesNotMatch(sidebars.light, /任务分组/);
   assert.match(sidebars.light, /class="repository-action-divider" aria-hidden="true"><\/span>[\s\S]*class="add-task-floating"/);
   assert.match(sidebars.light, /class="add-task-floating-icon"[\s\S]*<path d="M12 5v14M5 12h14"><\/path>[\s\S]*<span>新增<\/span>/);
   assert.match(sidebars.light, /class="repository-priority-select"[\s\S]*<span>优先级 ·<\/span>/);
@@ -4095,6 +4096,7 @@ test("recurrence settings match the selected compact popover and support multipl
   assert.match(workbenchBaseRules, /> \.task-recurrence-controls\s*\{[\s\S]*border:\s*0;[\s\S]*background:\s*transparent;[\s\S]*box-shadow:\s*none;/);
   assert.match(workbenchBaseRules, /> \.task-recurrence-controls::before\s*\{[\s\S]*display:\s*none;[\s\S]*background:\s*transparent;[\s\S]*content:\s*none;/);
   assert.match(workbenchBaseRules, /v0\.1\.174: recurrence is editorial metadata[\s\S]*\.task-recurrence-trigger\s*\{[\s\S]*border:\s*0;[\s\S]*border-radius:\s*0;[\s\S]*background:\s*transparent;[\s\S]*box-shadow:\s*none;/);
+  assert.match(workbenchBaseRules, /\.task-recurrence-trigger > span\s*\{[\s\S]*min-height:\s*0;[\s\S]*border-radius:\s*0;[\s\S]*padding:\s*0;[\s\S]*background:\s*transparent;/);
   assert.match(workbenchBaseRules, /\.task-recurrence-trigger:hover,[\s\S]*\.task-recurrence-trigger\[aria-expanded="true"\][\s\S]*background:\s*transparent;[\s\S]*box-shadow:\s*none;/);
   assert.match(workbenchBaseRules, /> \.brief-label\s*\{[\s\S]*justify-content:\s*flex-start;[\s\S]*text-align:\s*left;/);
   assert.match(workbenchBaseRules, /\.brief-label-title\s*\{[\s\S]*align-self:\s*flex-start;[\s\S]*justify-content:\s*flex-start;[\s\S]*text-align:\s*left;/);
