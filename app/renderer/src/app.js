@@ -1834,8 +1834,10 @@ function renderSidebar() {
                 </label>
               </div>
             </div>
+            <span class="repository-action-divider" aria-hidden="true"></span>
             <button class="add-task-floating" type="button" data-action="add-task" title="新增任务" aria-label="新增任务">
-              <svg class="add-task-floating-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"></rect><path d="M12 8v8M8 12h8"></path></svg>
+              <svg class="add-task-floating-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+              <span>新增</span>
             </button>
           </div>
           <div class="task-repository-toolbar">
@@ -1845,7 +1847,7 @@ function renderSidebar() {
               ["done", "已完成"],
             ], state.taskFilter, "task-filter")}
             <label class="repository-priority-select" aria-label="优先级筛选">
-              <span>优先级</span>
+              <span>优先级 ·</span>
               ${filterSelectHtml("priority-filter", state.priorityFilter, repositoryPriorityFilterLabels, "按优先级筛选")}
             </label>
             ${renderRepositoryTypeToggles()}
@@ -1967,7 +1969,7 @@ function renderRepositoryGroupPicker() {
   const open = repositoryGroupPickerOpen;
   return `
     <div class="repository-group-picker ${open ? "is-open" : ""}">
-      <button class="repository-group-trigger" type="button" data-action="toggle-repository-group-picker" aria-expanded="${open}" aria-haspopup="listbox" title="选择分组；双击可修改当前分组名称"><span>${esc(repositoryGroupLabel())}</span><span class="repository-group-chevron" aria-hidden="true">⌄</span></button>
+      <button class="repository-group-trigger" type="button" data-action="toggle-repository-group-picker" aria-expanded="${open}" aria-haspopup="listbox" title="选择分组；双击可修改当前分组名称"><span class="repository-group-prefix">任务分组 ·</span><span class="repository-group-value">${esc(repositoryGroupLabel())}</span><span class="repository-group-chevron" aria-hidden="true">⌄</span></button>
       ${open ? `
         <div class="repository-group-popover" role="listbox" aria-label="选择任务分组">
           <label class="repository-group-search"><span aria-hidden="true">⌕</span><input type="search" value="${escAttr(repositoryGroupQuery)}" placeholder="搜索分组…" aria-label="搜索分组" autocomplete="off" /></label>

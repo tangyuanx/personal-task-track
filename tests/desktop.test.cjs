@@ -3638,6 +3638,10 @@ test("repository filters remain compact, aligned, and keep the add control visib
   assert.match(sidebars.light, /completion-segmented task-status-filters/);
   assert.match(sidebars.light, /class="task-repository-toolbar"[\s\S]*class="repository-priority-select"[\s\S]*class="repository-type-toggles"/);
   assert.match(sidebars.light, /class="repository-primary-row task-list-head section-label"[\s\S]*class="repository-group-slot"[\s\S]*class="task-list-count"[\s\S]*class="search-box search gooey-search [^"]*"[\s\S]*class="add-task-floating"/);
+  assert.match(sidebars.light, /class="repository-group-prefix">任务分组 ·<\/span><span class="repository-group-value">/);
+  assert.match(sidebars.light, /class="repository-action-divider" aria-hidden="true"><\/span>[\s\S]*class="add-task-floating"/);
+  assert.match(sidebars.light, /class="add-task-floating-icon"[\s\S]*<path d="M12 5v14M5 12h14"><\/path>[\s\S]*<span>新增<\/span>/);
+  assert.match(sidebars.light, /class="repository-priority-select"[\s\S]*<span>优先级 ·<\/span>/);
   assert.ok(sidebars.light.indexOf('class="add-task-floating"') < sidebars.light.indexOf('class="repository-list-wrapper"'));
   assert.match(sidebars.light, /class="repository-fixed-header"[\s\S]*class="repository-scroll-area" data-task-repository-scroll/);
   assert.match(sidebars.light, /class="add-task-floating"/);
@@ -3682,6 +3686,12 @@ test("repository filters remain compact, aligned, and keep the add control visib
   assert.match(repositoryV1, /\.rail\.sidebar \.repository-scroll-area \.task-row\.task-item::after \{[^}]*right:34px;[^}]*left:33px;/);
   assert.match(repositoryV1, /\.rail\.sidebar \.task-row\.task-item \.task-row-meta \{[^}]*display:grid;[^}]*grid-column:3;/);
   assert.match(repositoryV1, /\.rail\.sidebar \.task-row\.task-item\.done \{[^}]*background-color:transparent;[^}]*opacity:1;/);
+  const repositoryV171 = styles.slice(styles.lastIndexOf("v0.1.171 final cascade"));
+  assert.match(repositoryV171, /\.rail\.sidebar \.repository-group-trigger \{[^}]*font-size:calc\(11 \* var\(--font-unit\)\);[^}]*font-weight:500;[^}]*letter-spacing:0;/);
+  assert.match(repositoryV171, /\.rail\.sidebar \.repository-primary-row \.search\.search-box\.gooey-search \{[^}]*--gooey-search-collapsed:54px;[^}]*right:calc\(var\(--repository-padding-x\) \+ 67px\);/);
+  assert.match(repositoryV171, /\.rail\.sidebar \.repository-action-divider \{[^}]*width:1px;[^}]*height:14px;[^}]*background:var\(--handoff-line-strong\);/);
+  assert.match(repositoryV171, /\.rail\.sidebar \.repository-primary-row \.add-task-floating \{[^}]*width:52px;[^}]*border:0;[^}]*background:transparent;[^}]*font-weight:500;/);
+  assert.match(repositoryV171, /\.rail\.sidebar \.repository-priority-select \{[^}]*border:0;[^}]*background:transparent;[^}]*font-size:calc\(11 \* var\(--font-unit\)\);[^}]*font-weight:500;/);
   assert.match(app, /function bindGooeySearch\(\)/);
   assert.match(app, /function renderRepositoryGroupPicker\(\)[\s\S]*placeholder="搜索分组…"[\s\S]*data-action="add-group">＋ 新建分组/);
   assert.match(app, /function bindRepositoryGroupOptionMenus\(scope = document\)[\s\S]*kind: "group"/);
