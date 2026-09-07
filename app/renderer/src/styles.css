@@ -13236,13 +13236,24 @@ body.flow-node-reordering * {
   padding: 0;
 }
 
+.meta-line.page-properties > .task-recurrence-controls {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
 .meta-line.page-properties > .task-recurrence-controls::before {
   display: none;
+  width: 0;
+  height: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
   content: none;
 }
 
 .meta-line.page-properties .task-deadline-trigger,
-.meta-line.page-properties .task-recurrence-trigger,
 .meta-line.page-properties .task-group-select-trigger {
   min-height: 26px;
   height: 26px;
@@ -13251,6 +13262,23 @@ body.flow-node-reordering * {
   border-radius: 7px;
   padding: 0 8px;
   background: transparent;
+  color: var(--handoff-muted, var(--muted));
+  font-family: var(--app-font);
+  font-size: calc(12 * var(--font-unit));
+  font-weight: 520;
+  line-height: 1;
+}
+
+/* v0.1.174: recurrence is editorial metadata, not a pill control. */
+.meta-line.page-properties .task-recurrence-trigger {
+  min-height: 26px;
+  height: 26px;
+  gap: 5px;
+  border: 0;
+  border-radius: 0;
+  padding: 0 8px;
+  background: transparent;
+  box-shadow: none;
   color: var(--handoff-muted, var(--muted));
   font-family: var(--app-font);
   font-size: calc(12 * var(--font-unit));
@@ -13267,14 +13295,22 @@ body.flow-node-reordering * {
 .meta-line.page-properties .task-deadline-trigger:hover,
 .meta-line.page-properties .task-deadline-trigger:focus-visible,
 .meta-line.page-properties .task-deadline-trigger[aria-expanded="true"],
-.meta-line.page-properties .task-recurrence-trigger:hover,
-.meta-line.page-properties .task-recurrence-trigger:focus-visible,
-.meta-line.page-properties .task-recurrence-trigger[aria-expanded="true"],
 .meta-line.page-properties .task-group-select-trigger:hover,
 .meta-line.page-properties .task-group-select-trigger:focus-visible,
 .meta-line.page-properties .task-group-select.is-open .task-group-select-trigger {
   border-color: transparent;
   background: var(--handoff-surface, var(--surface));
+  color: var(--handoff-ink, var(--ink));
+  outline: 0;
+}
+
+.meta-line.page-properties .task-recurrence-trigger:hover,
+.meta-line.page-properties .task-recurrence-trigger:focus-visible,
+.meta-line.page-properties .task-recurrence-trigger[aria-expanded="true"] {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
   color: var(--handoff-ink, var(--ink));
   outline: 0;
 }
@@ -13353,18 +13389,23 @@ body.flow-node-reordering * {
   width: 100%;
   min-height: 21px;
   align-items: center;
+  justify-content: flex-start;
   margin: 0;
   border: 0;
   padding: 0;
   color: var(--handoff-muted, var(--muted));
   background: transparent;
+  text-align: left;
 }
 
 .brief-label-title {
   display: inline-flex;
   min-width: 0;
   align-items: center;
+  align-self: flex-start;
+  justify-content: flex-start;
   gap: 0;
+  text-align: left;
 }
 
 .brief-label b {
@@ -14835,24 +14876,7 @@ button.settings-row:hover .settings-row-copy strong {
   }
 }
 
-/* v0.1.173 final cascade: one shared writing canvas for the task brief. */
-.meta-line.page-properties .task-recurrence-trigger,
-.meta-line.page-properties .task-recurrence-trigger:hover,
-.meta-line.page-properties .task-recurrence-trigger:focus-visible,
-.meta-line.page-properties .task-recurrence-trigger[aria-expanded="true"] {
-  border:0;
-  border-radius:0;
-  background:transparent;
-  box-shadow:none;
-}
-
-.meta-line.page-properties .task-recurrence-trigger:hover,
-.meta-line.page-properties .task-recurrence-trigger:focus-visible,
-.meta-line.page-properties .task-recurrence-trigger[aria-expanded="true"] {
-  color:var(--handoff-ink, var(--ink));
-  outline:0;
-}
-
+/* v0.1.173 shared writing canvas for the task brief. */
 .brief-strip.task-brief,
 :root[data-theme="dark"] .brief-strip.task-brief {
   border:0;

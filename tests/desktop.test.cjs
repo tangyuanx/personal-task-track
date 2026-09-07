@@ -4088,8 +4088,16 @@ test("recurrence settings match the selected compact popover and support multipl
   assert.doesNotMatch(result.pageHtml, /brief-progress-ring|brief-edit-icon/);
   assert.doesNotMatch(result.pageHtml, /src\/assets\/feather\/feather-sprite\.svg#(?:file-text|bar-chart-2|check-square|edit-3)/);
 
-  const sharedCanvasRules = styles.slice(styles.lastIndexOf("v0.1.173 final cascade"));
-  assert.match(sharedCanvasRules, /\.meta-line\.page-properties \.task-recurrence-trigger,[\s\S]*background:\s*transparent;[\s\S]*box-shadow:\s*none;/);
+  const workbenchBaseStart = styles.lastIndexOf("v0.1.168 - J1 workbench header");
+  const workbenchBaseEnd = styles.indexOf("v0.1.165 Settings", workbenchBaseStart);
+  const workbenchBaseRules = styles.slice(workbenchBaseStart, workbenchBaseEnd);
+  const sharedCanvasRules = styles.slice(styles.lastIndexOf("v0.1.173 shared writing canvas"));
+  assert.match(workbenchBaseRules, /> \.task-recurrence-controls\s*\{[\s\S]*border:\s*0;[\s\S]*background:\s*transparent;[\s\S]*box-shadow:\s*none;/);
+  assert.match(workbenchBaseRules, /> \.task-recurrence-controls::before\s*\{[\s\S]*display:\s*none;[\s\S]*background:\s*transparent;[\s\S]*content:\s*none;/);
+  assert.match(workbenchBaseRules, /v0\.1\.174: recurrence is editorial metadata[\s\S]*\.task-recurrence-trigger\s*\{[\s\S]*border:\s*0;[\s\S]*border-radius:\s*0;[\s\S]*background:\s*transparent;[\s\S]*box-shadow:\s*none;/);
+  assert.match(workbenchBaseRules, /\.task-recurrence-trigger:hover,[\s\S]*\.task-recurrence-trigger\[aria-expanded="true"\][\s\S]*background:\s*transparent;[\s\S]*box-shadow:\s*none;/);
+  assert.match(workbenchBaseRules, /> \.brief-label\s*\{[\s\S]*justify-content:\s*flex-start;[\s\S]*text-align:\s*left;/);
+  assert.match(workbenchBaseRules, /\.brief-label-title\s*\{[\s\S]*align-self:\s*flex-start;[\s\S]*justify-content:\s*flex-start;[\s\S]*text-align:\s*left;/);
   assert.match(sharedCanvasRules, /\.brief-strip\.task-brief,[\s\S]*background:\s*color-mix\([\s\S]*box-shadow:[\s\S]*inset 0 1px 0[\s\S]*inset 0 -1px 0/);
   assert.match(sharedCanvasRules, /\.brief-cell\.brief-field:focus-within\s*\{[\s\S]*background:\s*color-mix\(in srgb, var\(--focus\) 3%, transparent\);/);
   assert.match(sharedCanvasRules, /\.task-brief textarea,[\s\S]*border:\s*0;[\s\S]*border-radius:\s*0;[\s\S]*background:\s*transparent;[\s\S]*box-shadow:\s*none;/);
