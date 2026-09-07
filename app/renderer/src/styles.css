@@ -14834,3 +14834,57 @@ button.settings-row:hover .settings-row-copy strong {
     transition:none;
   }
 }
+
+/* v0.1.173 final cascade: one shared writing canvas for the task brief. */
+.meta-line.page-properties .task-recurrence-trigger,
+.meta-line.page-properties .task-recurrence-trigger:hover,
+.meta-line.page-properties .task-recurrence-trigger:focus-visible,
+.meta-line.page-properties .task-recurrence-trigger[aria-expanded="true"] {
+  border:0;
+  border-radius:0;
+  background:transparent;
+  box-shadow:none;
+}
+
+.meta-line.page-properties .task-recurrence-trigger:hover,
+.meta-line.page-properties .task-recurrence-trigger:focus-visible,
+.meta-line.page-properties .task-recurrence-trigger[aria-expanded="true"] {
+  color:var(--handoff-ink, var(--ink));
+  outline:0;
+}
+
+.brief-strip.task-brief,
+:root[data-theme="dark"] .brief-strip.task-brief {
+  border:0;
+  border-radius:0;
+  background:color-mix(in srgb, var(--handoff-surface, var(--surface)) 26%, transparent);
+  box-shadow:
+    inset 0 1px 0 var(--handoff-line, var(--line)),
+    inset 0 -1px 0 var(--handoff-line, var(--line));
+}
+
+.brief-cell.brief-field,
+.brief-cell.brief-field:hover {
+  border-radius:0;
+  background:transparent;
+  box-shadow:none;
+}
+
+.brief-cell.brief-field:focus-within {
+  background:color-mix(in srgb, var(--focus) 3%, transparent);
+  box-shadow:none;
+}
+
+:root[data-theme="dark"] .brief-cell.brief-field:focus-within {
+  background:color-mix(in srgb, var(--focus) 5%, transparent);
+}
+
+.task-brief textarea,
+.task-brief textarea:hover,
+.task-brief textarea:focus,
+:root[data-theme="dark"] .task-brief textarea:focus {
+  border:0;
+  border-radius:0;
+  background:transparent;
+  box-shadow:none;
+}

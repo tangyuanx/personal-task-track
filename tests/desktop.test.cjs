@@ -4087,6 +4087,12 @@ test("recurrence settings match the selected compact popover and support multipl
   assert.match(result.pageHtml, /class="brief-field brief-cell hypothesis/);
   assert.doesNotMatch(result.pageHtml, /brief-progress-ring|brief-edit-icon/);
   assert.doesNotMatch(result.pageHtml, /src\/assets\/feather\/feather-sprite\.svg#(?:file-text|bar-chart-2|check-square|edit-3)/);
+
+  const sharedCanvasRules = styles.slice(styles.lastIndexOf("v0.1.173 final cascade"));
+  assert.match(sharedCanvasRules, /\.meta-line\.page-properties \.task-recurrence-trigger,[\s\S]*background:\s*transparent;[\s\S]*box-shadow:\s*none;/);
+  assert.match(sharedCanvasRules, /\.brief-strip\.task-brief,[\s\S]*background:\s*color-mix\([\s\S]*box-shadow:[\s\S]*inset 0 1px 0[\s\S]*inset 0 -1px 0/);
+  assert.match(sharedCanvasRules, /\.brief-cell\.brief-field:focus-within\s*\{[\s\S]*background:\s*color-mix\(in srgb, var\(--focus\) 3%, transparent\);/);
+  assert.match(sharedCanvasRules, /\.task-brief textarea,[\s\S]*border:\s*0;[\s\S]*border-radius:\s*0;[\s\S]*background:\s*transparent;[\s\S]*box-shadow:\s*none;/);
 });
 
 test("group and node mutations do not steal repository title focus", async () => {

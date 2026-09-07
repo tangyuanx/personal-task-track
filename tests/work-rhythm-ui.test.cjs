@@ -48,7 +48,7 @@ test("motion is directional, interruptible, and reduced-motion aware", () => {
 });
 
 test("release version and cache keys are aligned", () => {
-  assert.equal(pkg.version, "0.1.172");
-  assert.match(html, /work-rhythm-refine\.css\?v=0\.1\.172/);
-  assert.match(html, /work-rhythm-refine\.js\?v=0\.1\.172/);
+  assert.equal(pkg.version, "0.1.173");
+  assert.match(html, /work-rhythm-refine\.css\?v=0\.1\.173/);
+  assert.match(html, /work-rhythm-refine\.js\?v=0\.1\.173/);
 });
