@@ -33,6 +33,7 @@ const PRIORITY_FILTERS = new Set(["all", "high", "medium", "low"]);
 const CAPTURE_SOURCE_FILTERS = new Set(["all", "task", "quick"]);
 const ZH_FONTS = new Set(["system", "noto", "yahei", "pingfang", "songti", "simsun", "fangsong", "heiti", "kaiti"]);
 const EN_FONTS = new Set(["inter", "system", "segoe", "arial", "helvetica", "verdana", "trebuchet", "tahoma", "times", "georgia", "courier", "mono"]);
+const FONT_SCALES = new Set(["current", "larger", "large", "largest"]);
 
 function dataFilePath(userDataPath) {
   return path.join(userDataPath, DATA_FILE);
@@ -126,6 +127,7 @@ function normalizeTaskData(data) {
     font: ["songti", "heiti", "system", "mono"].includes(safeData.font) ? safeData.font : "system",
     zhFont: ZH_FONTS.has(safeData.zhFont) ? safeData.zhFont : legacyFonts.zhFont,
     enFont: EN_FONTS.has(safeData.enFont) ? safeData.enFont : legacyFonts.enFont,
+    fontScale: FONT_SCALES.has(safeData.fontScale) ? safeData.fontScale : "large",
     taskFilter: TASK_FILTERS.has(safeData.taskFilter) ? safeData.taskFilter : "all",
     priorityFilter: PRIORITY_FILTERS.has(safeData.priorityFilter) ? safeData.priorityFilter : "all",
     captureSourceFilter: CAPTURE_SOURCE_FILTERS.has(safeData.captureSourceFilter) ? safeData.captureSourceFilter : "all",

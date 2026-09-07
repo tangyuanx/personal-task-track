@@ -2377,6 +2377,12 @@ test("disk normalization preserves every supported typography choice", () => {
     assert.equal(normalizeTaskData({ zhFont: "system", enFont }).enFont, enFont);
   }
 
+  for (const fontScale of ["current", "larger", "large", "largest"]) {
+    assert.equal(normalizeTaskData({ fontScale }).fontScale, fontScale);
+  }
+
+  assert.equal(normalizeTaskData({ fontScale: "unknown" }).fontScale, "large");
+
 });
 
 test("disk normalization creates and preserves a random UUID installation identifier", () => {
@@ -2833,10 +2839,12 @@ test("production Today widget uses its dedicated frontend and a sandboxed Electr
   assert.ok(packageJson.build.files.includes("app/renderer/today-widget.html"));
 });
 
-test("bundled cross-platform fonts are available", async () => {
-  const [app, styles, normalized] = await Promise.all([
+test("bundled cross-platform fonts and four global size presets are available", async () => {
+  const [app, styles, milkdownStyles, milkdownBuilder, normalized] = await Promise.all([
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "app.js"), "utf8"),
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "styles.css"), "utf8"),
+    fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "vendor", "milkdown-editor.css"), "utf8"),
+    fs.readFile(path.join(__dirname, "..", "tools", "build-milkdown.cjs"), "utf8"),
     Promise.resolve(normalizeTaskData({ zhFont: "noto", enFont: "inter" })),
   ]);
   const fontDirectory = path.join(__dirname, "..", "app", "renderer", "src", "assets", "fonts");
@@ -2847,11 +2855,21 @@ test("bundled cross-platform fonts are available", async () => {
   ]);
 
   assert.equal(normalized.zhFont, "noto");
-  assert.doesNotMatch(app, /task-track-font-size/);
+  assert.match(app, /const FONT_SCALE_KEY = "task-track-font-scale"/);
+  assert.match(app, /current: "当前（最小）"/);
+  assert.match(app, /large: "大（推荐）"/);
+  assert.match(app, /document\.documentElement\.dataset\.fontScale = state\.fontScale/);
+  assert.match(app, /selectRow\("界面字号", "font-scale", state\.fontScale, fontScaleLabels\)/);
   assert.match(styles, /url\("\.\/assets\/fonts\/InterVariable\.woff2"\)/);
   assert.match(styles, /url\("\.\/assets\/fonts\/NotoSansCJKsc-Regular\.otf"\)/);
   assert.match(styles, /url\("\.\/assets\/fonts\/NotoSansCJKsc-Bold\.otf"\)/);
-  assert.doesNotMatch(styles, /--font-scale/);
+  assert.match(styles, /:root\[data-font-scale="current"\]\s*\{[\s\S]*--font-unit:\s*1px/);
+  assert.match(styles, /:root\[data-font-scale="larger"\]\s*\{[\s\S]*--font-unit:\s*1\.06px/);
+  assert.match(styles, /:root\[data-font-scale="large"\]\s*\{[\s\S]*--font-unit:\s*1\.12px/);
+  assert.match(styles, /:root\[data-font-scale="largest"\]\s*\{[\s\S]*--font-unit:\s*1\.18px/);
+  assert.match(styles, /font-size:\s*calc\(13 \* var\(--font-unit\)\)/);
+  assert.match(milkdownStyles, /font-size:calc\(14 \* var\(--font-unit\)\)/);
+  assert.match(milkdownBuilder, /function applyGlobalFontScale\(css\)/);
   assert.ok(inter.size > 100000);
   assert.ok(noto.size > 10000000);
   assert.ok(notoBold.size > 10000000);
@@ -2912,7 +2930,7 @@ test("task metadata keeps complete context with lightweight tags and variable-wi
   assert.ok(page.indexOf("task-recurrence-controls") < page.indexOf("task-group-select"));
 
   const finalRules = styles.slice(styles.lastIndexOf("v0.1.168 - J1 workbench header"));
-  assert.match(finalRules, /\.meta-line\.page-properties\s*\{[\s\S]*gap:\s*5px 0;[\s\S]*margin-top:\s*12px;[\s\S]*font-size:\s*12px;/);
+  assert.match(finalRules, /\.meta-line\.page-properties\s*\{[\s\S]*gap:\s*5px 0;[\s\S]*margin-top:\s*12px;[\s\S]*font-size:\s*calc\(12 \* var\(--font-unit\)\);/);
   assert.match(finalRules, /task-context-badge\.task-tag\.today\s*\{[\s\S]*border-radius:\s*6px;[\s\S]*background:\s*color-mix/);
   assert.match(finalRules, /task-context-badge\.priority\.high,[\s\S]*task-context-badge\.status\.resolved\s*\{[\s\S]*background:\s*transparent/);
   assert.match(finalRules, /task-context-item\.task-context-badge,[\s\S]*border-radius:\s*0;[\s\S]*background:\s*transparent/);
@@ -4044,7 +4062,7 @@ test("recurrence settings match the selected compact popover and support multipl
   assert.match(briefRules, /\.brief-cell\.brief-field,[\s\S]*min-height:\s*132px;[\s\S]*height:\s*132px;[\s\S]*padding:\s*12px 21px 13px;[\s\S]*background:\s*transparent;/);
   assert.match(briefRules, /\.brief-cell\.brief-field \+ \.brief-cell\.brief-field\s*\{[\s\S]*border-left:\s*1px solid/);
   assert.match(briefRules, /\.brief-cell\.brief-field > \.brief-label\s*\{[\s\S]*min-height:\s*21px;/);
-  assert.match(briefRules, /\.task-brief textarea\s*\{[\s\S]*min-height:\s*79px;[\s\S]*height:\s*79px;[\s\S]*max-height:\s*79px;[\s\S]*margin:\s*7px 0 0;[\s\S]*font-size:\s*14px;[\s\S]*line-height:\s*1\.62;/);
+  assert.match(briefRules, /\.task-brief textarea\s*\{[\s\S]*min-height:\s*79px;[\s\S]*height:\s*79px;[\s\S]*max-height:\s*79px;[\s\S]*margin:\s*7px 0 0;[\s\S]*font-size:\s*calc\(14 \* var\(--font-unit\)\);[\s\S]*line-height:\s*1\.62;/);
   assert.match(briefRules, /\.brief-cell\.brief-field:focus-within \.brief-label\s*\{[\s\S]*color:\s*var\(--focus\);/);
   assert.match(result.pageHtml, /class="brief-field brief-cell background/);
   assert.match(result.pageHtml, /class="brief-field brief-cell hypothesis/);

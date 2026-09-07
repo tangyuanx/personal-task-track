@@ -8,6 +8,7 @@ const FLOW_WIDTH_KEY = "task-flow-column-widths-v1";
 const THEME_KEY = "task-track-theme";
 const ZH_FONT_KEY = "task-track-zh-font";
 const EN_FONT_KEY = "task-track-en-font";
+const FONT_SCALE_KEY = "task-track-font-scale";
 const TASK_FILTER_KEY = "task-track-task-filter";
 const PRIORITY_FILTER_KEY = "task-track-priority-filter";
 const CAPTURE_SOURCE_FILTER_KEY = "task-track-capture-source-filter";
@@ -133,6 +134,13 @@ const enFontLabels = {
   mono: "Monospace",
 };
 
+const fontScaleLabels = {
+  current: "当前（最小）",
+  larger: "较大",
+  large: "大（推荐）",
+  largest: "特大",
+};
+
 const defaultFlowWidths = {
   title: 360,
   note: 330,
@@ -235,6 +243,7 @@ let state = {
   theme: "light",
   zhFont: "system",
   enFont: "inter",
+  fontScale: "large",
   settingsOpen: false,
   calendarOpen: false,
   reviewOpen: false,
@@ -712,6 +721,10 @@ function normalizeEnFont(value) {
   return Object.hasOwn(enFontLabels, value) ? value : "inter";
 }
 
+function normalizeFontScale(value) {
+  return Object.hasOwn(fontScaleLabels, value) ? value : "large";
+}
+
 function migrateLegacyFont(value) {
   if (value === "songti") return { zhFont: "songti", enFont: "inter" };
   if (value === "heiti") return { zhFont: "heiti", enFont: "inter" };
@@ -728,6 +741,7 @@ function loadBrowserTypography() {
   return {
     zhFont: normalizeZhFont(localStorage.getItem(ZH_FONT_KEY) || legacy.zhFont),
     enFont: normalizeEnFont(localStorage.getItem(EN_FONT_KEY) || legacy.enFont),
+    fontScale: normalizeFontScale(localStorage.getItem(FONT_SCALE_KEY)),
   };
 }
 
@@ -1431,6 +1445,7 @@ async function loadAppData() {
       const legacy = migrateLegacyFont(stored?.font);
       const zhFont = normalizeZhFont(stored?.zhFont || legacy.zhFont);
       const enFont = normalizeEnFont(stored?.enFont || legacy.enFont);
+      const fontScale = normalizeFontScale(stored?.fontScale);
       const taskFilter = normalizeTaskFilter(stored?.taskFilter);
       const priorityFilter = normalizePriorityFilter(stored?.priorityFilter);
       const captureSourceFilter = normalizeCaptureSourceFilter(stored?.captureSourceFilter);
@@ -1439,7 +1454,7 @@ async function loadAppData() {
       const detailHeight = normalizeDetailHeight(stored?.detailHeight);
       const attachments = normalizeAttachments(stored?.attachments);
       const installationId = normalizeInstallationId(stored?.installationId);
-      return { tasks, taskGroups, activeGroupId, flowWidths, sidebarWidth, detailHeight, attachments, theme, zhFont, enFont, taskFilter, priorityFilter, captureSourceFilter, newTaskPriority, installationId };
+      return { tasks, taskGroups, activeGroupId, flowWidths, sidebarWidth, detailHeight, attachments, theme, zhFont, enFont, fontScale, taskFilter, priorityFilter, captureSourceFilter, newTaskPriority, installationId };
     } catch (error) {
       console.error("Failed to read local task data.", error);
       if (error?.code === "CORRUPT_TASK_DATA") {
@@ -1487,6 +1502,7 @@ function save() {
     theme: state.theme,
     zhFont: state.zhFont,
     enFont: state.enFont,
+    fontScale: state.fontScale,
     taskFilter: state.taskFilter,
     priorityFilter: state.priorityFilter,
     captureSourceFilter: state.captureSourceFilter,
@@ -1506,6 +1522,7 @@ function save() {
     localStorage.setItem(THEME_KEY, state.theme);
     localStorage.setItem(ZH_FONT_KEY, state.zhFont);
     localStorage.setItem(EN_FONT_KEY, state.enFont);
+    localStorage.setItem(FONT_SCALE_KEY, state.fontScale);
     localStorage.setItem(TASK_FILTER_KEY, state.taskFilter);
     localStorage.setItem(PRIORITY_FILTER_KEY, state.priorityFilter);
     localStorage.setItem(CAPTURE_SOURCE_FILTER_KEY, state.captureSourceFilter);
@@ -1677,6 +1694,7 @@ function render() {
   document.documentElement.dataset.theme = state.theme;
   document.documentElement.dataset.zhFont = state.zhFont;
   document.documentElement.dataset.enFont = state.enFont;
+  document.documentElement.dataset.fontScale = state.fontScale;
   if (task) state.activeTaskId = task.id;
   if (recurrencePopoverTaskId && recurrencePopoverTaskId !== task?.id) recurrencePopoverTaskId = "";
   if (taskGroupSelectTaskId && taskGroupSelectTaskId !== task?.id) taskGroupSelectTaskId = "";
@@ -3131,6 +3149,7 @@ function renderSettingsPanel() {
       <h3 class="settings-section-label">界面</h3>
       <section class="settings-list">
         ${row("显示模式", settingsOptionGroup("theme", state.theme, themeLabels))}
+        ${selectRow("界面字号", "font-scale", state.fontScale, fontScaleLabels)}
         ${selectRow("中文字体", "zh-font", state.zhFont, zhFontLabels)}
         ${selectRow("英文字体", "en-font", state.enFont, enFontLabels)}
       </section>
@@ -4369,6 +4388,7 @@ function bind() {
       if (event.target.dataset.setting === "theme") state.theme = normalizeTheme(event.target.value);
       if (event.target.dataset.setting === "zh-font") state.zhFont = normalizeZhFont(event.target.value);
       if (event.target.dataset.setting === "en-font") state.enFont = normalizeEnFont(event.target.value);
+      if (event.target.dataset.setting === "font-scale") state.fontScale = normalizeFontScale(event.target.value);
       if (event.target.dataset.setting === "task-filter") state.taskFilter = normalizeTaskFilter(event.target.value);
     });
   });
@@ -4784,6 +4804,7 @@ function bindTaskRepositoryRows(scope = document) {
       if (event.target.dataset.setting === "theme") state.theme = normalizeTheme(event.target.value);
       if (event.target.dataset.setting === "zh-font") state.zhFont = normalizeZhFont(event.target.value);
       if (event.target.dataset.setting === "en-font") state.enFont = normalizeEnFont(event.target.value);
+      if (event.target.dataset.setting === "font-scale") state.fontScale = normalizeFontScale(event.target.value);
       if (event.target.dataset.setting === "task-filter") state.taskFilter = normalizeTaskFilter(event.target.value);
       if (event.target.dataset.setting === "priority-filter") state.priorityFilter = normalizePriorityFilter(event.target.value);
       if (event.target.dataset.setting === "capture-source-filter") state.captureSourceFilter = normalizeCaptureSourceFilter(event.target.value);
@@ -5230,6 +5251,7 @@ function applySetting(key, value) {
   if (key === "theme") state.theme = normalizeTheme(value);
   if (key === "zh-font") state.zhFont = normalizeZhFont(value);
   if (key === "en-font") state.enFont = normalizeEnFont(value);
+  if (key === "font-scale") state.fontScale = normalizeFontScale(value);
   if (key === "task-filter") state.taskFilter = normalizeTaskFilter(value);
   if (key === "priority-filter") state.priorityFilter = normalizePriorityFilter(value);
   if (key === "capture-source-filter") state.captureSourceFilter = normalizeCaptureSourceFilter(value);
@@ -7949,6 +7971,7 @@ async function bootstrap() {
   state.theme = data.theme;
   state.zhFont = data.zhFont;
   state.enFont = data.enFont;
+  state.fontScale = normalizeFontScale(data.fontScale);
   state.taskFilter = data.taskFilter;
   state.priorityFilter = data.priorityFilter;
   state.captureSourceFilter = normalizeCaptureSourceFilter(data.captureSourceFilter);

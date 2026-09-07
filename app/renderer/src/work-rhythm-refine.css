@@ -27,7 +27,7 @@
   background: transparent !important;
   color: var(--wr3-secondary) !important;
   box-shadow: none !important;
-  font-size: 12px !important;
+  font-size: calc(12 * var(--font-unit)) !important;
   letter-spacing: -0.01em;
 }
 
@@ -115,7 +115,7 @@
   background: transparent;
   color: var(--wr3-accent);
   font: inherit;
-  font-size: 13px;
+  font-size: calc(13 * var(--font-unit));
   font-weight: 620;
   letter-spacing: -0.01em;
   cursor: pointer;
@@ -174,7 +174,7 @@
 .wr3-task-title {
   margin: 0;
   color: var(--wr3-ink);
-  font-size: clamp(22px, 3vw, 27px);
+  font-size: clamp(calc(22 * var(--font-unit)), 3vw, calc(27 * var(--font-unit)));
   font-weight: 650;
   line-height: 1.28;
   letter-spacing: -0.035em;
@@ -184,7 +184,7 @@
 .wr3-task-support {
   margin: 0;
   color: var(--wr3-secondary);
-  font-size: 12px;
+  font-size: calc(12 * var(--font-unit));
   line-height: 1.45;
   letter-spacing: -0.01em;
 }
@@ -200,13 +200,13 @@
   justify-content: center;
   align-items: baseline;
   gap: 6px;
-  font-size: 13px;
+  font-size: calc(13 * var(--font-unit));
   color: var(--wr3-secondary);
 }
 
 .wr3-remaining strong {
   color: var(--wr3-ink);
-  font-size: 16px;
+  font-size: calc(16 * var(--font-unit));
   font-weight: 650;
   letter-spacing: -0.025em;
 }
@@ -219,7 +219,7 @@
 .wr3-next {
   margin-top: 5px;
   color: var(--wr3-tertiary);
-  font-size: 12px;
+  font-size: calc(12 * var(--font-unit));
   line-height: 1.4;
 }
 
@@ -238,7 +238,7 @@
 
 .wr3-subhead h2 {
   margin: 0;
-  font-size: 15px;
+  font-size: calc(15 * var(--font-unit));
   font-weight: 650;
   letter-spacing: -0.02em;
   text-align: center;
@@ -286,7 +286,7 @@
 
 .wr3-timeline-row time {
   color: var(--wr3-secondary);
-  font-size: 11px;
+  font-size: calc(11 * var(--font-unit));
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
@@ -294,7 +294,7 @@
 .wr3-timeline-row strong {
   overflow: hidden;
   color: var(--wr3-ink);
-  font-size: 13px;
+  font-size: calc(13 * var(--font-unit));
   font-weight: 560;
   letter-spacing: -0.015em;
   text-overflow: ellipsis;
@@ -347,7 +347,7 @@
   margin: 0;
   padding: 11px 14px 7px;
   color: var(--wr3-tertiary);
-  font-size: 11px;
+  font-size: calc(11 * var(--font-unit));
   font-weight: 620;
   letter-spacing: .02em;
 }
@@ -365,7 +365,7 @@
   background: transparent;
   color: var(--wr3-ink);
   font: inherit;
-  font-size: 13px;
+  font-size: calc(13 * var(--font-unit));
   text-align: left;
 }
 
@@ -378,7 +378,7 @@ button.wr3-setting-row:hover { color: var(--wr3-accent); }
   max-width: 190px;
   overflow: hidden;
   color: var(--wr3-secondary);
-  font-size: 12px;
+  font-size: calc(12 * var(--font-unit));
   font-style: normal;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -455,19 +455,19 @@ button.wr3-setting-row:hover { color: var(--wr3-accent); }
 
 .work-rhythm-settings-entry strong,
 .work-rhythm-settings-nav strong {
-  font-size: 13px;
+  font-size: calc(13 * var(--font-unit));
   font-weight: 640;
   letter-spacing: -0.015em;
 }
 
 .work-rhythm-settings-entry small {
   color: var(--wr3-tertiary);
-  font-size: 10px;
+  font-size: calc(10 * var(--font-unit));
 }
 
 .work-rhythm-settings-entry > b {
   color: var(--wr3-tertiary);
-  font-size: 19px;
+  font-size: calc(19 * var(--font-unit));
   font-weight: 400;
 }
 
@@ -487,7 +487,7 @@ button.wr3-setting-row:hover { color: var(--wr3-accent); }
   border-radius: 9px;
   background: transparent;
   color: var(--wr3-secondary);
-  font-size: 22px;
+  font-size: calc(22 * var(--font-unit));
   cursor: pointer;
 }
 
@@ -517,7 +517,7 @@ button.wr3-setting-row:hover { color: var(--wr3-accent); }
 }
 
 .work-rhythm-settings .work-rhythm-settings-card p {
-  font-size: 11px;
+  font-size: calc(11 * var(--font-unit));
 }
 
 .work-rhythm-settings .work-rhythm-password-row input,
@@ -560,7 +560,7 @@ button.wr3-setting-row:hover { color: var(--wr3-accent); }
 @media (max-width: 520px) {
   .wr3-current-shell { min-height: 238px; padding: 16px; }
   .wr3-task-copy { margin: 18px auto 24px; }
-  .wr3-task-title { font-size: 22px; }
+  .wr3-task-title { font-size: calc(22 * var(--font-unit)); }
   .wr3-timeline { --wr3-axis-x: 82px; padding-left: 12px; padding-right: 12px; }
   .wr3-timeline::before, .wr3-timeline::after { left: calc(12px + var(--wr3-axis-x)); }
   .wr3-timeline-row { grid-template-columns: 72px 20px minmax(0, 1fr); gap: 0 8px; }
