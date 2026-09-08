@@ -7,15 +7,29 @@
 })(typeof globalThis === "object" ? globalThis : this, function createLoopWorkNavigationModel() {
   "use strict";
 
-  const SCHEMA_VERSION = 1;
-  const PHASE_TYPES = new Set(["startup", "work", "growth", "close"]);
+  const SCHEMA_VERSION = 2;
+  const PHASE_TYPES = new Set(["work", "growth", "break", "meeting"]);
   const WEEKDAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
+  const DEFAULT_SCHEDULE = Object.freeze({
+    workStart: "09:40",
+    morningEnd: "11:50",
+    afternoonStart: "13:40",
+    restStart: "15:15",
+    restEnd: "15:30",
+    transitionStart: "17:00",
+    learningStart: "17:10",
+    learningEnd: "18:10",
+    fridayMeetingStart: "15:00",
+    fridayMeetingEnd: "16:00",
+  });
   const DEFAULT_PHASES = Object.freeze([
-    Object.freeze({ id: "startup", type: "startup", label: "今日启动", start: "09:40", end: "09:55" }),
-    Object.freeze({ id: "morning-work", type: "work", label: "上午工作", start: "09:55", end: "11:40" }),
-    Object.freeze({ id: "afternoon-work", type: "work", label: "下午工作", start: "13:40", end: "16:30" }),
-    Object.freeze({ id: "growth", type: "growth", label: "个人成长", start: "16:30", end: "17:40" }),
-    Object.freeze({ id: "close", type: "close", label: "今日收束", start: "17:40", end: "18:10" }),
+    Object.freeze({ id: "morning-work", type: "work", label: "上午工作", start: "09:40", end: "11:50" }),
+    Object.freeze({ id: "lunch", type: "break", label: "午间休息", start: "11:50", end: "13:40" }),
+    Object.freeze({ id: "afternoon-work", type: "work", label: "下午工作", start: "13:40", end: "15:15" }),
+    Object.freeze({ id: "rest", type: "break", label: "休息缓冲", start: "15:15", end: "15:30" }),
+    Object.freeze({ id: "deep-work", type: "work", label: "深度工作", start: "15:30", end: "17:00" }),
+    Object.freeze({ id: "transition", type: "break", label: "学习过渡", start: "17:00", end: "17:10" }),
+    Object.freeze({ id: "growth", type: "growth", label: "个人成长", start: "17:10", end: "18:10" }),
   ]);
 
   function isRecord(value) {
@@ -83,6 +97,70 @@
     };
   }
 
+  function normalizeIdentifiers(value) {
+    if (!Array.isArray(value)) return [];
+    return [...new Set(value.map((item) => identifier(item)).filter(Boolean))];
+  }
+
+  function normalizeSchedule(value) {
+    const raw = isRecord(value) ? value : {};
+    const schedule = Object.fromEntries(Object.entries(DEFAULT_SCHEDULE).map(([key, fallback]) => [
+      key,
+      normalizeTime(raw[key], fallback),
+    ]));
+    return validateSchedule(schedule).valid ? schedule : clone(DEFAULT_SCHEDULE);
+  }
+
+  function validateSchedule(value) {
+    const schedule = isRecord(value) ? value : {};
+    const errors = [];
+    const required = Object.keys(DEFAULT_SCHEDULE);
+    required.forEach((key) => {
+      if (minutes(schedule[key]) < 0) errors.push({ field: key, message: "时间格式无效" });
+    });
+    if (errors.length) return { valid: false, errors };
+    const normalOrder = ["workStart", "morningEnd", "afternoonStart", "restStart", "restEnd", "transitionStart", "learningStart", "learningEnd"];
+    normalOrder.slice(1).forEach((key, index) => {
+      if (minutes(schedule[key]) <= minutes(schedule[normalOrder[index]])) {
+        errors.push({ field: key, message: "每日时间必须按顺序递增" });
+      }
+    });
+    if (minutes(schedule.fridayMeetingStart) < minutes(schedule.afternoonStart)
+      || minutes(schedule.fridayMeetingEnd) > minutes(schedule.transitionStart)
+      || minutes(schedule.fridayMeetingEnd) <= minutes(schedule.fridayMeetingStart)) {
+      errors.push({ field: "fridayMeetingStart", message: "周五例会必须位于下午工作时段内" });
+    }
+    if (minutes(schedule.learningEnd) - minutes(schedule.learningStart) < 60) {
+      errors.push({ field: "learningEnd", message: "每日学习时间不能少于 60 分钟" });
+    }
+    return { valid: errors.length === 0, errors };
+  }
+
+  function phasesForDate(navigation, value = new Date()) {
+    const date = value instanceof Date ? value : new Date(value);
+    const schedule = normalizeSchedule(navigation?.config?.schedule);
+    if (date.getDay() === 5) {
+      return [
+        { id: "morning-work", type: "work", label: "上午工作", start: schedule.workStart, end: schedule.morningEnd },
+        { id: "lunch", type: "break", label: "午间休息", start: schedule.morningEnd, end: schedule.afternoonStart },
+        { id: "afternoon-work", type: "work", label: "下午工作", start: schedule.afternoonStart, end: schedule.fridayMeetingStart },
+        { id: "friday-meeting", type: "meeting", label: "周例会", start: schedule.fridayMeetingStart, end: schedule.fridayMeetingEnd },
+        { id: "deep-work", type: "work", label: "会后工作", start: schedule.fridayMeetingEnd, end: schedule.transitionStart },
+        { id: "transition", type: "break", label: "学习过渡", start: schedule.transitionStart, end: schedule.learningStart },
+        { id: "growth", type: "growth", label: "个人成长", start: schedule.learningStart, end: schedule.learningEnd },
+      ];
+    }
+    return [
+      { id: "morning-work", type: "work", label: "上午工作", start: schedule.workStart, end: schedule.morningEnd },
+      { id: "lunch", type: "break", label: "午间休息", start: schedule.morningEnd, end: schedule.afternoonStart },
+      { id: "afternoon-work", type: "work", label: "下午工作", start: schedule.afternoonStart, end: schedule.restStart },
+      { id: "rest", type: "break", label: "休息缓冲", start: schedule.restStart, end: schedule.restEnd },
+      { id: "deep-work", type: "work", label: "深度工作", start: schedule.restEnd, end: schedule.transitionStart },
+      { id: "transition", type: "break", label: "学习过渡", start: schedule.transitionStart, end: schedule.learningStart },
+      { id: "growth", type: "growth", label: "个人成长", start: schedule.learningStart, end: schedule.learningEnd },
+    ];
+  }
+
   function validatePhaseSchedule(phases) {
     const errors = [];
     let previousEnd = -1;
@@ -133,12 +211,13 @@
       config: {
         workdays: [1, 2, 3, 4, 5],
         phases: clone(DEFAULT_PHASES),
+        schedule: clone(DEFAULT_SCHEDULE),
         work: { autoAdvance: true },
         growth: {
           sourceGroupId: "",
           autoAdvance: true,
           weekendEnabled: true,
-          weekendDurationMinutes: 240,
+          weekendDurationMinutes: 60,
           weekendStartTime: "",
         },
       },
@@ -146,6 +225,9 @@
         dateKey: localDateKey(now),
         activeWorkTaskId: "",
         activeGrowthTaskId: "",
+        workQueueIds: [],
+        growthQueueIds: [],
+        blockedTaskIds: [],
         workAdvancePaused: false,
         growthAdvancePaused: false,
         manualPhaseId: "",
@@ -170,13 +252,14 @@
       schemaVersion: SCHEMA_VERSION,
       config: {
         workdays: normalizeWeekdays(config.workdays),
-        phases: normalizePhases(config.phases),
+        phases: clone(DEFAULT_PHASES),
+        schedule: normalizeSchedule(config.schedule),
         work: { autoAdvance: boolean(work.autoAdvance, true) },
         growth: {
           sourceGroupId,
           autoAdvance: boolean(growth.autoAdvance, true),
           weekendEnabled: boolean(growth.weekendEnabled, true),
-          weekendDurationMinutes: integer(growth.weekendDurationMinutes, 240, 30, 720),
+          weekendDurationMinutes: integer(growth.weekendDurationMinutes, 60, 60, 720),
           weekendStartTime: normalizeTime(growth.weekendStartTime, ""),
         },
       },
@@ -184,6 +267,9 @@
         dateKey: text(runtime.dateKey, 10),
         activeWorkTaskId: identifier(runtime.activeWorkTaskId),
         activeGrowthTaskId: identifier(runtime.activeGrowthTaskId),
+        workQueueIds: normalizeIdentifiers(runtime.workQueueIds),
+        growthQueueIds: normalizeIdentifiers(runtime.growthQueueIds),
+        blockedTaskIds: normalizeIdentifiers(runtime.blockedTaskIds),
         workAdvancePaused: boolean(runtime.workAdvancePaused, false),
         growthAdvancePaused: boolean(runtime.growthAdvancePaused, false),
         manualPhaseId: identifier(runtime.manualPhaseId),
@@ -195,13 +281,18 @@
     if (normalized.runtime.dateKey !== today) {
       normalized.runtime.dateKey = today;
       normalized.runtime.activeWorkTaskId = "";
+      normalized.runtime.activeGrowthTaskId = "";
+      normalized.runtime.workQueueIds = [];
+      normalized.runtime.growthQueueIds = [];
+      normalized.runtime.blockedTaskIds = [];
       normalized.runtime.workAdvancePaused = false;
+      normalized.runtime.growthAdvancePaused = false;
       normalized.runtime.manualPhaseId = "";
       normalized.runtime.manualPhaseExpiresAt = "";
       normalized.runtime.weekendStartedAt = "";
     }
     const manualExpiry = new Date(normalized.runtime.manualPhaseExpiresAt);
-    if (!normalized.config.phases.some((phase) => phase.id === normalized.runtime.manualPhaseId)
+    if (!phasesForDate(normalized, now).some((phase) => phase.id === normalized.runtime.manualPhaseId)
       || Number.isNaN(manualExpiry.getTime())
       || manualExpiry <= now) {
       normalized.runtime.manualPhaseId = "";
@@ -229,7 +320,8 @@
   function resolvePhase(value = new Date(), navigation = defaultWorkNavigation(value)) {
     const now = value instanceof Date ? value : new Date(value);
     const nav = normalizeWorkNavigation(navigation, { now });
-    const manual = nav.config.phases.find((phase) => phase.id === nav.runtime.manualPhaseId);
+    const phases = phasesForDate(nav, now);
+    const manual = phases.find((phase) => phase.id === nav.runtime.manualPhaseId);
     if (manual) {
       const expiry = new Date(nav.runtime.manualPhaseExpiresAt);
       return {
@@ -244,14 +336,14 @@
     const weekday = now.getDay();
     const currentMinute = now.getHours() * 60 + now.getMinutes();
     if (nav.config.workdays.includes(weekday)) {
-      const active = nav.config.phases.find((phase) => currentMinute >= minutes(phase.start) && currentMinute < minutes(phase.end));
+      const active = phases.find((phase) => currentMinute >= minutes(phase.start) && currentMinute < minutes(phase.end));
       if (active) return phaseStateBase(active, "active", now);
-      const next = nav.config.phases.find((phase) => currentMinute < minutes(phase.start));
+      const next = phases.find((phase) => currentMinute < minutes(phase.start));
       if (next) {
-        const firstStart = minutes(nav.config.phases[0]?.start);
+        const firstStart = minutes(phases[0]?.start);
         return phaseStateBase(next, currentMinute < firstStart ? "next" : "gap", now);
       }
-      return phaseStateBase(nav.config.phases.at(-1) || null, "ended", now);
+      return phaseStateBase(phases.at(-1) || null, "ended", now);
     }
 
     if (nav.config.growth.weekendEnabled && (weekday === 0 || weekday === 6)) {
@@ -289,7 +381,7 @@
     const now = value instanceof Date ? value : new Date(value);
     const nav = normalizeWorkNavigation(navigation, { now });
     const currentMinute = now.getHours() * 60 + now.getMinutes();
-    const boundaries = nav.config.phases
+    const boundaries = phasesForDate(nav, now)
       .flatMap((phase) => [minutes(phase.start), minutes(phase.end)])
       .filter((minute) => minute > currentMinute)
       .sort((a, b) => a - b);
@@ -302,19 +394,62 @@
     return target.toISOString();
   }
 
-  function resolveWorkCandidates({ tasks = [], todayTaskIds = [], sourceGroupId = "" } = {}) {
-    const taskById = new Map(tasks.filter(isRecord).map((task) => [task.id, task]));
-    return todayTaskIds
-      .map((taskId) => taskById.get(taskId))
-      .filter((task) => task && task.status !== "done" && (!sourceGroupId || task.groupId !== sourceGroupId));
+  function taskIsBlocked(task) {
+    if (!isRecord(task)) return false;
+    if (task.tags?.blocked === true || (Array.isArray(task.tags) && task.tags.includes("blocked"))) return true;
+    return flattenNodes(task.nodes, []).some((node) => node.status === "blocked");
   }
 
-  function resolveGrowthCandidates(tasks = [], sourceGroupId = "") {
-    if (!sourceGroupId) return [];
+  function resolveWorkCandidates({ tasks = [], todayTaskIds = [], sourceGroupId = "", now = new Date(), blockedTaskIds = [] } = {}) {
+    const at = now instanceof Date ? now : new Date(now);
+    const today = new Set(todayTaskIds.map((taskId) => identifier(taskId)));
+    const blocked = new Set(normalizeIdentifiers(blockedTaskIds));
+    const priorityRank = { high: 0, medium: 1, low: 2 };
+    const rank = (task) => {
+      const deadline = new Date(task.deadlineAt || "");
+      const deadlineTime = Number.isNaN(deadline.getTime()) ? Number.POSITIVE_INFINITY : deadline.getTime();
+      if (deadlineTime < at.getTime()) return [0, deadlineTime];
+      if (today.has(task.id) && deadlineTime < Number.POSITIVE_INFINITY) return [1, deadlineTime];
+      if (today.has(task.id) && task.priority === "high") return [2, Number(task.order || 0)];
+      if (today.has(task.id)) return [3, priorityRank[task.priority] ?? 3];
+      return [4, priorityRank[task.priority] ?? 3];
+    };
     return tasks
-      .filter((task) => isRecord(task) && task.status !== "done" && task.groupId === sourceGroupId)
+      .filter((task) => isRecord(task)
+        && task.status !== "done"
+        && (!sourceGroupId || task.groupId !== sourceGroupId)
+        && !blocked.has(task.id)
+        && !taskIsBlocked(task))
+      .slice()
+      .sort((a, b) => {
+        const aRank = rank(a);
+        const bRank = rank(b);
+        return aRank[0] - bRank[0]
+          || aRank[1] - bRank[1]
+          || Number(a.order || 0) - Number(b.order || 0)
+          || String(a.id).localeCompare(String(b.id));
+      });
+  }
+
+  function resolveGrowthCandidates(tasks = [], sourceGroupId = "", blockedTaskIds = []) {
+    if (!sourceGroupId) return [];
+    const blocked = new Set(normalizeIdentifiers(blockedTaskIds));
+    return tasks
+      .filter((task) => isRecord(task)
+        && task.status !== "done"
+        && task.groupId === sourceGroupId
+        && !blocked.has(task.id)
+        && !taskIsBlocked(task))
       .slice()
       .sort((a, b) => Number(a.order || 0) - Number(b.order || 0) || String(a.id).localeCompare(String(b.id)));
+  }
+
+  function reconcileQueueIds(candidates = [], savedIds = []) {
+    const candidateIds = candidates.map((task) => identifier(task?.id)).filter(Boolean);
+    const available = new Set(candidateIds);
+    const saved = normalizeIdentifiers(savedIds).filter((taskId) => available.has(taskId));
+    const retained = new Set(saved);
+    return [...saved, ...candidateIds.filter((taskId) => !retained.has(taskId))];
   }
 
   function resolveActiveTask(candidates = [], activeTaskId = "") {
@@ -447,6 +582,7 @@
 
   return Object.freeze({
     SCHEMA_VERSION,
+    DEFAULT_SCHEDULE,
     DEFAULT_PHASES,
     defaultWorkNavigation,
     normalizeWorkNavigation,
@@ -454,12 +590,16 @@
     normalizeOrigin,
     normalizeTime,
     validatePhaseSchedule,
+    normalizeSchedule,
+    validateSchedule,
+    phasesForDate,
     localDateKey,
     minutes,
     resolvePhase,
     nextBoundaryAt,
     resolveWorkCandidates,
     resolveGrowthCandidates,
+    reconcileQueueIds,
     resolveActiveTask,
     resolveNextAction,
     previousRecoveryTask,

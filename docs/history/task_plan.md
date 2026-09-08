@@ -4,9 +4,20 @@
 Maintain the personal task management app through scoped, low-risk improvements while preserving existing task flow behavior and release discipline.
 
 ## Current Phase
-Phase 35
+Phase 36
 
 ## Phases
+
+### Phase 36: Work and Learning Queue Navigation
+- [x] Confirm the latest remote baseline and preserve unrelated local work
+- [x] Replace the wide navigation strip with a centered phase-and-time pill
+- [x] Add editable daily boundaries, Friday meeting replacement, afternoon rest, and a protected one-hour learning block
+- [x] Build deterministic work and configured-group learning queues with skip, defer, block, manual selection, and automatic continuation
+- [x] Replace schedule, queue, and settings text controls with accessible SVG icon buttons
+- [x] Preserve learning-plan import, local persistence, keyboard focus behavior, and responsive layouts
+- [x] Add focused model/UI regressions and run the complete project check
+- [x] Build, tag, push, and verify patch release `0.1.178`
+- **Status:** complete
 
 ### Phase 35: Configurable Deadline Reminder Timing
 - [x] Confirm the latest remote baseline and release workflow

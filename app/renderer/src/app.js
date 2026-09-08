@@ -3014,10 +3014,12 @@ function workNavigationCandidates() {
     tasks: state.tasks,
     todayTaskIds: todayItems.map((item) => item.task.id),
     sourceGroupId: navigation.config.growth.sourceGroupId,
+    blockedTaskIds: navigation.runtime.blockedTaskIds,
   });
   const growth = workNavigationModel.resolveGrowthCandidates(
     state.tasks,
     navigation.config.growth.sourceGroupId,
+    navigation.runtime.blockedTaskIds,
   );
   return { todayItems, work, growth };
 }
@@ -3026,10 +3028,14 @@ function reconcileWorkNavigationRuntime() {
   const navigation = normalizeCurrentWorkNavigation();
   const { work, growth } = workNavigationCandidates();
   const runtime = navigation.runtime;
-  const referencedWork = state.tasks.find((task) => task.id === runtime.activeWorkTaskId && task.status !== "done");
-  if (!referencedWork) runtime.activeWorkTaskId = runtime.workAdvancePaused ? "" : work[0]?.id || "";
+  runtime.workQueueIds = workNavigationModel.reconcileQueueIds(work, runtime.workQueueIds);
+  runtime.growthQueueIds = workNavigationModel.reconcileQueueIds(growth, runtime.growthQueueIds);
+  const referencedWork = work.find((task) => task.id === runtime.activeWorkTaskId);
+  if (referencedWork) runtime.workQueueIds = [referencedWork.id, ...runtime.workQueueIds.filter((taskId) => taskId !== referencedWork.id)];
+  else runtime.activeWorkTaskId = runtime.workAdvancePaused ? "" : runtime.workQueueIds[0] || "";
   const referencedGrowth = growth.find((task) => task.id === runtime.activeGrowthTaskId);
-  if (!referencedGrowth) runtime.activeGrowthTaskId = runtime.growthAdvancePaused ? "" : growth[0]?.id || "";
+  if (referencedGrowth) runtime.growthQueueIds = [referencedGrowth.id, ...runtime.growthQueueIds.filter((taskId) => taskId !== referencedGrowth.id)];
+  else runtime.activeGrowthTaskId = runtime.growthAdvancePaused ? "" : runtime.growthQueueIds[0] || "";
   return navigation;
 }
 
@@ -3050,6 +3056,7 @@ function workNavigationTaskSnapshot(task) {
     estimateMinutes: task.estimateMinutes || 0,
     origin: workNavigationModel.normalizeOrigin(task.origin),
     updatedAt: task.updatedAt,
+    deadlineAt: task.deadlineAt || "",
     resolvedAt: task.resolvedAt || "",
   };
 }
@@ -3058,9 +3065,11 @@ function workNavigationSnapshot() {
   const navigation = reconcileWorkNavigationRuntime();
   const { todayItems, work, growth } = workNavigationCandidates();
   const taskById = new Map(state.tasks.map((task) => [task.id, task]));
-  const referencedWork = taskById.get(navigation.runtime.activeWorkTaskId) || null;
-  const activeWork = referencedWork?.status !== "done" ? referencedWork : navigation.runtime.workAdvancePaused ? null : work[0] || null;
-  const activeGrowth = growth.find((task) => task.id === navigation.runtime.activeGrowthTaskId) || (navigation.runtime.growthAdvancePaused ? null : growth[0] || null);
+  const orderedWork = navigation.runtime.workQueueIds.map((taskId) => taskById.get(taskId)).filter((task) => work.some((item) => item.id === task?.id));
+  const orderedGrowth = navigation.runtime.growthQueueIds.map((taskId) => taskById.get(taskId)).filter((task) => growth.some((item) => item.id === task?.id));
+  const referencedWork = orderedWork.find((task) => task.id === navigation.runtime.activeWorkTaskId) || null;
+  const activeWork = referencedWork || (navigation.runtime.workAdvancePaused ? null : orderedWork[0] || null);
+  const activeGrowth = orderedGrowth.find((task) => task.id === navigation.runtime.activeGrowthTaskId) || (navigation.runtime.growthAdvancePaused ? null : orderedGrowth[0] || null);
   const workIds = new Set(work.map((task) => task.id));
   return {
     version: APP_VERSION || "dev",
@@ -3068,8 +3077,8 @@ function workNavigationSnapshot() {
     tasks: state.tasks.map(workNavigationTaskSnapshot),
     groups: sort(state.taskGroups).map((group) => ({ id: group.id, title: group.title, order: group.order })),
     todayTaskIds: todayItems.map((item) => item.task.id),
-    workTaskIds: work.map((task) => task.id),
-    growthTaskIds: growth.map((task) => task.id),
+    workTaskIds: orderedWork.map((task) => task.id),
+    growthTaskIds: orderedGrowth.map((task) => task.id),
     activeWorkTaskId: activeWork?.id || "",
     activeGrowthTaskId: activeGrowth?.id || "",
     detachedWorkTask: Boolean(activeWork && !workIds.has(activeWork.id)),
@@ -3124,7 +3133,11 @@ function openTaskFromNavigation(taskId, options = {}) {
 
 function nextNavigationTask(kind) {
   const { work, growth } = workNavigationCandidates();
-  return kind === "growth" ? growth[0] || null : work[0] || null;
+  const navigation = normalizeCurrentWorkNavigation();
+  const candidates = kind === "growth" ? growth : work;
+  const queueIds = kind === "growth" ? navigation.runtime.growthQueueIds : navigation.runtime.workQueueIds;
+  const byId = new Map(candidates.map((task) => [task.id, task]));
+  return queueIds.map((taskId) => byId.get(taskId)).find(Boolean) || candidates[0] || null;
 }
 
 function advanceNavigationAfterCompletion(taskId) {
@@ -3166,6 +3179,23 @@ function completeTaskFromNavigation(taskId, kind) {
   save();
   render();
   return { success: true, code: "COMPLETED", taskId: task.id, nextTaskId: advanced?.nextTaskId || "" };
+}
+
+function blockTaskFromNavigation(taskId, kind) {
+  const task = state.tasks.find((item) => item.id === taskId && item.status !== "done");
+  if (!task) return { success: false, code: "TASK_NOT_FOUND" };
+  const navigation = normalizeCurrentWorkNavigation();
+  const queueKey = kind === "growth" ? "growthQueueIds" : "workQueueIds";
+  const activeKey = kind === "growth" ? "activeGrowthTaskId" : "activeWorkTaskId";
+  task.tags = normalizeTaskTags({ ...task.tags, blocked: true });
+  task.updatedAt = now();
+  navigation.runtime.blockedTaskIds = [...new Set([...navigation.runtime.blockedTaskIds, task.id])];
+  navigation.runtime[queueKey] = navigation.runtime[queueKey].filter((id) => id !== task.id);
+  navigation.runtime[activeKey] = navigation.runtime[queueKey][0] || "";
+  if (navigation.runtime[activeKey]) openTaskFromGlobalList(navigation.runtime[activeKey]);
+  save();
+  render();
+  return { success: true, code: "BLOCKED", taskId, nextTaskId: navigation.runtime[activeKey] };
 }
 
 function saveNavigationRecovery(taskId, value = {}) {
@@ -3267,6 +3297,7 @@ globalThis.LoopWorkNavigationBridge = Object.freeze({
   updateConfig: updateWorkNavigationConfig,
   openTask: openTaskFromNavigation,
   completeTask: completeTaskFromNavigation,
+  blockTask: blockTaskFromNavigation,
   saveRecovery: saveNavigationRecovery,
   openGrowthGroup,
   importLearningPlan,
