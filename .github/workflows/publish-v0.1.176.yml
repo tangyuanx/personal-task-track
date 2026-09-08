@@ -1,0 +1,158 @@
+name: Publish v0.1.176
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/publish-v0.1.176.yml
+
+concurrency:
+  group: publish-v0.1.176
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify v0.1.176 source
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify phase-aware work rhythm
+        shell: bash
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          test "$version" = "0.1.176"
+          node --check app/renderer/src/work-rhythm-refine.js
+          node --test tests/work-rhythm-ui.test.cjs
+          grep -q 'function phaseAction' app/renderer/src/work-rhythm-refine.js
+          grep -q '昨日续接建议' app/renderer/src/work-rhythm-refine.js
+
+  build:
+    name: Build v0.1.176 ${{ matrix.platform }}
+    needs: verify
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macOS
+            os: macos-latest
+            script: npm run dist:mac -- --x64 --arm64 --publish never
+            artifact: v0.1.176-macos
+          - platform: Windows
+            os: windows-latest
+            script: npm run dist:win -- --publish never
+            artifact: v0.1.176-windows
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check JavaScript and tests
+        run: npm run check
+
+      - name: Build app
+        run: ${{ matrix.script }}
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      - name: Test Windows installer upgrade matrix
+        if: matrix.platform == 'Windows'
+        shell: pwsh
+        run: |
+          $candidate = Get-ChildItem release -Filter "Loop-*-x64-setup.exe" | Select-Object -First 1
+          if (-not $candidate) { throw "Windows installer was not produced." }
+          ./tests/windows-upgrade-installer.test.ps1 -CandidateInstaller $candidate.FullName
+
+      - name: Verify update metadata
+        run: node tools/verify-update-artifacts.cjs release
+
+      - name: Stage v0.1.176 release assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            release/*.dmg
+            release/*.zip
+            release/*.exe
+            release/*.blockmap
+            release/latest.yml
+            release/latest-mac.yml
+          if-no-files-found: error
+          retention-days: 2
+
+  publish:
+    name: Publish v0.1.176 release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Refuse to replace an existing tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          if gh api "repos/${{ github.repository }}/git/ref/tags/v0.1.176" >/dev/null 2>&1; then
+            echo "v0.1.176 already exists; refusing to replace it."
+            exit 1
+          fi
+
+      - name: Collect v0.1.176 release assets
+        uses: actions/download-artifact@v4
+        with:
+          pattern: v0.1.176-*
+          path: release
+          merge-multiple: true
+
+      - name: Verify complete cross-platform update feed
+        run: node tools/verify-update-artifacts.cjs release --require-all-platforms
+
+      - name: Publish v0.1.176
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v0.1.176
+          target_commitish: ${{ github.sha }}
+          name: v0.1.176
+          body: |
+            ## 工作节奏阶段动作与今日启动优化
+
+            - 工作节奏卡片按当前阶段显示动作，不再统一显示“记录恢复卡”。
+            - 等待和休息阶段隐藏记录动作；午后重启显示“读取恢复卡”。
+            - 今日启动显示昨日“明天要做”的续接建议，但不会自动选中或强制沿用。
+            - 可以改选当前打开任务或手动输入新任务，并填写今日唯一主结果、完成标准和第一动作。
+            - 总结与收尾阶段保留“记录恢复卡”，其他工作阶段使用“记录阶段结果”。
+            - 更新前端资源缓存键，确保升级后加载本版界面。
+          make_latest: true
+          files: |
+            release/*.dmg
+            release/*.zip
+            release/*.exe
+            release/*.blockmap
+            release/latest.yml
+            release/latest-mac.yml
+
