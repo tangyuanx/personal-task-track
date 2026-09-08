@@ -31,6 +31,29 @@ test("boundary states keep one primary action and a stable footer", () => {
   assert.match(js, /wr3-remaining.*is-empty/);
 });
 
+test("stage actions follow the active phase instead of reusing recovery everywhere", () => {
+  assert.match(js, /function phaseAction/);
+  assert.match(js, /完成启动清单/);
+  assert.match(js, /读取恢复卡/);
+  assert.match(js, /记录阶段结果/);
+  assert.match(js, /记录恢复卡/);
+  assert.match(js, /state\.mode !== "active" \|\| isRest\(state\)/);
+  assert.doesNotMatch(js, /data-wr3-record>记录恢复卡<\/button>/);
+});
+
+test("today startup shows yesterday as an unselected suggestion", () => {
+  assert.match(js, /function previousSuggestion/);
+  assert.match(js, /"明日第一动作"/);
+  assert.match(js, /昨日续接建议/);
+  assert.match(js, /data-wr3-choice="suggestion" aria-pressed="false"/);
+  assert.match(js, /今日新输入 · 当前打开任务/);
+  assert.match(js, /今日唯一主结果/);
+  assert.match(js, /完成标准/);
+  assert.match(js, /第一动作/);
+  assert.match(css, /\.wr3-carryover/);
+  assert.match(css, /\.wr3-startup/);
+});
+
 test("advanced access and disable share the base storage contract", () => {
   assert.match(baseJs, /data-wr-advanced/);
   assert.match(baseJs, /data-wr-settings-advanced/);

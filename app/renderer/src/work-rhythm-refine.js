@@ -44,6 +44,7 @@
   let lastPhaseSignature = null;
   let transitionCue = null;
   let viewTransitionToken = 0;
+  let startupEscapeHandler = null;
 
   function escapeHtml(value) {
     return String(value ?? "").replace(/[&<>\"']/g, (character) => ({
@@ -127,6 +128,83 @@
     return state.mode === "active" && /休息|午休|短休/.test(state.slot[2]);
   }
 
+  function localDateKey(value = new Date()) {
+    const date = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
+
+  function records() {
+    const saved = readJson(K.records, []);
+    return Array.isArray(saved) ? saved : [];
+  }
+
+  function startupRecordToday() {
+    const today = localDateKey();
+    return records().find((record) => {
+      const fields = record?.fields || {};
+      return localDateKey(record?.createdAt) === today
+        && fields["今日唯一主结果"]
+        && fields["完成标准"]
+        && fields["第一动作"];
+    }) || null;
+  }
+
+  function previousSuggestion() {
+    const today = localDateKey();
+    const earlier = records().filter((record) => {
+      const key = localDateKey(record?.createdAt);
+      return key && key < today;
+    });
+    const preferredKeys = ["明日第一动作", "明天第一个动作", "回来后第一步"];
+    const fallbackKeys = ["下一步", "第一动作"];
+    for (const keys of [preferredKeys, fallbackKeys]) {
+      for (const record of earlier) {
+        for (const key of keys) {
+          const value = String(record?.fields?.[key] || "").trim();
+          if (!value) continue;
+          const date = new Date(record.createdAt);
+          const yesterday = new Date();
+          yesterday.setDate(yesterday.getDate() - 1);
+          return {
+            label: localDateKey(date) === localDateKey(yesterday) ? "昨日续接建议" : "上次续接建议",
+            value,
+          };
+        }
+      }
+    }
+    return null;
+  }
+
+  function isStartup(state) {
+    if (state.mode !== "active") return false;
+    const name = state.slot[2] || "";
+    const template = state.slot[4] || "";
+    return /今日启动|问题启动|学习启动|到岗准备/.test(name)
+      || /今日启动|Debug 启动|学习启动/.test(template);
+  }
+
+  function phaseAction(state) {
+    if (state.mode !== "active" || isRest(state) || state.slot[4] === "无") return null;
+    if (isStartup(state)) {
+      return startupRecordToday()
+        ? { label: "修改启动清单", kind: "startup" }
+        : { label: "完成启动清单", kind: "startup" };
+    }
+    const name = state.slot[2] || "";
+    const template = state.slot[4] || "";
+    if (template === "恢复卡" || /下午重启|恢复上下文/.test(name)) {
+      return { label: "读取恢复卡", kind: "read" };
+    }
+    if (/阶段总结|每日关闭/.test(template) || /阶段记录|验证与收束|证据固定|每日关闭|关闭现场/.test(name)) {
+      return { label: "记录恢复卡", kind: "record" };
+    }
+    return { label: "记录阶段结果", kind: "record" };
+  }
+
   function presentation(state) {
     if (state.mode === "ended") {
       return { title: "收好现场，今天到这里", support: "明日可从恢复卡继续" };
@@ -136,6 +214,16 @@
     }
     if (state.mode === "next") {
       return { title: "稍后继续", support: "" };
+    }
+    if (isStartup(state)) {
+      const saved = startupRecordToday();
+      if (saved) {
+        return {
+          title: saved.fields["今日唯一主结果"],
+          support: `完成标准 · ${saved.fields["完成标准"]}`,
+        };
+      }
+      return { title: "确定今日唯一主结果", support: "" };
     }
     const cueActive = transitionCue
       && transitionCue.signature === phaseSignature(state)
@@ -148,6 +236,150 @@
       };
     }
     return { title: currentTask(state), support: "" };
+  }
+
+  function showToast(message) {
+    document.querySelector(".work-rhythm-toast")?.remove();
+    const toast = document.createElement("div");
+    toast.className = "work-rhythm-toast";
+    toast.textContent = message;
+    document.body.append(toast);
+    setTimeout(() => toast.remove(), 1500);
+  }
+
+  function closeStartupDialog() {
+    document.querySelector(".wr3-startup-backdrop")?.remove();
+    if (startupEscapeHandler) {
+      document.removeEventListener("keydown", startupEscapeHandler, true);
+      startupEscapeHandler = null;
+    }
+  }
+
+  function openStartupChecklist(panel, state) {
+    closeStartupDialog();
+    const suggestion = previousSuggestion();
+    const current = currentTask(state);
+    const saved = startupRecordToday();
+    const currentCandidate = current && current !== state.slot[3] && current !== "当前任务" ? current : "";
+    const candidateRows = [
+      suggestion ? `
+        <button class="wr3-candidate" type="button" data-wr3-choice="suggestion" aria-pressed="false">
+          <i aria-hidden="true"></i>
+          <span><small>${escapeHtml(suggestion.label)} · 明天第一个动作</small><strong>${escapeHtml(suggestion.value)}</strong></span>
+          <em>沿用</em>
+        </button>` : "",
+      currentCandidate && currentCandidate !== suggestion?.value ? `
+        <button class="wr3-candidate" type="button" data-wr3-choice="current" aria-pressed="false">
+          <i aria-hidden="true"></i>
+          <span><small>今日新输入 · 当前打开任务</small><strong>${escapeHtml(currentCandidate)}</strong></span>
+          <em>改选</em>
+        </button>` : "",
+    ].join("");
+
+    document.body.insertAdjacentHTML("beforeend", `
+      <div class="work-rhythm-backdrop wr3-startup-backdrop">
+        <section class="wr3-startup" role="dialog" aria-modal="true" aria-labelledby="wr3-startup-title">
+          <header>
+            <div><span>今日启动</span><h2 id="wr3-startup-title">选择今日唯一主结果</h2><p>先看上次留下的位置，再结合今日新输入重新判断。</p></div>
+            <button type="button" data-wr3-startup-close aria-label="关闭">×</button>
+          </header>
+          ${candidateRows ? `<div class="wr3-candidates"><h3>可选来源</h3>${candidateRows}<p>不会默认采用昨日记录；也可以直接填写新的主结果。</p></div>` : ""}
+          <div class="wr3-startup-fields">
+            <label><span>今日唯一主结果</span><input data-wr3-result value="${escapeHtml(saved?.fields?.["今日唯一主结果"] || "")}" placeholder="选择上方候选，或输入新的主结果"></label>
+            <label><span>完成标准</span><input data-wr3-done value="${escapeHtml(saved?.fields?.["完成标准"] || "")}" placeholder="什么证据出现，才算今天完成？"></label>
+            <label><span>第一个动作</span><input data-wr3-first value="${escapeHtml(saved?.fields?.["第一动作"] || "")}" placeholder="填写一个 5–15 分钟可开始的动作"></label>
+          </div>
+          <footer><span>选择后仍可编辑</span><button class="primary" type="button" data-wr3-startup-save>${saved ? "保存修改" : "完成今日启动"}</button></footer>
+        </section>
+      </div>`);
+
+    const backdrop = document.querySelector(".wr3-startup-backdrop");
+    const resultInput = backdrop?.querySelector("[data-wr3-result]");
+    const doneInput = backdrop?.querySelector("[data-wr3-done]");
+    const firstInput = backdrop?.querySelector("[data-wr3-first]");
+    const choices = {
+      suggestion: suggestion?.value || "",
+      current: currentCandidate,
+    };
+    backdrop?.querySelectorAll("[data-wr3-choice]").forEach((button) => {
+      button.addEventListener("click", () => {
+        backdrop.querySelectorAll("[data-wr3-choice]").forEach((item) => item.setAttribute("aria-pressed", String(item === button)));
+        const value = choices[button.dataset.wr3Choice] || "";
+        if (resultInput) resultInput.value = value;
+        if (firstInput && !firstInput.value.trim()) firstInput.value = value;
+        resultInput?.focus();
+      });
+    });
+    const close = () => closeStartupDialog();
+    backdrop?.querySelector("[data-wr3-startup-close]")?.addEventListener("click", close);
+    backdrop?.addEventListener("pointerdown", (event) => {
+      event.stopPropagation();
+      if (event.target === backdrop) close();
+    });
+    startupEscapeHandler = (event) => {
+      if (event.key !== "Escape") return;
+      event.stopImmediatePropagation();
+      close();
+    };
+    document.addEventListener("keydown", startupEscapeHandler, true);
+    backdrop?.querySelector("[data-wr3-startup-save]")?.addEventListener("click", () => {
+      const result = resultInput?.value.trim() || "";
+      const done = doneInput?.value.trim() || "";
+      const first = firstInput?.value.trim() || "";
+      if (!result || !done || !first) {
+        const missing = !result ? resultInput : !done ? doneInput : firstInput;
+        missing?.focus();
+        showToast("请先完成三个启动字段");
+        return;
+      }
+      const list = records();
+      const fields = { "今日唯一主结果": result, "完成标准": done, "第一动作": first };
+      if (saved) {
+        const index = list.findIndex((record) => record.createdAt === saved.createdAt);
+        if (index >= 0) list[index] = { ...list[index], fields, updatedAt: new Date().toISOString() };
+      } else {
+        list.unshift({ createdAt: new Date().toISOString(), phase: state.slot[2], profileId: state.profile.id, fields });
+      }
+      localStorage.setItem(K.records, JSON.stringify(list.slice(0, 500)));
+      close();
+      activePanel = null;
+      delete panel.dataset.wr3View;
+      renderCurrent(panel);
+      showToast(saved ? "启动清单已更新" : "今日主结果已确认");
+    });
+    requestAnimationFrame(() => resultInput?.focus());
+  }
+
+  function recoveryRecord() {
+    return records().find((record) => {
+      const fields = record?.fields || {};
+      return ["我做到哪里", "当前判断", "回来后第一步", "下一步", "明日第一动作"].some((key) => String(fields[key] || "").trim());
+    }) || records()[0] || null;
+  }
+
+  function renderRecovery(panel) {
+    panelMode = "recovery";
+    resetPanel(panel);
+    panel.classList.add("wr3-detail-mode");
+    panel.dataset.wr3View = "recovery";
+    const main = panel.querySelector("main");
+    if (!main) return;
+    const record = recoveryRecord();
+    const body = record
+      ? Object.entries(record.fields || {}).filter(([, value]) => String(value || "").trim()).map(([key, value]) => `<div class="wr3-recovery-row"><span>${escapeHtml(key)}</span><strong>${escapeHtml(value)}</strong></div>`).join("")
+      : `<p class="wr3-empty-recovery">还没有可读取的恢复卡。</p>`;
+    main.innerHTML = `
+      <div class="wr3-subhead">
+        <button type="button" data-wr3-back aria-label="返回当前阶段">${icon.back}</button>
+        <h2>恢复上下文</h2><span></span>
+      </div>
+      <div class="wr3-recovery-card">
+        ${record ? `<p>${escapeHtml(record.phase || "阶段记录")} · ${escapeHtml(new Date(record.createdAt).toLocaleString("zh-CN"))}</p>` : ""}
+        ${body}
+      </div>`;
+    main.querySelector("[data-wr3-back]")?.addEventListener("click", () => {
+      transitionView(panel, "back", () => restoreCurrent(panel));
+    });
   }
 
   function reducedMotion() {
@@ -259,6 +491,8 @@
     const state = phaseState();
     const next = nextSlot(state);
     const content = presentation(state);
+    const action = phaseAction(state);
+    const suggestion = isStartup(state) && !startupRecordToday() ? previousSuggestion() : null;
     const main = panel.querySelector("main");
     if (!main) return;
     const originalRecord = main.querySelector("[data-wr-record]");
@@ -274,7 +508,7 @@
     main.innerHTML = `
       <div class="wr3-current-shell">
         <div class="wr3-head">
-          <button class="wr3-recovery" type="button" data-wr3-record>记录恢复卡</button>
+          <div class="wr3-stage-action">${action ? `<button class="wr3-recovery" type="button" data-wr3-action="${action.kind}">${escapeHtml(action.label)}</button>` : ""}</div>
           <div class="wr3-tools" aria-label="阶段工具">
             <button type="button" data-wr3-timeline aria-label="打开今日时间轴">${icon.clock}</button>
             <button type="button" data-wr3-settings aria-label="打开设置">${icon.settings}</button>
@@ -283,6 +517,7 @@
         <div class="wr3-task-copy">
           <h2 class="wr3-task-title">${escapeHtml(content.title)}</h2>
           <p class="wr3-task-support"${content.support ? "" : " hidden"}>${escapeHtml(content.support)}</p>
+          ${suggestion ? `<div class="wr3-carryover"><span>${escapeHtml(suggestion.label)}</span><strong>${escapeHtml(suggestion.value)}</strong></div>` : ""}
         </div>
         <div class="wr3-status" aria-label="阶段状态">
           <div class="wr3-remaining${remainingValue ? "" : " is-empty"}"><span>${remainingValue ? remainingLabel : ""}</span><strong>${escapeHtml(remainingValue)}</strong></div>
@@ -294,14 +529,19 @@
       originalRecord.hidden = true;
       originalRecord.tabIndex = -1;
       main.append(originalRecord);
-      main.querySelector("[data-wr3-record]")?.addEventListener("click", () => {
+    }
+    main.querySelector("[data-wr3-action]")?.addEventListener("click", (event) => {
+      const kind = event.currentTarget.dataset.wr3Action;
+      if (kind === "startup") {
+        openStartupChecklist(panel, state);
+      } else if (kind === "read") {
+        transitionView(panel, "forward", () => renderRecovery(panel));
+      } else if (kind === "record" && originalRecord) {
         activePanel = null;
         delete panel.dataset.wr3View;
         originalRecord.click();
-      });
-    } else {
-      main.querySelector("[data-wr3-record]")?.remove();
-    }
+      }
+    });
     main.querySelector("[data-wr3-timeline]")?.addEventListener("click", () => {
       transitionView(panel, "forward", () => renderTimeline(panel));
     });
@@ -418,6 +658,7 @@
     if (panelMode === "timeline") renderTimeline(panel);
     else if (panelMode === "settings") renderSettings(panel);
     else if (panelMode === "detail") renderDetail(panel);
+    else if (panelMode === "recovery") renderRecovery(panel);
     else renderCurrent(panel);
   }
 
