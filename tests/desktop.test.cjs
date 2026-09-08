@@ -151,6 +151,7 @@ function rendererHarness(personalTaskTrack = undefined) {
       style: {},
     }),
     createTextNode: (value) => ({ value }),
+    dispatchEvent() { return true; },
     execCommand: () => false,
     queryCommandSupported: () => false,
   };
@@ -174,6 +175,9 @@ function rendererHarness(personalTaskTrack = undefined) {
     Blob,
     confirm: () => true,
     console,
+    CustomEvent: class CustomEvent extends Event {
+      constructor(type, options = {}) { super(type); this.detail = options.detail; }
+    },
     document,
     Event,
     FileReader: class {},
@@ -192,13 +196,17 @@ function rendererHarness(personalTaskTrack = undefined) {
   return Promise.all([
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "knowledge-document.js"), "utf8"),
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "knowledge-recovery.js"), "utf8"),
+    fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "work-navigation-model.js"), "utf8"),
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "app.js"), "utf8"),
-  ]).then(([documentSource, recoverySource, source]) => {
+  ]).then(([documentSource, recoverySource, navigationSource, source]) => {
       vm.runInContext(documentSource, context, {
         filename: "app/renderer/src/knowledge-document.js",
       });
       vm.runInContext(recoverySource, context, {
         filename: "app/renderer/src/knowledge-recovery.js",
+      });
+      vm.runInContext(navigationSource, context, {
+        filename: "app/renderer/src/work-navigation-model.js",
       });
       vm.runInContext(source.replace(/\nbootstrap\(\);\s*$/, "\n"), context, {
         filename: "app/renderer/src/app.js",
@@ -2454,7 +2462,7 @@ test("settings use the selected categorized modal, grouped rows, mixed controls,
   assert.match(styles, /\.settings-list\s*\{[\s\S]*border-radius:\s*14px/);
   assert.match(styles, /@keyframes settings-panel-spring-in/);
   assert.match(styles, /@media \(prefers-reduced-motion: reduce\)[\s\S]*settings-panel\.settings-panel-opening/);
-  assert.match(workRhythm, /data-wr-settings-profile/);
+  assert.match(workRhythm, /data-wr-growth-source/);
   assert.match(workRhythm, /data-settings-advanced-slot/);
 });
 

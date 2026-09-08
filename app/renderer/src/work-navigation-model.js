@@ -1,0 +1,470 @@
+(function attachLoopWorkNavigationModel(root, factory) {
+  "use strict";
+
+  const api = factory();
+  if (typeof module === "object" && module.exports) module.exports = api;
+  if (root) root.LoopWorkNavigationModel = api;
+})(typeof globalThis === "object" ? globalThis : this, function createLoopWorkNavigationModel() {
+  "use strict";
+
+  const SCHEMA_VERSION = 1;
+  const PHASE_TYPES = new Set(["startup", "work", "growth", "close"]);
+  const WEEKDAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
+  const DEFAULT_PHASES = Object.freeze([
+    Object.freeze({ id: "startup", type: "startup", label: "今日启动", start: "09:40", end: "09:55" }),
+    Object.freeze({ id: "morning-work", type: "work", label: "上午工作", start: "09:55", end: "11:40" }),
+    Object.freeze({ id: "afternoon-work", type: "work", label: "下午工作", start: "13:40", end: "16:30" }),
+    Object.freeze({ id: "growth", type: "growth", label: "个人成长", start: "16:30", end: "17:40" }),
+    Object.freeze({ id: "close", type: "close", label: "今日收束", start: "17:40", end: "18:10" }),
+  ]);
+
+  function isRecord(value) {
+    return value !== null && typeof value === "object" && !Array.isArray(value);
+  }
+
+  function clone(value) {
+    return JSON.parse(JSON.stringify(value));
+  }
+
+  function text(value, max = 5000) {
+    return typeof value === "string" ? value.slice(0, max) : "";
+  }
+
+  function identifier(value, max = 160) {
+    return text(value, max).trim();
+  }
+
+  function boolean(value, fallback) {
+    return typeof value === "boolean" ? value : fallback;
+  }
+
+  function integer(value, fallback, min, max) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return fallback;
+    return Math.max(min, Math.min(max, Math.round(number)));
+  }
+
+  function normalizeTime(value, fallback = "") {
+    const candidate = text(value, 5).trim();
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(candidate)) return fallback;
+    return candidate;
+  }
+
+  function minutes(value) {
+    const normalized = normalizeTime(value);
+    if (!normalized) return -1;
+    const [hours, mins] = normalized.split(":").map(Number);
+    return hours * 60 + mins;
+  }
+
+  function localDateKey(value = new Date()) {
+    const date = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
+
+  function normalizeWeekdays(value) {
+    if (!Array.isArray(value)) return [1, 2, 3, 4, 5];
+    const selected = new Set(value.map(Number).filter((day) => WEEKDAY_ORDER.includes(day)));
+    return WEEKDAY_ORDER.filter((day) => selected.has(day));
+  }
+
+  function normalizePhase(raw, fallback) {
+    const value = isRecord(raw) ? raw : {};
+    return {
+      id: fallback.id,
+      type: PHASE_TYPES.has(value.type) ? value.type : fallback.type,
+      label: identifier(value.label, 24) || fallback.label,
+      start: normalizeTime(value.start, fallback.start),
+      end: normalizeTime(value.end, fallback.end),
+    };
+  }
+
+  function validatePhaseSchedule(phases) {
+    const errors = [];
+    let previousEnd = -1;
+    phases.forEach((phase, index) => {
+      const start = minutes(phase.start);
+      const end = minutes(phase.end);
+      if (start < 0) errors.push({ field: `phases[${index}].start`, message: "开始时间格式无效" });
+      if (end < 0) errors.push({ field: `phases[${index}].end`, message: "结束时间格式无效" });
+      if (start >= 0 && end >= 0 && end <= start) {
+        errors.push({ field: `phases[${index}].end`, message: "结束时间必须晚于开始时间" });
+      }
+      if (start >= 0 && previousEnd >= 0 && start < previousEnd) {
+        errors.push({ field: `phases[${index}].start`, message: "时间段不能与上一阶段重叠" });
+      }
+      if (end >= 0) previousEnd = end;
+    });
+    return { valid: errors.length === 0, errors };
+  }
+
+  function normalizePhases(value) {
+    const source = Array.isArray(value) ? value : [];
+    const byId = new Map(source.filter(isRecord).map((phase) => [phase.id, phase]));
+    const phases = DEFAULT_PHASES.map((fallback) => normalizePhase(byId.get(fallback.id), fallback));
+    return validatePhaseSchedule(phases).valid ? phases : clone(DEFAULT_PHASES);
+  }
+
+  function normalizeRecovery(value) {
+    const raw = isRecord(value) ? value : {};
+    return {
+      updatedAt: text(raw.updatedAt, 64),
+      progress: text(raw.progress, 4000).trim(),
+      nextAction: text(raw.nextAction, 1000).trim(),
+      evidenceRef: text(raw.evidenceRef, 2000).trim(),
+    };
+  }
+
+  function normalizeOrigin(value) {
+    const raw = isRecord(value) ? value : {};
+    if (raw.kind !== "learning-plan") return null;
+    const planId = identifier(raw.planId);
+    const itemId = identifier(raw.itemId);
+    return planId && itemId ? { kind: "learning-plan", planId, itemId } : null;
+  }
+
+  function defaultWorkNavigation(now = new Date()) {
+    return {
+      schemaVersion: SCHEMA_VERSION,
+      config: {
+        workdays: [1, 2, 3, 4, 5],
+        phases: clone(DEFAULT_PHASES),
+        work: { autoAdvance: true },
+        growth: {
+          sourceGroupId: "",
+          autoAdvance: true,
+          weekendEnabled: true,
+          weekendDurationMinutes: 240,
+          weekendStartTime: "",
+        },
+      },
+      runtime: {
+        dateKey: localDateKey(now),
+        activeWorkTaskId: "",
+        activeGrowthTaskId: "",
+        workAdvancePaused: false,
+        growthAdvancePaused: false,
+        manualPhaseId: "",
+        manualPhaseExpiresAt: "",
+        weekendStartedAt: "",
+      },
+    };
+  }
+
+  function normalizeWorkNavigation(value, options = {}) {
+    const now = options.now instanceof Date ? options.now : new Date(options.now || Date.now());
+    const defaults = defaultWorkNavigation(now);
+    const raw = isRecord(value) ? value : {};
+    const config = isRecord(raw.config) ? raw.config : {};
+    const work = isRecord(config.work) ? config.work : {};
+    const growth = isRecord(config.growth) ? config.growth : {};
+    const runtime = isRecord(raw.runtime) ? raw.runtime : {};
+    const groupIds = Array.isArray(options.groupIds) ? new Set(options.groupIds.map(identifier)) : null;
+    let sourceGroupId = identifier(growth.sourceGroupId);
+    if (groupIds && sourceGroupId && !groupIds.has(sourceGroupId)) sourceGroupId = "";
+    const normalized = {
+      schemaVersion: SCHEMA_VERSION,
+      config: {
+        workdays: normalizeWeekdays(config.workdays),
+        phases: normalizePhases(config.phases),
+        work: { autoAdvance: boolean(work.autoAdvance, true) },
+        growth: {
+          sourceGroupId,
+          autoAdvance: boolean(growth.autoAdvance, true),
+          weekendEnabled: boolean(growth.weekendEnabled, true),
+          weekendDurationMinutes: integer(growth.weekendDurationMinutes, 240, 30, 720),
+          weekendStartTime: normalizeTime(growth.weekendStartTime, ""),
+        },
+      },
+      runtime: {
+        dateKey: text(runtime.dateKey, 10),
+        activeWorkTaskId: identifier(runtime.activeWorkTaskId),
+        activeGrowthTaskId: identifier(runtime.activeGrowthTaskId),
+        workAdvancePaused: boolean(runtime.workAdvancePaused, false),
+        growthAdvancePaused: boolean(runtime.growthAdvancePaused, false),
+        manualPhaseId: identifier(runtime.manualPhaseId),
+        manualPhaseExpiresAt: text(runtime.manualPhaseExpiresAt, 64),
+        weekendStartedAt: text(runtime.weekendStartedAt, 64),
+      },
+    };
+    const today = localDateKey(now);
+    if (normalized.runtime.dateKey !== today) {
+      normalized.runtime.dateKey = today;
+      normalized.runtime.activeWorkTaskId = "";
+      normalized.runtime.workAdvancePaused = false;
+      normalized.runtime.manualPhaseId = "";
+      normalized.runtime.manualPhaseExpiresAt = "";
+      normalized.runtime.weekendStartedAt = "";
+    }
+    const manualExpiry = new Date(normalized.runtime.manualPhaseExpiresAt);
+    if (!normalized.config.phases.some((phase) => phase.id === normalized.runtime.manualPhaseId)
+      || Number.isNaN(manualExpiry.getTime())
+      || manualExpiry <= now) {
+      normalized.runtime.manualPhaseId = "";
+      normalized.runtime.manualPhaseExpiresAt = "";
+    }
+    const weekendStart = new Date(normalized.runtime.weekendStartedAt);
+    if (Number.isNaN(weekendStart.getTime()) || localDateKey(weekendStart) !== today) {
+      normalized.runtime.weekendStartedAt = "";
+    }
+    return normalized;
+  }
+
+  function phaseStateBase(phase, mode, now, extra = {}) {
+    const currentMinute = now.getHours() * 60 + now.getMinutes();
+    const start = phase ? minutes(phase.start) : -1;
+    const end = phase ? minutes(phase.end) : -1;
+    const remainingMinutes = mode === "active" && end >= 0
+      ? Math.max(0, end - currentMinute)
+      : mode === "next" || mode === "gap"
+        ? Math.max(0, start - currentMinute)
+        : 0;
+    return { phase, mode, remainingMinutes, manual: false, weekend: false, ...extra };
+  }
+
+  function resolvePhase(value = new Date(), navigation = defaultWorkNavigation(value)) {
+    const now = value instanceof Date ? value : new Date(value);
+    const nav = normalizeWorkNavigation(navigation, { now });
+    const manual = nav.config.phases.find((phase) => phase.id === nav.runtime.manualPhaseId);
+    if (manual) {
+      const expiry = new Date(nav.runtime.manualPhaseExpiresAt);
+      return {
+        phase: manual,
+        mode: "active",
+        remainingMinutes: Math.max(0, Math.ceil((expiry.getTime() - now.getTime()) / 60000)),
+        manual: true,
+        weekend: false,
+      };
+    }
+
+    const weekday = now.getDay();
+    const currentMinute = now.getHours() * 60 + now.getMinutes();
+    if (nav.config.workdays.includes(weekday)) {
+      const active = nav.config.phases.find((phase) => currentMinute >= minutes(phase.start) && currentMinute < minutes(phase.end));
+      if (active) return phaseStateBase(active, "active", now);
+      const next = nav.config.phases.find((phase) => currentMinute < minutes(phase.start));
+      if (next) {
+        const firstStart = minutes(nav.config.phases[0]?.start);
+        return phaseStateBase(next, currentMinute < firstStart ? "next" : "gap", now);
+      }
+      return phaseStateBase(nav.config.phases.at(-1) || null, "ended", now);
+    }
+
+    if (nav.config.growth.weekendEnabled && (weekday === 0 || weekday === 6)) {
+      const duration = nav.config.growth.weekendDurationMinutes;
+      const growthPhase = {
+        id: "weekend-growth",
+        type: "growth",
+        label: "个人成长",
+        start: nav.config.growth.weekendStartTime,
+        end: "",
+      };
+      let startedAt = nav.runtime.weekendStartedAt ? new Date(nav.runtime.weekendStartedAt) : null;
+      if (!startedAt && nav.config.growth.weekendStartTime) {
+        const startMinute = minutes(nav.config.growth.weekendStartTime);
+        startedAt = new Date(now);
+        startedAt.setHours(Math.floor(startMinute / 60), startMinute % 60, 0, 0);
+      }
+      if (!startedAt) {
+        return { phase: growthPhase, mode: "weekend-ready", remainingMinutes: duration, manual: false, weekend: true };
+      }
+      const endAt = new Date(startedAt.getTime() + duration * 60000);
+      if (now < startedAt) {
+        return { phase: growthPhase, mode: "next", remainingMinutes: Math.ceil((startedAt - now) / 60000), manual: false, weekend: true };
+      }
+      if (now >= endAt) {
+        return { phase: growthPhase, mode: "ended", remainingMinutes: 0, manual: false, weekend: true };
+      }
+      return { phase: growthPhase, mode: "active", remainingMinutes: Math.ceil((endAt - now) / 60000), manual: false, weekend: true };
+    }
+
+    return { phase: null, mode: "off-day", remainingMinutes: 0, manual: false, weekend: false };
+  }
+
+  function nextBoundaryAt(value, navigation) {
+    const now = value instanceof Date ? value : new Date(value);
+    const nav = normalizeWorkNavigation(navigation, { now });
+    const currentMinute = now.getHours() * 60 + now.getMinutes();
+    const boundaries = nav.config.phases
+      .flatMap((phase) => [minutes(phase.start), minutes(phase.end)])
+      .filter((minute) => minute > currentMinute)
+      .sort((a, b) => a - b);
+    const target = new Date(now);
+    if (boundaries.length) {
+      target.setHours(Math.floor(boundaries[0] / 60), boundaries[0] % 60, 0, 0);
+    } else {
+      target.setHours(23, 59, 59, 999);
+    }
+    return target.toISOString();
+  }
+
+  function resolveWorkCandidates({ tasks = [], todayTaskIds = [], sourceGroupId = "" } = {}) {
+    const taskById = new Map(tasks.filter(isRecord).map((task) => [task.id, task]));
+    return todayTaskIds
+      .map((taskId) => taskById.get(taskId))
+      .filter((task) => task && task.status !== "done" && (!sourceGroupId || task.groupId !== sourceGroupId));
+  }
+
+  function resolveGrowthCandidates(tasks = [], sourceGroupId = "") {
+    if (!sourceGroupId) return [];
+    return tasks
+      .filter((task) => isRecord(task) && task.status !== "done" && task.groupId === sourceGroupId)
+      .slice()
+      .sort((a, b) => Number(a.order || 0) - Number(b.order || 0) || String(a.id).localeCompare(String(b.id)));
+  }
+
+  function resolveActiveTask(candidates = [], activeTaskId = "") {
+    return candidates.find((task) => task.id === activeTaskId) || candidates[0] || null;
+  }
+
+  function flattenNodes(nodes, result = []) {
+    (Array.isArray(nodes) ? nodes : []).forEach((node) => {
+      if (!isRecord(node)) return;
+      result.push(node);
+      flattenNodes(node.children, result);
+    });
+    return result;
+  }
+
+  function firstDescriptionLine(value) {
+    return text(value, 4000)
+      .split(/\r?\n/)
+      .map((line) => line.replace(/^\s*(?:#{1,6}|[-*+] |\d+[.)]\s*)/, "").trim())
+      .find(Boolean) || "";
+  }
+
+  function resolveNextAction(task) {
+    if (!isRecord(task)) return "";
+    const nodes = flattenNodes(task.nodes, []);
+    const blocked = nodes.find((node) => node.status === "blocked" && identifier(node.title));
+    if (blocked) return identifier(blocked.title, 1000);
+    const open = nodes.find((node) => node.status === "todo" && identifier(node.title));
+    if (open) return identifier(open.title, 1000);
+    const recovery = normalizeRecovery(task.navigationRecovery);
+    if (recovery.nextAction) return recovery.nextAction;
+    return firstDescriptionLine(task.description) || "补充下一动作";
+  }
+
+  function previousRecoveryTask(tasks = [], today = new Date()) {
+    const todayKey = localDateKey(today);
+    return tasks
+      .filter((task) => task?.status !== "done")
+      .map((task) => ({ task, recovery: normalizeRecovery(task.navigationRecovery) }))
+      .filter(({ recovery }) => recovery.nextAction && localDateKey(recovery.updatedAt) && localDateKey(recovery.updatedAt) < todayKey)
+      .sort((a, b) => new Date(b.recovery.updatedAt) - new Date(a.recovery.updatedAt))[0] || null;
+  }
+
+  function normalizePlanNode(value, taskIndex, nodeIndex, errors) {
+    if (!isRecord(value)) {
+      errors.push({ field: `tasks[${taskIndex}].nodes[${nodeIndex}]`, message: "节点必须是对象" });
+      return null;
+    }
+    const title = identifier(value.title, 240);
+    if (!title) errors.push({ field: `tasks[${taskIndex}].nodes[${nodeIndex}].title`, message: "节点标题不能为空" });
+    return title ? { title, order: integer(value.order, nodeIndex + 1, 1, 10000) } : null;
+  }
+
+  function validateLearningPlan(value) {
+    const errors = [];
+    if (!isRecord(value)) return { valid: false, errors: [{ field: "$", message: "文件根节点必须是对象" }] };
+    if (value.schemaVersion !== 1) errors.push({ field: "schemaVersion", message: "仅支持 schemaVersion 1" });
+    if (value.type !== "loop-learning-plan") errors.push({ field: "type", message: "type 必须为 loop-learning-plan" });
+    const plan = isRecord(value.plan) ? value.plan : {};
+    const planId = identifier(plan.id);
+    const planTitle = identifier(plan.title, 240);
+    const targetGroup = identifier(plan.targetGroup, 240);
+    if (!planId) errors.push({ field: "plan.id", message: "计划 ID 不能为空" });
+    if (!planTitle) errors.push({ field: "plan.title", message: "计划标题不能为空" });
+    if (!targetGroup) errors.push({ field: "plan.targetGroup", message: "目标分组不能为空" });
+    if (!Array.isArray(value.tasks) || value.tasks.length === 0) {
+      errors.push({ field: "tasks", message: "至少需要一项学习任务" });
+    }
+    if (Array.isArray(value.tasks) && value.tasks.length > 1000) {
+      errors.push({ field: "tasks", message: "单次最多导入 1000 项任务" });
+    }
+    const itemIds = new Set();
+    const normalizedTasks = (Array.isArray(value.tasks) ? value.tasks : []).map((raw, index) => {
+      if (!isRecord(raw)) {
+        errors.push({ field: `tasks[${index}]`, message: "任务必须是对象" });
+        return null;
+      }
+      const itemId = identifier(raw.itemId);
+      const title = identifier(raw.title, 240);
+      const estimateMinutes = integer(raw.estimateMinutes, 0, 0, 720);
+      if (!itemId) errors.push({ field: `tasks[${index}].itemId`, message: "itemId 不能为空" });
+      if (itemIds.has(itemId)) errors.push({ field: `tasks[${index}].itemId`, message: "itemId 在计划内重复" });
+      if (itemId) itemIds.add(itemId);
+      if (!title) errors.push({ field: `tasks[${index}].title`, message: "标题不能为空" });
+      if (estimateMinutes < 1) errors.push({ field: `tasks[${index}].estimateMinutes`, message: "预计分钟数必须大于 0" });
+      const nodes = (Array.isArray(raw.nodes) ? raw.nodes : [])
+        .map((node, nodeIndex) => normalizePlanNode(node, index, nodeIndex, errors))
+        .filter(Boolean);
+      return itemId && title && estimateMinutes > 0 ? {
+        itemId,
+        order: integer(raw.order, index + 1, 1, 100000),
+        title,
+        estimateMinutes,
+        description: text(raw.description, 20000).trim(),
+        nodes,
+      } : null;
+    }).filter(Boolean);
+    return {
+      valid: errors.length === 0,
+      errors,
+      plan: errors.length ? null : {
+        id: planId,
+        title: planTitle,
+        targetGroup,
+        tasks: normalizedTasks.sort((a, b) => a.order - b.order),
+      },
+    };
+  }
+
+  function learningOriginKey(value) {
+    const origin = normalizeOrigin(value);
+    return origin ? `${origin.planId}\u0000${origin.itemId}` : "";
+  }
+
+  function previewLearningPlanImport(value, tasks = []) {
+    const validation = validateLearningPlan(value);
+    if (!validation.valid) return { ...validation, newTasks: [], existingTasks: [], totalMinutes: 0 };
+    const existingKeys = new Set(tasks.map((task) => learningOriginKey(task.origin)).filter(Boolean));
+    const newTasks = validation.plan.tasks.filter((task) => !existingKeys.has(`${validation.plan.id}\u0000${task.itemId}`));
+    const existingTasks = validation.plan.tasks.filter((task) => existingKeys.has(`${validation.plan.id}\u0000${task.itemId}`));
+    return {
+      valid: true,
+      errors: [],
+      plan: validation.plan,
+      newTasks,
+      existingTasks,
+      totalMinutes: newTasks.reduce((sum, task) => sum + task.estimateMinutes, 0),
+    };
+  }
+
+  return Object.freeze({
+    SCHEMA_VERSION,
+    DEFAULT_PHASES,
+    defaultWorkNavigation,
+    normalizeWorkNavigation,
+    normalizeRecovery,
+    normalizeOrigin,
+    normalizeTime,
+    validatePhaseSchedule,
+    localDateKey,
+    minutes,
+    resolvePhase,
+    nextBoundaryAt,
+    resolveWorkCandidates,
+    resolveGrowthCandidates,
+    resolveActiveTask,
+    resolveNextAction,
+    previousRecoveryTask,
+    validateLearningPlan,
+    previewLearningPlanImport,
+    learningOriginKey,
+  });
+});

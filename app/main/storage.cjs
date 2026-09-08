@@ -15,9 +15,10 @@ const fs = require("node:fs/promises");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const knowledgeDocument = require("../renderer/src/knowledge-document.js");
+const workNavigationModel = require("../renderer/src/work-navigation-model.js");
 
 const DATA_FILE = "task-data.json";
-const DATA_VERSION = 1;
+const DATA_VERSION = 2;
 const KNOWLEDGE_MIGRATION_VERSION = 1;
 const DEFAULT_GROUP = { id: "group_inbox", title: "默认", order: 1 };
 const ALL_TASKS_GROUP_ID = "group_all";
@@ -132,6 +133,9 @@ function normalizeTaskData(data) {
     priorityFilter: PRIORITY_FILTERS.has(safeData.priorityFilter) ? safeData.priorityFilter : "all",
     captureSourceFilter: CAPTURE_SOURCE_FILTERS.has(safeData.captureSourceFilter) ? safeData.captureSourceFilter : "all",
     newTaskPriority: PRIORITIES.has(safeData.newTaskPriority) ? safeData.newTaskPriority : "medium",
+    workNavigation: workNavigationModel.normalizeWorkNavigation(safeData.workNavigation, {
+      groupIds: taskGroups.map((group) => group.id),
+    }),
     installationId: normalizeInstallationId(safeData.installationId),
     updatedAt: normalizeDateValue(safeData.updatedAt, new Date().toISOString()),
   };
@@ -197,6 +201,9 @@ function normalizeTasks(tasks) {
           hypothesis ? updatedAt : "",
         ),
         conclusion: normalizeText(task.conclusion),
+        navigationRecovery: workNavigationModel.normalizeRecovery(task.navigationRecovery),
+        estimateMinutes: clampNumber(task.estimateMinutes, 0, 0, 720),
+        origin: workNavigationModel.normalizeOrigin(task.origin),
         createdAt,
         updatedAt,
         deadlineAt: normalizeOptionalDateValue(task.deadlineAt),

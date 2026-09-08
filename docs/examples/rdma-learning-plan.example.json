@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "type": "loop-learning-plan",
+  "plan": {
+    "id": "rdma-foundation-v1",
+    "title": "RDMA 基础与工程实践",
+    "targetGroup": "个人成长 · RDMA"
+  },
+  "tasks": [
+    {
+      "itemId": "rdma-01-transport-model",
+      "title": "建立 RDMA 传输模型与术语地图",
+      "description": "理解 Verbs、QP、CQ、MR、PD 的关系，并画出一次操作的数据路径。",
+      "estimateMinutes": 45,
+      "nodes": [
+        { "title": "阅读核心概念并整理术语", "order": 1 },
+        { "title": "画出 Send/Receive 与 Read/Write 数据路径", "order": 2 },
+        { "title": "写下仍不确定的三个问题", "order": 3 }
+      ]
+    },
+    {
+      "itemId": "rdma-02-queue-pair",
+      "title": "理解 QP 状态机与连接建立",
+      "description": "掌握 RESET、INIT、RTR、RTS 状态迁移和关键属性。",
+      "estimateMinutes": 60,
+      "nodes": [
+        { "title": "整理 QP 状态转换条件", "order": 1 },
+        { "title": "对照示例定位每次 modify_qp", "order": 2 }
+      ]
+    },
+    {
+      "itemId": "rdma-03-minimal-lab",
+      "title": "完成最小 RDMA 环境验证",
+      "description": "使用现有环境确认设备、端口、GID 与基础性能工具可用。",
+      "estimateMinutes": 90,
+      "nodes": [
+        { "title": "检查设备与端口状态", "order": 1 },
+        { "title": "记录 GID、MTU 与链路信息", "order": 2 },
+        { "title": "运行一次最小连通性或带宽实验", "order": 3 },
+        { "title": "保存命令、结果和异常", "order": 4 }
+      ]
+    }
+  ]
+}

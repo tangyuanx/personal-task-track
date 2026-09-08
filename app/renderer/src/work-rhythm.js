@@ -1,130 +1,327 @@
 (() => {
-"use strict";
-const gate=window.personalTaskTrack?.workRhythm;
-const K={enabled:"loop-work-rhythm-v1:enabled",profiles:"loop-work-rhythm-v1:profiles",active:"loop-work-rhythm-v1:active",records:"loop-work-rhythm-v1:records"};
-const defaults=[
-{id:"default",name:"默认工作日",desc:"稳定执行主线工作的标准节奏。",slots:[["09:40","09:55","今日启动","确定今日唯一主结果、完成标准和第一动作","今日启动"],["09:55","11:15","深度工作 A","推进今日主结果，不切换问题","Debug / 开发"],["11:15","11:30","验证与收束","固定上午结果并留下下一步","阶段总结"],["13:40","13:55","下午重启","读取恢复卡，重建上下文","恢复卡"],["13:55","15:15","深度工作 B","继续今日主结果","Debug / 开发"],["15:15","15:30","休息","离开屏幕 / 喝水 / 活动","无"],["15:30","16:15","协作 / 次要任务","处理必要协作和低认知任务","任务记录"],["16:15","17:00","交付验证","验证、复现并固定结果","交付验证"],["17:00","17:25","代码 / 文档收尾","整理改动、提交、文档与遗留","开发实现"],["17:25","17:55","知识沉淀","提炼今天可复用的工程经验","知识沉淀"],["17:55","18:10","每日关闭","确认今日结果并留下明日第一动作","每日关闭"]]},
-{id:"debug",name:"Debug 日",desc:"复杂问题定位，减少切换。",slots:[["09:40","09:55","问题启动","明确现象、边界和今日要排除的范围","Debug 启动"],["09:55","11:30","深度 Debug A","只围绕主问题做最小区分实验","问题定位 / Debug"],["11:30","11:40","证据固定","整理上午事实、证据和被推翻假设","阶段总结"],["13:40","13:50","恢复上下文","读取恢复卡和上午证据","恢复卡"],["13:50","15:30","深度 Debug B","继续收敛根因，不处理支线","问题定位 / Debug"],["15:30","15:45","休息","离开屏幕","无"],["15:45","17:10","复现 / 修复验证","构造稳定复现并验证修复","交付验证"],["17:10","17:45","知识沉淀","把根因链和判断方法写成知识卡","知识沉淀"],["17:45","18:10","关闭现场","形成恢复卡和明日第一动作","每日关闭"]]},
-{id:"learn",name:"学习日",desc:"技术学习、手册阅读和小实验。",slots:[["09:30","09:45","学习启动","明确今天要补齐的一个知识缺口","学习启动"],["09:45","11:15","概念学习","阅读核心材料并建立概念框架","学习任务"],["11:15","11:45","最小实验","用代码 / 命令验证刚学内容","学习实验"],["13:30","15:00","深度学习 B","继续第二块核心内容","学习任务"],["15:20","16:30","工程连接","把知识与当前项目问题连接起来","知识沉淀"],["16:30","17:00","知识卡","整理机制、证据、边界和例子","知识卡"],["17:00","17:15","学习关闭","记录仍不理解的问题和下一次入口","每日关闭"]]}
-];
-const templates={"今日启动":["今日唯一主结果","完成标准","第一动作"],"Debug / 开发":["当前假设 / 当前目标","本轮验证 / 修改","证据 / 结果","当前结论","下一步最小动作"],"问题定位 / Debug":["现象","当前假设","本轮实验","证据 / 结果","当前结论","下一步最小动作"],"阶段总结":["本阶段完成了什么","确认的事实","尚未确认","下一步"],"恢复卡":["我做到哪里","当前判断","回来后第一步"],"任务记录":["处理事项","处理结果","遗留事项"],"交付验证":["验证目标","验证场景 / 条件","验证结果","是否通过","遗留风险 / 下一步"],"开发实现":["目标","修改点","验证结果","遗留问题"],"知识沉淀":["核心经验","判断方法","以后如何复用"],"每日关闭":["今日主结果完成情况","今天确认的关键事实","未完成及原因","明日第一动作"],"学习启动":["今天要补齐的知识缺口","完成标准","第一动作"],"学习任务":["当前理解","新概念","仍不理解","下一步"],"学习实验":["验证目标","实验 / 命令","观察结果","结论"],"知识卡":["机制","证据","适用边界","可复用表达"],"Debug 启动":["现象","影响","今天要排除的范围","第一实验"],"无":[]};
-const exports=[{id:"debug",title:"技术问题交接",cmd:"/debug"},{id:"start",title:"日启动交接",cmd:"/start-day"},{id:"learn",title:"学习交接",cmd:"/learn"},{id:"knowledge",title:"知识沉淀交接",cmd:"/knowledge"},{id:"end",title:"日关闭交接",cmd:"/end-day"},{id:"week",title:"周度复盘交接",cmd:"/weekly-review"},{id:"growth",title:"成长检查交接",cmd:"/growth"},{id:"month",title:"月度复盘交接",cmd:"/monthly-review"}];
-const rt={enabled:localStorage.getItem(K.enabled)==="1",tab:"current",exp:"debug",panel:null,modal:null,drawer:null};
-const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-const read=(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}},write=(k,v)=>localStorage.setItem(k,JSON.stringify(v));
-const profiles=()=>{const p=read(K.profiles,null);return Array.isArray(p)&&p.length?p:structuredClone(defaults)};
-const activeId=()=>localStorage.getItem(K.active)||"default";
-const activeProfile=()=>{const p=profiles(),x=p.find(v=>v.id===activeId())||p[0];localStorage.setItem(K.active,x.id);return x};
-const hm=s=>{const [h,m]=String(s).split(":").map(Number);return h*60+m},nowMin=()=>{const d=new Date();return d.getHours()*60+d.getMinutes()};
-function phase(){const p=activeProfile(),n=nowMin(),a=p.slots.find(s=>n>=hm(s[0])&&n<hm(s[1]));if(a)return{p,s:a,mode:"active"};const nx=p.slots.find(s=>hm(s[0])>n);return{p,s:nx||p.slots.at(-1),mode:nx?"next":"ended"}}
-function remain(x){if(!x.s)return"未配置";const n=nowMin();if(x.mode==="next")return`${Math.max(0,hm(x.s[0])-n)} 分钟后`;if(x.mode==="ended")return"今日已结束";const r=Math.max(0,hm(x.s[1])-n);return r>=60?`剩余 ${Math.floor(r/60)} 小时${r%60?` ${r%60} 分钟`:""}`:`剩余 ${r} 分钟`}
-function phaseName(x){return !x.s?"工作节奏":x.mode==="next"?`下一阶段 ${x.s[2]}`:x.mode==="ended"?"今日节奏已结束":x.s[2]}
-function context(){const w=document.querySelector(".workspace"),h=w?.querySelector("h1,h2"),title=(h?.textContent||"当前任务").trim(),body=Array.from(w?.querySelectorAll(".brief-card,.task-brief-card,.flow-row,.flow-node,[data-node-id]")||[]).map(n=>n.innerText.trim()).filter(Boolean).slice(0,28).join("\n\n");return{title,body}}
-function recs(){const r=read(K.records,[]);return Array.isArray(r)?r:[]}
-function barHtml(){const x=phase();return`<div class="work-rhythm-rail"><button class="work-rhythm-pill" type="button" data-wr-open><i></i><strong>${esc(phaseName(x))}</strong><span>·</span><span>${esc(remain(x))}</span><em>· ${esc(x.s?.[3]||"")}</em><b>⌄</b></button></div>`}
-function syncBar(){const w=document.querySelector(".workspace");if(!w)return;const old=w.querySelector(":scope>.work-rhythm-rail");if(!rt.enabled){old?.remove();return}if(!old){w.insertAdjacentHTML("afterbegin",barHtml());w.querySelector("[data-wr-open]")?.addEventListener("click",e=>{e.stopPropagation();openPanel()})}else{const fresh=document.createElement("div");fresh.innerHTML=barHtml();const n=fresh.firstElementChild;if(old.innerHTML!==n.innerHTML){old.replaceWith(n);n.querySelector("[data-wr-open]")?.addEventListener("click",e=>{e.stopPropagation();openPanel()})}}}
-function settingsHtml() {
-  return `<section class="settings-list work-rhythm-settings" data-wr-advanced data-wr-settings-home data-wr-settings-advanced>
-    <div class="settings-row">
-      <div class="settings-row-copy"><strong>时间导航</strong></div>
-      <div class="settings-row-control">
-        ${rt.enabled
-          ? '<button class="settings-switch work-rhythm-disable" type="button" role="switch" aria-checked="true" aria-label="关闭时间导航" data-wr-disable></button>'
-          : '<button class="settings-switch" type="button" role="switch" aria-checked="false" aria-label="开启时间导航" data-wr-request-unlock></button>'}
-      </div>
-    </div>
-    <button class="settings-row work-rhythm-profile-row" type="button" data-wr-settings-profile>
-      <span class="settings-row-copy"><strong>时间方案</strong></span>
-      <span class="settings-row-control"><em>${esc(activeProfile().name)}</em><b aria-hidden="true">›</b></span>
-    </button>
-    <div class="settings-row">
-      <div class="settings-row-copy"><strong>访问保护</strong></div>
-      <div class="settings-row-control"><span class="settings-current-value">${rt.enabled ? "已开启" : "需要验证"}</span></div>
-    </div>
-    <div class="work-rhythm-settings-unlock" data-wr-settings-unlock hidden>
-      <div class="work-rhythm-settings-nav"><button type="button" data-wr-settings-advanced-back aria-label="返回高级功能">‹</button><strong>开启时间导航</strong><span></span></div>
-      <div class="work-rhythm-settings-card">
-        <div class="work-rhythm-settings-title"><div><strong>输入访问密码</strong><span>设备验证</span></div></div>
-        <div class="work-rhythm-password-row"><input type="password" data-wr-password placeholder="访问密码" autocomplete="off"><button type="button" data-wr-unlock>开启</button></div>
-        <p class="work-rhythm-password-error" data-wr-error hidden>密码不正确，请重试。</p>
-      </div>
-    </div>
-  </section>`;
-}
-function syncSettings(initialView = "advanced") {
-  const slot = document.querySelector("[data-settings-advanced-slot]");
-  if (!slot || slot.querySelector(".work-rhythm-settings")) return;
-  slot.innerHTML = settingsHtml();
-  const section = slot.querySelector(".work-rhythm-settings");
-  const unlockPanel = section.querySelector("[data-wr-settings-unlock]");
-  const showUnlock = (visible) => {
-    if (!unlockPanel) return;
-    unlockPanel.hidden = !visible;
-    section.classList.toggle("is-unlocking", visible);
-    if (visible) window.requestAnimationFrame(() => section.querySelector("[data-wr-password]")?.focus());
-  };
-  section.querySelector("[data-wr-request-unlock]")?.addEventListener("click", () => showUnlock(true));
-  section.querySelector("[data-wr-settings-advanced-back]")?.addEventListener("click", () => showUnlock(false));
-  section.querySelector("[data-wr-unlock]")?.addEventListener("click", unlock);
-  section.querySelector("[data-wr-settings-profile]")?.addEventListener("click", profileDrawer);
-  section.querySelector("[data-wr-password]")?.addEventListener("keydown", (event) => {
-    if (event.key === "Enter") unlock();
-  });
-  section.querySelector("[data-wr-password]")?.addEventListener("input", () => {
-    const error = section.querySelector("[data-wr-error]");
-    if (error) error.hidden = true;
-  });
-  section.querySelector("[data-wr-disable]")?.addEventListener("click", disable);
-  showUnlock(initialView === "unlock");
-}
-function disable() {
-  rt.enabled = false;
-  localStorage.setItem(K.enabled, "0");
-  closeAll();
-  document.querySelector(".work-rhythm-settings")?.remove();
-  syncSettings("advanced");
-  syncBar();
-  toast("时间导航已关闭");
-}
-async function unlock() {
-  const input = document.querySelector("[data-wr-password]");
-  const error = document.querySelector("[data-wr-error]");
-  let ok = false;
-  try {
-    ok = await gate?.verifyPassword(input?.value || "");
-  } catch {}
-  if (!ok) {
-    if (error) error.hidden = false;
-    input?.focus();
-    input?.select();
-    return;
+  "use strict";
+
+  const model = globalThis.LoopWorkNavigationModel;
+  const bridge = globalThis.LoopWorkNavigationBridge;
+  const gate = globalThis.personalTaskTrack?.workRhythm;
+  const ENABLED_KEY = "loop-work-rhythm-v1:enabled";
+  const WEEKDAYS = [[1, "一"], [2, "二"], [3, "三"], [4, "四"], [5, "五"], [6, "六"], [0, "日"]];
+  const ui = { enabled: localStorage.getItem(ENABLED_KEY) === "1", overlay: null };
+  if (!model || !bridge) return;
+
+  const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  })[character]);
+  const taskById = (data, id) => data.tasks.find((task) => task.id === id) || null;
+  const groupById = (data, id) => data.groups.find((group) => group.id === id) || null;
+  const snapshot = () => { try { return bridge.snapshot(); } catch (_) { return null; } };
+
+  function timeHint(state) {
+    if (state.mode === "weekend-ready") return "等待开始";
+    if (state.mode === "off-day") return "今日未安排";
+    if (state.mode === "ended") return "本阶段已结束";
+    if (state.mode === "next") return `${state.remainingMinutes} 分钟后开始`;
+    if (state.mode === "gap") return `空档 · ${state.remainingMinutes} 分钟后`;
+    return `${state.manual ? "手动 · " : ""}剩余 ${state.remainingMinutes} 分钟`;
   }
-  rt.enabled = true;
-  localStorage.setItem(K.enabled, "1");
-  document.querySelector(".work-rhythm-settings")?.remove();
-  syncSettings("advanced");
-  syncBar();
-  toast("时间导航已开启");
-}
-function fields(s){return templates[s?.[4]]||["当前目标","已有结果","下一步"]}
-function shell(body){return`<div class="work-rhythm-panel"><header><nav>${[["current","当前阶段"],["timeline","今日时间轴"],["templates","固定模板"],["export","导出给 ChatGPT"],["profiles","节奏方案"]].map(([i,l])=>`<button data-wr-tab="${i}" class="${rt.tab===i?"active":""}">${l}</button>`).join("")}</nav><button data-wr-close>×</button></header><main>${body}</main></div>`}
-function currentView(){const x=phase();if(!x.s)return"<p>当前方案没有时间段。</p>";return`<div class="wr-eyebrow">当前阶段 · ${esc(x.p.name)}</div><div class="wr-current"><div><h3>${esc(phaseName(x))}</h3><p>${esc(x.s[4])}</p></div><span>${esc(remain(x))}</span></div><div class="wr-goal"><span>这段时间只做</span><strong>${esc(x.s[3])}</strong></div><div class="wr-preview">${fields(x.s).slice(0,3).map(f=>`<div><span>固定字段</span><strong>${esc(f)}</strong></div>`).join("")}</div><div class="wr-actions"><button data-wr-go="timeline">查看全天</button><button data-wr-go="profiles">切换方案</button><button data-wr-go="export">导出交接</button>${x.s[4]!=="无"?'<button class="primary" data-wr-record>记录本阶段</button>':""}</div>`}
-function timelineView(){const x=phase();return`<div class="wr-profile-strip"><strong>当前：${esc(x.p.name)}</strong><button data-wr-go="profiles">切换 / 编辑</button></div><div class="wr-timeline">${x.p.slots.map(s=>`<article class="${s===x.s&&x.mode==="active"?"current":""}"><time>${esc(s[0])}</time><i></i><div><strong>${esc(s[2])}</strong><p>${esc(s[3])}</p></div><span>${esc(s[4])}</span></article>`).join("")}</div>`}
-function templatesView(){return`<div class="wr-eyebrow">固定模板库</div><div class="wr-template-grid">${Object.entries(templates).filter(([n])=>n!=="无").map(([n,f])=>`<article><strong>${esc(n)}</strong><p>${f.map(esc).join(" / ")}</p></article>`).join("")}</div>`}
-function exportText(p){const c=context(),x=phase(),days=p.id==="week"?7:p.id==="month"?30:1,cut=Date.now()-days*86400000,rs=recs().filter(r=>new Date(r.createdAt).getTime()>=cut).slice(0,40),rtext=rs.length?rs.map(r=>`### ${r.phase} · ${new Date(r.createdAt).toLocaleString("zh-CN")}\n${Object.entries(r.fields||{}).map(([k,v])=>`- ${k}：${v}`).join("\n")}`).join("\n\n"):"（暂无阶段记录）";return`${p.cmd}\n\n# LOOP 交接包\n\n## 当前任务\n${c.title}\n\n## 当前阶段\n${x.s?`${x.s[2]}：${x.s[3]}`:"未配置"}\n\n## LOOP 当前可见上下文\n${c.body||"（无）"}\n\n## 本地阶段记录\n${rtext}\n\n## 说明\n以上内容仅由 LOOP 本地已有数据整理导出，未在本地进行自动分析、总结或推断。`}
-function exportView(){const p=exports.find(x=>x.id===rt.exp)||exports[0];return`<div class="wr-export"><aside>${exports.map(x=>`<button data-wr-exp="${x.id}" class="${x.id===p.id?"active":""}"><strong>${esc(x.title)}</strong><span>${esc(x.cmd)}</span></button>`).join("")}</aside><section><h3>${esc(p.title)}</h3><pre>${esc(exportText(p))}</pre><div class="wr-actions"><button data-wr-md>导出 .md</button><button class="primary" data-wr-copy>复制交接文本</button></div><small>本地只整理与导出，不提供自动分析能力。</small></section></div>`}
-function profilesView(){const ps=profiles(),a=activeProfile();return`<div class="wr-eyebrow">工作节奏方案</div><div class="wr-profile-grid">${ps.map(p=>`<article class="${p.id===a.id?"active":""}"><strong>${esc(p.name)}</strong><p>${esc(p.desc)}</p><div>${p.id===a.id?"<span>当前启用</span>":`<button data-wr-use="${esc(p.id)}">切换</button>`}</div></article>`).join("")}</div><div class="wr-setting-row"><div><strong>自定义时间段</strong><p>修改开始/结束时间、阶段名称、此时只做什么、绑定模板。</p></div><button data-wr-edit>编辑方案</button></div>`}
-const body=()=>rt.tab==="timeline"?timelineView():rt.tab==="templates"?templatesView():rt.tab==="export"?exportView():rt.tab==="profiles"?profilesView():currentView();
-function openPanel(){closeAll();document.body.insertAdjacentHTML("beforeend",shell(body()));rt.panel=document.querySelector(".work-rhythm-panel");bindPanel()}
-function redraw(){if(!rt.panel)return;rt.panel.outerHTML=shell(body());rt.panel=document.querySelector(".work-rhythm-panel");bindPanel()}
-function bindPanel(){const p=rt.panel;if(!p)return;p.querySelector("[data-wr-close]")?.addEventListener("click",closeAll);p.querySelectorAll("[data-wr-tab]").forEach(b=>b.onclick=()=>{rt.tab=b.dataset.wrTab;redraw()});p.querySelectorAll("[data-wr-go]").forEach(b=>b.onclick=()=>{rt.tab=b.dataset.wrGo;redraw()});p.querySelector("[data-wr-record]")?.addEventListener("click",recordModal);p.querySelectorAll("[data-wr-exp]").forEach(b=>b.onclick=()=>{rt.exp=b.dataset.wrExp;redraw()});p.querySelector("[data-wr-copy]")?.addEventListener("click",async()=>{await navigator.clipboard.writeText(exportText(exports.find(x=>x.id===rt.exp)||exports[0]));toast("已复制交接文本")});p.querySelector("[data-wr-md]")?.addEventListener("click",()=>{const x=exports.find(x=>x.id===rt.exp)||exports[0],blob=new Blob([exportText(x)],{type:"text/markdown;charset=utf-8"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`loop-${x.id}-handoff.md`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),0)});p.querySelectorAll("[data-wr-use]").forEach(b=>b.onclick=()=>{localStorage.setItem(K.active,b.dataset.wrUse);syncBar();redraw()});p.querySelector("[data-wr-edit]")?.addEventListener("click",profileDrawer)}
-function recordModal(){const x=phase();if(!x.s)return;rt.panel?.remove();rt.panel=null;document.body.insertAdjacentHTML("beforeend",`<div class="work-rhythm-backdrop"><section class="work-rhythm-record"><header><div><h3>${esc(x.s[2])} · 阶段记录</h3><p>${esc(x.s[4])}</p></div><button data-wr-x>×</button></header><main>${fields(x.s).map(f=>`<label><span>${esc(f)}</span><textarea data-field="${esc(f)}"></textarea></label>`).join("")}</main><footer><span>仅保存到本地。</span><div><button data-wr-cancel>取消</button><button class="primary" data-wr-save>保存记录</button></div></footer></section></div>`);rt.modal=document.querySelector(".work-rhythm-backdrop");rt.modal.querySelector("[data-wr-x]").onclick=closeAll;rt.modal.querySelector("[data-wr-cancel]").onclick=closeAll;rt.modal.querySelector("[data-wr-save]").onclick=()=>{const fs={};rt.modal.querySelectorAll("[data-field]").forEach(t=>fs[t.dataset.field]=t.value.trim());const r=recs();r.unshift({createdAt:new Date().toISOString(),phase:x.s[2],profileId:x.p.id,fields:fs});write(K.records,r.slice(0,500));closeAll();toast("阶段记录已保存")}}
-function profileDrawer(){rt.panel?.remove();rt.panel=null;const ps=profiles(),a=activeProfile();document.body.insertAdjacentHTML("beforeend",`<div class="work-rhythm-drawer-backdrop"><aside class="work-rhythm-drawer"><header><div><h3>编辑工作节奏方案</h3><p>方案和时间段只保存在本地。</p></div><button data-wr-dx>×</button></header><div class="wr-dbody"><aside>${ps.map(p=>`<button data-wr-pick="${esc(p.id)}" class="${p.id===a.id?"active":""}"><strong>${esc(p.name)}</strong><span>${p.slots.length} 个时间段</span></button>`).join("")}<button data-wr-new>＋ 新建方案</button><button data-wr-copy-profile>⧉ 复制当前方案</button></aside><section><input data-wr-pname value="${esc(a.name)}"><textarea data-wr-pdesc>${esc(a.desc)}</textarea><div class="wr-slot-head"><span>开始</span><span>结束</span><span>阶段</span><span>此时只做什么</span><span>模板</span><span></span></div><div data-wr-slots>${slotRows(a)}</div><button data-wr-add>＋ 添加时间段</button></section></div><footer><span>关闭前请保存修改。</span><div><button data-wr-dcancel>取消</button><button class="primary" data-wr-psave>保存方案</button></div></footer></aside></div>`);rt.drawer=document.querySelector(".work-rhythm-drawer-backdrop");bindDrawer(a.id)}
-function slotRows(p){return p.slots.map((s,i)=>`<div class="wr-slot-row"><input value="${esc(s[0])}"><input value="${esc(s[1])}"><input value="${esc(s[2])}"><input value="${esc(s[3])}"><select>${Object.keys(templates).map(n=>`<option ${n===s[4]?"selected":""}>${esc(n)}</option>`).join("")}</select><button data-wr-del>×</button></div>`).join("")}
-function bindDrawer(id){const d=rt.drawer;if(!d)return;const close=()=>{d.remove();rt.drawer=null};d.querySelector("[data-wr-dx]").onclick=close;d.querySelector("[data-wr-dcancel]").onclick=close;d.querySelectorAll("[data-wr-pick]").forEach(b=>b.onclick=()=>{localStorage.setItem(K.active,b.dataset.wrPick);close();profileDrawer();syncBar()});d.querySelectorAll("[data-wr-del]").forEach(b=>b.onclick=()=>b.closest(".wr-slot-row").remove());d.querySelector("[data-wr-add]").onclick=()=>{d.querySelector("[data-wr-slots]").insertAdjacentHTML("beforeend",`<div class="wr-slot-row"><input value="18:10"><input value="18:30"><input value="新阶段"><input value="填写此时只做什么"><select>${Object.keys(templates).map(n=>`<option>${esc(n)}</option>`).join("")}</select><button data-wr-del>×</button></div>`);d.querySelectorAll("[data-wr-del]").forEach(b=>b.onclick=()=>b.closest(".wr-slot-row").remove())};d.querySelector("[data-wr-new]").onclick=()=>{const ps=profiles(),nid=`custom-${Date.now()}`;ps.push({id:nid,name:"我的方案",desc:"自定义工作节奏。",slots:[["09:00","10:00","新阶段","填写此时只做什么","无"]]});write(K.profiles,ps);localStorage.setItem(K.active,nid);close();profileDrawer();syncBar()};d.querySelector("[data-wr-copy-profile]").onclick=()=>{const ps=profiles(),src=ps.find(p=>p.id===id);if(!src)return;const cp=structuredClone(src);cp.id=`copy-${Date.now()}`;cp.name+=` 副本`;ps.push(cp);write(K.profiles,ps);localStorage.setItem(K.active,cp.id);close();profileDrawer()};d.querySelector("[data-wr-psave]").onclick=()=>{const ps=profiles(),p=ps.find(p=>p.id===id);if(!p)return;p.name=d.querySelector("[data-wr-pname]").value.trim()||"未命名方案";p.desc=d.querySelector("[data-wr-pdesc]").value.trim();p.slots=Array.from(d.querySelectorAll(".wr-slot-row")).map(r=>Array.from(r.querySelectorAll("input,select")).map(e=>e.value.trim()));write(K.profiles,ps);close();syncBar();toast("工作节奏方案已保存")}}
-function closeAll(){rt.panel?.remove();rt.modal?.remove();rt.drawer?.remove();rt.panel=rt.modal=rt.drawer=null}
-function toast(s){document.querySelector(".work-rhythm-toast")?.remove();const n=document.createElement("div");n.className="work-rhythm-toast";n.textContent=s;document.body.append(n);setTimeout(()=>n.remove(),1500)}
-document.addEventListener("loop-work-rhythm:disable",disable);
-document.addEventListener("pointerdown",e=>{if(rt.panel&&!rt.panel.contains(e.target)&&!e.target.closest("[data-wr-open]")){rt.panel.remove();rt.panel=null}if(rt.modal&&e.target===rt.modal){rt.modal.remove();rt.modal=null}if(rt.drawer&&e.target===rt.drawer){rt.drawer.remove();rt.drawer=null}});document.addEventListener("keydown",e=>{if(e.key!=="Escape")return;if(rt.modal){rt.modal.remove();rt.modal=null}else if(rt.drawer){rt.drawer.remove();rt.drawer=null}else if(rt.panel){rt.panel.remove();rt.panel=null}});
-const root=document.getElementById("root");new MutationObserver(()=>{syncBar();syncSettings()}).observe(root,{childList:true,subtree:false});setInterval(syncBar,30000);syncBar();syncSettings();
+
+  function phaseView(data) {
+    const state = model.resolvePhase(new Date(), data.navigation);
+    const type = state.phase?.type || "idle";
+    const activeId = type === "growth" ? data.activeGrowthTaskId : data.activeWorkTaskId;
+    const task = taskById(data, activeId);
+    const source = groupById(data, data.navigation.config.growth.sourceGroupId);
+    let label = state.phase?.label || "工作与成长";
+    let title = task?.title || "暂无当前任务";
+    let support = task ? model.resolveNextAction(task) : "";
+    let primary = { label: "选择任务", action: "pick-work" };
+    let secondary = [];
+
+    if (state.mode === "off-day") {
+      title = "今天没有自动安排";
+      support = "可从阶段菜单手动进入工作或个人成长";
+      primary = { label: "切换阶段", action: "phase-menu" };
+    } else if (state.mode === "ended") {
+      title = "当前安排已结束";
+      support = task ? `仍可继续：${task.title}` : "需要时可手动切换阶段";
+      primary = { label: "切换阶段", action: "phase-menu" };
+    } else if (state.mode === "next" || state.mode === "gap") {
+      title = `下一阶段：${label}`;
+      support = `${state.phase.start} 开始`;
+      primary = { label: "现在进入", action: "enter-phase", phaseId: state.phase.id };
+    } else if (type === "startup") {
+      title = task ? `建议先做：${task.title}` : `${data.workTaskIds.length} 项今日任务待安排`;
+      support = task ? model.resolveNextAction(task) : "昨日任务仅作为建议，不会自动选中";
+      primary = { label: "选择首个任务", action: "pick-work", startup: true };
+      if (task) secondary.push({ label: "打开当前任务", action: "open-current", kind: "work" });
+    } else if (type === "work") {
+      if (task) {
+        title = task.title;
+        support = model.resolveNextAction(task);
+        primary = { label: "完成并继续", action: "complete", kind: "work" };
+        secondary = [
+          { label: "打开任务", action: "open-current", kind: "work" },
+          { label: "切换今日任务", action: "pick-work" },
+        ];
+      } else {
+        title = data.workTaskIds.length ? "选择一项今日任务" : "今日任务为空";
+        support = data.workTaskIds.length ? `${data.workTaskIds.length} 项可执行` : "可从全部任务中选择并加入今日";
+      }
+      if (data.detachedWorkTask) support = `已移出 Today · ${support}`;
+    } else if (type === "growth") {
+      if (!source) {
+        title = "尚未配置学习来源";
+        support = "选择一个已有的个人成长分组作为顺序来源";
+        primary = { label: "配置学习来源", action: "open-settings" };
+      } else if (state.mode === "weekend-ready") {
+        title = `准备学习 · ${source.title}`;
+        support = `本次 ${data.navigation.config.growth.weekendDurationMinutes} 分钟`;
+        primary = { label: "开始学习", action: "start-weekend" };
+      } else if (task) {
+        title = task.title;
+        support = model.resolveNextAction(task);
+        primary = { label: "继续学习", action: "open-current", kind: "growth" };
+        secondary = [
+          { label: "完成并继续", action: "complete", kind: "growth" },
+          { label: "保存进度", action: "recovery", kind: "growth" },
+        ];
+      } else if (data.growthTaskIds.length) {
+        title = "等待选择下一项学习任务";
+        support = `${source.title} 还有 ${data.growthTaskIds.length} 项未完成`;
+        primary = { label: "选择下一项", action: "pick-growth" };
+      } else {
+        title = `${source.title} 已全部完成`;
+        support = "可以回到分组补充或导入下一阶段学习任务";
+        primary = { label: "打开成长分组", action: "open-growth-group" };
+        secondary = [{ label: "导入学习计划", action: "import-plan" }];
+      }
+    } else if (type === "close") {
+      title = task ? `收束：${task.title}` : "保存今天的工作入口";
+      support = task ? model.resolveNextAction(task) : "记录做到哪里和下一步，明天可直接续接";
+      primary = { label: "保存恢复卡", action: "recovery", kind: "close" };
+      secondary = task ? [{ label: "打开任务", action: "open-current", kind: "work" }] : [];
+    }
+    return { state, task, label, title, support, primary, secondary: secondary.slice(0, 2) };
+  }
+
+  function navHtml(data) {
+    const view = phaseView(data);
+    const recoveryMark = view.task?.navigationRecovery?.nextAction ? '<span class="wr-nav-recovery">可续接</span>' : "";
+    return `<section class="work-rhythm-nav" aria-label="工作与个人成长导航">
+      <button class="wr-phase" type="button" data-wr-action="phase-menu" title="切换阶段或时间"><span>${esc(view.label)}</span><strong>${esc(timeHint(view.state))}</strong><i aria-hidden="true">⌄</i></button>
+      <div class="wr-current-task"><strong title="${esc(view.title)}">${esc(view.title)}</strong>${recoveryMark}<span title="${esc(view.support)}">${esc(view.support || "当前任务没有明确的下一动作")}</span></div>
+      <div class="wr-nav-actions">${view.secondary.map((item) => `<button type="button" data-wr-action="${item.action}" data-kind="${item.kind || ""}">${esc(item.label)}</button>`).join("")}<button class="primary" type="button" data-wr-action="${view.primary.action}" data-kind="${view.primary.kind || ""}" data-phase-id="${view.primary.phaseId || ""}" data-startup="${view.primary.startup ? "1" : "0"}">${esc(view.primary.label)}</button></div>
+    </section>`;
+  }
+
+  function syncNav() {
+    const workspace = document.querySelector(".workspace");
+    if (!workspace) return;
+    const old = workspace.querySelector(":scope > .work-rhythm-nav");
+    if (!ui.enabled) { old?.remove(); return; }
+    const data = snapshot();
+    if (!data) return;
+    const template = document.createElement("template");
+    template.innerHTML = navHtml(data);
+    const next = template.content.firstElementChild;
+    if (!old) workspace.prepend(next);
+    else if (old.outerHTML !== next.outerHTML) old.replaceWith(next);
+  }
+
+  function closeOverlay() { ui.overlay?.remove(); ui.overlay = null; }
+  function showOverlay(content, extra = "") {
+    closeOverlay();
+    const layer = document.createElement("div");
+    layer.className = `wr-overlay ${extra}`.trim(); layer.innerHTML = content;
+    document.body.append(layer); ui.overlay = layer; return layer;
+  }
+
+  function phaseMenu() {
+    const data = snapshot(); if (!data) return;
+    const current = model.resolvePhase(new Date(), data.navigation);
+    const layer = showOverlay(`<section class="wr-dialog wr-phase-dialog" role="dialog" aria-modal="true"><header><div><h3>切换阶段</h3><p>手动选择将在下一个时间边界自动恢复。</p></div><button data-wr-close aria-label="关闭">×</button></header><main class="wr-phase-list">${data.navigation.config.phases.map((phase) => `<button type="button" data-wr-select-phase="${phase.id}" class="${current.phase?.id === phase.id ? "active" : ""}"><span><strong>${esc(phase.label)}</strong><small>${phase.start}–${phase.end}</small></span><b>${current.phase?.id === phase.id ? "当前" : "进入"}</b></button>`).join("")}</main><footer><button type="button" data-wr-auto-phase ${current.manual ? "" : "disabled"}>恢复自动切换</button><button type="button" data-wr-open-settings>编辑时间</button></footer></section>`);
+    layer.querySelectorAll("[data-wr-select-phase]").forEach((button) => button.addEventListener("click", () => {
+      bridge.setRuntime({ manualPhaseId: button.dataset.wrSelectPhase, manualPhaseExpiresAt: model.nextBoundaryAt(new Date(), data.navigation) });
+      closeOverlay(); syncNav(); toast("已切换，将在下一时间边界恢复自动导航");
+    }));
+    layer.querySelector("[data-wr-auto-phase]")?.addEventListener("click", () => { bridge.setRuntime({ manualPhaseId: "", manualPhaseExpiresAt: "" }); closeOverlay(); syncNav(); });
+    layer.querySelector("[data-wr-open-settings]")?.addEventListener("click", () => { closeOverlay(); bridge.openSettings(); });
+  }
+
+  function enterPhase(phaseId) {
+    const data = snapshot(); if (!data || !phaseId) return;
+    bridge.setRuntime({ manualPhaseId: phaseId, manualPhaseExpiresAt: model.nextBoundaryAt(new Date(), data.navigation) }); syncNav();
+  }
+
+  function workPicker(startup = false) {
+    const data = snapshot(); if (!data) return;
+    const todaySet = new Set(data.todayTaskIds);
+    const growthId = data.navigation.config.growth.sourceGroupId;
+    const candidates = data.tasks.filter((task) => task.status !== "done" && task.groupId !== growthId);
+    const today = data.todayTaskIds.map((id) => taskById(data, id)).filter((task) => task && task.status !== "done" && task.groupId !== growthId);
+    const previous = model.previousRecoveryTask(candidates, new Date());
+    const layer = showOverlay(`<section class="wr-dialog wr-task-dialog" role="dialog" aria-modal="true"><header><div><h3>${startup ? "选择今天先做什么" : "切换工作任务"}</h3><p>今日任务不设数量上限；也可从全部任务中选择并加入今日。</p></div><button data-wr-close aria-label="关闭">×</button></header><main>${startup && previous ? `<section class="wr-suggestion"><span>昨日续接建议 · 不会自动选中</span><button type="button" data-wr-pick-task="${previous.task.id}" data-add-today="${todaySet.has(previous.task.id) ? "0" : "1"}"><strong>${esc(previous.task.title)}</strong><small>${esc(previous.recovery.nextAction)}</small></button></section>` : ""}<label class="wr-search"><span>⌕</span><input type="search" data-wr-task-search placeholder="搜索任务"></label><div class="wr-task-tabs"><button class="active" type="button" data-wr-task-scope="today">今日任务 <b>${today.length}</b></button><button type="button" data-wr-task-scope="all">全部未完成 <b>${candidates.length}</b></button></div><div class="wr-task-list" data-wr-task-list></div></main></section>`);
+    let scope = "today";
+    const list = layer.querySelector("[data-wr-task-list]");
+    const search = layer.querySelector("[data-wr-task-search]");
+    const draw = () => {
+      const query = search.value.trim().toLowerCase();
+      const source = scope === "today" ? today : candidates;
+      const filtered = source.filter((task) => `${task.title} ${task.description}`.toLowerCase().includes(query));
+      list.innerHTML = filtered.length ? filtered.map((task) => `<button type="button" data-wr-pick-task="${task.id}" data-add-today="${todaySet.has(task.id) ? "0" : "1"}"><span><strong>${esc(task.title)}</strong><small>${esc(model.resolveNextAction(task))}</small></span><b>${todaySet.has(task.id) ? "今日" : "加入今日"}</b></button>`).join("") : '<p class="wr-empty">没有匹配的任务</p>';
+    };
+    layer.querySelectorAll("[data-wr-task-scope]").forEach((button) => button.addEventListener("click", () => { scope = button.dataset.wrTaskScope; layer.querySelectorAll("[data-wr-task-scope]").forEach((item) => item.classList.toggle("active", item === button)); draw(); }));
+    search.addEventListener("input", draw); draw();
+  }
+
+  function recoveryDialog(kind) {
+    const data = snapshot(); if (!data) return;
+    const ids = kind === "close" ? [data.activeWorkTaskId, data.activeGrowthTaskId] : [kind === "growth" ? data.activeGrowthTaskId : data.activeWorkTaskId];
+    const tasks = [...new Set(ids)].map((id) => taskById(data, id)).filter(Boolean);
+    if (!tasks.length) { toast("当前没有可记录的任务"); return; }
+    const sections = tasks.map((task) => {
+      const recovery = task.navigationRecovery || {};
+      const group = groupById(data, task.groupId);
+      return `<section class="wr-recovery-task" data-wr-recovery-task="${task.id}"><h4>${esc(task.title)}${group ? `<small>${esc(group.title)}</small>` : ""}</h4><label><span>做到哪里</span><textarea data-wr-progress placeholder="已完成、已确认的内容">${esc(recovery.progress)}</textarea></label><label><span>下次第一动作 <b>必填</b></span><textarea data-wr-next placeholder="回来后立刻可以做的具体动作">${esc(recovery.nextAction)}</textarea></label><label><span>证据位置（可选）</span><input data-wr-evidence value="${esc(recovery.evidenceRef)}" placeholder="日志、提交、文档或实验位置"></label></section>`;
+    }).join("");
+    const layer = showOverlay(`<section class="wr-dialog wr-recovery-dialog" role="dialog" aria-modal="true"><header><div><h3>保存恢复卡</h3><p>${tasks.length > 1 ? "分别记录工作与个人成长的下次入口" : esc(tasks[0].title)}</p></div><button data-wr-close aria-label="关闭">×</button></header><main>${sections}</main><footer><button type="button" data-wr-close>取消</button><button class="primary" type="button" data-wr-save-recovery>保存</button></footer></section>`);
+    layer.querySelector("[data-wr-save-recovery]")?.addEventListener("click", () => {
+      const cards = [...layer.querySelectorAll("[data-wr-recovery-task]")];
+      const missing = cards.find((card) => !card.querySelector("[data-wr-next]").value.trim());
+      if (missing) { toast("请填写每项任务的下次第一动作"); return missing.querySelector("[data-wr-next]").focus(); }
+      cards.forEach((card) => bridge.saveRecovery(card.dataset.wrRecoveryTask, { progress: card.querySelector("[data-wr-progress]").value.trim(), nextAction: card.querySelector("[data-wr-next]").value.trim(), evidenceRef: card.querySelector("[data-wr-evidence]").value.trim() }));
+      closeOverlay(); syncNav(); toast("恢复卡已保存");
+    });
+  }
+
+  function growthPicker() {
+    const data = snapshot(); if (!data) return;
+    const source = groupById(data, data.navigation.config.growth.sourceGroupId);
+    const tasks = data.growthTaskIds.map((id) => taskById(data, id)).filter(Boolean);
+    const layer = showOverlay(`<section class="wr-dialog wr-task-dialog" role="dialog" aria-modal="true"><header><div><h3>选择学习任务</h3><p>${source ? esc(source.title) : "个人成长"} · 默认按分组顺序接续</p></div><button data-wr-close aria-label="关闭">×</button></header><main><div class="wr-task-list">${tasks.map((task, index) => `<button type="button" data-wr-pick-growth="${task.id}"><span><strong>${esc(task.title)}</strong><small>${esc(model.resolveNextAction(task))}</small></span><b>${index === 0 ? "下一项" : `第 ${index + 1} 项`}</b></button>`).join("") || '<p class="wr-empty">没有未完成的学习任务</p>'}</div></main></section>`);
+    layer.querySelector("[data-wr-pick-growth]")?.focus();
+  }
+
+  function importDialog() {
+    const data = snapshot(); if (!data) return;
+    const sourceId = data.navigation.config.growth.sourceGroupId;
+    const source = groupById(data, sourceId);
+    const layer = showOverlay(`<section class="wr-dialog wr-import-dialog" role="dialog" aria-modal="true"><header><div><h3>导入学习计划</h3><p>${source ? `导入到「${esc(source.title)}」` : "未配置来源时，将按文件中的目标分组导入"}</p></div><button data-wr-close aria-label="关闭">×</button></header><main><label class="wr-file"><input type="file" accept="application/json,.json" data-wr-plan-file><span>选择 JSON 文件</span></label><div class="wr-or"><span>或粘贴 JSON</span></div><textarea data-wr-plan-json spellcheck="false" placeholder='{"schemaVersion":1,"type":"loop-learning-plan",...}'></textarea><div class="wr-import-preview" data-wr-import-preview>选择文件或粘贴内容后，将在导入前校验并预览。</div></main><footer><button type="button" data-wr-close>取消</button><button class="primary" type="button" data-wr-confirm-import disabled>确认导入</button></footer></section>`);
+    let value = null;
+    const textarea = layer.querySelector("[data-wr-plan-json]");
+    const preview = layer.querySelector("[data-wr-import-preview]");
+    const confirm = layer.querySelector("[data-wr-confirm-import]");
+    const inspect = () => {
+      try { value = JSON.parse(textarea.value); } catch (_) { value = null; }
+      const result = value ? model.previewLearningPlanImport(value, data.tasks) : null;
+      if (!result) { preview.className = "wr-import-preview"; preview.textContent = textarea.value.trim() ? "JSON 格式无效" : "选择文件或粘贴内容后，将在导入前校验并预览。"; confirm.disabled = true; return; }
+      if (!result.valid) { preview.className = "wr-import-preview error"; preview.innerHTML = `<strong>无法导入</strong><span>${result.errors.slice(0, 4).map((item) => esc(`${item.field}：${item.message}`)).join("<br>")}</span>`; confirm.disabled = true; return; }
+      preview.className = "wr-import-preview valid"; preview.innerHTML = `<strong>${esc(result.plan.title)}</strong><span>新增 ${result.newTasks.length} 项 · 已存在 ${result.existingTasks.length} 项 · 新增任务预计 ${result.totalMinutes} 分钟</span>`; confirm.disabled = false;
+    };
+    textarea.addEventListener("input", inspect);
+    layer.querySelector("[data-wr-plan-file]")?.addEventListener("change", async (event) => { const file = event.target.files?.[0]; if (file) { textarea.value = await file.text(); inspect(); } });
+    confirm.addEventListener("click", () => { const result = bridge.importLearningPlan(value, { groupId: sourceId }); if (!result.success) return toast("学习计划导入失败"); closeOverlay(); syncNav(); toast(`已导入 ${result.importedCount} 项，跳过 ${result.existingCount} 项`); });
+  }
+
+  function settingsHtml(data) {
+    const config = data.navigation.config;
+    return `<section class="settings-list work-rhythm-settings" data-wr-settings><div class="settings-row"><div class="settings-row-copy"><strong>工作与成长导航</strong></div><div class="settings-row-control"><button class="settings-switch" type="button" role="switch" aria-checked="${ui.enabled}" data-wr-toggle aria-label="工作与成长导航"></button></div></div>${ui.enabled ? `<div class="wr-settings-body"><fieldset><legend>工作日</legend><div class="wr-weekdays">${WEEKDAYS.map(([value, label]) => `<label><input type="checkbox" value="${value}" data-wr-workday ${config.workdays.includes(value) ? "checked" : ""}><span>${label}</span></label>`).join("")}</div></fieldset><fieldset><legend>五个阶段</legend><div class="wr-settings-phases">${config.phases.map((phase) => `<div><strong>${esc(phase.label)}</strong><input type="time" value="${phase.start}" data-wr-phase-start="${phase.id}"><span>至</span><input type="time" value="${phase.end}" data-wr-phase-end="${phase.id}"></div>`).join("")}</div><p class="wr-setting-error" data-wr-time-error hidden></p><button type="button" class="wr-text-action" data-wr-reset-times>恢复默认时间</button></fieldset><fieldset><legend>任务接续</legend><label class="wr-settings-line"><span>工作完成后自动顺移</span><input type="checkbox" data-wr-work-auto ${config.work.autoAdvance ? "checked" : ""}></label><label class="wr-settings-line"><span>学习完成后自动顺移</span><input type="checkbox" data-wr-growth-auto ${config.growth.autoAdvance ? "checked" : ""}></label></fieldset><fieldset><legend>个人成长</legend><label class="wr-settings-select"><span>学习任务来源</span><select data-wr-growth-source><option value="">请选择分组</option>${data.groups.map((group) => `<option value="${group.id}" ${group.id === config.growth.sourceGroupId ? "selected" : ""}>${esc(group.title)}</option>`).join("")}</select></label><label class="wr-settings-line"><span>周末安排个人成长</span><input type="checkbox" data-wr-weekend-enabled ${config.growth.weekendEnabled ? "checked" : ""}></label><label class="wr-settings-select"><span>周末学习时长</span><input type="number" min="30" max="720" step="30" value="${config.growth.weekendDurationMinutes}" data-wr-weekend-duration><em>分钟</em></label><label class="wr-settings-select"><span>周末开始时间（可选）</span><input type="time" value="${config.growth.weekendStartTime}" data-wr-weekend-start><button type="button" class="wr-clear-time" data-wr-clear-weekend>清除</button></label></fieldset><div class="wr-settings-save"><span>修改后保存生效</span><button class="primary" type="button" data-wr-save-settings>保存导航设置</button></div></div>` : `<p class="settings-page-note">开启后，导航会根据 Today、个人成长分组和当前时间给出下一步。</p><div class="work-rhythm-settings-unlock" data-wr-unlock-panel hidden><label>访问密码<input type="password" data-wr-password autocomplete="off"></label><button class="primary" type="button" data-wr-unlock>验证并开启</button><p data-wr-password-error hidden>密码不正确，请重试。</p></div>`}</section>`;
+  }
+
+  function syncSettings() {
+    const slot = document.querySelector("[data-settings-advanced-slot]");
+    if (!slot || slot.querySelector("[data-wr-settings]")) return;
+    const data = snapshot(); if (data) slot.insertAdjacentHTML("beforeend", settingsHtml(data));
+  }
+
+  function toggleEnabled() {
+    if (ui.enabled) { ui.enabled = false; localStorage.setItem(ENABLED_KEY, "0"); document.querySelector("[data-wr-settings]")?.remove(); syncSettings(); syncNav(); return toast("工作与成长导航已关闭"); }
+    const panel = document.querySelector("[data-wr-unlock-panel]"); if (panel) { panel.hidden = false; panel.querySelector("input")?.focus(); }
+  }
+
+  async function unlock() {
+    const input = document.querySelector("[data-wr-password]");
+    let ok = false; try { ok = await gate?.verifyPassword(input?.value || ""); } catch (_) {}
+    if (!ok) { const error = document.querySelector("[data-wr-password-error]"); if (error) error.hidden = false; return input?.select(); }
+    ui.enabled = true; localStorage.setItem(ENABLED_KEY, "1"); document.querySelector("[data-wr-settings]")?.remove(); syncSettings(); syncNav(); toast("工作与成长导航已开启");
+  }
+
+  function saveSettings(section) {
+    const data = snapshot(); if (!data) return;
+    const phases = data.navigation.config.phases.map((phase) => ({ ...phase, start: section.querySelector(`[data-wr-phase-start="${phase.id}"]`).value, end: section.querySelector(`[data-wr-phase-end="${phase.id}"]`).value }));
+    const validation = model.validatePhaseSchedule(phases);
+    const error = section.querySelector("[data-wr-time-error]");
+    if (!validation.valid) { error.hidden = false; error.textContent = validation.errors[0].message; return; }
+    bridge.updateConfig({
+      workdays: [...section.querySelectorAll("[data-wr-workday]:checked")].map((input) => Number(input.value)), phases,
+      work: { autoAdvance: section.querySelector("[data-wr-work-auto]").checked },
+      growth: { sourceGroupId: section.querySelector("[data-wr-growth-source]").value, autoAdvance: section.querySelector("[data-wr-growth-auto]").checked, weekendEnabled: section.querySelector("[data-wr-weekend-enabled]").checked, weekendDurationMinutes: Number(section.querySelector("[data-wr-weekend-duration]").value), weekendStartTime: section.querySelector("[data-wr-weekend-start]").value },
+    });
+    syncNav(); toast("导航设置已保存");
+  }
+
+  function resetTimes(section) {
+    model.DEFAULT_PHASES.forEach((phase) => { section.querySelector(`[data-wr-phase-start="${phase.id}"]`).value = phase.start; section.querySelector(`[data-wr-phase-end="${phase.id}"]`).value = phase.end; });
+    section.querySelector("[data-wr-time-error]").hidden = true;
+  }
+
+  function complete(kind) {
+    const data = snapshot(); if (!data) return;
+    const taskId = kind === "growth" ? data.activeGrowthTaskId : data.activeWorkTaskId;
+    if (!taskId) return toast("当前没有可完成的任务");
+    const result = bridge.completeTask(taskId, kind);
+    if (!result.success && result.code === "CONCLUSION_REQUIRED") toast("请先在任务中填写结论，再标记完成");
+    else if (!result.success) toast("任务状态已变化，请重新选择");
+    else toast(result.nextTaskId ? "已完成，已顺移到下一项" : "已完成当前任务");
+    syncNav();
+  }
+
+  function openCurrent(kind) {
+    const data = snapshot(); if (!data) return;
+    const taskId = kind === "growth" ? data.activeGrowthTaskId : data.activeWorkTaskId;
+    if (taskId) bridge.openTask(taskId, { kind }); else toast("当前没有任务");
+  }
+
+  function handleAction(button) {
+    const action = button.dataset.wrAction;
+    if (action === "phase-menu") phaseMenu();
+    else if (action === "enter-phase") enterPhase(button.dataset.phaseId);
+    else if (action === "pick-work") workPicker(button.dataset.startup === "1");
+    else if (action === "pick-growth") growthPicker();
+    else if (action === "open-current") openCurrent(button.dataset.kind);
+    else if (action === "complete") complete(button.dataset.kind);
+    else if (action === "recovery") recoveryDialog(button.dataset.kind || "work");
+    else if (action === "open-settings") bridge.openSettings();
+    else if (action === "open-growth-group") bridge.openGrowthGroup();
+    else if (action === "import-plan") importDialog();
+    else if (action === "start-weekend") { bridge.setRuntime({ weekendStartedAt: new Date().toISOString() }); syncNav(); }
+  }
+
+  function toast(message) {
+    document.querySelector(".work-rhythm-toast")?.remove();
+    const node = document.createElement("div"); node.className = "work-rhythm-toast"; node.textContent = message;
+    document.body.append(node); setTimeout(() => node.remove(), 2200);
+  }
+
+  document.addEventListener("click", (event) => {
+    const action = event.target.closest("[data-wr-action]"); if (action) handleAction(action);
+    if (event.target.closest("[data-wr-close]")) closeOverlay();
+    const pick = event.target.closest("[data-wr-pick-task]"); if (pick) { bridge.openTask(pick.dataset.wrPickTask, { kind: "work", addToToday: pick.dataset.addToday === "1" }); closeOverlay(); syncNav(); }
+    const growthPick = event.target.closest("[data-wr-pick-growth]"); if (growthPick) { bridge.openTask(growthPick.dataset.wrPickGrowth, { kind: "growth" }); closeOverlay(); syncNav(); }
+    if (event.target.closest("[data-wr-toggle]")) toggleEnabled();
+    if (event.target.closest("[data-wr-unlock]")) unlock();
+    const save = event.target.closest("[data-wr-save-settings]"); if (save) saveSettings(save.closest("[data-wr-settings]"));
+    const reset = event.target.closest("[data-wr-reset-times]"); if (reset) resetTimes(reset.closest("[data-wr-settings]"));
+    const clear = event.target.closest("[data-wr-clear-weekend]"); if (clear) clear.closest("fieldset").querySelector("[data-wr-weekend-start]").value = "";
+  });
+  document.addEventListener("keydown", (event) => { if (event.key === "Escape") closeOverlay(); if (event.key === "Enter" && event.target.matches("[data-wr-password]")) unlock(); });
+  document.addEventListener("pointerdown", (event) => { if (ui.overlay && event.target === ui.overlay) closeOverlay(); });
+  document.addEventListener("loop-work-navigation:rendered", () => { syncNav(); syncSettings(); });
+  document.addEventListener("loop-work-navigation:import-plan", importDialog);
+  document.addEventListener("loop-work-rhythm:disable", () => { ui.enabled = false; localStorage.setItem(ENABLED_KEY, "0"); closeOverlay(); syncNav(); });
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) syncNav(); });
+  window.addEventListener("focus", syncNav);
+  new MutationObserver(() => { syncNav(); syncSettings(); }).observe(document.getElementById("root"), { childList: true });
+  window.setInterval(syncNav, 60000);
+  syncNav(); syncSettings();
 })();

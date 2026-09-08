@@ -20,9 +20,10 @@ const DETAIL_HEIGHT_KEY = "task-track-detail-height";
 const ATTACHMENTS_KEY = "task-track-attachments";
 const INSTALLATION_ID_KEY = "task-track-installation-id";
 const KNOWLEDGE_RECOVERY_KEY = "task-track-knowledge-recovery-v1";
+const WORK_NAVIGATION_KEY = "task-track-work-navigation-v1";
 const KNOWLEDGE_RECOVERY_DEBOUNCE_MS = 800;
 const KNOWLEDGE_RECOVERY_MAX_INTERVAL_MS = 5000;
-const DATA_VERSION = 1;
+const DATA_VERSION = 2;
 const KNOWLEDGE_MIGRATION_VERSION = 1;
 const desktopStorage = window.personalTaskTrack?.storage;
 const desktopDataBackup = window.personalTaskTrack?.dataBackup;
@@ -39,6 +40,7 @@ const desktopPlatform = window.personalTaskTrack?.platform || "";
 const APP_VERSION = window.personalTaskTrack?.appVersion || "";
 const knowledgeDocument = globalThis.KnowledgeDocument;
 const knowledgeRecoveryModel = globalThis.KnowledgeRecovery;
+const workNavigationModel = globalThis.LoopWorkNavigationModel;
 
 const priorityLabels = {
 
@@ -280,6 +282,7 @@ let state = {
   knowledgeAssets: {},
   knowledgeFileIssues: {},
   knowledgeRecovery: { version: 1, records: {} },
+  workNavigation: workNavigationModel.defaultWorkNavigation(),
   installationId: "",
   conclusionPromptTaskId: "",
   knowledgeDraftPrompt: null,
@@ -443,6 +446,18 @@ function loadBrowserTasks() {
   }
 }
 
+function loadBrowserWorkNavigation(taskGroups = []) {
+  let saved = null;
+  try {
+    saved = JSON.parse(localStorage.getItem(WORK_NAVIGATION_KEY) || "null");
+  } catch (_) {
+    saved = null;
+  }
+  return workNavigationModel.normalizeWorkNavigation(saved, {
+    groupIds: taskGroups.map((group) => group.id),
+  });
+}
+
 function normalizeTasks(tasks) {
   const seenTaskIds = new Set();
   return (Array.isArray(tasks) ? tasks : [])
@@ -482,6 +497,9 @@ function normalizeTasks(tasks) {
           hypothesis ? updatedAt : "",
         ),
         conclusion: normalizeText(task.conclusion),
+        navigationRecovery: workNavigationModel.normalizeRecovery(task.navigationRecovery),
+        estimateMinutes: Math.max(0, Math.min(720, Math.round(Number(task.estimateMinutes) || 0))),
+        origin: workNavigationModel.normalizeOrigin(task.origin),
         createdAt,
         updatedAt,
         deadlineAt: normalizeOptionalDateValue(task.deadlineAt),
@@ -1454,7 +1472,10 @@ async function loadAppData() {
       const detailHeight = normalizeDetailHeight(stored?.detailHeight);
       const attachments = normalizeAttachments(stored?.attachments);
       const installationId = normalizeInstallationId(stored?.installationId);
-      return { tasks, taskGroups, activeGroupId, flowWidths, sidebarWidth, detailHeight, attachments, theme, zhFont, enFont, fontScale, taskFilter, priorityFilter, captureSourceFilter, newTaskPriority, installationId };
+      const workNavigation = workNavigationModel.normalizeWorkNavigation(stored?.workNavigation, {
+        groupIds: taskGroups.map((group) => group.id),
+      });
+      return { tasks, taskGroups, activeGroupId, flowWidths, sidebarWidth, detailHeight, attachments, theme, zhFont, enFont, fontScale, taskFilter, priorityFilter, captureSourceFilter, newTaskPriority, installationId, workNavigation };
     } catch (error) {
       console.error("Failed to read local task data.", error);
       if (error?.code === "CORRUPT_TASK_DATA") {
@@ -1478,6 +1499,7 @@ async function loadAppData() {
     detailHeight: loadBrowserDetailHeight(),
     attachments: loadBrowserAttachments(),
     installationId: loadBrowserInstallationId(),
+    workNavigation: loadBrowserWorkNavigation(taskGroups),
     theme: loadBrowserTheme(),
     ...typography,
     ...preferences,
@@ -1508,6 +1530,7 @@ function save() {
     captureSourceFilter: state.captureSourceFilter,
     newTaskPriority: state.newTaskPriority,
     installationId: state.installationId,
+    workNavigation: state.workNavigation,
     updatedAt: now(),
   };
 
@@ -1528,6 +1551,7 @@ function save() {
     localStorage.setItem(CAPTURE_SOURCE_FILTER_KEY, state.captureSourceFilter);
     localStorage.setItem(NEW_TASK_PRIORITY_KEY, state.newTaskPriority);
     localStorage.setItem(INSTALLATION_ID_KEY, state.installationId);
+    localStorage.setItem(WORK_NAVIGATION_KEY, JSON.stringify(state.workNavigation));
     return;
   }
 
@@ -1663,6 +1687,7 @@ function restoreScrollViewport(snapshot, selector) {
  * This is called after every state change.
  */
 function render() {
+  reconcileWorkNavigationRuntime();
   const task = activeTask();
   const previousGroupScrollLeft = document.querySelector("[data-sheet-tabs]");
   const groupScrollLeft = previousGroupScrollLeft ? Number(previousGroupScrollLeft.scrollLeft) || 0 : null;
@@ -1747,6 +1772,7 @@ function render() {
       restoreRenderViewports();
     });
   });
+  document.dispatchEvent(new CustomEvent("loop-work-navigation:rendered"));
 }
 
 function renderCompletionNotice() {
@@ -1968,6 +1994,9 @@ function renderRepositoryTypeToggles() {
 
 function renderRepositoryGroupPicker() {
   const open = repositoryGroupPickerOpen;
+  const growthSource = normalizeCurrentWorkNavigation().config.growth.sourceGroupId;
+  const canImportLearningPlan = state.activeGroupId === growthSource
+    && state.taskGroups.some((group) => group.id === growthSource);
   return `
     <div class="repository-group-picker ${open ? "is-open" : ""}">
       <button class="repository-group-trigger" type="button" data-action="toggle-repository-group-picker" aria-expanded="${open}" aria-haspopup="listbox" title="选择分组；双击可修改当前分组名称"><span class="repository-group-prefix">分组 ·</span><span class="repository-group-value">${esc(repositoryGroupLabel())}</span><span class="repository-group-chevron" aria-hidden="true">⌄</span></button>
@@ -1977,7 +2006,10 @@ function renderRepositoryGroupPicker() {
           <div class="repository-group-options">
             ${renderRepositoryGroupOptions()}
           </div>
-          <div class="repository-group-footer"><button type="button" data-action="add-group">＋ 新建分组</button></div>
+          <div class="repository-group-footer">
+            <button type="button" data-action="add-group">＋ 新建分组</button>
+            ${canImportLearningPlan ? `<button type="button" data-action="import-learning-plan" data-group-id="${growthSource}">导入学习计划…</button>` : ""}
+          </div>
         </div>
       ` : ""}
     </div>
@@ -2967,6 +2999,286 @@ function todayFocusItems() {
     })
     .sort((a, b) => b.score - a.score || b.updatedAt - a.updatedAt || a.task.order - b.task.order);
 }
+
+function normalizeCurrentWorkNavigation() {
+  state.workNavigation = workNavigationModel.normalizeWorkNavigation(state.workNavigation, {
+    groupIds: state.taskGroups.map((group) => group.id),
+  });
+  return state.workNavigation;
+}
+
+function workNavigationCandidates() {
+  const navigation = normalizeCurrentWorkNavigation();
+  const todayItems = todayFocusItems();
+  const work = workNavigationModel.resolveWorkCandidates({
+    tasks: state.tasks,
+    todayTaskIds: todayItems.map((item) => item.task.id),
+    sourceGroupId: navigation.config.growth.sourceGroupId,
+  });
+  const growth = workNavigationModel.resolveGrowthCandidates(
+    state.tasks,
+    navigation.config.growth.sourceGroupId,
+  );
+  return { todayItems, work, growth };
+}
+
+function reconcileWorkNavigationRuntime() {
+  const navigation = normalizeCurrentWorkNavigation();
+  const { work, growth } = workNavigationCandidates();
+  const runtime = navigation.runtime;
+  const referencedWork = state.tasks.find((task) => task.id === runtime.activeWorkTaskId && task.status !== "done");
+  if (!referencedWork) runtime.activeWorkTaskId = runtime.workAdvancePaused ? "" : work[0]?.id || "";
+  const referencedGrowth = growth.find((task) => task.id === runtime.activeGrowthTaskId);
+  if (!referencedGrowth) runtime.activeGrowthTaskId = runtime.growthAdvancePaused ? "" : growth[0]?.id || "";
+  return navigation;
+}
+
+function workNavigationTaskSnapshot(task) {
+  return {
+    id: task.id,
+    order: task.order,
+    groupId: task.groupId || "",
+    title: task.title || "",
+    description: task.description || "",
+    conclusion: task.conclusion || "",
+    status: task.status,
+    priority: task.priority,
+    tags: normalizeTaskTags(task.tags),
+    captureSource: task.captureSource || "",
+    nodes: task.nodes,
+    navigationRecovery: workNavigationModel.normalizeRecovery(task.navigationRecovery),
+    estimateMinutes: task.estimateMinutes || 0,
+    origin: workNavigationModel.normalizeOrigin(task.origin),
+    updatedAt: task.updatedAt,
+    resolvedAt: task.resolvedAt || "",
+  };
+}
+
+function workNavigationSnapshot() {
+  const navigation = reconcileWorkNavigationRuntime();
+  const { todayItems, work, growth } = workNavigationCandidates();
+  const taskById = new Map(state.tasks.map((task) => [task.id, task]));
+  const referencedWork = taskById.get(navigation.runtime.activeWorkTaskId) || null;
+  const activeWork = referencedWork?.status !== "done" ? referencedWork : navigation.runtime.workAdvancePaused ? null : work[0] || null;
+  const activeGrowth = growth.find((task) => task.id === navigation.runtime.activeGrowthTaskId) || (navigation.runtime.growthAdvancePaused ? null : growth[0] || null);
+  const workIds = new Set(work.map((task) => task.id));
+  return {
+    version: APP_VERSION || "dev",
+    navigation: JSON.parse(JSON.stringify(navigation)),
+    tasks: state.tasks.map(workNavigationTaskSnapshot),
+    groups: sort(state.taskGroups).map((group) => ({ id: group.id, title: group.title, order: group.order })),
+    todayTaskIds: todayItems.map((item) => item.task.id),
+    workTaskIds: work.map((task) => task.id),
+    growthTaskIds: growth.map((task) => task.id),
+    activeWorkTaskId: activeWork?.id || "",
+    activeGrowthTaskId: activeGrowth?.id || "",
+    detachedWorkTask: Boolean(activeWork && !workIds.has(activeWork.id)),
+    activeAppTaskId: state.activeTaskId || "",
+  };
+}
+
+function setWorkNavigationRuntime(patch = {}) {
+  const navigation = normalizeCurrentWorkNavigation();
+  navigation.runtime = {
+    ...navigation.runtime,
+    ...patch,
+    dateKey: workNavigationModel.localDateKey(new Date()),
+  };
+  state.workNavigation = workNavigationModel.normalizeWorkNavigation(navigation, {
+    groupIds: state.taskGroups.map((group) => group.id),
+  });
+}
+
+function updateWorkNavigationConfig(nextConfig) {
+  const navigation = normalizeCurrentWorkNavigation();
+  navigation.config = nextConfig;
+  if (nextConfig?.work?.autoAdvance) navigation.runtime.workAdvancePaused = false;
+  if (nextConfig?.growth?.autoAdvance) navigation.runtime.growthAdvancePaused = false;
+  state.workNavigation = workNavigationModel.normalizeWorkNavigation(navigation, {
+    groupIds: state.taskGroups.map((group) => group.id),
+  });
+  reconcileWorkNavigationRuntime();
+  save();
+  render();
+  return { success: true, navigation: state.workNavigation };
+}
+
+function openTaskFromNavigation(taskId, options = {}) {
+  const task = state.tasks.find((item) => item.id === taskId && item.status !== "done");
+  if (!task) return { success: false, code: "TASK_NOT_FOUND" };
+  if (options.addToToday === true) {
+    task.tags = normalizeTaskTags(task.tags);
+    task.tags.today = true;
+    task.updatedAt = now();
+  }
+  if (options.kind === "growth") {
+    setWorkNavigationRuntime({ activeGrowthTaskId: task.id, growthAdvancePaused: false });
+  } else {
+    setWorkNavigationRuntime({ activeWorkTaskId: task.id, workAdvancePaused: false });
+  }
+  openTaskFromGlobalList(task.id);
+  save();
+  render();
+  return { success: true, code: "OPENED", taskId: task.id };
+}
+
+function nextNavigationTask(kind) {
+  const { work, growth } = workNavigationCandidates();
+  return kind === "growth" ? growth[0] || null : work[0] || null;
+}
+
+function advanceNavigationAfterCompletion(taskId) {
+  const navigation = normalizeCurrentWorkNavigation();
+  let kind = "";
+  if (navigation.runtime.activeGrowthTaskId === taskId) kind = "growth";
+  if (navigation.runtime.activeWorkTaskId === taskId) kind = "work";
+  if (!kind) return null;
+  const autoAdvance = kind === "growth"
+    ? navigation.config.growth.autoAdvance
+    : navigation.config.work.autoAdvance;
+  const next = autoAdvance ? nextNavigationTask(kind) : null;
+  if (kind === "growth") {
+    navigation.runtime.activeGrowthTaskId = next?.id || "";
+    navigation.runtime.growthAdvancePaused = !autoAdvance;
+  } else {
+    navigation.runtime.activeWorkTaskId = next?.id || "";
+    navigation.runtime.workAdvancePaused = !autoAdvance;
+  }
+  if (next) openTaskFromGlobalList(next.id);
+  return { kind, nextTaskId: next?.id || "" };
+}
+
+function completeTaskFromNavigation(taskId, kind) {
+  const navigation = normalizeCurrentWorkNavigation();
+  const runtimeKey = kind === "growth" ? "activeGrowthTaskId" : "activeWorkTaskId";
+  if (navigation.runtime[runtimeKey] && navigation.runtime[runtimeKey] !== taskId) {
+    return { success: false, code: "STALE_TASK" };
+  }
+  const task = state.tasks.find((item) => item.id === taskId);
+  if (!task || task.status === "done") return { success: false, code: "TASK_NOT_FOUND" };
+  openTaskFromGlobalList(task.id);
+  toggleTaskDone(task.id);
+  if (task.status !== "done") {
+    render();
+    return { success: false, code: "CONCLUSION_REQUIRED", taskId: task.id };
+  }
+  const advanced = advanceNavigationAfterCompletion(task.id);
+  save();
+  render();
+  return { success: true, code: "COMPLETED", taskId: task.id, nextTaskId: advanced?.nextTaskId || "" };
+}
+
+function saveNavigationRecovery(taskId, value = {}) {
+  const task = state.tasks.find((item) => item.id === taskId && item.status !== "done");
+  if (!task) return { success: false, code: "TASK_NOT_FOUND" };
+  task.navigationRecovery = workNavigationModel.normalizeRecovery({
+    ...value,
+    updatedAt: now(),
+  });
+  task.updatedAt = now();
+  save();
+  render();
+  return { success: true, code: "SAVED", taskId };
+}
+
+function openGrowthGroup() {
+  const sourceGroupId = normalizeCurrentWorkNavigation().config.growth.sourceGroupId;
+  if (!state.taskGroups.some((group) => group.id === sourceGroupId)) {
+    return { success: false, code: "GROUP_NOT_FOUND" };
+  }
+  selectGroup(sourceGroupId);
+  state.activeTaskId = tasksInActiveGroup().find((task) => task.status !== "done")?.id || tasksInActiveGroup()[0]?.id || "";
+  save();
+  render();
+  return { success: true, code: "OPENED", groupId: sourceGroupId };
+}
+
+function makeImportedLearningTask(item, groupId, planId, order) {
+  const createdAt = now();
+  const taskId = id("task");
+  return {
+    id: taskId,
+    order,
+    groupId,
+    title: item.title,
+    description: item.description,
+    status: "active",
+    priority: "medium",
+    tags: normalizeTaskTags({}),
+    recurrence: normalizeTaskRecurrence({}),
+    hypothesis: "",
+    hypothesisUpdatedAt: "",
+    conclusion: "",
+    navigationRecovery: workNavigationModel.normalizeRecovery(null),
+    estimateMinutes: item.estimateMinutes,
+    origin: { kind: "learning-plan", planId, itemId: item.itemId },
+    deadlineAt: "",
+    deadlineReminderMinutes: defaultDeadlineReminderMinutes,
+    notes: "",
+    knowledgeNote: knowledgeDocument.createKnowledgeNoteMetadata({
+      noteId: id("note"), taskId, title: item.title, createdAt, updatedAt: createdAt,
+    }),
+    createdAt,
+    updatedAt: createdAt,
+    nodes: item.nodes.map((node, index) => ({
+      ...makeNode(taskId, null, index + 1),
+      title: node.title,
+      order: node.order,
+    })),
+  };
+}
+
+function importLearningPlan(value, options = {}) {
+  const preview = workNavigationModel.previewLearningPlanImport(value, state.tasks);
+  if (!preview.valid) return { success: false, code: "INVALID_PLAN", errors: preview.errors };
+  let group = state.taskGroups.find((item) => item.id === options.groupId);
+  if (!group) group = state.taskGroups.find((item) => item.title === preview.plan.targetGroup);
+  if (!group) {
+    group = { id: id("group"), title: preview.plan.targetGroup, order: state.taskGroups.length + 1 };
+    state.taskGroups.push(group);
+  }
+  const groupOrders = state.tasks.filter((task) => task.groupId === group.id).map((task) => Number(task.order) || 0);
+  let nextOrder = Math.max(0, ...groupOrders) + 1;
+  const imported = preview.newTasks.map((item) => makeImportedLearningTask(item, group.id, preview.plan.id, nextOrder++));
+  state.tasks.push(...imported);
+  if (!normalizeCurrentWorkNavigation().config.growth.sourceGroupId) {
+    state.workNavigation.config.growth.sourceGroupId = group.id;
+  }
+  reconcileWorkNavigationRuntime();
+  save();
+  render();
+  return {
+    success: true,
+    code: "IMPORTED",
+    groupId: group.id,
+    importedCount: imported.length,
+    existingCount: preview.existingTasks.length,
+  };
+}
+
+globalThis.LoopWorkNavigationBridge = Object.freeze({
+  snapshot: workNavigationSnapshot,
+  setRuntime(patch) {
+    setWorkNavigationRuntime(patch);
+    save();
+    render();
+    return { success: true };
+  },
+  updateConfig: updateWorkNavigationConfig,
+  openTask: openTaskFromNavigation,
+  completeTask: completeTaskFromNavigation,
+  saveRecovery: saveNavigationRecovery,
+  openGrowthGroup,
+  importLearningPlan,
+  openSettings() {
+    activeSettingsPage = "advanced";
+    state.settingsOpen = true;
+    state.calendarOpen = false;
+    state.reviewOpen = false;
+    render();
+    return { success: true };
+  },
+});
 
 function recurrenceSummaryLabel(value) {
   const recurrence = normalizeTaskRecurrence(value);
@@ -6418,6 +6730,13 @@ async function action(data, event = null) {
     selectGroup(data.groupId);
   }
   if (data.action === "add-group") addGroup();
+  if (data.action === "import-learning-plan") {
+    const groupId = data.groupId;
+    repositoryGroupPickerOpen = false;
+    render();
+    document.dispatchEvent(new CustomEvent("loop-work-navigation:import-plan", { detail: { groupId } }));
+    return;
+  }
   if (data.action === "rename-group") {
     startRenameGroup(data.groupId);
     render();
@@ -6439,7 +6758,10 @@ async function action(data, event = null) {
   }
   if (data.action === "toggle-task-done") {
     activateRepositoryTask(data.taskId);
+    const wasDone = state.tasks.find((item) => item.id === data.taskId)?.status === "done";
     toggleTaskDone(data.taskId);
+    const isDone = state.tasks.find((item) => item.id === data.taskId)?.status === "done";
+    if (!wasDone && isDone) advanceNavigationAfterCompletion(data.taskId);
   }
   if (data.action === "toggle-task-tag") toggleTaskTag(data.taskId, data.tag);
   if (data.action === "add-node") addNode(data.taskId, data.parentId || null);
@@ -6680,6 +7002,9 @@ function createTask(title, shouldRender = true) {
     hypothesis: "",
     hypothesisUpdatedAt: "",
     conclusion: "",
+    navigationRecovery: workNavigationModel.normalizeRecovery(null),
+    estimateMinutes: 0,
+    origin: null,
     deadlineAt: "",
     deadlineReminderMinutes: defaultDeadlineReminderMinutes,
     notes: "",
@@ -6832,6 +7157,10 @@ async function deleteGroup(groupId, taskPolicy = "ungroup") {
   }
   state.taskGroups = state.taskGroups.filter((item) => item.id !== groupId);
   state.taskGroups = normalizeTaskGroups(state.taskGroups, state.tasks);
+  if (normalizeCurrentWorkNavigation().config.growth.sourceGroupId === groupId) {
+    state.workNavigation.config.growth.sourceGroupId = "";
+    state.workNavigation.runtime.activeGrowthTaskId = "";
+  }
   if (state.activeGroupId === groupId) {
     state.activeGroupId = deleteTasks ? ALL_TASKS_GROUP_ID : UNGROUPED_TASKS_GROUP_ID;
     state.activeTaskId = tasksInActiveGroup()[0]?.id || "";
@@ -7156,6 +7485,9 @@ async function deleteTask(taskId, { skipDraftPrompt = false } = {}) {
     void desktopKnowledgeFile.unwatch({ noteId: task.knowledgeNote?.noteId || task.id });
   }
   state.tasks = state.tasks.filter((item) => item.id !== taskId);
+  const navigation = normalizeCurrentWorkNavigation();
+  if (navigation.runtime.activeWorkTaskId === taskId) navigation.runtime.activeWorkTaskId = "";
+  if (navigation.runtime.activeGrowthTaskId === taskId) navigation.runtime.activeGrowthTaskId = "";
   reorder(state.tasks);
   if (state.activeTaskId === taskId) {
     const groupTasks = tasksInActiveGroup();
@@ -7868,6 +8200,7 @@ async function initializeTodayWidgetBridge() {
       desktopTodayWidget.respondCompletion({ requestId, success: false, code: "TASK_NOT_FOUND" });
       return;
     }
+    const wasDone = task.status === "done";
     if (task.captureSource === "today-widget" && task.status !== "done" && !task.conclusion.trim()) {
       task.status = "done";
       task.resolvedAt = now();
@@ -7878,6 +8211,7 @@ async function initializeTodayWidgetBridge() {
       toggleTaskDone(taskId);
     }
     const success = task.status === "done";
+    if (!wasDone && success) advanceNavigationAfterCompletion(taskId);
     render();
     desktopTodayWidget.respondCompletion({
       requestId,
@@ -7981,6 +8315,9 @@ async function bootstrap() {
   state.newTaskPriority = data.newTaskPriority;
   state.knowledgeRecovery = recovery;
   state.installationId = normalizeInstallationId(data.installationId);
+  state.workNavigation = workNavigationModel.normalizeWorkNavigation(data.workNavigation, {
+    groupIds: state.taskGroups.map((group) => group.id),
+  });
   await restoreKnowledgeRecoveryDrafts();
   state.activeTaskId = tasksInActiveGroup()[0]?.id || "";
   syncRecurringTasks(new Date());
