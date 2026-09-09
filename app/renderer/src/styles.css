@@ -14924,3 +14924,22 @@ button.settings-row:hover .settings-row-copy strong {
   background:transparent;
   box-shadow:none;
 }
+
+/* v0.1.179 group-scoped batch task entry. */
+.repository-group-footer .repository-batch-add {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  font-weight:650;
+}
+
+.repository-group-footer .repository-batch-add small {
+  flex:0 0 auto;
+  padding:2px 5px;
+  border-radius:4px;
+  background:color-mix(in srgb,var(--handoff-focus-800) 10%,transparent);
+  color:var(--handoff-focus-800);
+  font-size:calc(8 * var(--font-unit));
+  font-weight:720;
+}

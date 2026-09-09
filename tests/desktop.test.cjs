@@ -4544,3 +4544,38 @@ test("bug feedback payload contains only form and optional basic environment fie
   assert.equal(payload.tasks, undefined);
   assert.doesNotMatch(JSON.stringify(payload), /不得上传/);
 });
+
+test("batch import appends selected tasks and immediately reconciles the growth queue", async () => {
+  const harness = await rendererHarness();
+  const result = harness.json(`(() => {
+    render = () => {};
+    save = () => {};
+    state.taskGroups = [{ id: "growth", title: "个人成长 · RDMA", order: 1 }];
+    state.activeGroupId = "growth";
+    state.tasks = normalizeTasks([{ id: "existing", groupId: "growth", title: "理解 Queue Pair", status: "active", order: 1 }]);
+    state.workNavigation = workNavigationModel.defaultWorkNavigation(new Date("2026-09-09T09:00:00"));
+    state.workNavigation.config.growth.sourceGroupId = "growth";
+    const preview = workNavigationModel.previewTaskBatchImport("1. 理解 Queue Pair\\n2. 配置 CQ\\n3. 运行实验", state.tasks, { groupId: "growth", defaultEstimateMinutes: 60 });
+    const selectedKeys = preview.newTasks.map((item) => item.key);
+    const imported = importTaskBatch("1. 理解 Queue Pair\\n2. 配置 CQ\\n3. 运行实验", {
+      groupId: "growth",
+      defaultEstimateMinutes: 60,
+      selectedKeys,
+      estimateMinutesByKey: { [selectedKeys[0]]: 45 },
+    });
+    return {
+      imported,
+      titles: state.tasks.map((task) => task.title),
+      estimates: state.tasks.map((task) => task.estimateMinutes),
+      origins: state.tasks.slice(1).map((task) => task.origin.kind),
+      growthQueueIds: workNavigationSnapshot().growthTaskIds,
+    };
+  })()`);
+
+  assert.equal(result.imported.importedCount, 2);
+  assert.equal(result.imported.existingCount, 1);
+  assert.deepEqual(result.titles, ["理解 Queue Pair", "配置 CQ", "运行实验"]);
+  assert.deepEqual(result.estimates.slice(1), [45, 60]);
+  assert.deepEqual(result.origins, ["task-batch", "task-batch"]);
+  assert.equal(result.growthQueueIds.length, 3);
+});

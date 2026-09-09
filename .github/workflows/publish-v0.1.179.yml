@@ -1,0 +1,143 @@
+name: Publish v0.1.179
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/publish-v0.1.179.yml
+
+concurrency:
+  group: publish-v0.1.179
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify v0.1.179 source
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Verify batch task import
+        shell: bash
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          test "$version" = "0.1.179"
+          node --check app/renderer/src/work-navigation-model.js
+          node --check app/renderer/src/work-rhythm.js
+          node --test tests/work-navigation-model.test.cjs tests/work-rhythm-ui.test.cjs
+          grep -q 'loop-task-batch' app/renderer/src/work-navigation-model.js
+          grep -q '批量添加任务' app/renderer/src/work-rhythm.js
+
+  build:
+    name: Build v0.1.179 ${{ matrix.platform }}
+    needs: verify
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macOS
+            os: macos-latest
+            script: npm run dist:mac -- --x64 --arm64 --publish never
+            artifact: v0.1.179-macos
+          - platform: Windows
+            os: windows-latest
+            script: npm run dist:win -- --publish never
+            artifact: v0.1.179-windows
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Check JavaScript and tests
+        run: npm run check
+      - name: Build app
+        run: ${{ matrix.script }}
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+      - name: Test Windows installer upgrade matrix
+        if: matrix.platform == 'Windows'
+        shell: pwsh
+        run: |
+          $candidate = Get-ChildItem release -Filter "Loop-*-x64-setup.exe" | Select-Object -First 1
+          if (-not $candidate) { throw "Windows installer was not produced." }
+          ./tests/windows-upgrade-installer.test.ps1 -CandidateInstaller $candidate.FullName
+      - name: Verify update metadata
+        run: node tools/verify-update-artifacts.cjs release
+      - name: Stage v0.1.179 release assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            release/*.dmg
+            release/*.zip
+            release/*.exe
+            release/*.blockmap
+            release/latest.yml
+            release/latest-mac.yml
+          if-no-files-found: error
+          retention-days: 2
+
+  publish:
+    name: Publish v0.1.179 release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Refuse to replace an existing tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          if gh api "repos/${{ github.repository }}/git/ref/tags/v0.1.179" >/dev/null 2>&1; then
+            echo "v0.1.179 already exists; refusing to replace it."
+            exit 1
+          fi
+      - name: Collect v0.1.179 release assets
+        uses: actions/download-artifact@v4
+        with:
+          pattern: v0.1.179-*
+          path: release
+          merge-multiple: true
+      - name: Verify complete cross-platform update feed
+        run: node tools/verify-update-artifacts.cjs release --require-all-platforms
+      - name: Publish v0.1.179
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v0.1.179
+          target_commitish: ${{ github.sha }}
+          name: v0.1.179
+          body: |
+            ## 分组批量添加任务
+
+            - 每个真实任务分组都可从分组选择器或右键菜单打开批量添加。
+            - 支持直接粘贴逐行文本、编号列表、Markdown 复选框，以及选择 JSON、TXT 或 Markdown 文件。
+            - 导入前提供任务选择、单项时长调整、预计总时长和重复项原因预览。
+            - 默认每项 60 分钟，并按输入顺序追加到目标分组；同批次重复和同组同名任务会安全跳过。
+            - 导入个人成长来源分组后，任务立即进入成长队列，无需额外同步。
+            - 保持旧版 `loop-learning-plan` JSON 兼容，并新增 12 小时 RDMA 细粒度任务样例。
+          make_latest: true
+          files: |
+            release/*.dmg
+            release/*.zip
+            release/*.exe
+            release/*.blockmap
+            release/latest.yml
+            release/latest-mac.yml

@@ -76,9 +76,24 @@ test("overlay focus, Escape and reduced motion remain accessible", () => {
   assert.match(css, /prefers-reduced-motion:reduce/);
 });
 
+test("every personal group exposes the two-step batch task flow", () => {
+  assert.match(app, /data-action="batch-add-tasks"/);
+  assert.match(app, /repository-batch-add/);
+  assert.match(app, /loop-task-batch:open/);
+  assert.match(js, /批量添加任务/);
+  assert.match(js, /previewTaskBatchImport/);
+  assert.match(js, /data-wr-batch-preview/);
+  assert.match(js, /data-wr-batch-confirm/);
+  assert.match(js, /bridge\.importTaskBatch/);
+  assert.match(js, /选择 JSON \/ 文本文件/);
+  assert.match(css, /\.wr-batch-dialog/);
+  assert.match(css, /\.wr-batch-preview-row/);
+  assert.doesNotMatch(js, /<h3>导入学习计划<\/h3>/);
+});
+
 test("release version, scripts and cache keys are aligned", () => {
-  assert.equal(pkg.version, "0.1.178");
-  assert.match(html, /work-navigation-model\.js\?v=0\.1\.178/);
-  assert.match(html, /work-rhythm\.css\?v=0\.1\.178/);
-  assert.match(html, /work-rhythm\.js\?v=0\.1\.178/);
+  assert.equal(pkg.version, "0.1.179");
+  assert.match(html, /work-navigation-model\.js\?v=0\.1\.179/);
+  assert.match(html, /work-rhythm\.css\?v=0\.1\.179/);
+  assert.match(html, /work-rhythm\.js\?v=0\.1\.179/);
 });

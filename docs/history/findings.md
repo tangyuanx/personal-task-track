@@ -1,5 +1,16 @@
 # Findings & Decisions
 
+## Phase 37 Group Batch Task Import (2026-09-09)
+- Batch import belongs to the existing group interaction, not to a separate global task system. Every real group exposes the same entry, while `全部记录` and `未分组` remain read-only aggregate scopes.
+- The safe workflow is input, preview, then commit. No task is persisted until the user sees the recognized count, duplicates, selected items, per-item durations, target group, and total estimated time.
+- Plain text is the lowest-friction AI handoff format: one non-heading line becomes one task, common list prefixes are removed, and each task defaults to 60 minutes. Structured JSON preserves stable IDs, descriptions, ordered process nodes, and explicit durations.
+- The general schema is `loop-task-batch` version 1. Existing `loop-learning-plan` files remain valid and share the same preview and import pipeline so the upgrade is additive.
+- Idempotency uses stable source origin first, same-group normalized title second, and duplicates inside the current input third. Duplicate tasks remain visible in preview with a reason but are disabled by default.
+- Import appends selected tasks in source order, uses ordinary LOOP task fields, writes once, then reconciles navigation. If the target is the configured growth-source group, the new tasks immediately become growth candidates without copying them to another model.
+- A normalization defect cleared a valid growth source when its ID appeared first in the group array because `Array.map(identifier)` passed the array index as the helper's second argument. Wrapping the call preserves the intended identifier limit for every group position.
+- The RDMA demo contains twelve independent one-hour outcomes with evidence-oriented process nodes. It is designed as import data, not as a parallel learning tracker.
+- Final local verification at version `0.1.179` passes 184 desktop/client tests and 11 bug-report service tests. The release workflow refuses to replace an existing tag and publishes only after both platform builds and update metadata verification succeed.
+
 ## Phase 35 Configurable Deadline Reminder Timing (2026-09-03)
 - Each task owns one optional `deadlineReminderMinutes` value. Supported values are due time (`0`), 5/15/30 minutes, 1/2 hours, 1/2 days, and 1 week before the deadline; `null` disables the reminder.
 - The product default is 60 minutes before the deadline. Storage normalization supplies this default when the field is absent, so existing tasks and newly created tasks behave consistently without a destructive data migration.

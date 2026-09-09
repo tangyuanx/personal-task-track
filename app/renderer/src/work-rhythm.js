@@ -145,23 +145,137 @@
   function importDialog(event) {
     const data = snapshot(); if (!data) return;
     const requestedGroupId = event?.detail?.groupId || "";
-    const sourceId = requestedGroupId || data.navigation.config.growth.sourceGroupId;
-    const source = groupById(data, sourceId);
-    const layer = showOverlay(`<section class="wr-dialog wr-import-dialog" role="dialog" aria-modal="true" aria-label="导入学习计划"><header><div><h3>导入学习计划</h3><p>${source ? `导入到「${esc(source.title)}」` : "按计划文件中的目标分组导入"}</p></div><button class="wr-icon-button" type="button" data-wr-close aria-label="关闭">${icon("close")}</button></header><main><label class="wr-file"><input type="file" accept="application/json,.json" data-wr-plan-file><span>选择 JSON 文件</span></label><textarea class="wr-plan-json" data-wr-plan-json spellcheck="false" placeholder='{"schemaVersion":1,"type":"loop-learning-plan",...}'></textarea><div class="wr-import-preview" data-wr-import-preview>选择文件或粘贴内容后，将在导入前校验并预览。</div></main><footer><button type="button" data-wr-close>取消</button><button class="primary" type="button" data-wr-confirm-import disabled>确认导入</button></footer></section>`);
-    let value = null;
-    const textarea = layer.querySelector("[data-wr-plan-json]");
-    const preview = layer.querySelector("[data-wr-import-preview]");
-    const confirm = layer.querySelector("[data-wr-confirm-import]");
-    const inspect = () => {
-      try { value = JSON.parse(textarea.value); } catch (_) { value = null; }
-      const result = value ? model.previewLearningPlanImport(value, data.tasks) : null;
-      if (!result) { preview.className = "wr-import-preview"; preview.textContent = textarea.value.trim() ? "JSON 格式无效" : "选择文件或粘贴内容后，将在导入前校验并预览。"; confirm.disabled = true; return; }
-      if (!result.valid) { preview.className = "wr-import-preview error"; preview.textContent = result.errors[0]?.message || "计划内容无效"; confirm.disabled = true; return; }
-      preview.className = "wr-import-preview valid"; preview.textContent = `${result.plan.title} · 新增 ${result.newTasks.length} 项 · 已存在 ${result.existingTasks.length} 项`; confirm.disabled = false;
+    const initialGroup = groupById(data, requestedGroupId) || data.groups[0];
+    if (!initialGroup) return toast("请先创建一个任务分组");
+    const draft = {
+      raw: "",
+      groupId: initialGroup.id,
+      defaultEstimateMinutes: 60,
+      preview: null,
+      selectedKeys: new Set(),
+      estimateMinutesByKey: {},
     };
-    textarea.addEventListener("input", inspect);
-    layer.querySelector("[data-wr-plan-file]")?.addEventListener("change", async (changeEvent) => { const file = changeEvent.target.files?.[0]; if (file) { textarea.value = await file.text(); inspect(); } });
-    confirm.addEventListener("click", () => { const result = bridge.importLearningPlan(value, { groupId: sourceId }); if (!result.success) return toast("学习计划导入失败"); closeOverlay(); syncNav(); toast(`已导入 ${result.importedCount} 项，跳过 ${result.existingCount} 项`); });
+    const layer = showOverlay("");
+    const sourceId = data.navigation.config.growth.sourceGroupId;
+    const durationOptions = (value) => [...new Set([30, 45, 60, 90, Number(value)])]
+      .filter((minutes) => Number.isFinite(minutes) && minutes > 0)
+      .sort((a, b) => a - b)
+      .map((minutes) => `<option value="${minutes}" ${minutes === Number(value) ? "selected" : ""}>${minutes} 分钟</option>`).join("");
+
+    function inspectEntry() {
+      const textarea = layer.querySelector("[data-wr-batch-input]");
+      const group = layer.querySelector("[data-wr-batch-group]");
+      const minutes = layer.querySelector("[data-wr-batch-minutes]");
+      const status = layer.querySelector("[data-wr-batch-status]");
+      const previewButton = layer.querySelector("[data-wr-batch-preview]");
+      if (!textarea || !group || !minutes || !status || !previewButton) return;
+      draft.raw = textarea.value;
+      draft.groupId = group.value;
+      draft.defaultEstimateMinutes = Number(minutes.value) || 60;
+      const result = model.previewTaskBatchImport(draft.raw, data.tasks, {
+        groupId: draft.groupId,
+        defaultEstimateMinutes: draft.defaultEstimateMinutes,
+      });
+      draft.preview = result;
+      if (!draft.raw.trim()) {
+        status.className = "wr-batch-status";
+        status.textContent = "每行一项任务";
+        previewButton.disabled = true;
+      } else if (!result.valid) {
+        status.className = "wr-batch-status error";
+        status.textContent = result.errors[0]?.message || "任务列表无效";
+        previewButton.disabled = true;
+      } else {
+        status.className = "wr-batch-status";
+        status.textContent = `识别到 ${result.items.length} 项`;
+        previewButton.disabled = false;
+      }
+      const sourceNote = layer.querySelector("[data-wr-batch-source]");
+      if (sourceNote) {
+        sourceNote.classList.toggle("muted", draft.groupId !== sourceId);
+        sourceNote.innerHTML = draft.groupId === sourceId
+          ? "<i aria-hidden=\"true\"></i><span>该分组是个人成长阶段的任务来源</span>"
+          : "<span>该分组不会进入个人成长队列</span>";
+      }
+    }
+
+    function renderEntry() {
+      layer.innerHTML = `<section class="wr-dialog wr-batch-dialog" role="dialog" aria-modal="true" aria-label="批量添加任务"><header><div><h3>批量添加任务</h3><p>把任务列表粘贴到当前分组</p></div><button class="wr-icon-button" type="button" data-wr-close aria-label="关闭">${icon("close")}</button></header><main><div class="wr-batch-fields"><label><span>添加到</span><select data-wr-batch-group>${data.groups.map((group) => `<option value="${esc(group.id)}" ${group.id === draft.groupId ? "selected" : ""}>${esc(group.title)}</option>`).join("")}</select></label><label><span>默认时长</span><select data-wr-batch-minutes>${durationOptions(draft.defaultEstimateMinutes)}</select></label></div><p class="wr-batch-source" data-wr-batch-source></p><div class="wr-batch-input-head"><span>任务列表</span><label class="wr-batch-file">选择 JSON / 文本文件<input type="file" accept="application/json,.json,text/plain,.txt,.md" data-wr-batch-file></label></div><textarea class="wr-batch-input" data-wr-batch-input spellcheck="false" placeholder="1. 区分 RDMA、RoCE 与 InfiniBand\n2. 画出 RDMA 数据路径\n3. 理解 Queue Pair 与 QP 状态机">${esc(draft.raw)}</textarea><p class="wr-batch-format">编号、项目符号和 Markdown 复选框会自动清理。</p></main><footer><span class="wr-batch-status" data-wr-batch-status>每行一项任务</span><button type="button" data-wr-close>取消</button><button class="primary" type="button" data-wr-batch-preview disabled>预览</button></footer></section>`;
+      const textarea = layer.querySelector("[data-wr-batch-input]");
+      textarea?.addEventListener("input", inspectEntry);
+      layer.querySelector("[data-wr-batch-group]")?.addEventListener("change", inspectEntry);
+      layer.querySelector("[data-wr-batch-minutes]")?.addEventListener("change", inspectEntry);
+      layer.querySelector("[data-wr-batch-file]")?.addEventListener("change", async (changeEvent) => {
+        const file = changeEvent.target.files?.[0];
+        if (!file || !textarea) return;
+        textarea.value = await file.text();
+        inspectEntry();
+      });
+      layer.querySelector("[data-wr-batch-preview]")?.addEventListener("click", () => {
+        if (!draft.preview?.valid) return;
+        draft.selectedKeys = new Set(draft.preview.newTasks.map((item) => item.key));
+        draft.estimateMinutesByKey = Object.fromEntries(draft.preview.newTasks.map((item) => [item.key, item.estimateMinutes]));
+        renderPreview();
+      });
+      inspectEntry();
+      requestAnimationFrame(() => textarea?.focus({ preventScroll: true }));
+    }
+
+    function duplicateLabel(reason) {
+      if (reason === "input") return "列表中重复，将跳过";
+      if (reason === "origin") return "该导入项已存在，将跳过";
+      return "同名任务已在分组中，将跳过";
+    }
+
+    function updatePreviewSummary() {
+      const selected = draft.preview.newTasks.filter((item) => draft.selectedKeys.has(item.key));
+      const totalMinutes = selected.reduce((sum, item) => sum + (Number(draft.estimateMinutesByKey[item.key]) || item.estimateMinutes), 0);
+      const count = layer.querySelector("[data-wr-batch-selected-count]");
+      const total = layer.querySelector("[data-wr-batch-total-time]");
+      const toggle = layer.querySelector("[data-wr-batch-toggle-all]");
+      const confirm = layer.querySelector("[data-wr-batch-confirm]");
+      if (count) count.textContent = String(selected.length);
+      if (total) total.textContent = totalMinutes % 60 === 0 ? `${totalMinutes / 60} 小时` : `${Math.floor(totalMinutes / 60)}小时${totalMinutes % 60}分`;
+      if (toggle) toggle.textContent = selected.length === draft.preview.newTasks.length ? "取消全选" : "全选";
+      if (confirm) { confirm.textContent = `添加 ${selected.length} 个任务`; confirm.disabled = selected.length === 0; }
+    }
+
+    function renderPreview() {
+      const group = groupById(data, draft.groupId);
+      const preview = draft.preview;
+      layer.innerHTML = `<section class="wr-dialog wr-batch-dialog" role="dialog" aria-modal="true" aria-label="批量添加任务预览"><header><div><h3>批量添加任务</h3><p>添加到「${esc(group?.title || "未找到分组")}」</p></div><button class="wr-icon-button" type="button" data-wr-close aria-label="关闭">${icon("close")}</button></header><main><div class="wr-batch-summary"><span><b data-wr-batch-selected-count>${preview.newTasks.length}</b><small>将新增</small></span><span><b>${preview.existingTasks.length}</b><small>已存在</small></span><span><b data-wr-batch-total-time></b><small>预计总时长</small></span></div><div class="wr-batch-preview-head"><span>任务预览</span><button type="button" data-wr-batch-toggle-all>取消全选</button></div><div class="wr-batch-preview-list">${preview.items.map((item, index) => `<label class="wr-batch-preview-row ${item.duplicateReason ? "duplicate" : ""}"><input type="checkbox" data-wr-batch-select="${esc(item.key)}" ${item.duplicateReason ? "disabled" : "checked"}><span><strong>${esc(item.title)}</strong><small class="${item.duplicateReason ? "duplicate-label" : ""}">${item.duplicateReason ? duplicateLabel(item.duplicateReason) : `第 ${String(index + 1).padStart(2, "0")} 项`}</small></span><select data-wr-batch-duration="${esc(item.key)}" ${item.duplicateReason ? "disabled" : ""}>${durationOptions(item.estimateMinutes)}</select></label>`).join("")}</div></main><footer><span>确认后按当前顺序追加</span><button type="button" data-wr-batch-back>返回修改</button><button class="primary" type="button" data-wr-batch-confirm>添加任务</button></footer></section>`;
+      layer.querySelectorAll("[data-wr-batch-select]").forEach((input) => input.addEventListener("change", () => {
+        if (input.checked) draft.selectedKeys.add(input.dataset.wrBatchSelect);
+        else draft.selectedKeys.delete(input.dataset.wrBatchSelect);
+        updatePreviewSummary();
+      }));
+      layer.querySelectorAll("[data-wr-batch-duration]").forEach((select) => select.addEventListener("change", () => {
+        draft.estimateMinutesByKey[select.dataset.wrBatchDuration] = Number(select.value) || 60;
+        updatePreviewSummary();
+      }));
+      layer.querySelector("[data-wr-batch-toggle-all]")?.addEventListener("click", () => {
+        const shouldSelect = draft.selectedKeys.size !== preview.newTasks.length;
+        draft.selectedKeys = new Set(shouldSelect ? preview.newTasks.map((item) => item.key) : []);
+        layer.querySelectorAll("[data-wr-batch-select]:not(:disabled)").forEach((input) => { input.checked = shouldSelect; });
+        updatePreviewSummary();
+      });
+      layer.querySelector("[data-wr-batch-back]")?.addEventListener("click", renderEntry);
+      layer.querySelector("[data-wr-batch-confirm]")?.addEventListener("click", () => {
+        const result = bridge.importTaskBatch(draft.raw, {
+          groupId: draft.groupId,
+          defaultEstimateMinutes: draft.defaultEstimateMinutes,
+          selectedKeys: [...draft.selectedKeys],
+          estimateMinutesByKey: draft.estimateMinutesByKey,
+        });
+        if (!result.success) return toast(result.code === "GROUP_NOT_FOUND" ? "目标分组已不存在" : "任务导入失败");
+        closeOverlay();
+        syncNav();
+        toast(`已添加 ${result.importedCount} 个任务到「${group?.title || "分组"}」`);
+      });
+      updatePreviewSummary();
+    }
+
+    renderEntry();
   }
 
   function settingsForm(data, embedded = false) {
@@ -301,7 +415,7 @@
   });
   document.addEventListener("pointerdown", (event) => { if (ui.overlay && event.target === ui.overlay) closeOverlay(); });
   document.addEventListener("loop-work-navigation:rendered", () => { syncNav(); syncSettings(); });
-  document.addEventListener("loop-work-navigation:import-plan", importDialog);
+  document.addEventListener("loop-task-batch:open", importDialog);
   document.addEventListener("loop-work-rhythm:disable", () => { ui.enabled = false; localStorage.setItem(ENABLED_KEY, "0"); closeOverlay(); syncNav(); });
   document.addEventListener("visibilitychange", () => { if (!document.hidden) syncNav(); });
   window.addEventListener("focus", syncNav);

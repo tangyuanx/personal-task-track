@@ -1,5 +1,21 @@
 # Progress Log
 
+## Session: 2026-09-09 Group Batch Task Import
+
+### Phase 37: Batch import and v0.1.179 publication
+- **Status:** in progress
+- Actions taken:
+  - Synchronized with the current `v0.1.178` baseline and retained the existing Focus Panel navigation structure and green visual system.
+  - Added a `批量添加任务…` entry to each real group in the repository picker and group context menu; virtual aggregate groups remain unchanged.
+  - Replaced the learning-only import dialog with a two-step batch flow that accepts pasted text, numbered lists, Markdown checkboxes, and JSON/TXT/Markdown files.
+  - Added preview selection, duplicate reasons, per-task duration editing, total-time calculation, and a 60-minute default before any task is written.
+  - Added the general `loop-task-batch` schema while preserving the existing `loop-learning-plan` schema and origin-based idempotency.
+  - Kept imported tasks in normal LOOP storage, appended them in input order, saved once, and reconciled the work/growth navigation immediately.
+  - Fixed growth-source normalization when the selected source is the first group; the previous callback signature accidentally treated the first array index as an identifier length limit.
+  - Added a directly importable twelve-task RDMA demo with one-hour objectives and observable process nodes.
+  - Passed the complete project check with 184 desktop/client tests and 11 bug-report service tests.
+  - Prepared patch version `0.1.179` and a protected cross-platform publication workflow.
+
 ## Session: 2026-09-03 Configurable Deadline Reminder Release
 
 ### Phase 35: Per-task reminder timing and v0.1.159 publication

@@ -1995,8 +1995,8 @@ function renderRepositoryTypeToggles() {
 function renderRepositoryGroupPicker() {
   const open = repositoryGroupPickerOpen;
   const growthSource = normalizeCurrentWorkNavigation().config.growth.sourceGroupId;
-  const canImportLearningPlan = state.activeGroupId === growthSource
-    && state.taskGroups.some((group) => group.id === growthSource);
+  const activePersonalGroup = state.taskGroups.find((group) => group.id === state.activeGroupId) || null;
+  const isGrowthSource = activePersonalGroup?.id === growthSource;
   return `
     <div class="repository-group-picker ${open ? "is-open" : ""}">
       <button class="repository-group-trigger" type="button" data-action="toggle-repository-group-picker" aria-expanded="${open}" aria-haspopup="listbox" title="选择分组；双击可修改当前分组名称"><span class="repository-group-prefix">分组 ·</span><span class="repository-group-value">${esc(repositoryGroupLabel())}</span><span class="repository-group-chevron" aria-hidden="true">⌄</span></button>
@@ -2008,7 +2008,7 @@ function renderRepositoryGroupPicker() {
           </div>
           <div class="repository-group-footer">
             <button type="button" data-action="add-group">＋ 新建分组</button>
-            ${canImportLearningPlan ? `<button type="button" data-action="import-learning-plan" data-group-id="${growthSource}">导入学习计划…</button>` : ""}
+            ${activePersonalGroup ? `<button class="repository-batch-add" type="button" data-action="batch-add-tasks" data-group-id="${activePersonalGroup.id}"><span>批量添加任务…</span>${isGrowthSource ? '<small>成长来源</small>' : ""}</button>` : ""}
           </div>
         </div>
       ` : ""}
@@ -2799,6 +2799,7 @@ function renderContextMenu() {
       <div class="context-menu" style="left:${menu.x}px; top:${menu.y}px">
         <button data-action="select-group" data-group-id="${menu.groupId}">打开分组</button>
         <button data-action="rename-group" data-group-id="${menu.groupId}">重命名分组</button>
+        <button data-action="batch-add-tasks" data-group-id="${menu.groupId}">批量添加任务…</button>
         <hr />
         <button class="danger" data-action="delete-group-keep-tasks" data-group-id="${menu.groupId}">删除分组，任务移至未分组</button>
         <button class="danger" data-action="delete-group-with-tasks" data-group-id="${menu.groupId}">删除分组及其中任务</button>
@@ -3223,7 +3224,7 @@ function openGrowthGroup() {
   return { success: true, code: "OPENED", groupId: sourceGroupId };
 }
 
-function makeImportedLearningTask(item, groupId, planId, order) {
+function makeImportedTask(item, groupId, order) {
   const createdAt = now();
   const taskId = id("task");
   return {
@@ -3241,7 +3242,7 @@ function makeImportedLearningTask(item, groupId, planId, order) {
     conclusion: "",
     navigationRecovery: workNavigationModel.normalizeRecovery(null),
     estimateMinutes: item.estimateMinutes,
-    origin: { kind: "learning-plan", planId, itemId: item.itemId },
+    origin: workNavigationModel.normalizeOrigin(item.origin),
     deadlineAt: "",
     deadlineReminderMinutes: defaultDeadlineReminderMinutes,
     notes: "",
@@ -3255,6 +3256,46 @@ function makeImportedLearningTask(item, groupId, planId, order) {
       title: node.title,
       order: node.order,
     })),
+  };
+}
+
+function makeImportedLearningTask(item, groupId, planId, order) {
+  return makeImportedTask({
+    ...item,
+    origin: { kind: "learning-plan", planId, itemId: item.itemId },
+  }, groupId, order);
+}
+
+function importTaskBatch(value, options = {}) {
+  const group = state.taskGroups.find((item) => item.id === options.groupId);
+  if (!group) return { success: false, code: "GROUP_NOT_FOUND" };
+  const preview = workNavigationModel.previewTaskBatchImport(value, state.tasks, {
+    groupId: group.id,
+    defaultEstimateMinutes: options.defaultEstimateMinutes,
+  });
+  if (!preview.valid) return { success: false, code: "INVALID_BATCH", errors: preview.errors };
+  const selectedKeys = Array.isArray(options.selectedKeys) ? new Set(options.selectedKeys) : null;
+  const estimateMinutesByKey = options.estimateMinutesByKey && typeof options.estimateMinutesByKey === "object"
+    ? options.estimateMinutesByKey
+    : {};
+  const selected = preview.newTasks.filter((item) => !selectedKeys || selectedKeys.has(item.key));
+  const groupOrders = state.tasks.filter((task) => task.groupId === group.id).map((task) => Number(task.order) || 0);
+  let nextOrder = Math.max(0, ...groupOrders) + 1;
+  const imported = selected.map((item) => makeImportedTask({
+    ...item,
+    estimateMinutes: Math.max(1, Math.min(720, Math.round(Number(estimateMinutesByKey[item.key]) || item.estimateMinutes || 60))),
+  }, group.id, nextOrder++));
+  state.tasks.push(...imported);
+  reconcileWorkNavigationRuntime();
+  save();
+  render();
+  return {
+    success: true,
+    code: "IMPORTED",
+    groupId: group.id,
+    importedCount: imported.length,
+    existingCount: preview.existingTasks.length,
+    excludedCount: preview.newTasks.length - imported.length,
   };
 }
 
@@ -3300,6 +3341,7 @@ globalThis.LoopWorkNavigationBridge = Object.freeze({
   blockTask: blockTaskFromNavigation,
   saveRecovery: saveNavigationRecovery,
   openGrowthGroup,
+  importTaskBatch,
   importLearningPlan,
   openSettings() {
     activeSettingsPage = "advanced";
@@ -6761,11 +6803,11 @@ async function action(data, event = null) {
     selectGroup(data.groupId);
   }
   if (data.action === "add-group") addGroup();
-  if (data.action === "import-learning-plan") {
+  if (data.action === "batch-add-tasks" || data.action === "import-learning-plan") {
     const groupId = data.groupId;
     repositoryGroupPickerOpen = false;
     render();
-    document.dispatchEvent(new CustomEvent("loop-work-navigation:import-plan", { detail: { groupId } }));
+    document.dispatchEvent(new CustomEvent("loop-task-batch:open", { detail: { groupId } }));
     return;
   }
   if (data.action === "rename-group") {

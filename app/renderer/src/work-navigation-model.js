@@ -199,10 +199,16 @@
 
   function normalizeOrigin(value) {
     const raw = isRecord(value) ? value : {};
-    if (raw.kind !== "learning-plan") return null;
-    const planId = identifier(raw.planId);
     const itemId = identifier(raw.itemId);
-    return planId && itemId ? { kind: "learning-plan", planId, itemId } : null;
+    if (raw.kind === "learning-plan") {
+      const planId = identifier(raw.planId);
+      return planId && itemId ? { kind: "learning-plan", planId, itemId } : null;
+    }
+    if (raw.kind === "task-batch") {
+      const batchId = identifier(raw.batchId);
+      return batchId && itemId ? { kind: "task-batch", batchId, itemId } : null;
+    }
+    return null;
   }
 
   function defaultWorkNavigation(now = new Date()) {
@@ -245,7 +251,7 @@
     const work = isRecord(config.work) ? config.work : {};
     const growth = isRecord(config.growth) ? config.growth : {};
     const runtime = isRecord(raw.runtime) ? raw.runtime : {};
-    const groupIds = Array.isArray(options.groupIds) ? new Set(options.groupIds.map(identifier)) : null;
+    const groupIds = Array.isArray(options.groupIds) ? new Set(options.groupIds.map((groupId) => identifier(groupId))) : null;
     let sourceGroupId = identifier(growth.sourceGroupId);
     if (groupIds && sourceGroupId && !groupIds.has(sourceGroupId)) sourceGroupId = "";
     const normalized = {
@@ -580,6 +586,196 @@
     };
   }
 
+  function normalizedTitleKey(value) {
+    return identifier(value, 240).replace(/\s+/g, " ").toLocaleLowerCase();
+  }
+
+  function stableTextHash(value) {
+    let hash = 2166136261;
+    for (const character of String(value)) {
+      hash ^= character.codePointAt(0);
+      hash = Math.imul(hash, 16777619);
+    }
+    return (hash >>> 0).toString(36);
+  }
+
+  function normalizeTaskBatchItem(raw, index, errors) {
+    if (!isRecord(raw)) {
+      errors.push({ field: `tasks[${index}]`, message: "任务必须是对象" });
+      return null;
+    }
+    const itemId = identifier(raw.itemId);
+    const title = identifier(raw.title, 240);
+    const hasEstimate = raw.estimateMinutes !== undefined && raw.estimateMinutes !== null && raw.estimateMinutes !== "";
+    const rawEstimate = Number(raw.estimateMinutes);
+    const validEstimate = !hasEstimate || (Number.isFinite(rawEstimate) && rawEstimate >= 1 && rawEstimate <= 720);
+    const estimateMinutes = validEstimate && hasEstimate ? Math.round(rawEstimate) : 60;
+    if (!itemId) errors.push({ field: `tasks[${index}].itemId`, message: "itemId 不能为空" });
+    if (!title) errors.push({ field: `tasks[${index}].title`, message: "标题不能为空" });
+    if (!validEstimate) errors.push({ field: `tasks[${index}].estimateMinutes`, message: "预计分钟数必须在 1–720 之间" });
+    const nodes = (Array.isArray(raw.nodes) ? raw.nodes : [])
+      .map((node, nodeIndex) => normalizePlanNode(node, index, nodeIndex, errors))
+      .filter(Boolean);
+    return itemId && title ? {
+      itemId,
+      order: integer(raw.order, index + 1, 1, 100000),
+      title,
+      estimateMinutes,
+      description: text(raw.description, 20000).trim(),
+      nodes,
+    } : null;
+  }
+
+  function validateTaskBatch(value) {
+    const errors = [];
+    if (!isRecord(value)) return { valid: false, errors: [{ field: "$", message: "文件根节点必须是对象" }] };
+    if (value.schemaVersion !== 1) errors.push({ field: "schemaVersion", message: "仅支持 schemaVersion 1" });
+    if (value.type !== "loop-task-batch") errors.push({ field: "type", message: "type 必须为 loop-task-batch" });
+    const batch = isRecord(value.batch) ? value.batch : {};
+    const batchId = identifier(batch.id);
+    const batchTitle = identifier(batch.title, 240) || "批量任务";
+    const targetGroup = identifier(batch.targetGroup, 240);
+    if (!batchId) errors.push({ field: "batch.id", message: "批次 ID 不能为空" });
+    if (!Array.isArray(value.tasks) || value.tasks.length === 0) errors.push({ field: "tasks", message: "至少需要一项任务" });
+    if (Array.isArray(value.tasks) && value.tasks.length > 1000) errors.push({ field: "tasks", message: "单次最多导入 1000 项任务" });
+    const itemIds = new Set();
+    const normalizedTasks = (Array.isArray(value.tasks) ? value.tasks : []).map((raw, index) => {
+      const item = normalizeTaskBatchItem(raw, index, errors);
+      if (!item) return null;
+      if (itemIds.has(item.itemId)) errors.push({ field: `tasks[${index}].itemId`, message: "itemId 在批次内重复" });
+      itemIds.add(item.itemId);
+      return item;
+    }).filter(Boolean);
+    return {
+      valid: errors.length === 0,
+      errors,
+      batch: errors.length ? null : {
+        id: batchId,
+        title: batchTitle,
+        targetGroup,
+        tasks: normalizedTasks.sort((a, b) => a.order - b.order),
+      },
+    };
+  }
+
+  function stripTaskListPrefix(value) {
+    return String(value)
+      .replace(/^\s*[-*+]\s+\[[ xX]\]\s+/, "")
+      .replace(/^\s*[-*+]\s+/, "")
+      .replace(/^\s*\d+[.)、]\s*/, "")
+      .trim();
+  }
+
+  function parseTaskBatchText(value, options = {}) {
+    const defaultEstimateMinutes = integer(options.defaultEstimateMinutes, 60, 1, 720);
+    const raw = text(value, 500000);
+    const sourceLines = raw.split(/\r?\n/);
+    const errors = [];
+    const tasks = [];
+    sourceLines.forEach((line, index) => {
+      if (!line.trim() || /^\s*```/.test(line) || /^\s*#{1,6}\s+/.test(line)) return;
+      const title = stripTaskListPrefix(line);
+      if (!title) return;
+      if (title.length > 240) {
+        errors.push({ field: `lines[${index + 1}]`, message: `第 ${index + 1} 行超过 240 个字符` });
+        return;
+      }
+      tasks.push({
+        itemId: `line-${index + 1}`,
+        order: tasks.length + 1,
+        title,
+        estimateMinutes: defaultEstimateMinutes,
+        description: "",
+        nodes: [],
+      });
+    });
+    if (!tasks.length) errors.push({ field: "tasks", message: "至少需要一项任务" });
+    if (tasks.length > 1000) errors.push({ field: "tasks", message: "单次最多导入 1000 项任务" });
+    const signature = tasks.map((task) => normalizedTitleKey(task.title)).join("\n");
+    return {
+      valid: errors.length === 0,
+      errors,
+      batch: errors.length ? null : {
+        id: `text-${stableTextHash(signature)}`,
+        title: "批量任务",
+        targetGroup: "",
+        tasks,
+      },
+    };
+  }
+
+  function taskBatchOriginKey(value) {
+    const origin = normalizeOrigin(value);
+    if (!origin) return "";
+    if (origin.kind === "learning-plan") return `learning-plan\u0000${origin.planId}\u0000${origin.itemId}`;
+    return `task-batch\u0000${origin.batchId}\u0000${origin.itemId}`;
+  }
+
+  function previewTaskBatchImport(value, tasks = [], options = {}) {
+    let validation;
+    let sourceKind = "text";
+    if (typeof value === "string") {
+      const raw = value.trim();
+      if (raw.startsWith("{")) {
+        try {
+          return previewTaskBatchImport(JSON.parse(raw), tasks, options);
+        } catch (_) {
+          return { valid: false, errors: [{ field: "$", message: "JSON 格式无效" }], items: [], newTasks: [], existingTasks: [], totalMinutes: 0 };
+        }
+      }
+      validation = parseTaskBatchText(value, options);
+    } else if (value?.type === "loop-learning-plan") {
+      sourceKind = "learning-plan";
+      const learning = validateLearningPlan(value);
+      validation = learning.valid ? {
+        valid: true,
+        errors: [],
+        batch: { id: learning.plan.id, title: learning.plan.title, targetGroup: learning.plan.targetGroup, tasks: learning.plan.tasks },
+      } : learning;
+    } else {
+      sourceKind = "task-batch";
+      validation = validateTaskBatch(value);
+    }
+    if (!validation.valid) return { ...validation, items: [], newTasks: [], existingTasks: [], totalMinutes: 0 };
+    const groupId = identifier(options.groupId);
+    const existingTitles = new Set(tasks
+      .filter((task) => !groupId || identifier(task?.groupId) === groupId)
+      .map((task) => normalizedTitleKey(task?.title))
+      .filter(Boolean));
+    const existingOrigins = new Set(tasks.map((task) => taskBatchOriginKey(task?.origin)).filter(Boolean));
+    const seenTitles = new Set();
+    const items = validation.batch.tasks.map((item, index) => {
+      const titleKey = normalizedTitleKey(item.title);
+      const origin = sourceKind === "learning-plan"
+        ? { kind: "learning-plan", planId: validation.batch.id, itemId: item.itemId }
+        : { kind: "task-batch", batchId: validation.batch.id, itemId: item.itemId };
+      const originKey = taskBatchOriginKey(origin);
+      let duplicateReason = "";
+      if (existingOrigins.has(originKey)) duplicateReason = "origin";
+      else if (existingTitles.has(titleKey)) duplicateReason = "title";
+      else if (seenTitles.has(titleKey)) duplicateReason = "input";
+      seenTitles.add(titleKey);
+      return {
+        ...item,
+        key: `${sourceKind}:${validation.batch.id}:${item.itemId}:${index}`,
+        origin,
+        duplicateReason,
+      };
+    });
+    const newTasks = items.filter((item) => !item.duplicateReason);
+    const existingTasks = items.filter((item) => item.duplicateReason);
+    return {
+      valid: true,
+      errors: [],
+      sourceKind,
+      batch: validation.batch,
+      items,
+      newTasks,
+      existingTasks,
+      totalMinutes: newTasks.reduce((sum, task) => sum + task.estimateMinutes, 0),
+    };
+  }
+
   return Object.freeze({
     SCHEMA_VERSION,
     DEFAULT_SCHEDULE,
@@ -606,5 +802,9 @@
     validateLearningPlan,
     previewLearningPlanImport,
     learningOriginKey,
+    validateTaskBatch,
+    parseTaskBatchText,
+    previewTaskBatchImport,
+    taskBatchOriginKey,
   });
 });

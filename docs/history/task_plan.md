@@ -4,9 +4,21 @@
 Maintain the personal task management app through scoped, low-risk improvements while preserving existing task flow behavior and release discipline.
 
 ## Current Phase
-Phase 36
+Phase 37
 
 ## Phases
+
+### Phase 37: Batch Add Tasks to Groups
+- [x] Confirm the latest remote baseline and preserve the established navigation design
+- [x] Add batch entry points to every real task group without changing virtual groups
+- [x] Accept pasted lists and JSON/TXT/Markdown files with a one-hour default
+- [x] Preview selection, per-task duration, total time, and duplicate reasons before import
+- [x] Preserve order, idempotent origins, legacy learning-plan compatibility, and single-save persistence
+- [x] Feed imported tasks immediately into the configured personal-growth source queue
+- [x] Add a twelve-hour RDMA task-batch demo and focused regression coverage
+- [x] Run the complete project check and prepare patch release `0.1.179`
+- [ ] Push `main` and verify the cross-platform `v0.1.179` release
+- **Status:** in progress
 
 ### Phase 36: Work and Learning Queue Navigation
 - [x] Confirm the latest remote baseline and preserve unrelated local work

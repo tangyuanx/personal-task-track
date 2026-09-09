@@ -89,6 +89,13 @@ test("queue runtime and manual continuation survive same-day normalization", () 
   assert.deepEqual(normalized.runtime.blockedTaskIds, ["blocked-1"]);
 });
 
+test("navigation normalization preserves a configured first task group as the growth source", () => {
+  const nav = navigation("2026-09-09T09:00:00");
+  nav.config.growth.sourceGroupId = "growth";
+  const normalized = model.normalizeWorkNavigation(nav, { now: at("2026-09-09T09:00:00"), groupIds: ["growth", "work"] });
+  assert.equal(normalized.config.growth.sourceGroupId, "growth");
+});
+
 test("weekend growth defaults to the same one-hour minimum and supports manual start", () => {
   const nav = navigation("2026-09-12T09:00:00");
   let state = model.resolvePhase(at("2026-09-12T09:00:00"), nav);
@@ -108,6 +115,54 @@ test("learning plan validates atomically and deduplicates by planId plus itemId"
   assert.equal(preview.valid, true);
   assert.equal(preview.newTasks.length, 1);
   assert.equal(preview.existingTasks.length, 1);
+});
+
+test("plain task batches clean common list markers and apply the one-hour default", () => {
+  const result = model.parseTaskBatchText(`# RDMA 学习\n\n1. 理解 Queue Pair\n- [ ] 搭建 Soft-RoCE\n* 运行 ibv_rc_pingpong\n\`\`\``);
+  assert.equal(result.valid, true);
+  assert.deepEqual(result.batch.tasks.map((task) => task.title), [
+    "理解 Queue Pair",
+    "搭建 Soft-RoCE",
+    "运行 ibv_rc_pingpong",
+  ]);
+  assert.deepEqual(result.batch.tasks.map((task) => task.estimateMinutes), [60, 60, 60]);
+});
+
+test("batch preview skips same-group and in-list duplicates while preserving order", () => {
+  const result = model.previewTaskBatchImport("1. 理解 Queue Pair\n2. 配置 CQ\n3. 配置 CQ\n4. 运行实验", [
+    { groupId: "growth", title: "理解 Queue Pair" },
+    { groupId: "work", title: "运行实验" },
+  ], { groupId: "growth", defaultEstimateMinutes: 60 });
+  assert.equal(result.valid, true);
+  assert.deepEqual(result.newTasks.map((task) => task.title), ["配置 CQ", "运行实验"]);
+  assert.deepEqual(result.existingTasks.map((task) => task.duplicateReason), ["title", "input"]);
+  assert.equal(result.totalMinutes, 120);
+});
+
+test("structured task batches and legacy learning plans share the general preview", () => {
+  const batch = { schemaVersion: 1, type: "loop-task-batch", batch: { id: "rdma-2026", title: "RDMA" }, tasks: [
+    { itemId: "01", title: "理解 MR", estimateMinutes: 45 },
+    { itemId: "02", title: "理解 QP", estimateMinutes: 60 },
+  ] };
+  const existing = [{ groupId: "growth", title: "旧标题", origin: { kind: "task-batch", batchId: "rdma-2026", itemId: "01" } }];
+  const preview = model.previewTaskBatchImport(batch, existing, { groupId: "growth" });
+  assert.equal(preview.valid, true);
+  assert.deepEqual(preview.newTasks.map((task) => task.title), ["理解 QP"]);
+  assert.equal(preview.existingTasks[0].duplicateReason, "origin");
+
+  const learning = { schemaVersion: 1, type: "loop-learning-plan", plan: { id: "verbs-v1", title: "Verbs", targetGroup: "成长" }, tasks: [
+    { itemId: "01", title: "创建 PD", estimateMinutes: 60 },
+  ] };
+  assert.equal(model.previewTaskBatchImport(learning, [], { groupId: "growth" }).newTasks[0].origin.kind, "learning-plan");
+});
+
+test("RDMA batch demo is importable as twelve one-hour growth tasks", () => {
+  const example = require("../docs/examples/rdma-task-batch.example.json");
+  const preview = model.previewTaskBatchImport(example, [], { groupId: "growth" });
+  assert.equal(preview.valid, true);
+  assert.equal(preview.newTasks.length, 12);
+  assert.equal(preview.totalMinutes, 12 * 60);
+  assert.ok(preview.newTasks.every((task) => task.estimateMinutes === 60));
 });
 
 test("legacy disk data migrates to safe navigation schema and task metadata", () => {

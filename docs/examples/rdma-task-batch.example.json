@@ -1,0 +1,155 @@
+{
+  "schemaVersion": 1,
+  "type": "loop-task-batch",
+  "batch": {
+    "id": "rdma-foundation-12h-v1",
+    "title": "RDMA 基础：12 小时细粒度学习任务",
+    "targetGroup": "个人成长 · RDMA"
+  },
+  "tasks": [
+    {
+      "itemId": "rdma-01-landscape",
+      "order": 1,
+      "title": "区分 RDMA、InfiniBand、RoCE 与 iWARP",
+      "description": "用一张图说明 API、传输协议、链路层和典型部署环境的关系。",
+      "estimateMinutes": 60,
+      "nodes": [
+        { "title": "整理四个术语的边界", "order": 1 },
+        { "title": "画出协议栈对照图", "order": 2 },
+        { "title": "写出三条选型判断", "order": 3 }
+      ]
+    },
+    {
+      "itemId": "rdma-02-data-path",
+      "order": 2,
+      "title": "画出一次 RDMA 操作的端到端数据路径",
+      "description": "从用户态提交 Work Request 开始，追踪到远端内存和 Completion Queue。",
+      "estimateMinutes": 60,
+      "nodes": [
+        { "title": "标出用户态与内核态边界", "order": 1 },
+        { "title": "标出 NIC、PCIe 与内存路径", "order": 2 },
+        { "title": "解释零拷贝和内核旁路", "order": 3 }
+      ]
+    },
+    {
+      "itemId": "rdma-03-verbs-objects",
+      "order": 3,
+      "title": "建立 PD、MR、CQ、QP 的对象关系图",
+      "description": "掌握最小 Verbs 程序中核心对象的创建顺序、依赖关系和销毁顺序。",
+      "estimateMinutes": 60,
+      "nodes": [
+        { "title": "列出核心对象及职责", "order": 1 },
+        { "title": "画出创建依赖关系", "order": 2 },
+        { "title": "写出逆序释放清单", "order": 3 }
+      ]
+    },
+    {
+      "itemId": "rdma-04-memory-registration",
+      "order": 4,
+      "title": "理解内存注册与 lkey、rkey 权限边界",
+      "description": "解释为什么需要 Memory Region，以及本地和远端访问密钥分别保护什么。",
+      "estimateMinutes": 60,
+      "nodes": [
+        { "title": "梳理 MR 注册参数", "order": 1 },
+        { "title": "对比 lkey 与 rkey", "order": 2 },
+        { "title": "记录常见权限错误", "order": 3 }
+      ]
+    },
+    {
+      "itemId": "rdma-05-work-queues",
+      "order": 5,
+      "title": "理解 WR、WQE、WC 与 Completion Queue",
+      "description": "追踪一次请求从 post 到完成的生命周期，并能解释 signaled 与 unsignaled。",
+      "estimateMinutes": 60,
+      "nodes": [
+        { "title": "整理 WR 到 WQE 的提交路径", "order": 1 },
+        { "title": "整理 WC 的关键字段", "order": 2 },
+        { "title": "比较轮询与事件通知", "order": 3 }
+      ]
+    },
+    {
+      "itemId": "rdma-06-qp-state-machine",
+      "order": 6,
+      "title": "手绘 QP 状态机并标注关键属性",
+      "description": "掌握 RESET、INIT、RTR、RTS 的迁移条件，以及连接两端需要交换的信息。",
+      "estimateMinutes": 60,
+      "nodes": [
+        { "title": "画出状态迁移", "order": 1 },
+        { "title": "标注每次 modify_qp 的关键字段", "order": 2 },
+        { "title": "整理连接元数据交换清单", "order": 3 }
+      ]
+    },
+    {
+      "itemId": "rdma-07-send-receive",
+      "order": 7,
+      "title": "运行并解释最小 RC Send/Receive 实验",
+      "description": "跑通一个可靠连接示例，并把每次 post、poll 和数据变化对应到代码位置。",
+      "estimateMinutes": 60,
+      "nodes": [
+        { "title": "准备双方 Receive", "order": 1 },
+        { "title": "提交 Send 并轮询完成", "order": 2 },
+        { "title": "保存成功输出与调用顺序", "order": 3 }
+      ]
+    },
+    {
+      "itemId": "rdma-08-read-write",
+      "order": 8,
+      "title": "对比并验证 RDMA Read、Write 与 Send",
+      "description": "从参与端、权限、完成语义和数据可见性四个角度比较三类操作。",
+      "estimateMinutes": 60,
+      "nodes": [
+        { "title": "制作操作语义对照表", "order": 1 },
+        { "title": "修改示例执行一次 Write", "order": 2 },
+        { "title": "验证远端数据与完成事件", "order": 3 }
+      ]
+    },
+    {
+      "itemId": "rdma-09-rocev2-addressing",
+      "order": 9,
+      "title": "梳理 RoCE v2 的 GID、IP、UDP 与路由关系",
+      "description": "能够从端口、GID index 和网络配置判断两端是否具备通信条件。",
+      "estimateMinutes": 60,
+      "nodes": [
+        { "title": "读取设备、端口与 GID 信息", "order": 1 },
+        { "title": "映射 GID 到网卡和 IP", "order": 2 },
+        { "title": "写出连通性检查顺序", "order": 3 }
+      ]
+    },
+    {
+      "itemId": "rdma-10-congestion",
+      "order": 10,
+      "title": "理解 RoCE 拥塞控制中的 PFC、ECN 与 CNP",
+      "description": "解释无损以太网的目标、风险和常见拥塞反馈路径。",
+      "estimateMinutes": 60,
+      "nodes": [
+        { "title": "区分流控与拥塞控制", "order": 1 },
+        { "title": "画出 ECN/CNP 反馈路径", "order": 2 },
+        { "title": "记录 PFC 风暴与死锁风险", "order": 3 }
+      ]
+    },
+    {
+      "itemId": "rdma-11-troubleshooting",
+      "order": 11,
+      "title": "建立 RDMA 连通性故障的最小排查清单",
+      "description": "把设备、链路、地址、QP、权限和完成错误组织为可重复的排查顺序。",
+      "estimateMinutes": 60,
+      "nodes": [
+        { "title": "收集设备与链路证据", "order": 1 },
+        { "title": "按层定位失败边界", "order": 2 },
+        { "title": "为三类常见错误写最小实验", "order": 3 }
+      ]
+    },
+    {
+      "itemId": "rdma-12-performance",
+      "order": 12,
+      "title": "完成一次 RDMA 延迟与带宽基线实验",
+      "description": "固定环境和参数，采集可复现结果，并解释消息大小、队列深度与性能的关系。",
+      "estimateMinutes": 60,
+      "nodes": [
+        { "title": "记录环境与实验参数", "order": 1 },
+        { "title": "采集延迟和带宽结果", "order": 2 },
+        { "title": "写出观察、限制与下一实验", "order": 3 }
+      ]
+    }
+  ]
+}
