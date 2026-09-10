@@ -1967,9 +1967,9 @@ function renderRepositoryGroupOption(groupId, title) {
   const selected = state.activeGroupId === groupId;
   const personalGroup = state.taskGroups.some((group) => group.id === groupId);
   if (personalGroup && state.editingGroupId === groupId) {
-    return `<div class="repository-group-option is-editing" role="option" aria-selected="${selected}" data-group-id="${groupId}" data-personal-group="true"><input class="repository-group-edit" data-group-title="${groupId}" value="${escAttr(title)}" aria-label="修改分组名称" /></div>`;
+    return `<div class="repository-group-option is-editing" role="option" aria-selected="${selected}" data-group-id="${groupId}" data-personal-group="true" data-group-context-id="${groupId}"><input class="repository-group-edit" data-group-title="${groupId}" value="${escAttr(title)}" aria-label="修改分组名称" /></div>`;
   }
-  return `<button class="repository-group-option ${selected ? "selected" : ""}" type="button" role="option" aria-selected="${selected}" data-action="select-repository-group" data-group-id="${groupId}" ${personalGroup ? 'data-personal-group="true"' : ""}><span>${esc(title)}</span>${selected ? `<span class="repository-group-check" aria-hidden="true">✓</span>` : ""}</button>`;
+  return `<button class="repository-group-option ${selected ? "selected" : ""}" type="button" role="option" aria-selected="${selected}" data-action="select-repository-group" data-group-id="${groupId}" ${personalGroup ? `data-personal-group="true" data-group-context-id="${groupId}"` : ""}><span>${esc(title)}</span>${selected ? `<span class="repository-group-check" aria-hidden="true">✓</span>` : ""}</button>`;
 }
 
 function renderRepositoryGroupOptions() {
@@ -1999,7 +1999,7 @@ function renderRepositoryGroupPicker() {
   const isGrowthSource = activePersonalGroup?.id === growthSource;
   return `
     <div class="repository-group-picker ${open ? "is-open" : ""}">
-      <button class="repository-group-trigger" type="button" data-action="toggle-repository-group-picker" aria-expanded="${open}" aria-haspopup="listbox" title="选择分组；双击可修改当前分组名称"><span class="repository-group-prefix">分组 ·</span><span class="repository-group-value">${esc(repositoryGroupLabel())}</span><span class="repository-group-chevron" aria-hidden="true">⌄</span></button>
+      <button class="repository-group-trigger" type="button" data-action="toggle-repository-group-picker" ${activePersonalGroup ? `data-group-context-id="${activePersonalGroup.id}"` : ""} aria-expanded="${open}" aria-haspopup="listbox" title="选择分组；双击可修改当前分组名称"><span class="repository-group-prefix">分组 ·</span><span class="repository-group-value">${esc(repositoryGroupLabel())}</span><span class="repository-group-chevron" aria-hidden="true">⌄</span></button>
       ${open ? `
         <div class="repository-group-popover" role="listbox" aria-label="选择分组">
           <label class="repository-group-search"><span aria-hidden="true">⌕</span><input type="search" value="${escAttr(repositoryGroupQuery)}" placeholder="搜索分组…" aria-label="搜索分组" autocomplete="off" /></label>
@@ -5588,18 +5588,24 @@ function bindTaskRepositoryRows(scope = document) {
   }
 }
 
+function openRepositoryGroupContextMenu(groupId, event) {
+  if (!state.taskGroups.some((group) => group.id === groupId)) return false;
+  event.preventDefault();
+  event.stopPropagation();
+  state.contextMenu = {
+    kind: "group",
+    groupId,
+    x: Math.min(event.clientX, window.innerWidth - 250),
+    y: Math.min(event.clientY, window.innerHeight - 220),
+  };
+  syncContextMenuRoot();
+  return true;
+}
+
 function bindRepositoryGroupOptionMenus(scope = document) {
-  scope.querySelectorAll('.repository-group-option[data-personal-group="true"]').forEach((element) => {
+  scope.querySelectorAll("[data-group-context-id]").forEach((element) => {
     element.addEventListener("contextmenu", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      state.contextMenu = {
-        kind: "group",
-        groupId: element.dataset.groupId,
-        x: Math.min(event.clientX, window.innerWidth - 250),
-        y: Math.min(event.clientY, window.innerHeight - 220),
-      };
-      syncContextMenuRoot();
+      openRepositoryGroupContextMenu(element.dataset.groupContextId, event);
     });
   });
 }

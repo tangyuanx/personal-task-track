@@ -1,5 +1,18 @@
 # Progress Log
 
+## Session: 2026-09-10 First-click Task-group Context Menu
+
+### Phase 38: Context-menu regression and v0.1.180 publication
+- **Status:** in progress
+- Actions taken:
+  - Confirmed the clean published `v0.1.179` baseline and reproduced the task-group context operation as a two-interaction flow.
+  - Traced the cause to event coverage: expanded personal-group options had `contextmenu` listeners, but the visible current-group trigger did not, so users first had to open the picker.
+  - Added the real group identifier to both surfaces and routed them through one guarded context-menu opener without rebuilding the task page.
+  - Kept virtual scopes menu-free and preserved the established single-click picker and double-click rename behaviors.
+  - Added focused renderer coverage plus a Playwright/Electron acceptance script for first right-click opening, batch-action invocation, picker opening, rename, and outside dismissal.
+  - Passed the complete local project check with 185 desktop/client tests and 11 bug-report service tests.
+  - The managed local container blocks Electron's process-singleton socket, so the real UI script is a required Linux/Xvfb release gate rather than an unverified local claim.
+
 ## Session: 2026-09-09 Group Batch Task Import
 
 ### Phase 37: Batch import and v0.1.179 publication

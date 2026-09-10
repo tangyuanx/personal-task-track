@@ -1,5 +1,13 @@
 # Findings & Decisions
 
+## Phase 38 First-click Task-group Context Menu (2026-09-10)
+- The regression is an event-coverage defect, not a click debounce problem. The expanded personal-group option owned a `contextmenu` listener, while the visible current-group trigger did not.
+- A real active group must expose the same identifier on both the visible trigger and its expanded option. The virtual `全部记录` and `未分组` scopes intentionally expose neither identifier nor a mutation menu.
+- Both surfaces now use one guarded opener that verifies the group still exists, consumes the native event, clamps menu coordinates, and synchronizes only the context-menu root.
+- The change leaves click semantics intact: one left click opens the picker, two rapid clicks enter rename, context-menu actions still dispatch through their existing handlers, and an outside click dismisses the menu.
+- Source regressions cover the binding and state transition. A Playwright/Electron test covers the actual interaction sequence and is required in the Linux/Xvfb release workflow because the managed local container denies Electron's process-singleton socket before page creation.
+- The complete local check passes 185 desktop/client tests and 11 bug-report service tests before the `0.1.180` version bump.
+
 ## Phase 37 Group Batch Task Import (2026-09-09)
 - Batch import belongs to the existing group interaction, not to a separate global task system. Every real group exposes the same entry, while `全部记录` and `未分组` remain read-only aggregate scopes.
 - The safe workflow is input, preview, then commit. No task is persisted until the user sees the recognized count, duplicates, selected items, per-item durations, target group, and total estimated time.

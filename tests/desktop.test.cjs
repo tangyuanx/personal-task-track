@@ -3566,6 +3566,40 @@ test("repository groups render only record scope and personal groups with manage
   assert.equal(result.open, true);
 });
 
+test("the visible personal-group trigger opens its context menu on the first right click", async () => {
+  const harness = await rendererHarness();
+  const result = harness.json(`(() => {
+    state.taskGroups = [{ id: "group_work", title: "工作", order: 1 }];
+    state.activeGroupId = "group_work";
+    repositoryGroupPickerOpen = false;
+    const picker = renderRepositoryGroupPicker();
+    const listeners = {};
+    const trigger = {
+      dataset: { groupContextId: "group_work" },
+      addEventListener(type, listener) { listeners[type] = listener; }
+    };
+    const scope = {
+      querySelectorAll(selector) { return selector === "[data-group-context-id]" ? [trigger] : []; }
+    };
+    let prevented = 0;
+    let stopped = 0;
+    let synced = 0;
+    syncContextMenuRoot = () => { synced += 1; };
+    bindRepositoryGroupOptionMenus(scope);
+    listeners.contextmenu({
+      clientX: 240,
+      clientY: 180,
+      preventDefault() { prevented += 1; },
+      stopPropagation() { stopped += 1; }
+    });
+    return { picker, contextMenu: state.contextMenu, prevented, stopped, synced };
+  })()`);
+
+  assert.match(result.picker, /repository-group-trigger[^>]*data-group-context-id="group_work"/);
+  assert.deepEqual(result.contextMenu, { kind: "group", groupId: "group_work", x: 240, y: 180 });
+  assert.deepEqual({ prevented: result.prevented, stopped: result.stopped, synced: result.synced }, { prevented: 1, stopped: 1, synced: 1 });
+});
+
 test("quick captures and preserved group deletions remain truly ungrouped across disk normalization", async () => {
   const disk = normalizeTaskData({
     activeGroupId: "group_ungrouped",
@@ -3712,7 +3746,8 @@ test("repository filters remain compact, aligned, and keep the add control visib
   assert.match(app, /class="gooey-search-trigger-label">搜索[\s\S]*class="gooey-search-field-icon"/);
   assert.match(app, /function bindGooeySearch\(\)/);
   assert.match(app, /function renderRepositoryGroupPicker\(\)[\s\S]*placeholder="搜索分组…"[\s\S]*data-action="add-group">＋ 新建分组/);
-  assert.match(app, /function bindRepositoryGroupOptionMenus\(scope = document\)[\s\S]*kind: "group"/);
+  assert.match(app, /function openRepositoryGroupContextMenu\(groupId, event\)[\s\S]*kind: "group"/);
+  assert.match(app, /function bindRepositoryGroupOptionMenus\(scope = document\)[\s\S]*querySelectorAll\("\[data-group-context-id\]"\)[\s\S]*openRepositoryGroupContextMenu/);
   assert.match(app, /function isEditableTarget\(target\)/);
   assert.match(app, /event\.key !== "Escape" && isEditableTarget\(event\.target\)/);
   assert.match(app, /if \(event\.isComposing\) return;/);

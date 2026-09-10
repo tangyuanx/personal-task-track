@@ -1,0 +1,141 @@
+name: Publish v0.1.180
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/publish-v0.1.180.yml
+
+concurrency:
+  group: publish-v0.1.180
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify v0.1.180 source and UI
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Verify context-menu regression
+        shell: bash
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          test "$version" = "0.1.180"
+          node --check app/renderer/src/app.js
+          node --test --test-name-pattern='visible personal-group trigger|repository filters remain compact|repository groups render' tests/desktop.test.cjs
+      - name: Verify real Electron interactions
+        run: xvfb-run -a npm run test:ui:group-menu
+
+  build:
+    name: Build v0.1.180 ${{ matrix.platform }}
+    needs: verify
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macOS
+            os: macos-latest
+            script: npm run dist:mac -- --x64 --arm64 --publish never
+            artifact: v0.1.180-macos
+          - platform: Windows
+            os: windows-latest
+            script: npm run dist:win -- --publish never
+            artifact: v0.1.180-windows
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Check JavaScript and tests
+        run: npm run check
+      - name: Build app
+        run: ${{ matrix.script }}
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+      - name: Test Windows installer upgrade matrix
+        if: matrix.platform == 'Windows'
+        shell: pwsh
+        run: |
+          $candidate = Get-ChildItem release -Filter "Loop-*-x64-setup.exe" | Select-Object -First 1
+          if (-not $candidate) { throw "Windows installer was not produced." }
+          ./tests/windows-upgrade-installer.test.ps1 -CandidateInstaller $candidate.FullName
+      - name: Verify update metadata
+        run: node tools/verify-update-artifacts.cjs release
+      - name: Stage v0.1.180 release assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            release/*.dmg
+            release/*.zip
+            release/*.exe
+            release/*.blockmap
+            release/latest.yml
+            release/latest-mac.yml
+          if-no-files-found: error
+          retention-days: 2
+
+  publish:
+    name: Publish v0.1.180 release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Refuse to replace an existing tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          if gh api "repos/${{ github.repository }}/git/ref/tags/v0.1.180" >/dev/null 2>&1; then
+            echo "v0.1.180 already exists; refusing to replace it."
+            exit 1
+          fi
+      - name: Collect v0.1.180 release assets
+        uses: actions/download-artifact@v4
+        with:
+          pattern: v0.1.180-*
+          path: release
+          merge-multiple: true
+      - name: Verify complete cross-platform update feed
+        run: node tools/verify-update-artifacts.cjs release --require-all-platforms
+      - name: Publish v0.1.180
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v0.1.180
+          target_commitish: ${{ github.sha }}
+          name: v0.1.180
+          body: |
+            ## 任务分组右键首次响应修复
+
+            - 当前显示的真实任务分组现在一次右键即可打开分组菜单，无需先展开分组选择器。
+            - 展开后的分组选项继续支持相同右键菜单；`全部记录` 和 `未分组` 等虚拟范围仍不显示修改菜单。
+            - 保留单击打开分组选择器、双击重命名、批量添加等菜单操作及点击外部关闭行为。
+            - 新增真实 Electron 交互门禁，并完成 macOS 与 Windows 安装包及更新元数据验证。
+            - 本次不修改任务数据或存储结构。
+          make_latest: true
+          files: |
+            release/*.dmg
+            release/*.zip
+            release/*.exe
+            release/*.blockmap
+            release/latest.yml
+            release/latest-mac.yml

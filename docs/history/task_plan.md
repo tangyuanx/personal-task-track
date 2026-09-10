@@ -4,9 +4,19 @@
 Maintain the personal task management app through scoped, low-risk improvements while preserving existing task flow behavior and release discipline.
 
 ## Current Phase
-Phase 37
+Phase 38
 
 ## Phases
+
+### Phase 38: First-click Task-group Context Menu
+- [x] Confirm the published `v0.1.179` baseline and reproduce the two-interaction regression
+- [x] Trace the regression to the missing `contextmenu` binding on the visible personal-group trigger
+- [x] Route visible triggers and expanded personal-group options through one guarded menu opener
+- [x] Preserve single-click picker opening, double-click rename, menu actions, and outside-click dismissal
+- [x] Add renderer regression coverage and a real Electron/Playwright interaction test
+- [x] Pass the complete local project check
+- [ ] Push `main` and verify the real-UI and cross-platform `v0.1.180` release gates
+- **Status:** in progress
 
 ### Phase 37: Batch Add Tasks to Groups
 - [x] Confirm the latest remote baseline and preserve the established navigation design
@@ -17,8 +27,8 @@ Phase 37
 - [x] Feed imported tasks immediately into the configured personal-growth source queue
 - [x] Add a twelve-hour RDMA task-batch demo and focused regression coverage
 - [x] Run the complete project check and prepare patch release `0.1.179`
-- [ ] Push `main` and verify the cross-platform `v0.1.179` release
-- **Status:** in progress
+- [x] Push `main` and verify the cross-platform `v0.1.179` release
+- **Status:** complete
 
 ### Phase 36: Work and Learning Queue Navigation
 - [x] Confirm the latest remote baseline and preserve unrelated local work

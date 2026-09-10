@@ -92,8 +92,9 @@ test("every personal group exposes the two-step batch task flow", () => {
 });
 
 test("release version, scripts and cache keys are aligned", () => {
-  assert.equal(pkg.version, "0.1.179");
+  assert.equal(pkg.version, "0.1.180");
   assert.match(html, /work-navigation-model\.js\?v=0\.1\.179/);
   assert.match(html, /work-rhythm\.css\?v=0\.1\.179/);
   assert.match(html, /work-rhythm\.js\?v=0\.1\.179/);
+  assert.match(html, /app\.js\?v=0\.1\.180/);
 });
