@@ -67,7 +67,7 @@ async function waitForMainWindow(app) {
 
     await trigger.click({ button: "right" });
     await menu.waitFor();
-    await page.locator(".task-list-count").click();
+    await page.mouse.click(8, 812);
     assert.equal(await page.locator(".context-menu").count(), 0, "outside click should close the menu");
   } finally {
     await app?.close();
