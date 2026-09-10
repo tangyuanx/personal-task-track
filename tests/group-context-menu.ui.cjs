@@ -20,7 +20,8 @@ const { _electron: electron } = require("playwright-core");
     await page.locator(".ops-app").waitFor();
 
     const trigger = page.locator(".repository-group-trigger");
-    await page.locator(".add-group-button").click();
+    await trigger.click();
+    await page.locator('.repository-group-popover [data-action="add-group"]').click();
     const groupTitle = "右键验收分组";
     const groupEditor = page.locator(".repository-group-edit");
     await groupEditor.waitFor();
@@ -28,7 +29,7 @@ const { _electron: electron } = require("playwright-core");
     await groupEditor.press("Enter");
     await trigger.waitFor();
     assert.match(await trigger.innerText(), new RegExp(groupTitle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
-    await trigger.click();
+    await page.keyboard.press("Escape");
     assert.equal(await page.locator(".repository-group-popover").count(), 0, "setup should leave the picker closed");
     await page.waitForTimeout(420);
 
