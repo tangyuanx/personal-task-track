@@ -33,7 +33,7 @@ jobs:
           test "$version" = "0.1.180"
           node --check app/renderer/src/app.js
           node --test --test-name-pattern='visible personal-group trigger|repository filters remain compact|repository groups render' tests/desktop.test.cjs
-      - name: Verify real Electron interactions
+      - name: Verify real Electron group-menu interactions
         run: xvfb-run -a npm run test:ui:group-menu
 
   build:
