@@ -4,6 +4,16 @@ const os = require("node:os");
 const path = require("node:path");
 const { _electron: electron } = require("playwright-core");
 
+async function waitForMainWindow(app) {
+  const deadline = Date.now() + 15_000;
+  while (Date.now() < deadline) {
+    const page = app.windows().find((candidate) => candidate.url().endsWith("/app/renderer/index.html"));
+    if (page) return page;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error("Loop main window did not open");
+}
+
 (async () => {
   const repository = path.join(__dirname, "..");
   const userData = await fs.mkdtemp(path.join(os.tmpdir(), "loop-group-menu-ui-"));
@@ -15,7 +25,8 @@ const { _electron: electron } = require("playwright-core");
       cwd: repository,
       env: { ...process.env, ELECTRON_DISABLE_SANDBOX: "1" },
     });
-    const page = await app.firstWindow();
+    await app.firstWindow();
+    const page = await waitForMainWindow(app);
     await page.setViewportSize({ width: 1280, height: 820 });
     await page.locator(".ops-app").waitFor();
 

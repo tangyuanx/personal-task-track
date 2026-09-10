@@ -34,7 +34,7 @@ jobs:
           node --check app/renderer/src/app.js
           node --test --test-name-pattern='visible personal-group trigger|repository filters remain compact|repository groups render' tests/desktop.test.cjs
       - name: Verify real Electron group-menu interactions
-        timeout-minutes: 3
+        timeout-minutes: 4
         run: xvfb-run -a npm run test:ui:group-menu
 
   build:
