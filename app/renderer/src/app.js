@@ -2593,9 +2593,8 @@ function renderFlowNode(taskId, node, depth, rootIndex = 0, lineage = [], isLast
     : `<span class="flow-collapse-spacer" aria-hidden="true"></span>`;
   return `
     <article class="flow-outline-node ${node.status} ${isSelected ? "selected" : ""}" style="--tree-depth:${depth}" data-context="node" data-task-id="${taskId}" data-node-id="${node.id}" data-flow-depth="${depth}">
-      <div class="flow-outline-row" data-flow-drag-source data-flow-drag-target data-flow-select data-task-id="${taskId}" data-node-id="${node.id}" title="按住左侧拖拽标识或行内空白处拖动；落在上下区域调整同级顺序，落在中间区域设为子级">
+      <div class="flow-outline-row" data-flow-drag-source data-flow-drag-target data-flow-select data-task-id="${taskId}" data-node-id="${node.id}" title="长按节点行后拖动；落在上下区域调整同级顺序，落在中间区域设为子级">
         <span class="flow-tree-zone">${treeGuides}</span>
-        <span class="flow-node-drag-grip" aria-hidden="true">${briefFieldIcon("move", "flow-row-icon")}</span>
         <button class="flow-node-marker flow-status-bullet status-${node.status}" type="button" data-action="cycle-node-status" data-task-id="${taskId}" data-node-id="${node.id}" aria-label="${escAttr(statusLabel)}：点击切换状态">${briefFieldIcon("disc", "flow-node-marker-icon")}</button>
         <button class="flow-status-badge status-${node.status}" type="button" data-action="cycle-node-status" data-task-id="${taskId}" data-node-id="${node.id}" aria-label="${escAttr(`${statusBadgeLabel}，点击切换状态`)}">${statusBadgeLabel}</button>
         ${nodeTitleInputHtml(node, taskId)}
@@ -4417,7 +4416,8 @@ function settingsOptionGroup(key, value, options) {
 // ============================================================
 const taskLongPressDelay = 320;
 const taskLongPressMoveTolerance = 8;
-const flowNodeDragMoveThreshold = 7;
+const flowNodeLongPressDelay = 180;
+const flowNodeLongPressMoveTolerance = 8;
 
 function taskDropPlacement(targetItem, clientY) {
   const bounds = targetItem.getBoundingClientRect();
@@ -4587,7 +4587,8 @@ function clearFlowNodeDropIndicators({ keepGuide = false } = {}) {
 
 function clearFlowNodeDragState() {
   const dragState = flowNodeDragState;
-  dragState?.sourceRow?.classList.remove("node-dragging");
+  if (dragState?.timer) window.clearTimeout(dragState.timer);
+  dragState?.sourceRow?.classList.remove("node-drag-pressing", "node-dragging");
   if (dragState?.sourceRow?.hasPointerCapture?.(dragState.pointerId)) {
     dragState.sourceRow.releasePointerCapture(dragState.pointerId);
   }
@@ -4601,7 +4602,7 @@ function clearFlowNodeDragState() {
 
 function beginFlowNodePointerDrag(event) {
   const sourceRow = event.currentTarget;
-  if (event.button !== 0 || event.target.closest("button, input, select, textarea, a, [contenteditable]")) return;
+  if (event.button !== 0 || event.target.closest("button, select, textarea, a, [contenteditable]")) return;
   const taskId = sourceRow.dataset.taskId || "";
   const nodeId = sourceRow.dataset.nodeId || "";
   if (!canMoveFlowNode(taskId, nodeId)) return;
@@ -4613,34 +4614,48 @@ function beginFlowNodePointerDrag(event) {
     pointerId: event.pointerId,
     startX: event.clientX,
     startY: event.clientY,
+    lastX: event.clientX,
+    lastY: event.clientY,
     active: false,
+    timer: 0,
     targetId: "",
     placement: "",
     root: false,
   };
+  sourceRow.classList.add("node-drag-pressing");
+  flowNodeDragState.timer = window.setTimeout(() => activateFlowNodePointerDrag(), flowNodeLongPressDelay);
   document.addEventListener("pointermove", updateFlowNodePointerDrag, { passive: false });
   document.addEventListener("pointerup", finishFlowNodePointerDrag);
   document.addEventListener("pointercancel", cancelFlowNodePointerDrag);
 }
 
-function activateFlowNodePointerDrag(event) {
+function activateFlowNodePointerDrag() {
   if (!flowNodeDragState || flowNodeDragState.active) return;
   flowNodeDragState.active = true;
+  flowNodeDragState.timer = 0;
+  flowNodeDragState.sourceRow.classList.remove("node-drag-pressing");
   flowNodeDragState.sourceRow.classList.add("node-dragging");
   flowNodeDragState.sourceRow.setPointerCapture?.(flowNodeDragState.pointerId);
   document.body.classList.add("flow-node-reordering");
   document.activeElement?.blur?.();
   state.contextMenu = null;
   syncContextMenuRoot();
-  updateFlowNodeDropGuide("上下区域：同级排序 · 中间区域：设为子级", "hint", event.clientX, event.clientY);
+  updateFlowNodeDropGuide(
+    "上下区域：同级排序 · 中间区域：设为子级",
+    "hint",
+    flowNodeDragState.lastX,
+    flowNodeDragState.lastY,
+  );
 }
 
 function updateFlowNodePointerDrag(event) {
   if (!flowNodeDragState || event.pointerId !== flowNodeDragState.pointerId) return;
+  flowNodeDragState.lastX = event.clientX;
+  flowNodeDragState.lastY = event.clientY;
   if (!flowNodeDragState.active) {
     const distance = Math.hypot(event.clientX - flowNodeDragState.startX, event.clientY - flowNodeDragState.startY);
-    if (distance < flowNodeDragMoveThreshold) return;
-    activateFlowNodePointerDrag(event);
+    if (distance > flowNodeLongPressMoveTolerance) clearFlowNodeDragState();
+    return;
   }
   event.preventDefault();
   autoScrollFlowDuringDrag(event);

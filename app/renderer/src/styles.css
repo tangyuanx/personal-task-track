@@ -14909,27 +14909,9 @@ button.settings-row:hover .settings-row-copy strong {
   cursor:grabbing;
 }
 
-.flow-node-drag-grip {
-  display:grid;
-  width:14px;
-  height:24px;
-  flex:0 0 14px;
-  place-items:center;
-  color:#82918d;
-  opacity:.28;
-  pointer-events:none;
-  transition:color 120ms ease, opacity 120ms ease;
-}
-
-.flow-node-drag-grip .flow-row-icon {
-  width:12px;
-  height:16px;
-}
-
-.flow-outline-row:hover .flow-node-drag-grip,
-.flow-outline-node.selected > .flow-outline-row .flow-node-drag-grip {
-  color:#4f766f;
-  opacity:.8;
+.flow-outline-row.node-drag-pressing {
+  background:color-mix(in srgb, #4f766f 7%, transparent);
+  box-shadow:inset 0 0 0 1px color-mix(in srgb, #4f766f 18%, transparent);
 }
 
 .flow-outline-row.node-dragging {
@@ -15035,12 +15017,6 @@ button.settings-row:hover .settings-row-copy strong {
 
 :root[data-theme="dark"] .flow-outline-node.node-drag-over-inside > .flow-outline-row {
   background:color-mix(in srgb, #79a79d 15%, var(--panel));
-}
-
-@media (prefers-reduced-motion:reduce) {
-  .flow-node-drag-grip {
-    transition:none;
-  }
 }
 
 @media (prefers-reduced-transparency:reduce) {

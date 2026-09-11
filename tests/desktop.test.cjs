@@ -4444,9 +4444,16 @@ test("processing-flow nodes move across parents, levels, and sibling positions w
   assert.match(app, /data-flow-depth="\$\{depth\}"/);
   assert.doesNotMatch(app, /draggable="true"[^>]+data-flow-drag-source/);
   assert.doesNotMatch(app, /<button class="flow-node-drag-handle"/);
+  assert.doesNotMatch(app, /flow-node-drag-grip/);
   assert.doesNotMatch(styles, /\.flow-node-drag-handle/);
-  assert.match(app, /const flowNodeDragMoveThreshold = 7/);
+  assert.doesNotMatch(styles, /\.flow-node-drag-grip/);
+  assert.match(app, /const flowNodeLongPressDelay = 180/);
+  assert.match(app, /const flowNodeLongPressMoveTolerance = 8/);
   assert.match(app, /function beginFlowNodePointerDrag\(/);
+  assert.match(app, /classList\.add\("node-drag-pressing"\)/);
+  assert.match(app, /window\.setTimeout\(\(\) => activateFlowNodePointerDrag\(\), flowNodeLongPressDelay\)/);
+  assert.match(app, /event\.target\.closest\("button, select, textarea, a, \[contenteditable\]"\)/);
+  assert.match(app, /distance > flowNodeLongPressMoveTolerance/);
   assert.match(app, /function updateFlowNodePointerDrag\(/);
   assert.match(app, /document\.elementFromPoint\(event\.clientX, event\.clientY\)/);
   assert.match(app, /setPointerCapture\?\.\(flowNodeDragState\.pointerId\)/);
@@ -4456,9 +4463,9 @@ test("processing-flow nodes move across parents, levels, and sibling positions w
   assert.match(app, /同级排序，不改变层级/);
   assert.match(app, /成为「\$\{targetTitle\}」的子级/);
   assert.match(app, /移到顶层末尾 · 第 1 层/);
-  assert.match(styles, /\.flow-node-drag-grip/);
   assert.match(styles, /\.flow-outline-row\[data-flow-drag-source\]/);
   assert.match(styles, /touch-action:none/);
+  assert.match(styles, /\.flow-outline-row\.node-drag-pressing/);
   assert.match(styles, /\.flow-outline-node\.node-drag-over-before::before/);
   assert.match(styles, /\.flow-outline-node\.node-drag-over-inside > \.flow-outline-row/);
   assert.match(styles, /\.flow-node-drop-guide/);
