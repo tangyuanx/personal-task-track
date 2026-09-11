@@ -301,6 +301,7 @@ let conclusionNoticeTimer = 0;
 let taskDragState = null;
 let flowNodeDragState = null;
 let suppressTaskClickUntil = 0;
+let suppressFlowNodeClickUntil = 0;
 let recurrenceScheduleTimer = 0;
 let recurringTodaySignature = "";
 let recurrencePopoverTaskId = "";
@@ -2591,17 +2592,15 @@ function renderFlowNode(taskId, node, depth, rootIndex = 0, lineage = [], isLast
     ? `<button class="flow-collapse-toggle" type="button" data-action="toggle-node-collapse" data-task-id="${taskId}" data-node-id="${node.id}" aria-label="${node.collapsed ? "展开" : "折叠"}节点" aria-expanded="${!node.collapsed}">${briefFieldIcon(node.collapsed ? "chevron-right" : "chevron-down", "flow-row-icon")}</button>`
     : `<span class="flow-collapse-spacer" aria-hidden="true"></span>`;
   return `
-    <article class="flow-outline-node ${node.status} ${isSelected ? "selected" : ""}" style="--tree-depth:${depth}" data-context="node" data-task-id="${taskId}" data-node-id="${node.id}" data-flow-drag-target>
-      <div class="flow-outline-row" data-flow-select data-task-id="${taskId}" data-node-id="${node.id}">
+    <article class="flow-outline-node ${node.status} ${isSelected ? "selected" : ""}" style="--tree-depth:${depth}" data-context="node" data-task-id="${taskId}" data-node-id="${node.id}" data-flow-depth="${depth}">
+      <div class="flow-outline-row" data-flow-drag-source data-flow-drag-target data-flow-select data-task-id="${taskId}" data-node-id="${node.id}" title="按住左侧拖拽标识或行内空白处拖动；落在上下区域调整同级顺序，落在中间区域设为子级">
         <span class="flow-tree-zone">${treeGuides}</span>
+        <span class="flow-node-drag-grip" aria-hidden="true">${briefFieldIcon("move", "flow-row-icon")}</span>
         <button class="flow-node-marker flow-status-bullet status-${node.status}" type="button" data-action="cycle-node-status" data-task-id="${taskId}" data-node-id="${node.id}" aria-label="${escAttr(statusLabel)}：点击切换状态">${briefFieldIcon("disc", "flow-node-marker-icon")}</button>
         <button class="flow-status-badge status-${node.status}" type="button" data-action="cycle-node-status" data-task-id="${taskId}" data-node-id="${node.id}" aria-label="${escAttr(`${statusBadgeLabel}，点击切换状态`)}">${statusBadgeLabel}</button>
         ${nodeTitleInputHtml(node, taskId)}
         ${collapseControl}
         <button class="flow-node-more" type="button" data-action="open-node-detail" data-task-id="${taskId}" data-node-id="${node.id}" aria-label="打开节点详情">${briefFieldIcon("more-horizontal", "flow-row-icon")}</button>
-        <button class="flow-node-drag-handle" type="button" draggable="true" data-flow-drag-source data-task-id="${taskId}" data-node-id="${node.id}" aria-label="${escAttr(`拖拽重组节点：${node.title || "未命名节点"}`)}" title="拖拽调整节点层级和顺序">
-          ${briefFieldIcon("move", "flow-row-icon")}
-        </button>
       </div>
       ${
         children.length && !node.collapsed
@@ -4418,7 +4417,7 @@ function settingsOptionGroup(key, value, options) {
 // ============================================================
 const taskLongPressDelay = 320;
 const taskLongPressMoveTolerance = 8;
-const flowNodeDragMime = "application/x-personal-task-flow-node";
+const flowNodeDragMoveThreshold = 7;
 
 function taskDropPlacement(targetItem, clientY) {
   const bounds = targetItem.getBoundingClientRect();
@@ -4512,9 +4511,58 @@ function finishTaskPointerDrag() {
 function flowNodeDropPlacement(targetRow, clientY) {
   const bounds = targetRow.getBoundingClientRect();
   const ratio = bounds.height > 0 ? (clientY - bounds.top) / bounds.height : 0.5;
-  if (ratio < 0.25) return "before";
-  if (ratio > 0.75) return "after";
+  // Favor the common operation (sibling reordering). The deliberately smaller
+  // middle band is the only place that changes hierarchy.
+  if (ratio < 0.36) return "before";
+  if (ratio > 0.64) return "after";
   return "inside";
+}
+
+function flowNodeDropFeedback(targetRow, placement) {
+  const targetDepth = Math.max(0, Number(targetRow?.closest?.(".flow-outline-node")?.dataset.flowDepth) || 0);
+  const targetTitle = targetRow?.querySelector?.(".flow-title-input")?.value?.trim() || "未命名节点";
+  if (placement === "inside") return `成为「${targetTitle}」的子级 · 第 ${targetDepth + 2} 层`;
+  return `同级排序，不改变层级 · 放到「${targetTitle}」${placement === "before" ? "之前" : "之后"} · 第 ${targetDepth + 1} 层`;
+}
+
+function ensureFlowNodeDropGuide() {
+  let guide = document.querySelector("[data-flow-drop-guide]");
+  if (guide) return guide;
+  guide = document.createElement("div");
+  guide.className = "flow-node-drop-guide";
+  guide.dataset.flowDropGuide = "";
+  guide.setAttribute("role", "status");
+  guide.setAttribute("aria-live", "polite");
+  document.body.appendChild(guide);
+  return guide;
+}
+
+function updateFlowNodeDropGuide(label, placement, clientX, clientY) {
+  const guide = ensureFlowNodeDropGuide();
+  guide.textContent = label;
+  guide.dataset.placement = placement;
+  const maxLeft = Math.max(12, window.innerWidth - guide.offsetWidth - 12);
+  const maxTop = Math.max(12, window.innerHeight - guide.offsetHeight - 12);
+  guide.style.left = `${Math.min(maxLeft, Math.max(12, clientX + 16))}px`;
+  guide.style.top = `${Math.min(maxTop, Math.max(12, clientY + 18))}px`;
+}
+
+function updateFlowNodeDropIndicator(targetRow, placement, event) {
+  clearFlowNodeDropIndicators({ keepGuide: true });
+  const targetNode = targetRow.closest(".flow-outline-node");
+  if (!targetNode) return;
+  targetNode.classList.add(`node-drag-over-${placement}`);
+  targetNode.dataset.flowDropLabel = flowNodeDropFeedback(targetRow, placement);
+  updateFlowNodeDropGuide(targetNode.dataset.flowDropLabel, placement, event.clientX, event.clientY);
+}
+
+function autoScrollFlowDuringDrag(event) {
+  const viewport = flowNodeDragState?.sourceRow?.closest?.("[data-processing-flow-scroll]") || document.querySelector("[data-processing-flow-scroll]");
+  if (!viewport) return;
+  const bounds = viewport.getBoundingClientRect();
+  const edge = 42;
+  if (event.clientY < bounds.top + edge) viewport.scrollTop -= 12;
+  else if (event.clientY > bounds.bottom - edge) viewport.scrollTop += 12;
 }
 
 function canMoveFlowNode(taskId, sourceId, targetId = "") {
@@ -4526,93 +4574,125 @@ function canMoveFlowNode(taskId, sourceId, targetId = "") {
   return !findNode(source.children, targetId);
 }
 
-function clearFlowNodeDropIndicators() {
+function clearFlowNodeDropIndicators({ keepGuide = false } = {}) {
   document
     .querySelectorAll(".node-drag-over-before, .node-drag-over-inside, .node-drag-over-after")
-    .forEach((row) => row.classList.remove("node-drag-over-before", "node-drag-over-inside", "node-drag-over-after"));
-  document.querySelectorAll(".flow-list.node-drag-over-root").forEach((list) => list.classList.remove("node-drag-over-root"));
+    .forEach((node) => {
+      node.classList.remove("node-drag-over-before", "node-drag-over-inside", "node-drag-over-after");
+      delete node.dataset.flowDropLabel;
+    });
+  document.querySelectorAll(".node-drag-over-root").forEach((list) => list.classList.remove("node-drag-over-root"));
+  if (!keepGuide) document.querySelector("[data-flow-drop-guide]")?.remove();
 }
 
 function clearFlowNodeDragState() {
-  flowNodeDragState?.sourceRow?.classList.remove("node-dragging");
+  const dragState = flowNodeDragState;
+  dragState?.sourceRow?.classList.remove("node-dragging");
+  if (dragState?.sourceRow?.hasPointerCapture?.(dragState.pointerId)) {
+    dragState.sourceRow.releasePointerCapture(dragState.pointerId);
+  }
   flowNodeDragState = null;
   document.body.classList.remove("flow-node-reordering");
+  document.removeEventListener("pointermove", updateFlowNodePointerDrag);
+  document.removeEventListener("pointerup", finishFlowNodePointerDrag);
+  document.removeEventListener("pointercancel", cancelFlowNodePointerDrag);
   clearFlowNodeDropIndicators();
 }
 
+function beginFlowNodePointerDrag(event) {
+  const sourceRow = event.currentTarget;
+  if (event.button !== 0 || event.target.closest("button, input, select, textarea, a, [contenteditable]")) return;
+  const taskId = sourceRow.dataset.taskId || "";
+  const nodeId = sourceRow.dataset.nodeId || "";
+  if (!canMoveFlowNode(taskId, nodeId)) return;
+  if (flowNodeDragState) clearFlowNodeDragState();
+  flowNodeDragState = {
+    taskId,
+    nodeId,
+    sourceRow,
+    pointerId: event.pointerId,
+    startX: event.clientX,
+    startY: event.clientY,
+    active: false,
+    targetId: "",
+    placement: "",
+    root: false,
+  };
+  document.addEventListener("pointermove", updateFlowNodePointerDrag, { passive: false });
+  document.addEventListener("pointerup", finishFlowNodePointerDrag);
+  document.addEventListener("pointercancel", cancelFlowNodePointerDrag);
+}
+
+function activateFlowNodePointerDrag(event) {
+  if (!flowNodeDragState || flowNodeDragState.active) return;
+  flowNodeDragState.active = true;
+  flowNodeDragState.sourceRow.classList.add("node-dragging");
+  flowNodeDragState.sourceRow.setPointerCapture?.(flowNodeDragState.pointerId);
+  document.body.classList.add("flow-node-reordering");
+  document.activeElement?.blur?.();
+  state.contextMenu = null;
+  syncContextMenuRoot();
+  updateFlowNodeDropGuide("上下区域：同级排序 · 中间区域：设为子级", "hint", event.clientX, event.clientY);
+}
+
+function updateFlowNodePointerDrag(event) {
+  if (!flowNodeDragState || event.pointerId !== flowNodeDragState.pointerId) return;
+  if (!flowNodeDragState.active) {
+    const distance = Math.hypot(event.clientX - flowNodeDragState.startX, event.clientY - flowNodeDragState.startY);
+    if (distance < flowNodeDragMoveThreshold) return;
+    activateFlowNodePointerDrag(event);
+  }
+  event.preventDefault();
+  autoScrollFlowDuringDrag(event);
+  const hovered = document.elementFromPoint(event.clientX, event.clientY);
+  const targetRow = hovered?.closest?.("[data-flow-drag-target]");
+  clearFlowNodeDropIndicators({ keepGuide: true });
+  flowNodeDragState.targetId = "";
+  flowNodeDragState.placement = "";
+  flowNodeDragState.root = false;
+
+  if (targetRow && targetRow.dataset.taskId === flowNodeDragState.taskId) {
+    const targetId = targetRow.dataset.nodeId || "";
+    if (!canMoveFlowNode(flowNodeDragState.taskId, flowNodeDragState.nodeId, targetId)) {
+      updateFlowNodeDropGuide("不能移动到自身或自己的子节点中", "invalid", event.clientX, event.clientY);
+      return;
+    }
+    const placement = flowNodeDropPlacement(targetRow, event.clientY);
+    flowNodeDragState.targetId = targetId;
+    flowNodeDragState.placement = placement;
+    updateFlowNodeDropIndicator(targetRow, placement, event);
+    return;
+  }
+
+  const viewport = flowNodeDragState.sourceRow.closest("[data-processing-flow-scroll]");
+  if (viewport && hovered && viewport.contains(hovered)) {
+    flowNodeDragState.root = true;
+    viewport.classList.add("node-drag-over-root");
+    updateFlowNodeDropGuide("移到顶层末尾 · 第 1 层", "root", event.clientX, event.clientY);
+  }
+}
+
+function finishFlowNodePointerDrag(event) {
+  if (!flowNodeDragState || event.pointerId !== flowNodeDragState.pointerId) return;
+  const { taskId, nodeId, targetId, placement, root, active } = flowNodeDragState;
+  if (active) event.preventDefault();
+  clearFlowNodeDragState();
+  if (!active) return;
+  suppressFlowNodeClickUntil = Date.now() + 450;
+  const moved = targetId && placement
+    ? moveFlowNode(taskId, nodeId, targetId, placement)
+    : root && moveFlowNode(taskId, nodeId, "", "root");
+  if (moved) render();
+}
+
+function cancelFlowNodePointerDrag(event) {
+  if (!flowNodeDragState || event.pointerId !== flowNodeDragState.pointerId) return;
+  clearFlowNodeDragState();
+}
+
 function bindFlowNodeDragAndDrop() {
-  document.querySelectorAll("[data-flow-drag-source]").forEach((handle) => {
-    handle.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-    });
-    handle.addEventListener("dragstart", (event) => {
-      const sourceRow = handle.closest("[data-flow-drag-target]");
-      const taskId = handle.dataset.taskId || "";
-      const nodeId = handle.dataset.nodeId || "";
-      if (!sourceRow || !canMoveFlowNode(taskId, nodeId)) {
-        event.preventDefault();
-        return;
-      }
-      flowNodeDragState = { taskId, nodeId, sourceRow };
-      event.dataTransfer.effectAllowed = "move";
-      event.dataTransfer.setData(flowNodeDragMime, JSON.stringify({ taskId, nodeId }));
-      sourceRow.classList.add("node-dragging");
-      document.body.classList.add("flow-node-reordering");
-      state.contextMenu = null;
-      syncContextMenuRoot();
-    });
-    handle.addEventListener("dragend", clearFlowNodeDragState);
-  });
-
-  document.querySelectorAll("[data-flow-drag-target]").forEach((row) => {
-    row.addEventListener("dragover", (event) => {
-      if (!flowNodeDragState || flowNodeDragState.taskId !== row.dataset.taskId) return;
-      const targetId = row.dataset.nodeId || "";
-      if (!canMoveFlowNode(flowNodeDragState.taskId, flowNodeDragState.nodeId, targetId)) {
-        event.dataTransfer.dropEffect = "none";
-        return;
-      }
-      event.preventDefault();
-      event.stopPropagation();
-      event.dataTransfer.dropEffect = "move";
-      clearFlowNodeDropIndicators();
-      row.classList.add(`node-drag-over-${flowNodeDropPlacement(row, event.clientY)}`);
-    });
-    row.addEventListener("dragleave", (event) => {
-      if (event.relatedTarget && row.contains(event.relatedTarget)) return;
-      row.classList.remove("node-drag-over-before", "node-drag-over-inside", "node-drag-over-after");
-    });
-    row.addEventListener("drop", (event) => {
-      if (!flowNodeDragState || flowNodeDragState.taskId !== row.dataset.taskId) return;
-      event.preventDefault();
-      event.stopPropagation();
-      const { taskId, nodeId } = flowNodeDragState;
-      const placement = flowNodeDropPlacement(row, event.clientY);
-      const targetId = row.dataset.nodeId || "";
-      clearFlowNodeDragState();
-      if (moveFlowNode(taskId, nodeId, targetId, placement)) render();
-    });
-  });
-
-  document.querySelectorAll(".flow-list[data-context='flow-root']").forEach((list) => {
-    list.addEventListener("dragover", (event) => {
-      if (event.target.closest?.("[data-flow-drag-target]")) return;
-      if (!flowNodeDragState || flowNodeDragState.taskId !== list.dataset.taskId) return;
-      event.preventDefault();
-      event.dataTransfer.dropEffect = "move";
-      clearFlowNodeDropIndicators();
-      list.classList.add("node-drag-over-root");
-    });
-    list.addEventListener("drop", (event) => {
-      if (event.target.closest?.("[data-flow-drag-target]")) return;
-      if (!flowNodeDragState || flowNodeDragState.taskId !== list.dataset.taskId) return;
-      event.preventDefault();
-      event.stopPropagation();
-      const { taskId, nodeId } = flowNodeDragState;
-      clearFlowNodeDragState();
-      if (moveFlowNode(taskId, nodeId, "", "root")) render();
-    });
+  document.querySelectorAll("[data-flow-drag-source]").forEach((sourceRow) => {
+    sourceRow.addEventListener("pointerdown", beginFlowNodePointerDrag);
   });
 }
 
@@ -5412,10 +5492,20 @@ function bindTaskRepositoryRows(scope = document) {
 
   document.querySelectorAll(".flow-outline-row[data-flow-select]").forEach((row) => {
     row.addEventListener("click", (event) => {
+      if (Date.now() < suppressFlowNodeClickUntil) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
       if (event.target.closest("button, select, textarea")) return;
       row.querySelector(".flow-title-input")?.focus({ preventScroll: true });
     });
     row.addEventListener("dblclick", (event) => {
+      if (Date.now() < suppressFlowNodeClickUntil) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
       if (event.target.closest("button, select, textarea")) return;
       event.preventDefault();
       selectNodeForInspector(row.dataset.taskId, row.dataset.nodeId);

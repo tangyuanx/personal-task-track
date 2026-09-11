@@ -4409,7 +4409,11 @@ test("processing-flow nodes move across parents, levels, and sibling positions w
       rootAppendMove,
       rootSiblingMove,
       a1Expanded: findNode(task.nodes, "a1").collapsed === false,
-      placements: [10, 50, 90].map((clientY) => flowNodeDropPlacement({ getBoundingClientRect: () => ({ top: 0, height: 100 }) }, clientY)),
+      placements: [10, 35, 36, 50, 64, 65, 90].map((clientY) => flowNodeDropPlacement({ getBoundingClientRect: () => ({ top: 0, height: 100 }) }, clientY)),
+      feedback: ["before", "inside", "after"].map((placement) => flowNodeDropFeedback({
+        closest: () => ({ dataset: { flowDepth: "2" } }),
+        querySelector: () => ({ value: "目标节点" })
+      }, placement)),
       nodes: snapshot(task.nodes)
     };
   })()`);
@@ -4423,7 +4427,12 @@ test("processing-flow nodes move across parents, levels, and sibling positions w
   assert.equal(result.rootAppendMove, true);
   assert.equal(result.rootSiblingMove, true);
   assert.equal(result.a1Expanded, true);
-  assert.deepEqual(result.placements, ["before", "inside", "after"]);
+  assert.deepEqual(result.placements, ["before", "before", "inside", "inside", "inside", "after", "after"]);
+  assert.deepEqual(result.feedback, [
+    "同级排序，不改变层级 · 放到「目标节点」之前 · 第 3 层",
+    "成为「目标节点」的子级 · 第 4 层",
+    "同级排序，不改变层级 · 放到「目标节点」之后 · 第 3 层",
+  ]);
   assert.deepEqual(result.nodes, [
     { id: "a", parentId: null, type: "step", order: 1, children: [{ id: "a2", parentId: "a", type: "subtask", order: 1, children: [] }] },
     { id: "b", parentId: null, type: "step", order: 2, children: [{ id: "c", parentId: "b", type: "subtask", order: 1, children: [] }] },
@@ -4431,12 +4440,29 @@ test("processing-flow nodes move across parents, levels, and sibling positions w
     { id: "a1x", parentId: null, type: "step", order: 4, children: [] },
     { id: "b1", parentId: null, type: "step", order: 5, children: [] },
   ]);
-  assert.match(app, /draggable="true"[^>]+data-flow-drag-source/);
-  assert.match(app, /data-flow-drag-target/);
-  assert.match(app, /application\/x-personal-task-flow-node/);
+  assert.match(app, /class="flow-outline-row" data-flow-drag-source data-flow-drag-target/);
+  assert.match(app, /data-flow-depth="\$\{depth\}"/);
+  assert.doesNotMatch(app, /draggable="true"[^>]+data-flow-drag-source/);
+  assert.doesNotMatch(app, /<button class="flow-node-drag-handle"/);
+  assert.doesNotMatch(styles, /\.flow-node-drag-handle/);
+  assert.match(app, /const flowNodeDragMoveThreshold = 7/);
+  assert.match(app, /function beginFlowNodePointerDrag\(/);
+  assert.match(app, /function updateFlowNodePointerDrag\(/);
+  assert.match(app, /document\.elementFromPoint\(event\.clientX, event\.clientY\)/);
+  assert.match(app, /setPointerCapture\?\.\(flowNodeDragState\.pointerId\)/);
+  assert.match(app, /function finishFlowNodePointerDrag\(/);
+  assert.match(app, /suppressFlowNodeClickUntil = Date\.now\(\) \+ 450/);
   assert.match(app, /function flowNodeDropPlacement\(/);
-  assert.match(styles, /\.flow-node-drag-handle/);
-  assert.match(styles, /\.node-drag-over-inside/);
+  assert.match(app, /同级排序，不改变层级/);
+  assert.match(app, /成为「\$\{targetTitle\}」的子级/);
+  assert.match(app, /移到顶层末尾 · 第 1 层/);
+  assert.match(styles, /\.flow-node-drag-grip/);
+  assert.match(styles, /\.flow-outline-row\[data-flow-drag-source\]/);
+  assert.match(styles, /touch-action:none/);
+  assert.match(styles, /\.flow-outline-node\.node-drag-over-before::before/);
+  assert.match(styles, /\.flow-outline-node\.node-drag-over-inside > \.flow-outline-row/);
+  assert.match(styles, /\.flow-node-drop-guide/);
+  assert.match(styles, /data-placement="invalid"/);
 });
 
 test("node record input focus stays within a quiet field boundary", async () => {
