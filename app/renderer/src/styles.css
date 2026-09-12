@@ -15025,3 +15025,94 @@ button.settings-row:hover .settings-row-copy strong {
     backdrop-filter:none;
   }
 }
+
+/* Compact update affordance replaces the quiet version only while an update is pending. */
+.brand.sidebar-head > .sidebar-version,
+:root[data-theme="dark"] .brand.sidebar-head > .sidebar-version {
+  padding:0;
+  border:0;
+  border-radius:0;
+  background:transparent;
+  color:var(--handoff-muted, var(--muted));
+  font-family:var(--mono);
+  font-size:calc(10 * var(--font-unit));
+  font-weight:700;
+}
+
+.brand.sidebar-head > .sidebar-update-action {
+  display:inline-flex;
+  min-width:0;
+  height:28px;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+  padding:0 9px;
+  border:1px solid color-mix(in srgb, var(--handoff-focus-800, var(--focus)) 72%, #17392d);
+  border-radius:7px;
+  background:var(--handoff-focus-800, var(--focus));
+  box-shadow:0 2px 8px rgba(31, 57, 51, .16);
+  color:#f5faf7;
+  font-family:var(--app-font);
+  font-size:calc(11 * var(--font-unit));
+  font-weight:650;
+  line-height:1;
+  letter-spacing:0;
+  white-space:nowrap;
+  transition:background 150ms ease, border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
+}
+
+.brand.sidebar-head > .sidebar-update-action:hover {
+  border-color:var(--handoff-focus-950, var(--focus));
+  background:color-mix(in srgb, var(--handoff-focus-800, var(--focus)) 88%, #17392d);
+  box-shadow:0 4px 12px rgba(31, 57, 51, .2);
+  transform:translateY(-1px);
+}
+
+.brand.sidebar-head > .sidebar-update-action:focus-visible {
+  outline:3px solid color-mix(in srgb, var(--handoff-focus-800, var(--focus)) 22%, transparent);
+  outline-offset:2px;
+}
+
+.brand.sidebar-head > .sidebar-update-action:disabled {
+  cursor:default;
+  opacity:.82;
+  transform:none;
+}
+
+.brand.sidebar-head > .sidebar-update-action svg {
+  width:14px;
+  height:14px;
+  flex:0 0 auto;
+  fill:none;
+  stroke:currentColor;
+  stroke-linecap:round;
+  stroke-linejoin:round;
+  stroke-width:2;
+}
+
+.brand.sidebar-head > .sidebar-update-action > span {
+  min-width:0;
+  padding:0;
+  border:0;
+  background:transparent;
+  color:inherit;
+  font:inherit;
+}
+
+.brand.sidebar-head > .sidebar-update-action.is-busy svg {
+  animation:sidebar-update-spin 900ms linear infinite;
+}
+
+@keyframes sidebar-update-spin {
+  to { transform:rotate(360deg); }
+}
+
+@media (prefers-reduced-motion:reduce) {
+  .brand.sidebar-head > .sidebar-update-action {
+    transition:none;
+  }
+
+  .brand.sidebar-head > .sidebar-update-action.is-busy svg {
+    animation-duration:1800ms;
+  }
+}

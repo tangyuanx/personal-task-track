@@ -1,5 +1,6 @@
 const assert = require("node:assert/strict");
 const { spawn } = require("node:child_process");
+const { EventEmitter } = require("node:events");
 const fs = require("node:fs/promises");
 const os = require("node:os");
 const path = require("node:path");
@@ -36,6 +37,7 @@ const {
 const {
   applyTodayWidgetTopmost,
   cornerWindowBounds,
+  createTodayWidgetController,
   resizedWidgetBounds,
   normalizeSnapshot,
   normalizeTodayWidgetAppearance,
@@ -2491,6 +2493,15 @@ test("settings expose one-confirmation background update with a safe silent rest
     appUpdateState = normalizeAppUpdateState({ status: "preparing", supported: true, currentVersion: "0.1.109", version: "0.1.110" });
     return renderUpdateSettingsControls();
   })()`);
+  const sidebar = harness.json(`(() => {
+    appUpdateState = normalizeAppUpdateState({ status: "latest", supported: true, currentVersion: "0.1.109" });
+    const latest = renderSidebarUpdateControl();
+    appUpdateState = normalizeAppUpdateState({ status: "available", supported: true, currentVersion: "0.1.109", version: "0.1.110" });
+    const available = renderSidebarUpdateControl();
+    appUpdateState = normalizeAppUpdateState({ status: "downloading", supported: true, currentVersion: "0.1.109", version: "0.1.110", percent: 42.4 });
+    const downloading = renderSidebarUpdateControl();
+    return { latest, available, downloading };
+  })()`);
   const missingWindowsFeed = harness.evaluate(`(() => {
     appUpdateState = normalizeAppUpdateState({ status: "error", supported: true, currentVersion: "0.1.118", errorCode: "UPDATE_METADATA_MISSING" });
     return renderUpdateSettingsControls();
@@ -2501,11 +2512,23 @@ test("settings expose one-confirmation background update with a safe silent rest
   assert.match(available, /v0\.1\.110 可用/);
   assert.match(available, /data-update-action="download">升级并重启/);
   assert.match(preparing, /正在保存并准备升级/);
+  assert.match(sidebar.latest, /class="sidebar-version"[^>]*>v0\.1\.109<\/span>/);
+  assert.doesNotMatch(sidebar.latest, /sidebar-update-action/);
+  assert.match(sidebar.available, /class="sidebar-update-action/);
+  assert.match(sidebar.available, /data-sidebar-update-action/);
+  assert.match(sidebar.available, /更新到 v0\.1\.110，完成后自动重启/);
+  assert.match(sidebar.available, /feather-sprite\.svg#download-cloud/);
+  assert.match(sidebar.downloading, /aria-busy="true" disabled/);
+  assert.match(sidebar.downloading, />42%<\/span>/);
+  assert.match(sidebar.downloading, /feather-sprite\.svg#loader/);
   assert.match(missingWindowsFeed, /Windows 更新包尚未发布完整/);
   assert.match(missingWindowsFeed, /UPDATE_METADATA_MISSING/);
   assert.match(missingWindowsFeed, /打开发布页/);
   assert.doesNotMatch(available, /data-update-action="install"/);
   assert.match(styles, /\.settings-update-progress span\s*\{[\s\S]*background:\s*var\(--focus\);/);
+  assert.match(styles, /\.brand\.sidebar-head > \.sidebar-update-action\s*\{[\s\S]*height:28px;[\s\S]*background:var\(--handoff-focus-800, var\(--focus\)\);/);
+  assert.match(styles, /\.brand\.sidebar-head > \.sidebar-update-action:focus-visible\s*\{/);
+  assert.match(styles, /@media \(prefers-reduced-motion:reduce\)[\s\S]*sidebar-update-action\.is-busy svg/);
   assert.match(styles, /\.update-install-overlay\s*\{/);
   assert.match(preload, /app-update:get-state/);
   assert.match(preload, /app-update:prepare-install/);
@@ -2726,6 +2749,77 @@ test("Today widget topmost policy joins macOS fullscreen Spaces without hiding t
   ]);
 });
 
+test("Today widget restores topmost after app deactivation releases temporary editing state", async (t) => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "personal-task-track-widget-lifecycle-test-"));
+  t.after(() => fs.rm(directory, { recursive: true, force: true }));
+  const ipcHandlers = new Map();
+  const topmostCalls = [];
+
+  class FakeWidgetWindow extends EventEmitter {
+    constructor() {
+      super();
+      this.bounds = { x: 0, y: 0, width: 360, height: 260 };
+      this.visible = false;
+      this.destroyed = false;
+      this.webContents = {
+        send() {},
+        setWindowOpenHandler() {},
+      };
+    }
+
+    getBounds() { return this.bounds; }
+    isDestroyed() { return this.destroyed; }
+    isVisible() { return this.visible; }
+    loadFile() {}
+    moveTop() { topmostCalls.push(["move-top"]); }
+    setAlwaysOnTop(...args) { topmostCalls.push(["always-on-top", ...args]); }
+    setBounds(bounds) { this.bounds = bounds; }
+    setHiddenInMissionControl() {}
+    setIgnoreMouseEvents() {}
+    setVisibleOnAllWorkspaces() {}
+    showInactive() { this.visible = true; }
+  }
+
+  let widgetWindow;
+  let widgetWindowOptions;
+  const BrowserWindow = class extends FakeWidgetWindow {
+    constructor(options) {
+      super();
+      widgetWindow = this;
+      widgetWindowOptions = options;
+    }
+    static getAllWindows() { return widgetWindow ? [widgetWindow] : []; }
+  };
+  const controller = createTodayWidgetController({
+    app: { getPath: () => directory },
+    BrowserWindow,
+    globalShortcut: {},
+    ipcMain: {
+      handle(channel, handler) { ipcHandlers.set(channel, handler); },
+      on() {},
+    },
+    screen: {
+      getDisplayMatching: () => ({ workArea: { x: 0, y: 0, width: 1280, height: 800 } }),
+      getDisplayNearestPoint: () => ({ workArea: { x: 0, y: 0, width: 1280, height: 800 } }),
+      getPrimaryDisplay: () => ({ workArea: { x: 0, y: 0, width: 1280, height: 800 } }),
+    },
+    getMainWindow: () => null,
+    ensureMainWindow: () => null,
+  });
+  controller.registerIpc();
+  await ipcHandlers.get("today-widget:show")();
+  assert.equal(widgetWindowOptions.type, process.platform === "darwin" ? "panel" : undefined);
+
+  await ipcHandlers.get("today-widget:set-editing")({ sender: widgetWindow.webContents }, true);
+  assert.deepEqual(topmostCalls.at(-1), ["always-on-top", false, "normal", 0]);
+
+  controller.restoreAlwaysOnTopAfterAppDeactivation();
+  assert.deepEqual(topmostCalls.slice(-2), [
+    ["always-on-top", true, "screen-saver", process.platform === "darwin" ? 1 : 0],
+    ["move-top"],
+  ]);
+});
+
 test("Today widget preferences persist atomically outside task data", async (t) => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "personal-task-track-widget-test-"));
   t.after(() => fs.rm(directory, { recursive: true, force: true }));
@@ -2781,6 +2875,8 @@ test("production Today widget uses its dedicated frontend and a sandboxed Electr
   assert.match(runtime, /compositionstart/);
   assert.match(runtime, /dblclick/);
   assert.match(demo, /id="quick-capture-input"/);
+  assert.doesNotMatch(demo, /quick-capture-add-today/);
+  assert.match(demo, /\.quick-capture-input-row\s*\{[\s\S]*grid-template-columns:\s*auto minmax\(0, 1fr\);/);
   assert.match(demo, /id="quick-capture-list"/);
   assert.match(demo, /quick-capture-item/);
   assert.match(demo, /quick-capture-section/);
@@ -2816,13 +2912,15 @@ test("production Today widget uses its dedicated frontend and a sandboxed Electr
   assert.match(runtime, /setPreferences\(\{ opacity \}\)/);
   assert.match(runtime, /document\.addEventListener\("pointerdown",[\s\S]*closeMenu\(\)/);
   assert.match(runtime, /window\.addEventListener\("blur", \(\) => \{[\s\S]*closeMenu\(\);[\s\S]*closeGroupMenu\(\);/);
+  assert.match(runtime, /window\.addEventListener\("focus", \(\) => \{[\s\S]*isTextEditingTarget\(document\.activeElement\)[\s\S]*bridge\.setEditing/);
   assert.match(widgetMain, /frame: false/);
   assert.match(widgetMain, /acceptFirstMouse: true/);
   assert.match(widgetMain, /transparent: true/);
   assert.match(widgetMain, /hasShadow: false/);
   assert.match(widgetMain, /sandbox: true/);
-  assert.doesNotMatch(widgetMain, /type: process\.platform === "darwin" \? "panel" : undefined/);
+  assert.match(widgetMain, /type: process\.platform === "darwin" \? "panel" : undefined/);
   assert.match(widgetMain, /preferences\.alwaysOnTop && !editingText/);
+  assert.match(widgetMain, /function restoreAlwaysOnTopAfterAppDeactivation\(\)[\s\S]*editingText = false;[\s\S]*applyAlwaysOnTop\(\)/);
   assert.match(widgetMain, /setAlwaysOnTop\(topmost, topmost \? "screen-saver" : "normal"/);
   assert.match(widgetMain, /visibleOnFullScreen: topmost/);
   assert.match(widgetMain, /skipTransformProcessType: true/);
@@ -2833,6 +2931,7 @@ test("production Today widget uses its dedicated frontend and a sandboxed Electr
   assert.match(widgetMain, /position:\s*"custom"[\s\S]*height,[\s\S]*customBounds:/);
   assert.match(widgetMain, /function stop\(\)[\s\S]*widgetWindow\.destroy\(\)/);
   assert.match(appMain, /if \(!isQuitting && !updateInstallPrepared\) app\.quit\(\)/);
+  assert.match(appMain, /did-resign-active[\s\S]*restoreAlwaysOnTopAfterAppDeactivation/);
   assert.doesNotMatch(appMain, /!isMac && !isQuitting/);
   assert.match(appMain, /app\.setActivationPolicy\("regular"\)/);
   assert.match(appMain, /await app\.dock\.show\(\)/);
@@ -3598,6 +3697,21 @@ test("the visible personal-group trigger opens its context menu on the first rig
   assert.match(result.picker, /repository-group-trigger[^>]*data-group-context-id="group_work"/);
   assert.deepEqual(result.contextMenu, { kind: "group", groupId: "group_work", x: 240, y: 180 });
   assert.deepEqual({ prevented: result.prevented, stopped: result.stopped, synced: result.synced }, { prevented: 1, stopped: 1, synced: 1 });
+});
+
+test("repository group context-menu presses keep the picker DOM alive through the first click", async () => {
+  const harness = await rendererHarness();
+  const result = harness.json(`(() => {
+    const targetInside = (selector) => ({ closest: (query) => query === selector ? {} : null });
+    state.contextMenu = { kind: "group", groupId: "group_work", x: 10, y: 20 };
+    const picker = isRepositoryGroupInteraction(targetInside(".repository-group-picker"));
+    const groupMenu = isRepositoryGroupInteraction(targetInside(".context-menu"));
+    state.contextMenu = { kind: "task", taskId: "task_a", x: 10, y: 20 };
+    const taskMenu = isRepositoryGroupInteraction(targetInside(".context-menu"));
+    return { picker, groupMenu, taskMenu };
+  })()`);
+
+  assert.deepEqual(result, { picker: true, groupMenu: true, taskMenu: false });
 });
 
 test("quick captures and preserved group deletions remain truly ungrouped across disk normalization", async () => {

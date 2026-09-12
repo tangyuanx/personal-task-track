@@ -456,7 +456,7 @@
 
     .quick-capture-input-row {
       display: grid;
-      grid-template-columns: auto minmax(0, 1fr) auto;
+      grid-template-columns: auto minmax(0, 1fr);
       gap: 6px;
       align-items: center;
       min-height: 36px;
@@ -484,19 +484,6 @@
     }
 
     #quick-capture-input::placeholder { color: var(--widget-muted); }
-
-    .quick-capture-add-today {
-      width: 24px;
-      height: 24px;
-      padding: 0;
-      border: 0;
-      border-radius: 6px;
-      background: transparent;
-      color: rgba(255, 255, 255, 0.66);
-      cursor: pointer;
-    }
-
-    .quick-capture-add-today:hover { background: var(--widget-control-hover); color: var(--widget-title); }
 
     .widget-section { display: grid; gap: 5px; }
     .widget-section[hidden] { display: none; }
@@ -1071,7 +1058,6 @@
           <div class="quick-capture-input-row">
             <span class="quick-capture-prefix" aria-hidden="true">＋</span>
             <textarea id="quick-capture-input" rows="1" maxlength="4000" placeholder="快速记录，Enter 保存 ↵" aria-label="快速记录内容"></textarea>
-            <button class="quick-capture-add-today" id="quick-capture-add-today" type="button" title="保存并加入今日" aria-label="保存并加入今日">↑</button>
           </div>
         </section>
         <section class="widget-section quick-capture-section" id="quick-capture-section" aria-label="速记" hidden>

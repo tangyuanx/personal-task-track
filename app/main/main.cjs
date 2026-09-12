@@ -645,7 +645,7 @@ app.whenReady().then(async () => {
   if (isMac) {
     app.on("did-become-active", () => todayWidgetController?.applyAlwaysOnTop());
     app.on("did-resign-active", () => {
-      todayWidgetController?.applyAlwaysOnTop();
+      todayWidgetController?.restoreAlwaysOnTopAfterAppDeactivation();
       const fullscreenTransitionRefresh = setTimeout(() => todayWidgetController?.applyAlwaysOnTop(), 1200);
       fullscreenTransitionRefresh.unref();
     });

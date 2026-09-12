@@ -209,6 +209,14 @@ function createTodayWidgetController({ app, BrowserWindow, globalShortcut, ipcMa
     applyTodayWidgetTopmost(widgetWindow, preferences.alwaysOnTop && !editingText, process.platform);
   }
 
+  function restoreAlwaysOnTopAfterAppDeactivation() {
+    // macOS keeps the DOM input focused when the user switches applications.
+    // Editing no longer needs the IME-safe normal window level once this app
+    // is inactive, so release that temporary override before refreshing z-order.
+    editingText = false;
+    applyAlwaysOnTop();
+  }
+
   function applyClickThrough() {
     if (!widgetWindow || widgetWindow.isDestroyed() || typeof widgetWindow.setIgnoreMouseEvents !== "function") return;
     widgetWindow.setIgnoreMouseEvents(preferences.clickThrough === true, { forward: true });
@@ -236,6 +244,7 @@ function createTodayWidgetController({ app, BrowserWindow, globalShortcut, ipcMa
       maximizable: false,
       fullscreenable: false,
       skipTaskbar: true,
+      type: process.platform === "darwin" ? "panel" : undefined,
       alwaysOnTop: preferences.alwaysOnTop,
       title: "今日任务",
       webPreferences: {
@@ -517,7 +526,7 @@ function createTodayWidgetController({ app, BrowserWindow, globalShortcut, ipcMa
     widgetWindow = null;
   }
 
-  return { applyAlwaysOnTop, registerIpc, start, stop };
+  return { applyAlwaysOnTop, registerIpc, restoreAlwaysOnTopAfterAppDeactivation, start, stop };
 }
 
 function normalizeTaskId(value) {

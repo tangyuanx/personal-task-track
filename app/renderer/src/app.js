@@ -1828,7 +1828,7 @@ function renderSidebar() {
         <div>
           <strong>Loop</strong>
         </div>
-        <span>v${esc(APP_VERSION || "dev")}</span>
+        ${renderSidebarUpdateControl()}
       </div>
 
       ${renderTodayFocus(focusItems)}
@@ -3835,6 +3835,64 @@ function formatUpdateDate(value) {
   return date ? new Intl.DateTimeFormat("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit" }).format(date) : "";
 }
 
+function renderSidebarUpdateControl(update = appUpdateState) {
+  const pendingStatuses = ["available", "downloading", "downloaded", "preparing", "installing"];
+  const hasPendingUpdate = Boolean(update.version) && pendingStatuses.includes(update.status);
+  if (!hasPendingUpdate) {
+    return `<span class="sidebar-version" data-sidebar-update-slot>v${esc(update.currentVersion || APP_VERSION || "dev")}</span>`;
+  }
+
+  const busy = ["downloading", "preparing", "installing"].includes(update.status);
+  const label = update.status === "available"
+    ? "更新"
+    : update.status === "downloaded"
+      ? "重启更新"
+      : update.status === "downloading"
+        ? `${Math.round(update.percent)}%`
+        : update.status === "preparing"
+          ? "准备中"
+          : "安装中";
+  const description = update.status === "available"
+    ? `更新到 v${update.version}，完成后自动重启`
+    : update.status === "downloaded"
+      ? `重启并安装 v${update.version}`
+      : `正在更新到 v${update.version}`;
+  const icon = busy ? "loader" : "download-cloud";
+  return `
+    <button
+      class="sidebar-update-action ${busy ? "is-busy" : ""}"
+      type="button"
+      data-sidebar-update-slot
+      data-sidebar-update-action
+      aria-label="${escAttr(description)}"
+      title="${escAttr(description)}"
+      ${busy ? 'aria-busy="true" disabled' : ""}
+    >
+      <svg aria-hidden="true"><use href="./src/assets/feather/feather-sprite.svg#${icon}"></use></svg>
+      <span>${label}</span>
+    </button>
+  `;
+}
+
+function refreshSidebarUpdateControl() {
+  const current = document.querySelector("[data-sidebar-update-slot]");
+  if (!current) return;
+  current.outerHTML = renderSidebarUpdateControl();
+  bindSidebarUpdateControl();
+}
+
+function bindSidebarUpdateControl() {
+  document.querySelector("[data-sidebar-update-action]")?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    void runUpdateAction("download");
+  });
+}
+
+function refreshUpdateSurfaces() {
+  refreshSidebarUpdateControl();
+  refreshUpdateSettings();
+}
+
 function refreshUpdateSettings() {
   const slot = document.querySelector(".settings-update-slot");
   if (!slot) return;
@@ -3918,7 +3976,7 @@ async function runUpdateAction(action) {
   if (!desktopUpdates) return;
   if (action === "check") appUpdateState = { ...appUpdateState, status: "checking", errorCode: "" };
   if (action === "download") appUpdateState = { ...appUpdateState, status: "downloading", percent: 0, errorCode: "" };
-  refreshUpdateSettings();
+  refreshUpdateSurfaces();
   try {
     const result = action === "check"
       ? await desktopUpdates.check()
@@ -3929,7 +3987,7 @@ async function runUpdateAction(action) {
   } catch {
     appUpdateState = { ...appUpdateState, status: "error", errorCode: "UPDATE_ACTION_FAILED" };
   }
-  refreshUpdateSettings();
+  refreshUpdateSurfaces();
 }
 
 async function initializeAppUpdates() {
@@ -3945,7 +4003,7 @@ async function initializeAppUpdates() {
       if (["downloaded", "error"].includes(appUpdateState.status)) {
         document.querySelector("[data-update-install-overlay]")?.remove();
       }
-      refreshUpdateSettings();
+      refreshUpdateSurfaces();
     });
   }
 }
@@ -5384,6 +5442,7 @@ function bindTaskRepositoryRows(scope = document) {
     });
   }
 
+  bindSidebarUpdateControl();
   bindUpdateSettingsControls();
   bindDataBackupControls();
 
@@ -5645,7 +5704,7 @@ function bindTaskRepositoryRows(scope = document) {
       const keepRecurrence = event.target.closest(".task-recurrence-controls");
       const keepTaskGroup = event.target.closest(".task-group-select");
       const keepDeadline = event.target.closest(".task-deadline-picker");
-      const keepRepositoryGroup = event.target.closest(".repository-group-picker");
+      const keepRepositoryGroup = isRepositoryGroupInteraction(event.target);
 
       if (state.contextMenu && !keepContextMenu) {
         state.contextMenu = null;
@@ -5705,6 +5764,11 @@ function openRepositoryGroupContextMenu(groupId, event) {
   };
   syncContextMenuRoot();
   return true;
+}
+
+function isRepositoryGroupInteraction(target) {
+  if (target?.closest?.(".repository-group-picker")) return true;
+  return Boolean(target?.closest?.(".context-menu") && state.contextMenu?.kind === "group");
 }
 
 function bindRepositoryGroupOptionMenus(scope = document) {

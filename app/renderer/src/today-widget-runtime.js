@@ -12,7 +12,6 @@
   const compactToggle = document.querySelector("#compact-toggle");
   const quickCaptureToggle = document.querySelector("#quick-capture-toggle");
   const quickCaptureInput = document.querySelector("#quick-capture-input");
-  const quickCaptureAddToday = document.querySelector("#quick-capture-add-today");
   const quickCaptureSection = document.querySelector("#quick-capture-section");
   const quickCaptureCount = document.querySelector("#quick-capture-count");
   const quickCaptureList = document.querySelector("#quick-capture-list");
@@ -447,7 +446,6 @@
     event.preventDefault();
     void submitQuickCapture(event.ctrlKey || event.metaKey);
   });
-  quickCaptureAddToday.addEventListener("click", () => void submitQuickCapture(true));
   quickCaptureToggle.addEventListener("click", async () => {
     if (widget.classList.contains("is-compact")) {
       const open = !widget.classList.contains("is-capture-open");
@@ -475,6 +473,12 @@
   window.addEventListener("blur", () => {
     closeMenu();
     closeGroupMenu();
+  });
+
+  window.addEventListener("focus", () => {
+    // Switching applications does not clear the DOM activeElement on macOS.
+    // If the user returns directly to an editor, restore the IME-safe level.
+    if (isTextEditingTarget(document.activeElement)) void bridge.setEditing?.(true);
   });
 
   quickCaptureGroupMenu.addEventListener("click", async (event) => {
