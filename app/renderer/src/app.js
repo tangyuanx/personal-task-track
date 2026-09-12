@@ -3437,6 +3437,12 @@ function isTaskScheduledForToday(task, at = new Date()) {
   return normalizeTaskTags(task.tags).today || isRecurringTaskDue(task, at) || Boolean(deadline && localDateKey(deadline) === localDateKey(at));
 }
 
+function recurringScheduleSignature(at = new Date()) {
+  return state.tasks
+    .map((task) => `${task.id}:${recurringOccurrenceKey(task, at)}:${isRecurringTaskDue(task, at) ? "due" : "idle"}`)
+    .join("|");
+}
+
 function syncRecurringTasks(at = new Date()) {
   let statusChanged = false;
   state.tasks.forEach((task) => {
@@ -3448,9 +3454,7 @@ function syncRecurringTasks(at = new Date()) {
     task.updatedAt = at.toISOString();
     statusChanged = true;
   });
-  const nextSignature = state.tasks
-    .map((task) => `${task.id}:${recurringOccurrenceKey(task, at)}:${isRecurringTaskDue(task, at) ? "due" : "idle"}`)
-    .join("|");
+  const nextSignature = recurringScheduleSignature(at);
   const scheduleChanged = nextSignature !== recurringTodaySignature;
   recurringTodaySignature = nextSignature;
   if (statusChanged) save();
@@ -7316,6 +7320,7 @@ function createTask(title, shouldRender = true) {
     nodes: [],
   };
   state.tasks.push(task);
+  recurringTodaySignature = recurringScheduleSignature(new Date(createdAt));
   state.activeTaskId = task.id;
   state.selectedNodeId = "";
   state.taskFilter = "all";

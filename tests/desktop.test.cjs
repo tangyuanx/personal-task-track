@@ -3710,6 +3710,26 @@ test("new tasks clear hiding filters, focus immediately, and queue a final repos
   assert.deepEqual(result.filters, ["all", "", "all", "all", "all", ""]);
 });
 
+test("new task creation does not make the next recurrence tick remount its active title input", async () => {
+  const harness = await rendererHarness();
+  const result = harness.json(`(() => {
+    const tickAt = new Date("2026-09-12T06:00:00.000Z");
+    state.taskGroups = [{ id: "group_inbox", title: "默认", order: 1 }];
+    state.activeGroupId = "group_inbox";
+    state.tasks = normalizeTasks([{ id: "existing", title: "已有任务", nodes: [] }]);
+    syncRecurringTasks(tickAt);
+    const created = createTask("", false);
+    return {
+      taskId: created.id,
+      focusTaskTitleId: state.focusTaskTitleId,
+      recurrenceTickRequestsRender: syncRecurringTasks(tickAt)
+    };
+  })()`);
+
+  assert.equal(result.focusTaskTitleId, result.taskId);
+  assert.equal(result.recurrenceTickRequestsRender, false);
+});
+
 test("the queued new task is scrolled into view after repository restoration", async () => {
   const harness = await rendererHarness();
   const result = harness.json(`(() => {
