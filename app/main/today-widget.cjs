@@ -399,7 +399,7 @@ function createTodayWidgetController({ app, BrowserWindow, globalShortcut, ipcMa
     pendingMutations.delete(requestId);
     pending.resolve({
       success: value?.success === true,
-      code: ["CREATED", "UPDATED", "PROMOTED", "TASK_NOT_FOUND", "GROUP_NOT_FOUND", "INVALID_TITLE", "TIMEOUT"].includes(value?.code)
+      code: ["CREATED", "UPDATED", "PROMOTED", "MOVED", "BOUNDARY", "INVALID_LANE", "INVALID_DIRECTION", "TASK_NOT_FOUND", "GROUP_NOT_FOUND", "INVALID_TITLE", "TIMEOUT"].includes(value?.code)
         ? value.code
         : "TASK_NOT_FOUND",
       taskId: normalizeTaskId(value?.taskId),
@@ -419,7 +419,7 @@ function createTodayWidgetController({ app, BrowserWindow, globalShortcut, ipcMa
       pendingCompletions.set(requestId, { resolve, timer });
       mainWindow.webContents.send("today-widget:complete-request", { requestId, taskId: normalizedTaskId });
     }).then(async (result) => {
-      if (result?.code === "CONCLUSION_REQUIRED") await showMainWindow(normalizedTaskId);
+      if (["CONCLUSION_REQUIRED", "FLOW_INCOMPLETE"].includes(result?.code)) await showMainWindow(normalizedTaskId);
       return result;
     });
   }
@@ -433,7 +433,7 @@ function createTodayWidgetController({ app, BrowserWindow, globalShortcut, ipcMa
     pendingCompletions.delete(requestId);
     pending.resolve({
       success: value?.success === true,
-      code: ["COMPLETED", "CONCLUSION_REQUIRED", "TASK_NOT_FOUND"].includes(value?.code) ? value.code : "TASK_NOT_FOUND",
+      code: ["COMPLETED", "CONCLUSION_REQUIRED", "FLOW_INCOMPLETE", "TASK_NOT_FOUND"].includes(value?.code) ? value.code : "TASK_NOT_FOUND",
     });
   }
 
@@ -479,6 +479,16 @@ function createTodayWidgetController({ app, BrowserWindow, globalShortcut, ipcMa
       if (!taskId) return { success: false, code: "TASK_NOT_FOUND" };
       if (!groupId) return { success: false, code: "GROUP_NOT_FOUND" };
       return requestMainMutation("today-widget:promote-quick-capture", { taskId, groupId });
+    });
+    ipcMain.handle("today-widget:reorder-item", (_event, payload) => {
+      const raw = payload && typeof payload === "object" ? payload : {};
+      const taskId = normalizeTaskId(raw.taskId);
+      const lane = raw.lane === "task" || raw.lane === "quick" ? raw.lane : "";
+      const direction = Number(raw.direction);
+      if (!taskId) return { success: false, code: "TASK_NOT_FOUND" };
+      if (!lane) return { success: false, code: "INVALID_LANE" };
+      if (direction !== -1 && direction !== 1) return { success: false, code: "INVALID_DIRECTION" };
+      return requestMainMutation("today-widget:reorder-item", { taskId, lane, direction });
     });
     ipcMain.on("today-widget:publish", (event, value) => {
       if (event.sender === getMainWindow()?.webContents) publishSnapshot(value);

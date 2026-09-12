@@ -512,7 +512,7 @@
     .quick-capture-overflow[hidden] { display: none; }
     .today-task.quick-capture-item {
       min-height: 45px;
-      grid-template-columns: 25px minmax(0, 1fr) 26px;
+      grid-template-columns: 25px minmax(0, 1fr) 26px 22px;
       border-color: rgba(255, 255, 255, 0.25);
       border-style: dashed;
       background: rgba(255, 255, 255, 0.025);
@@ -540,6 +540,15 @@
       line-height: 1;
     }
     .quick-capture-promote:hover { background: var(--widget-control-hover); color: var(--widget-title); }
+    .quick-capture-promote svg {
+      width: 15px;
+      height: 15px;
+      fill: none;
+      stroke: currentColor;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-width: 1.7;
+    }
     .task-inline-input {
       width: 100%;
       min-width: 0;
@@ -560,7 +569,7 @@
     .today-task {
       position: relative;
       display: grid;
-      grid-template-columns: 25px minmax(0, 1fr) 18px;
+      grid-template-columns: 25px minmax(0, 1fr) 18px 22px;
       gap: 9px;
       align-items: center;
       min-height: 60px;
@@ -586,6 +595,50 @@
       border-width: 0;
       opacity: 0;
       transform: translateX(18px);
+    }
+
+    .today-task.is-reordering { opacity: 0.72; }
+
+    .task-order-controls {
+      display: grid;
+      width: 22px;
+      gap: 1px;
+      justify-self: end;
+    }
+
+    .task-order-button {
+      display: grid;
+      width: 22px;
+      height: 19px;
+      place-items: center;
+      padding: 0;
+      border: 0;
+      border-radius: 5px;
+      background: transparent;
+      color: rgba(255, 255, 255, 0.78);
+      cursor: pointer;
+      transition: background 120ms ease, color 120ms ease;
+    }
+
+    .task-order-button:hover,
+    .task-order-button:focus-visible {
+      outline: 0;
+      background: var(--widget-control-hover);
+      color: var(--widget-title);
+    }
+
+    .task-order-button:focus-visible { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.52); }
+    .task-order-button:disabled { opacity: 0.2; cursor: default; }
+    .task-order-button:disabled:hover { background: transparent; color: rgba(255, 255, 255, 0.78); }
+
+    .task-order-button svg {
+      width: 13px;
+      height: 13px;
+      fill: none;
+      stroke: currentColor;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-width: 1.6;
     }
 
     .task-check {

@@ -273,6 +273,7 @@ let state = {
   focusGroupTitleId: "",
   focusSearch: false,
   searchCursor: 0,
+  revealTaskId: "",
   markdownSelection: null,
   restoreMarkdownFocus: false,
   flowWidths: { ...defaultFlowWidths },
@@ -285,6 +286,7 @@ let state = {
   workNavigation: workNavigationModel.defaultWorkNavigation(),
   installationId: "",
   conclusionPromptTaskId: "",
+  flowPromptTaskId: "",
   knowledgeDraftPrompt: null,
   contextMenu: null,
   nodeDetailPosition: null,
@@ -336,6 +338,7 @@ let unsubscribeTodayWidgetCompletion = null;
 let unsubscribeTodayWidgetCreateTask = null;
 let unsubscribeTodayWidgetUpdateTitle = null;
 let unsubscribeTodayWidgetPromote = null;
+let unsubscribeTodayWidgetReorder = null;
 let unsubscribeDeadlineReminderTask = null;
 let unsubscribeDeadlineReminderCalendar = null;
 let unsubscribeKnowledgeFileChanges = null;
@@ -475,6 +478,8 @@ function normalizeTasks(tasks) {
         ...task,
         id: taskId,
         order: normalizeOrder(task.order, index + 1),
+        todayTaskOrder: normalizeTodayWidgetOrder(task.todayTaskOrder),
+        todayQuickCaptureOrder: normalizeTodayWidgetOrder(task.todayQuickCaptureOrder),
         // An explicit empty groupId means "未分组". Legacy records that did
         // not contain the field still migrate into the historical default
         // group, so existing installations keep their previous grouping.
@@ -618,6 +623,11 @@ function uniqueDataId(value, prefix, seen) {
 function normalizeOrder(value, fallback) {
   const order = Number(value);
   return Number.isFinite(order) && order > 0 ? Math.round(order) : fallback;
+}
+
+function normalizeTodayWidgetOrder(value) {
+  const order = Math.round(Number(value));
+  return Number.isFinite(order) && order > 0 ? order : 0;
 }
 
 function normalizeDateValue(value, fallback) {
@@ -1771,16 +1781,20 @@ function render() {
     restoreRenderViewports();
     window.requestAnimationFrame(() => {
       restoreRenderViewports();
+      revealPendingTask();
     });
   });
   document.dispatchEvent(new CustomEvent("loop-work-navigation:rendered"));
 }
 
 function renderCompletionNotice() {
-  const task = state.tasks.find((item) => item.id === state.conclusionPromptTaskId);
-  return task
-    ? `<div class="completion-notice" role="status" aria-live="polite">请先填写结论，再标记完成</div>`
-    : "";
+  if (state.tasks.some((item) => item.id === state.conclusionPromptTaskId)) {
+    return `<div class="completion-notice" role="status" aria-live="polite">请先填写结论，再标记完成</div>`;
+  }
+  if (state.tasks.some((item) => item.id === state.flowPromptTaskId)) {
+    return `<div class="completion-notice" role="status" aria-live="polite">请先完成处理流中的所有节点，再标记任务完成</div>`;
+  }
+  return "";
 }
 
 function renderTodayWidgetRestore() {
@@ -2843,9 +2857,18 @@ function syncContextMenuRoot() {
   if (!root) return;
   root.innerHTML = renderContextMenu();
   root.querySelectorAll("[data-action]").forEach((element) => {
+    let activatedByPointer = false;
+    element.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0) return;
+      activatedByPointer = true;
+      event.preventDefault();
+      event.stopPropagation();
+      void action({ ...element.dataset }, event);
+    });
     element.addEventListener("click", (event) => {
       event.stopPropagation();
-      action(element.dataset, event);
+      if (activatedByPointer) return;
+      void action({ ...element.dataset }, event);
     });
   });
 }
@@ -2977,7 +3000,7 @@ function renderTaskGroupSelect(task) {
 }
 
 function todayFocusItems() {
-  return state.tasks
+  const items = state.tasks
     .filter((task) => task.status !== "done")
     .filter((task) => isTaskScheduledForToday(task))
     .map((task) => {
@@ -2997,6 +3020,19 @@ function todayFocusItems() {
       return { task, node, kind, badge, nextText, score, updatedAt: latestTaskTime(task) };
     })
     .sort((a, b) => b.score - a.score || b.updatedAt - a.updatedAt || a.task.order - b.task.order);
+  return applyTodayWidgetOrder(items, "todayTaskOrder", (item) => item.task);
+}
+
+function applyTodayWidgetOrder(items, orderKey, taskFromItem = (item) => item) {
+  if (!items.some((item) => normalizeTodayWidgetOrder(taskFromItem(item)?.[orderKey]) > 0)) return items;
+  return [...items].sort((a, b) => {
+    const aOrder = normalizeTodayWidgetOrder(taskFromItem(a)?.[orderKey]);
+    const bOrder = normalizeTodayWidgetOrder(taskFromItem(b)?.[orderKey]);
+    if (aOrder && bOrder) return aOrder - bOrder;
+    if (aOrder) return -1;
+    if (bOrder) return 1;
+    return 0;
+  });
 }
 
 function normalizeCurrentWorkNavigation() {
@@ -3169,10 +3205,10 @@ function completeTaskFromNavigation(taskId, kind) {
   const task = state.tasks.find((item) => item.id === taskId);
   if (!task || task.status === "done") return { success: false, code: "TASK_NOT_FOUND" };
   openTaskFromGlobalList(task.id);
-  toggleTaskDone(task.id);
+  const completion = toggleTaskDone(task.id);
   if (task.status !== "done") {
     render();
-    return { success: false, code: "CONCLUSION_REQUIRED", taskId: task.id };
+    return { success: false, code: completion?.code || "CONCLUSION_REQUIRED", taskId: task.id };
   }
   const advanced = advanceNavigationAfterCompletion(task.id);
   save();
@@ -6159,7 +6195,7 @@ function focusPendingElement() {
     const input = document.querySelector(`.task-title[data-task-id="${state.focusTaskTitleId}"]`);
     state.focusTaskTitleId = "";
     if (input) {
-      input.focus();
+      input.focus({ preventScroll: true });
       input.select();
     }
     return;
@@ -6192,6 +6228,16 @@ function focusPendingElement() {
   }
 
   restoreMarkdownSelection();
+}
+
+function revealPendingTask() {
+  const taskId = state.revealTaskId;
+  if (!taskId) return;
+  const input = document.querySelector(`.task-title[data-task-id="${taskId}"]`);
+  const row = input?.closest?.(".task-item") || document.querySelector(`.task-item[data-task-id="${taskId}"]`);
+  if (!row) return;
+  row.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+  state.revealTaskId = "";
 }
 
 function captureAppSwitchEditingFocus(target = document.activeElement) {
@@ -7236,6 +7282,8 @@ function createTask(title, shouldRender = true) {
   const task = {
     id: taskId,
     order: state.tasks.length + 1,
+    todayTaskOrder: 0,
+    todayQuickCaptureOrder: 0,
     groupId: state.activeGroupId === ALL_TASKS_GROUP_ID
       ? state.taskGroups[0]?.id || ""
       : state.activeGroupId === UNGROUPED_TASKS_GROUP_ID
@@ -7271,9 +7319,13 @@ function createTask(title, shouldRender = true) {
   state.activeTaskId = task.id;
   state.selectedNodeId = "";
   state.taskFilter = "all";
+  state.taskDateFilter = "";
+  state.taskDeadlineFilter = "all";
   state.priorityFilter = "all";
+  state.captureSourceFilter = "all";
   state.query = "";
   state.focusTaskTitleId = task.id;
+  state.revealTaskId = task.id;
   save();
   if (shouldRender) render();
   return task;
@@ -7282,16 +7334,47 @@ function createTask(title, shouldRender = true) {
 function createQuickCapture(title, description = "", addToToday = false) {
   const previousActiveTaskId = state.activeTaskId;
   const previousActiveGroupId = state.activeGroupId;
+  const {
+    taskFilter,
+    taskDateFilter,
+    taskDeadlineFilter,
+    priorityFilter,
+    captureSourceFilter,
+    query,
+    focusTaskTitleId,
+    revealTaskId,
+  } = state;
+  const previousRepositoryState = {
+    taskFilter,
+    taskDateFilter,
+    taskDeadlineFilter,
+    priorityFilter,
+    captureSourceFilter,
+    query,
+    focusTaskTitleId,
+    revealTaskId,
+  };
   const task = createTask(String(title || "").trim(), false);
   if (!task) return null;
   task.groupId = "";
   task.priority = "low";
   task.captureSource = "today-widget";
+  const orderedCaptures = state.tasks.filter((item) => (
+    item.id !== task.id &&
+    item.captureSource === "today-widget" &&
+    item.status !== "done" &&
+    item.todayQuickCaptureOrder > 0
+  ));
+  if (orderedCaptures.length) {
+    orderedCaptures.forEach((item) => { item.todayQuickCaptureOrder += 1; });
+    task.todayQuickCaptureOrder = 1;
+  }
   task.description = String(description || "").trim();
   task.tags = normalizeTaskTags({ today: addToToday === true });
   task.updatedAt = now();
   state.activeGroupId = previousActiveGroupId;
   state.activeTaskId = previousActiveTaskId;
+  Object.assign(state, previousRepositoryState);
   save();
   render();
   return task;
@@ -7317,6 +7400,7 @@ function promoteQuickCaptureFromWidget(taskId, groupId) {
   if (!group) return { success: false, code: "GROUP_NOT_FOUND" };
   task.groupId = group.id;
   task.captureSource = "";
+  task.todayQuickCaptureOrder = 0;
   task.updatedAt = now();
   save();
   render();
@@ -7752,10 +7836,13 @@ async function deleteTask(taskId, { skipDraftPrompt = false } = {}) {
  */
 function toggleTaskDone(taskId) {
   const task = state.tasks.find((item) => item.id === taskId);
-  if (!task) return;
-  if (task.status !== "done" && !task.conclusion.trim()) {
-    showConclusionNotice(taskId);
-    return;
+  if (!task) return { success: false, code: "TASK_NOT_FOUND" };
+  if (task.status !== "done") {
+    const blocker = taskCompletionBlocker(task);
+    if (blocker) {
+      showCompletionNotice(taskId, blocker);
+      return { success: false, code: blocker, taskId };
+    }
   }
   const wasDone = task.status === "done";
   const occurrence = recurringOccurrenceKey(task);
@@ -7768,20 +7855,38 @@ function toggleTaskDone(taskId) {
   }
   if (task.status === "done") {
     task.resolvedAt = now();
-    state.conclusionPromptTaskId = "";
+    clearCompletionNotice(taskId);
   }
   task.updatedAt = now();
+  return { success: true, code: task.status === "done" ? "COMPLETED" : "REOPENED", taskId };
 }
 
-function showConclusionNotice(taskId) {
-  state.conclusionPromptTaskId = taskId;
+function taskCompletionBlocker(task) {
+  if (!task.conclusion.trim()) return "CONCLUSION_REQUIRED";
+  if (flatten(task.nodes).some((node) => node.status !== "done")) return "FLOW_INCOMPLETE";
+  return "";
+}
+
+function showCompletionNotice(taskId, code) {
+  state.conclusionPromptTaskId = code === "CONCLUSION_REQUIRED" ? taskId : "";
+  state.flowPromptTaskId = code === "FLOW_INCOMPLETE" ? taskId : "";
   window.clearTimeout(conclusionNoticeTimer);
-  conclusionNoticeTimer = window.setTimeout(() => clearConclusionNotice(taskId), 4200);
+  conclusionNoticeTimer = window.setTimeout(() => clearCompletionNotice(taskId), 4200);
 }
 
 function clearConclusionNotice(taskId) {
   if (state.conclusionPromptTaskId !== taskId) return;
   state.conclusionPromptTaskId = "";
+  clearCompletionNoticeElement();
+}
+
+function clearCompletionNotice(taskId) {
+  if (state.conclusionPromptTaskId === taskId) state.conclusionPromptTaskId = "";
+  if (state.flowPromptTaskId === taskId) state.flowPromptTaskId = "";
+  clearCompletionNoticeElement();
+}
+
+function clearCompletionNoticeElement() {
   window.clearTimeout(conclusionNoticeTimer);
   document.querySelector(".completion-notice")?.remove();
   document.querySelector(".task-brief label.needs-attention")?.classList.remove("needs-attention");
@@ -8326,13 +8431,13 @@ function localDateKey(value) {
 }
 
 function todayQuickCaptureItems() {
-  return state.tasks
+  return applyTodayWidgetOrder(state.tasks
     .filter((task) => task.captureSource === "today-widget")
     .sort((a, b) => {
       const aTime = Date.parse(a.updatedAt || a.createdAt);
       const bTime = Date.parse(b.updatedAt || b.createdAt);
       return (Number.isFinite(bTime) ? bTime : 0) - (Number.isFinite(aTime) ? aTime : 0);
-    })
+    }), "todayQuickCaptureOrder")
     .map((task) => ({
       taskId: task.id,
       title: task.title || "未命名速记",
@@ -8341,6 +8446,33 @@ function todayQuickCaptureItems() {
       resolvedAt: task.resolvedAt || "",
       status: task.status,
     }));
+}
+
+function reorderTodayWidgetItem(taskId, lane, direction) {
+  const orderKey = lane === "task"
+    ? "todayTaskOrder"
+    : lane === "quick"
+      ? "todayQuickCaptureOrder"
+      : "";
+  if (!orderKey) return { success: false, code: "INVALID_LANE", taskId };
+  const delta = Number(direction) < 0 ? -1 : Number(direction) > 0 ? 1 : 0;
+  if (!delta) return { success: false, code: "INVALID_DIRECTION", taskId };
+  const taskIds = lane === "task"
+    ? todayFocusItems().map((item) => item.task.id)
+    : todayQuickCaptureItems().filter((item) => item.status !== "done").map((item) => item.taskId);
+  const index = taskIds.indexOf(taskId);
+  const targetIndex = index + delta;
+  if (index < 0) return { success: false, code: "TASK_NOT_FOUND", taskId };
+  if (targetIndex < 0 || targetIndex >= taskIds.length) return { success: false, code: "BOUNDARY", taskId };
+  [taskIds[index], taskIds[targetIndex]] = [taskIds[targetIndex], taskIds[index]];
+  state.tasks.forEach((task) => { task[orderKey] = 0; });
+  taskIds.forEach((id, orderIndex) => {
+    const task = state.tasks.find((item) => item.id === id);
+    if (task) task[orderKey] = orderIndex + 1;
+  });
+  save();
+  render();
+  return { success: true, code: "MOVED", taskId };
 }
 
 function todayWidgetSnapshot() {
@@ -8432,6 +8564,7 @@ async function initializeTodayWidgetBridge() {
   unsubscribeTodayWidgetCreateTask?.();
   unsubscribeTodayWidgetUpdateTitle?.();
   unsubscribeTodayWidgetPromote?.();
+  unsubscribeTodayWidgetReorder?.();
   unsubscribeTodayWidgetState = desktopTodayWidget.onState((nextState) => {
     todayWidgetWindowState = nextState && typeof nextState === "object" ? nextState : { visible: false };
     syncTodayWidgetRestoreButton();
@@ -8449,14 +8582,16 @@ async function initializeTodayWidgetBridge() {
       return;
     }
     const wasDone = task.status === "done";
+    let completion = null;
     if (task.captureSource === "today-widget" && task.status !== "done" && !task.conclusion.trim()) {
       task.status = "done";
       task.resolvedAt = now();
       task.updatedAt = now();
       save();
+      completion = { success: true, code: "COMPLETED", taskId };
     } else {
       openTaskFromGlobalList(taskId);
-      toggleTaskDone(taskId);
+      completion = toggleTaskDone(taskId);
     }
     const success = task.status === "done";
     if (!wasDone && success) advanceNavigationAfterCompletion(taskId);
@@ -8464,7 +8599,7 @@ async function initializeTodayWidgetBridge() {
     desktopTodayWidget.respondCompletion({
       requestId,
       success,
-      code: success ? "COMPLETED" : "CONCLUSION_REQUIRED",
+      code: success ? "COMPLETED" : completion?.code || "CONCLUSION_REQUIRED",
     });
   });
   unsubscribeTodayWidgetCreateTask = desktopTodayWidget.onCreateTaskRequest?.(({ requestId, title, description, addToToday } = {}) => {
@@ -8481,6 +8616,9 @@ async function initializeTodayWidgetBridge() {
   });
   unsubscribeTodayWidgetPromote = desktopTodayWidget.onPromoteQuickCaptureRequest?.(({ requestId, taskId, groupId } = {}) => {
     desktopTodayWidget.respondMutation?.({ requestId, ...promoteQuickCaptureFromWidget(taskId, groupId) });
+  });
+  unsubscribeTodayWidgetReorder = desktopTodayWidget.onReorderRequest?.(({ requestId, taskId, lane, direction } = {}) => {
+    desktopTodayWidget.respondMutation?.({ requestId, ...reorderTodayWidgetItem(taskId, lane, direction) });
   });
   try {
     todayWidgetWindowState = await desktopTodayWidget.getState();

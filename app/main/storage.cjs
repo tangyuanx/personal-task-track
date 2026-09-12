@@ -181,6 +181,8 @@ function normalizeTasks(tasks) {
         ...task,
         id: taskId,
         order: normalizeOrder(task.order, index + 1),
+        todayTaskOrder: normalizeTodayWidgetOrder(task.todayTaskOrder),
+        todayQuickCaptureOrder: normalizeTodayWidgetOrder(task.todayQuickCaptureOrder),
         groupId: Object.hasOwn(task, "groupId") ? normalizeIdentifier(task.groupId) : DEFAULT_GROUP.id,
         title: normalizeText(task.title),
         knowledgeNote: knowledgeDocument.normalizeKnowledgeNote(task.knowledgeNote, {
@@ -366,6 +368,11 @@ function uniqueDataId(value, prefix, seen) {
 function normalizeOrder(value, fallback) {
   const order = Number(value);
   return Number.isFinite(order) && order > 0 ? Math.round(order) : fallback;
+}
+
+function normalizeTodayWidgetOrder(value) {
+  const order = Math.round(Number(value));
+  return Number.isFinite(order) && order > 0 ? order : 0;
 }
 
 function clampNumber(value, fallback, min, max) {

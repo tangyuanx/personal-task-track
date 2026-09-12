@@ -85,6 +85,7 @@ contextBridge.exposeInMainWorld("personalTaskTrack", {
     createTask: (payload) => ipcRenderer.invoke("today-widget:create-task", payload),
     updateTaskTitle: (payload) => ipcRenderer.invoke("today-widget:update-task-title", payload),
     promoteQuickCapture: (payload) => ipcRenderer.invoke("today-widget:promote-quick-capture", payload),
+    reorderItem: (payload) => ipcRenderer.invoke("today-widget:reorder-item", payload),
     setEditing: (enabled) => ipcRenderer.invoke("today-widget:set-editing", enabled === true),
     publish: (snapshot) => ipcRenderer.send("today-widget:publish", snapshot),
     respondCompletion: (result) => ipcRenderer.send("today-widget:complete-result", result),
@@ -95,6 +96,7 @@ contextBridge.exposeInMainWorld("personalTaskTrack", {
     onCreateTaskRequest: (callback) => subscribe("today-widget:create-task", callback),
     onUpdateTaskTitleRequest: (callback) => subscribe("today-widget:update-task-title", callback),
     onPromoteQuickCaptureRequest: (callback) => subscribe("today-widget:promote-quick-capture", callback),
+    onReorderRequest: (callback) => subscribe("today-widget:reorder-item", callback),
     respondMutation: (result) => ipcRenderer.send("today-widget:mutation-result", result),
   },
 });

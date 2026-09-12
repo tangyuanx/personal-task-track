@@ -2375,6 +2375,23 @@ test("disk normalization repairs malformed records and legacy preferences", () =
   assert.equal(normalized.enFont, "mono");
 });
 
+test("Today widget lane orders are migration-safe in disk and renderer normalization", async () => {
+  const disk = normalizeTaskData({
+    tasks: [
+      { id: "valid", todayTaskOrder: 3.4, todayQuickCaptureOrder: 5.2 },
+      { id: "invalid", todayTaskOrder: -8, todayQuickCaptureOrder: "bad" },
+      { id: "legacy" },
+    ],
+  });
+  assert.deepEqual(disk.tasks.map((task) => [task.todayTaskOrder, task.todayQuickCaptureOrder]), [[3, 5], [0, 0], [0, 0]]);
+
+  const harness = await rendererHarness();
+  assert.deepEqual(
+    harness.json(`normalizeTasks([{ id: "valid", todayTaskOrder: 2.6, todayQuickCaptureOrder: 1.2 }, { id: "invalid", todayTaskOrder: "bad" }]).map((task) => [task.todayTaskOrder, task.todayQuickCaptureOrder])`),
+    [[3, 1], [0, 0]],
+  );
+});
+
 test("disk normalization preserves every supported typography choice", () => {
   const zhFonts = ["system", "noto", "yahei", "pingfang", "songti", "simsun", "fangsong", "heiti", "kaiti"];
   const enFonts = ["inter", "system", "segoe", "arial", "helvetica", "verdana", "trebuchet", "tahoma", "times", "georgia", "courier", "mono"];
@@ -2869,6 +2886,9 @@ test("production Today widget uses its dedicated frontend and a sandboxed Electr
   assert.match(runtime, /bridge\.createTask/);
   assert.match(runtime, /bridge\.updateTaskTitle/);
   assert.match(runtime, /bridge\.promoteQuickCapture/);
+  assert.match(runtime, /bridge\.reorderItem/);
+  assert.match(runtime, /data-reorder-lane/);
+  assert.match(runtime, /FLOW_INCOMPLETE/);
   assert.match(runtime, /bridge\.setEditing/);
   assert.match(runtime, /function isTextEditingTarget/);
   assert.match(runtime, /if \(isTextEditingTarget\(document\.activeElement\)\) return;/);
@@ -2881,6 +2901,7 @@ test("production Today widget uses its dedicated frontend and a sandboxed Electr
   assert.match(demo, /quick-capture-item/);
   assert.match(demo, /quick-capture-section/);
   assert.match(demo, /quick-capture-promote/);
+  assert.match(demo, /\.task-order-button/);
   assert.match(demo, /\.today-task\.quick-capture-item\s*\{[\s\S]*border-style:\s*dashed;[\s\S]*background:\s*rgba\(255, 255, 255, 0\.025\);/);
   assert.match(demo, /\.today-task\.quick-capture-item:hover\s*\{[\s\S]*border-style:\s*dashed;/);
   assert.match(runtime, /bridge\.setPreferences\(\{ clickThrough: enabled \}\)/);
@@ -2897,6 +2918,8 @@ test("production Today widget uses its dedicated frontend and a sandboxed Electr
   assert.match(widgetMain, /today-widget:create-task/);
   assert.match(widgetMain, /today-widget:update-task-title/);
   assert.match(widgetMain, /today-widget:promote-quick-capture/);
+  assert.match(widgetMain, /today-widget:reorder-item/);
+  assert.match(widgetMain, /FLOW_INCOMPLETE/);
   assert.match(widgetMain, /today-widget:set-editing/);
   assert.match(widgetMain, /pendingMutations/);
   assert.match(widgetMain, /CommandOrControl\+Shift\+T/);
@@ -2940,6 +2963,7 @@ test("production Today widget uses its dedicated frontend and a sandboxed Electr
   assert.match(preload, /createTask: \(payload\)/);
   assert.match(preload, /updateTaskTitle: \(payload\)/);
   assert.match(preload, /promoteQuickCapture: \(payload\)/);
+  assert.match(preload, /reorderItem: \(payload\)/);
   assert.match(preload, /setEditing: \(enabled\)/);
   assert.match(preload, /app:confirm-destructive/);
   assert.match(appMain, /dialog\.showMessageBox/);
@@ -3587,6 +3611,38 @@ test("Today widget quick captures reuse tasks, timestamps, source filtering, and
   assert.deepEqual(result.snapshot.groups, [{ id: "group_inbox", title: "默认" }]);
 });
 
+test("Today widget task and quick-capture order can be moved independently and survives normalization", async () => {
+  const harness = await rendererHarness();
+  const result = harness.json(`(() => {
+    state.tasks = normalizeTasks([
+      { id: "today_a", title: "今日 A", tags: { today: true }, priority: "high", updatedAt: "2026-08-29T10:00:00.000Z" },
+      { id: "today_b", title: "今日 B", tags: { today: true }, priority: "low", updatedAt: "2026-08-29T09:00:00.000Z" },
+      { id: "capture_a", title: "速记 A", captureSource: "today-widget", updatedAt: "2026-08-29T08:00:00.000Z" },
+      { id: "capture_b", title: "速记 B", captureSource: "today-widget", updatedAt: "2026-08-29T07:00:00.000Z" }
+    ]);
+    render = () => {};
+    const taskMove = reorderTodayWidgetItem("today_b", "task", -1);
+    const quickMove = reorderTodayWidgetItem("capture_a", "quick", 1);
+    const snapshot = todayWidgetSnapshot();
+    const normalizedAgain = normalizeTasks(state.tasks);
+    return {
+      taskMove,
+      quickMove,
+      taskIds: snapshot.items.map((item) => item.taskId),
+      quickIds: snapshot.quickCaptures.map((item) => item.taskId),
+      taskOrders: Object.fromEntries(normalizedAgain.map((task) => [task.id, task.todayTaskOrder])),
+      quickOrders: Object.fromEntries(normalizedAgain.map((task) => [task.id, task.todayQuickCaptureOrder]))
+    };
+  })()`);
+
+  assert.equal(result.taskMove.code, "MOVED");
+  assert.equal(result.quickMove.code, "MOVED");
+  assert.deepEqual(result.taskIds.slice(0, 2), ["today_b", "today_a"]);
+  assert.deepEqual(result.quickIds, ["capture_b", "capture_a"]);
+  assert.equal(result.taskOrders.today_b, 1);
+  assert.equal(result.quickOrders.capture_b, 1);
+});
+
 test("quick captures promote into a chosen real group and leave the quick-capture lane", async () => {
   const harness = await rendererHarness();
   const result = harness.json(`(() => {
@@ -3625,6 +3681,49 @@ test("the fixed all-tasks group is aggregate-only and new tasks still receive a 
   assert.equal(result.createdGroupId, "group_inbox");
   assert.match(result.tabs, />全部任务<\/button>/);
   assert.match(result.tabs, /sheet-tab-all active/);
+});
+
+test("new tasks clear hiding filters, focus immediately, and queue a final repository reveal", async () => {
+  const harness = await rendererHarness();
+  const result = harness.json(`(() => {
+    state.taskGroups = [{ id: "group_inbox", title: "默认", order: 1 }];
+    state.activeGroupId = "group_inbox";
+    state.taskFilter = "done";
+    state.taskDateFilter = "2026-08-01";
+    state.taskDeadlineFilter = "overdue";
+    state.priorityFilter = "high";
+    state.captureSourceFilter = "quick";
+    state.query = "不会命中";
+    const created = createTask("", false);
+    return {
+      taskId: created.id,
+      activeTaskId: state.activeTaskId,
+      focusTaskTitleId: state.focusTaskTitleId,
+      revealTaskId: state.revealTaskId,
+      filters: [state.taskFilter, state.taskDateFilter, state.taskDeadlineFilter, state.priorityFilter, state.captureSourceFilter, state.query]
+    };
+  })()`);
+
+  assert.equal(result.activeTaskId, result.taskId);
+  assert.equal(result.focusTaskTitleId, result.taskId);
+  assert.equal(result.revealTaskId, result.taskId);
+  assert.deepEqual(result.filters, ["all", "", "all", "all", "all", ""]);
+});
+
+test("the queued new task is scrolled into view after repository restoration", async () => {
+  const harness = await rendererHarness();
+  const result = harness.json(`(() => {
+    const calls = [];
+    const row = { scrollIntoView(options) { calls.push(options); } };
+    const input = { closest(selector) { return selector === ".task-item" ? row : null; } };
+    state.revealTaskId = "task_new";
+    document.querySelector = (selector) => selector === '.task-title[data-task-id="task_new"]' ? input : null;
+    revealPendingTask();
+    return { calls, revealTaskId: state.revealTaskId };
+  })()`);
+
+  assert.deepEqual(result.calls, [{ block: "nearest", inline: "nearest" }]);
+  assert.equal(result.revealTaskId, "");
 });
 
 test("repository groups render only record scope and personal groups with management actions", async () => {
@@ -3712,6 +3811,31 @@ test("repository group context-menu presses keep the picker DOM alive through th
   })()`);
 
   assert.deepEqual(result, { picker: true, groupMenu: true, taskMenu: false });
+});
+
+test("context-menu commands activate exactly once on the first primary pointer press", async () => {
+  const harness = await rendererHarness();
+  const result = harness.json(`(() => {
+    const listeners = {};
+    const button = {
+      dataset: { action: "select-group", groupId: "group_work" },
+      addEventListener(type, listener) { listeners[type] = listener; }
+    };
+    const root = {
+      innerHTML: "",
+      querySelectorAll() { return [button]; }
+    };
+    document.querySelector = (selector) => selector === "#context-menu-root" ? root : null;
+    const calls = [];
+    action = (data) => calls.push({ ...data });
+    syncContextMenuRoot();
+    listeners.pointerdown({ button: 0, preventDefault() {}, stopPropagation() {} });
+    listeners.click({ detail: 1, preventDefault() {}, stopPropagation() {} });
+    return { calls, listenerTypes: Object.keys(listeners).sort() };
+  })()`);
+
+  assert.deepEqual(result.calls, [{ action: "select-group", groupId: "group_work" }]);
+  assert.deepEqual(result.listenerTypes, ["click", "pointerdown"]);
 });
 
 test("quick captures and preserved group deletions remain truly ungrouped across disk normalization", async () => {
@@ -4424,6 +4548,64 @@ test("completion keeps the clicked repository task visible when it leaves the cu
   assert.equal(result.activeTaskId, "clicked");
   assert.deepEqual(result.visibleRepositoryIds, ["current"]);
   assert.equal(result.clickedStatus, "done");
+});
+
+test("task completion requires a conclusion and every nested processing-flow node to be done", async () => {
+  const harness = await rendererHarness();
+  const result = harness.json(`(() => {
+    state.tasks = normalizeTasks([
+      {
+        id: "nested_incomplete",
+        title: "递归校验",
+        conclusion: "已有结论",
+        nodes: [{
+          id: "root_done",
+          status: "done",
+          children: [{ id: "child_open", status: "todo", children: [] }]
+        }]
+      },
+      {
+        id: "missing_both",
+        title: "结论优先",
+        conclusion: "",
+        nodes: [{ id: "root_open", status: "todo", children: [] }]
+      },
+      {
+        id: "all_done",
+        title: "全部完成",
+        conclusion: "完成结论",
+        nodes: [{
+          id: "root_complete",
+          status: "done",
+          children: [{ id: "child_complete", status: "done", children: [] }]
+        }]
+      }
+    ]);
+    const nested = toggleTaskDone("nested_incomplete");
+    const flowNotice = renderCompletionNotice();
+    const missing = toggleTaskDone("missing_both");
+    const conclusionNotice = renderCompletionNotice();
+    const complete = toggleTaskDone("all_done");
+    return {
+      nested,
+      missing,
+      complete,
+      statuses: Object.fromEntries(state.tasks.map((task) => [task.id, task.status])),
+      flowNotice,
+      conclusionNotice
+    };
+  })()`);
+
+  assert.equal(result.nested.code, "FLOW_INCOMPLETE");
+  assert.equal(result.missing.code, "CONCLUSION_REQUIRED");
+  assert.equal(result.complete.code, "COMPLETED");
+  assert.deepEqual(result.statuses, {
+    nested_incomplete: "active",
+    missing_both: "active",
+    all_done: "done",
+  });
+  assert.match(result.flowNotice, /请先完成处理流中的所有节点/);
+  assert.match(result.conclusionNotice, /请先填写结论/);
 });
 
 test("flow title and record widths share a bounded accessible splitter", async () => {

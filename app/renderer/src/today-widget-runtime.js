@@ -40,6 +40,7 @@
   let draftSaveTimer = 0;
   let captureSubmitting = false;
   let promotingTaskId = "";
+  let reorderingTaskId = "";
   let editingReleaseTimer = 0;
 
   function isTextEditingTarget(element) {
@@ -124,7 +125,20 @@
     return new Intl.DateTimeFormat("zh-CN", { month: "2-digit", day: "2-digit", weekday: "short" }).format(date);
   }
 
-  function taskHtml(item) {
+  function orderControlsHtml(taskId, lane, index, total) {
+    const escapedTaskId = escapeHtml(taskId);
+    const escapedLane = escapeHtml(lane);
+    return `<span class="task-order-controls" aria-label="调整顺序">
+      <button class="task-order-button" type="button" data-reorder-task="${escapedTaskId}" data-reorder-lane="${escapedLane}" data-reorder-direction="-1" aria-label="上移" title="上移" ${index === 0 ? "disabled" : ""}>
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4.5 9.5 3.5-3 3.5 3"></path></svg>
+      </button>
+      <button class="task-order-button" type="button" data-reorder-task="${escapedTaskId}" data-reorder-lane="${escapedLane}" data-reorder-direction="1" aria-label="下移" title="下移" ${index === total - 1 ? "disabled" : ""}>
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4.5 6.5 3.5 3 3.5-3"></path></svg>
+      </button>
+    </span>`;
+  }
+
+  function taskHtml(item, index, items) {
     const taskId = escapeHtml(item.taskId);
     const title = escapeHtml(item.title || "未命名任务");
     const nextText = escapeHtml(item.nextText || "补充任务背景或新增第一个节点");
@@ -135,11 +149,12 @@
         <button class="task-check" type="button" aria-label="完成：${title}"></button>
         <span class="task-copy"><strong>${title}</strong><span>下一步：${nextText}</span></span>
         <i class="task-state" title="${stateTitle}"></i>
+        ${orderControlsHtml(item.taskId, "task", index, items.length)}
       </article>
     `;
   }
 
-  function quickCaptureHtml(item) {
+  function quickCaptureHtml(item, index, items) {
     const taskId = escapeHtml(item.taskId);
     const title = escapeHtml(item.title || "未命名速记");
     const stamp = item.updatedAt || item.createdAt;
@@ -148,7 +163,8 @@
       <article class="today-task quick-capture-item" data-task-id="${taskId}" data-title="${title}" tabindex="0" role="button">
         <button class="task-check" type="button" aria-label="完成速记：${title}"></button>
         <span class="task-copy"><strong>${title}</strong><span>速记 · ${escapeHtml(time)}</span></span>
-        <button class="quick-capture-promote" type="button" title="升级为任务" aria-label="将速记升级为任务">↑</button>
+        <button class="quick-capture-promote" type="button" title="升级为任务" aria-label="将速记升级为任务"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 12V4m0 0L5 7m3-3 3 3"></path></svg></button>
+        ${orderControlsHtml(item.taskId, "quick", index, items.length)}
       </article>
     `;
   }
@@ -380,12 +396,12 @@
     document.querySelectorAll(".today-task").forEach((row) => {
       let clickTimer = 0;
       row.addEventListener("click", (event) => {
-        if (event.target.closest(".task-check, .task-inline-input, .quick-capture-promote")) return;
+        if (event.target.closest(".task-check, .task-inline-input, .quick-capture-promote, .task-order-button")) return;
         window.clearTimeout(clickTimer);
         clickTimer = window.setTimeout(() => beginInlineEdit(row), 220);
       });
       row.addEventListener("dblclick", (event) => {
-        if (event.target.closest(".task-check, .task-inline-input, .quick-capture-promote")) return;
+        if (event.target.closest(".task-check, .task-inline-input, .quick-capture-promote, .task-order-button")) return;
         event.preventDefault();
         window.clearTimeout(clickTimer);
         void bridge.openMain(row.dataset.taskId);
@@ -417,6 +433,8 @@
         if (!quickCapture) updateCount();
         if (result?.code === "CONCLUSION_REQUIRED") {
           showToast("请先补充结论，已在主窗口打开该任务");
+        } else if (result?.code === "FLOW_INCOMPLETE") {
+          showToast("请先完成全部处理流节点，已在主窗口打开该任务");
         } else {
           showToast("任务状态未更新，请稍后重试");
         }
@@ -429,6 +447,22 @@
         event.stopPropagation();
         closeMenu();
         openGroupMenu(event.currentTarget, row.dataset.taskId);
+      });
+      row.querySelectorAll(".task-order-button").forEach((button) => {
+        button.addEventListener("click", async (event) => {
+          event.stopPropagation();
+          if (button.disabled || reorderingTaskId) return;
+          reorderingTaskId = button.dataset.reorderTask || "";
+          row.classList.add("is-reordering");
+          const result = await bridge.reorderItem?.({
+            taskId: reorderingTaskId,
+            lane: button.dataset.reorderLane,
+            direction: Number(button.dataset.reorderDirection),
+          });
+          reorderingTaskId = "";
+          row.classList.remove("is-reordering");
+          if (!result?.success && result?.code !== "BOUNDARY") showToast("顺序调整失败，请稍后重试");
+        });
       });
     });
   }
