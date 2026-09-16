@@ -241,6 +241,7 @@ test("knowledge document sessions expose safe draft and save transitions", () =>
   assert.equal(draft.documentState, "DRAFT");
   assert.equal(draft.filePath, null);
   assert.equal(draft.dirty, false);
+  assert.deepEqual(draft.tableColumnWidths, []);
 
   const edited = knowledgeDocument.markDocumentEdited(draft);
   assert.equal(edited.documentState, "DRAFT");
@@ -261,6 +262,28 @@ test("knowledge document sessions expose safe draft and save transitions", () =>
   assert.equal(changed.documentState, "DIRTY");
   assert.equal(changed.dirty, true);
   assert.equal(knowledgeDocument.updateDocumentTitle(changed, "新标题").filePath, "/tmp/knowledge.md");
+});
+
+test("knowledge table column widths normalize and persist without dirtying markdown", () => {
+  const saved = knowledgeDocument.markDocumentSaved(
+    knowledgeDocument.createDocumentSession({ taskId: "table_task", title: "表格笔记" }),
+    { filePath: "/tmp/table-note.md" },
+  );
+  const resized = knowledgeDocument.updateTableColumnWidths(saved, [
+    [132.4, 308.7, 116],
+    [],
+    [90, 240],
+  ]);
+
+  assert.deepEqual(resized.tableColumnWidths, [[132, 309, 116], [], [90, 240]]);
+  assert.equal(resized.documentState, "SAVED");
+  assert.equal(resized.dirty, false);
+
+  const normalized = knowledgeDocument.normalizeKnowledgeNote({
+    ...resized,
+    tableColumnWidths: [[79, 260], [120, 1700], [104, 296]],
+  });
+  assert.deepEqual(normalized.tableColumnWidths, [[], [], [104, 296]]);
 });
 
 test("knowledge document abnormal states remain explicit and dirty", () => {

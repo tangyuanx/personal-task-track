@@ -15116,3 +15116,163 @@ button.settings-row:hover .settings-row-copy strong {
     animation-duration:1800ms;
   }
 }
+
+/* ============================================================
+   v0.1.186 — knowledge table clarity and column resizing
+   ============================================================ */
+.task-knowledge-pane .milkdown-table-block {
+  margin: 16px 0;
+}
+
+.task-knowledge-pane .milkdown-table-block .table-wrapper {
+  position: relative;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border: 1px solid #c7ceca;
+  border-radius: 10px;
+  background: #ffffff;
+  scrollbar-color: #c5ccc8 transparent;
+  scrollbar-width: thin;
+}
+
+.task-knowledge-pane .milkdown-table-block table.children {
+  width: 100%;
+  min-width: 560px;
+  overflow: visible;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+}
+
+.task-knowledge-pane .milkdown-table-block th,
+.task-knowledge-pane .milkdown-table-block td {
+  min-width: 80px;
+  padding: 9px 12px;
+  border: 0;
+  border-right: 1px solid #dce1de;
+  border-bottom: 1px solid #dce1de;
+  color: var(--ink);
+  background: #ffffff;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  transition: background-color 140ms ease, border-color 140ms ease;
+}
+
+.task-knowledge-pane .milkdown-table-block th {
+  padding-top: 10px;
+  padding-bottom: 10px;
+  border-right-color: #ced5d1;
+  border-bottom-color: #bfc8c3;
+  color: #29332e;
+  background: #e7ebe8;
+  font-weight: 720;
+}
+
+.task-knowledge-pane .milkdown-table-block tr:last-child td {
+  border-bottom: 0;
+}
+
+.task-knowledge-pane .milkdown-table-block th:last-child,
+.task-knowledge-pane .milkdown-table-block td:last-child {
+  border-right: 0;
+}
+
+.task-knowledge-pane .milkdown-table-block tbody tr:hover td {
+  background: #f6f9f7;
+}
+
+.task-knowledge-pane .milkdown-table-block th:has(.ProseMirror-selectednode),
+.task-knowledge-pane .milkdown-table-block td:has(.ProseMirror-selectednode) {
+  outline: 2px solid color-mix(in srgb, var(--focus) 50%, transparent);
+  outline-offset: -2px;
+}
+
+.task-knowledge-pane .milkdown-table-block .selectedCell::after {
+  background: color-mix(in srgb, var(--focus) 18%, transparent);
+  opacity: 1;
+}
+
+.loop-table-resize-layer {
+  position: absolute;
+  z-index: 24;
+  pointer-events: none;
+}
+
+.loop-table-resize-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 12px;
+  transform: translateX(-6px);
+  cursor: col-resize;
+  touch-action: none;
+  pointer-events: auto;
+}
+
+.loop-table-resize-handle::after {
+  position: absolute;
+  top: 6px;
+  right: 5px;
+  bottom: 6px;
+  width: 1px;
+  border-radius: 2px;
+  background: transparent;
+  content: "";
+  transition: width 120ms ease, background-color 120ms ease;
+}
+
+.loop-table-resize-handle:hover::after,
+.loop-table-resize-handle:focus-visible::after,
+.loop-table-resize-handle.active::after {
+  width: 2px;
+  background: var(--focus);
+}
+
+.loop-table-resize-handle:focus-visible {
+  outline: 0;
+}
+
+.loop-table-resize-handle.active::before {
+  position: absolute;
+  top: 8px;
+  left: 10px;
+  padding: 4px 7px;
+  border-radius: 6px;
+  color: #ffffff;
+  background: color-mix(in srgb, var(--focus) 94%, #000000);
+  box-shadow: 0 5px 16px rgba(23, 57, 45, 0.18);
+  content: attr(data-width);
+  font: 650 calc(11 * var(--font-unit))/1.2 var(--mono);
+  white-space: nowrap;
+}
+
+.task-knowledge-pane .milkdown-table-block table.loop-table-resizing,
+.task-knowledge-pane .milkdown-table-block table.loop-table-resizing * {
+  cursor: col-resize !important;
+  user-select: none;
+}
+
+:root[data-theme="dark"] .task-knowledge-pane .milkdown-table-block .table-wrapper {
+  border-color: #515c57;
+  background: #252a27;
+  scrollbar-color: #5c6761 transparent;
+}
+
+:root[data-theme="dark"] .task-knowledge-pane .milkdown-table-block th {
+  border-right-color: #56615b;
+  border-bottom-color: #66736c;
+  color: #edf2ef;
+  background: #3d4842;
+}
+
+:root[data-theme="dark"] .task-knowledge-pane .milkdown-table-block td {
+  border-right-color: #444d48;
+  border-bottom-color: #444d48;
+  color: var(--ink);
+  background: #292e2b;
+}
+
+:root[data-theme="dark"] .task-knowledge-pane .milkdown-table-block tbody tr:hover td {
+  background: #303733;
+}

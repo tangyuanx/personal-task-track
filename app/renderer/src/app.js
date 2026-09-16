@@ -6496,9 +6496,22 @@ function mountMilkdownEditors() {
       root: host,
       markdown,
       placeholder: node ? "记录处理过程" : "记录分析过程、知识点和可复用结论……",
+      enableTableResizing: !nodeId,
+      tableColumnWidths: nodeId ? [] : task.knowledgeNote?.tableColumnWidths,
       onChange: (markdown) => {
         updateNodeNoteDraft(taskId, nodeId, markdown, host);
       },
+      onTableColumnWidthsChange: nodeId
+        ? undefined
+        : (tableColumnWidths) => {
+            const latestTask = state.tasks.find((item) => item.id === taskId);
+            if (!latestTask) return;
+            latestTask.knowledgeNote = knowledgeDocument.updateTableColumnWidths(
+              latestTask.knowledgeNote,
+              tableColumnWidths,
+            );
+            save();
+          },
     })
       .then((instance) => {
         if (!document.body.contains(host)) {

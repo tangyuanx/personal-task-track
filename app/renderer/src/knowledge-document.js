@@ -49,6 +49,17 @@
     return Object.keys(result).length ? result : null;
   }
 
+  function normalizeTableColumnWidths(value) {
+    if (!Array.isArray(value)) return [];
+    const tables = value.slice(0, 64).map((table) => {
+      if (!Array.isArray(table) || table.length < 2 || table.length > 32) return [];
+      const widths = table.map((width) => Math.round(Number(width)));
+      return widths.every((width) => Number.isFinite(width) && width >= 80 && width <= 1600) ? widths : [];
+    });
+    while (tables.length && tables[tables.length - 1].length === 0) tables.pop();
+    return tables;
+  }
+
   function normalizeDocumentState(value, fallback = "DRAFT") {
     return DOCUMENT_STATE_SET.has(value) ? value : fallback;
   }
@@ -86,6 +97,7 @@
       lineEnding: "LF",
       cursorPosition: null,
       scrollPosition: null,
+      tableColumnWidths: [],
       createdAt: normalizeTimestamp(createdAt),
       updatedAt: normalizeTimestamp(updatedAt, normalizeTimestamp(createdAt)),
       lastOpenedAt: null,
@@ -120,6 +132,7 @@
       lineEnding: raw.lineEnding === "CRLF" ? "CRLF" : "LF",
       cursorPosition: normalizePosition(raw.cursorPosition, ["start", "end"]),
       scrollPosition: normalizePosition(raw.scrollPosition, ["top", "left"]),
+      tableColumnWidths: normalizeTableColumnWidths(raw.tableColumnWidths),
       createdAt: normalizeTimestamp(raw.createdAt, fallback.createdAt),
       updatedAt: normalizeTimestamp(raw.updatedAt, fallback.updatedAt),
       lastOpenedAt: normalizeTimestamp(raw.lastOpenedAt, "") || null,
@@ -136,6 +149,12 @@
   function updateDocumentTitle(session, title) {
     const next = normalizeKnowledgeNote(session);
     next.title = normalizeText(title);
+    return next;
+  }
+
+  function updateTableColumnWidths(session, tableColumnWidths) {
+    const next = normalizeKnowledgeNote(session);
+    next.tableColumnWidths = normalizeTableColumnWidths(tableColumnWidths);
     return next;
   }
 
@@ -200,5 +219,6 @@
     normalizeDocumentState,
     normalizeKnowledgeNote,
     updateDocumentTitle,
+    updateTableColumnWidths,
   });
 });
