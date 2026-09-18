@@ -3239,6 +3239,21 @@ test("task repository renders priority without an update timestamp", async () =>
   assert.match(app, /aria-label="新增任务"/);
 });
 
+test("task repository priority controls stay concise and completed rows are fully de-emphasized", async () => {
+  const app = await fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "app.js"), "utf8");
+  const styles = await fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "styles.css"), "utf8");
+  const labelBlock = app.slice(app.indexOf("const repositoryPriorityLabels"), app.indexOf("const themeLabels"));
+  const finalRules = styles.slice(styles.lastIndexOf("v0.1.187 final cascade"));
+
+  assert.match(labelBlock, /high:\s*"高",[\s\S]*medium:\s*"中",[\s\S]*low:\s*"低"/);
+  assert.doesNotMatch(labelBlock, /优先/);
+  assert.match(finalRules, /\.task-priority-control\s*\{[\s\S]*min-width:56px;[\s\S]*height:27px;[\s\S]*background:color-mix\(in srgb,var\(--handoff-ink\) 3\.5%,transparent\);/);
+  assert.match(finalRules, /\.task-priority-control select\s*\{[\s\S]*width:100%;[\s\S]*height:100%;[\s\S]*padding:0 8px 0 23px;/);
+  assert.match(finalRules, /task-item\.done \.task-priority-control\.low\s*\{[\s\S]*background:transparent;[\s\S]*color:var\(--handoff-soft\);/);
+  assert.match(finalRules, /task-item\.done \.task-priority-control\.low::before\s*\{[\s\S]*background:currentColor;/);
+  assert.match(finalRules, /task-item\.done \.repository-complete:hover\s*\{[\s\S]*background:color-mix\(in srgb,var\(--handoff-muted\) 18%,transparent\);[\s\S]*opacity:\.56;/);
+});
+
 test("group editing preserves the horizontal group viewport across renders", async () => {
   const app = await fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "app.js"), "utf8");
 

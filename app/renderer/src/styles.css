@@ -15276,3 +15276,103 @@ button.settings-row:hover .settings-row-copy strong {
 :root[data-theme="dark"] .task-knowledge-pane .milkdown-table-block tbody tr:hover td {
   background: #303733;
 }
+
+/* v0.1.187 final cascade: a larger quiet priority control and one uniformly
+   de-emphasized visual state for completed repository tasks. */
+.rail.sidebar .task-row.task-item .task-priority-control {
+  position:relative;
+  display:inline-flex;
+  min-width:56px;
+  width:56px;
+  height:27px;
+  flex:0 0 56px;
+  align-items:center;
+  gap:0;
+  overflow:hidden;
+  border:0;
+  border-radius:7px;
+  padding:0;
+  background:color-mix(in srgb,var(--handoff-ink) 3.5%,transparent);
+  color:var(--handoff-muted);
+  transition:background-color 120ms ease,color 120ms ease,box-shadow 120ms ease;
+}
+
+.rail.sidebar .task-row.task-item .task-priority-control:hover {
+  background:color-mix(in srgb,var(--handoff-ink) 6%,transparent);
+  color:var(--handoff-ink);
+}
+
+.rail.sidebar .task-row.task-item .task-priority-control:focus-within {
+  box-shadow:0 0 0 2px color-mix(in srgb,var(--handoff-focus-800) 24%,transparent);
+}
+
+.rail.sidebar .task-row.task-item .task-priority-control::before {
+  position:absolute;
+  z-index:0;
+  top:50%;
+  left:10px;
+  width:5px;
+  height:5px;
+  flex:none;
+  border-radius:50%;
+  content:"";
+  transform:translateY(-50%);
+  pointer-events:none;
+}
+
+.rail.sidebar .task-row.task-item .task-priority-control.high::before {
+  background:color-mix(in srgb,var(--priority-high) 78%,var(--handoff-muted));
+}
+
+.rail.sidebar .task-row.task-item .task-priority-control.medium::before {
+  background:color-mix(in srgb,var(--priority-medium) 76%,var(--handoff-muted));
+}
+
+.rail.sidebar .task-row.task-item .task-priority-control.low::before {
+  background:color-mix(in srgb,var(--priority-low) 76%,var(--handoff-muted));
+}
+
+.rail.sidebar .task-row.task-item .task-priority-control select {
+  position:relative;
+  z-index:1;
+  width:100%;
+  height:100%;
+  border:0;
+  padding:0 8px 0 23px;
+  appearance:none;
+  background:transparent;
+  color:inherit;
+  font-size:calc(11 * var(--font-unit));
+  font-weight:600;
+  line-height:27px;
+  box-shadow:none;
+}
+
+.rail.sidebar .task-row.task-item.done .task-priority-control,
+.rail.sidebar .task-row.task-item.done .task-priority-control.high,
+.rail.sidebar .task-row.task-item.done .task-priority-control.medium,
+.rail.sidebar .task-row.task-item.done .task-priority-control.low {
+  background:transparent;
+  color:var(--handoff-soft);
+}
+
+.rail.sidebar .task-row.task-item.done .task-priority-control.high::before,
+.rail.sidebar .task-row.task-item.done .task-priority-control.medium::before,
+.rail.sidebar .task-row.task-item.done .task-priority-control.low::before {
+  background:currentColor;
+}
+
+.rail.sidebar .task-row.task-item.done .repository-complete,
+.rail.sidebar .task-row.task-item.done .repository-complete:hover {
+  border-color:color-mix(in srgb,var(--handoff-muted) 46%,transparent);
+  background:color-mix(in srgb,var(--handoff-muted) 18%,transparent);
+  color:color-mix(in srgb,var(--handoff-muted) 68%,transparent);
+  opacity:.56;
+}
+
+@media (prefers-reduced-motion:reduce) {
+  .rail.sidebar .task-row.task-item .task-priority-control {
+    transition:none;
+  }
+}
+
