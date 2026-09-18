@@ -15303,7 +15303,8 @@ button.settings-row:hover .settings-row-copy strong {
 }
 
 .rail.sidebar .task-row.task-item .task-priority-control:focus-within {
-  box-shadow:0 0 0 2px color-mix(in srgb,var(--handoff-focus-800) 24%,transparent);
+  outline:2px solid color-mix(in srgb,var(--handoff-focus-800) 24%,transparent);
+  outline-offset:0;
 }
 
 .rail.sidebar .task-row.task-item .task-priority-control::before {

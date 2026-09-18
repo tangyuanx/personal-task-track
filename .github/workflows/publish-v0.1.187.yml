@@ -32,7 +32,8 @@ jobs:
           version="$(node -p "require('./package.json').version")"
           test "$version" = "0.1.187"
           node --check app/renderer/src/app.js
-          node --test --test-name-pattern='task repository priority controls' tests/desktop.test.cjs
+          node --check tests/work-rhythm-ui.test.cjs
+          node --test --test-name-pattern='task repository priority controls|release version, scripts and cache keys are aligned' tests/desktop.test.cjs tests/work-rhythm-ui.test.cjs
 
   build:
     name: Build v0.1.187 ${{ matrix.platform }}
