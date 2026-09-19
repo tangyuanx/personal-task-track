@@ -1737,13 +1737,14 @@ function render() {
   if (deadlinePopoverTaskId && deadlinePopoverTaskId !== task?.id) deadlinePopoverTaskId = "";
   document.querySelector("#root").innerHTML = `
     <main class="ops-app app" style="--sidebar-width:${normalizeSidebarWidth(state.sidebarWidth)}px">
-      ${renderSidebar()}
-      <section class="workspace">
-        ${task ? renderTaskPage(task) : renderEmptyPage()}
+      ${state.searchOpen ? `<div class="global-search-layer" data-global-search-layer aria-hidden="true"></div>` : ""}
+      ${renderAppTopbar()}
+      ${state.calendarOpen ? "" : renderSidebar()}
+      <section class="workspace ${state.calendarOpen ? "workspace-calendar" : ""}">
+        ${state.calendarOpen ? renderCalendarPanel() : task ? renderTaskPage(task) : renderEmptyPage()}
       </section>
       <div id="context-menu-root">${renderContextMenu()}</div>
       ${state.settingsOpen ? renderSettingsPanel() : ""}
-      ${state.calendarOpen ? renderCalendarPanel() : ""}
       ${state.reviewOpen ? renderReviewPanel() : ""}
       ${state.feedbackOpen ? renderBugReportPanel() : ""}
     </main>
@@ -1828,71 +1829,245 @@ function renderKnowledgeDraftPrompt() {
   `;
 }
 
+function renderGlobalSearch() {
+  return `
+    <div class="app-global-search search-box search gooey-search is-open" data-gooey-search data-open="true" data-persistent-search="true">
+      <button class="gooey-search-trigger" type="button" data-gooey-search-trigger aria-hidden="true" tabindex="-1">
+        ${briefFieldIcon("search", "app-command-icon")}
+      </button>
+      <label class="gooey-search-field" for="search">
+        ${briefFieldIcon("search", "app-command-icon")}
+        <input id="search" type="search" value="${escAttr(state.query)}" placeholder="搜索任务、节点或内容…" aria-label="搜索任务、节点或内容" autocomplete="off" enterkeyhint="search" tabindex="0" />
+        <span class="search-shortcut" aria-hidden="true">⌘ K</span>
+      </label>
+    </div>
+  `;
+}
+
+function globalSearchMatches() {
+  const query = state.query.trim().toLowerCase();
+  const byRecentActivity = (a, b) => {
+    const aTime = Date.parse(a.updatedAt || a.createdAt || "") || 0;
+    const bTime = Date.parse(b.updatedAt || b.createdAt || "") || 0;
+    return bTime - aTime || a.order - b.order;
+  };
+  const tasks = [...state.tasks].sort(byRecentActivity);
+
+  if (!query) {
+    return {
+      recent: tasks.filter((task) => task.captureSource !== "today-widget").slice(0, 6),
+      tasks: [],
+      nodes: [],
+      notes: [],
+    };
+  }
+
+  const taskMatches = [];
+  const nodeMatches = [];
+  const noteMatches = [];
+  tasks.forEach((task) => {
+    const taskText = `${task.title || ""} ${task.description || ""} ${task.hypothesis || ""} ${task.conclusion || ""}`.toLowerCase();
+    if (taskText.includes(query)) {
+      if (task.captureSource === "today-widget") noteMatches.push(task);
+      else taskMatches.push(task);
+    }
+    flatten(task.nodes).forEach((node) => {
+      if (`${node.title || ""} ${node.note || ""}`.toLowerCase().includes(query)) {
+        nodeMatches.push({ task, node });
+      }
+    });
+  });
+
+  return {
+    recent: [],
+    tasks: taskMatches.slice(0, 6),
+    nodes: nodeMatches.slice(0, 6),
+    notes: noteMatches.slice(0, 4),
+  };
+}
+
+function renderGlobalSearchTaskResult(task, kind = "task") {
+  const completed = task.status === "done";
+  return `
+    <button class="global-search-result" type="button" data-action="open-global-search-task" data-task-id="${task.id}">
+      <span class="global-search-result-icon ${completed ? "is-complete" : ""}" aria-hidden="true">
+        ${briefFieldIcon(kind === "note" ? "file-text" : completed ? "check" : "circle", "global-search-result-svg")}
+      </span>
+      <span class="global-search-result-copy">
+        <strong>${esc(task.title || (kind === "note" ? "未命名速记" : "未命名任务"))}</strong>
+        <span>${esc(kind === "note" ? "今日速记" : taskSubtitle(task))}</span>
+      </span>
+      ${briefFieldIcon("chevron-right", "global-search-result-arrow")}
+    </button>
+  `;
+}
+
+function renderGlobalSearchNodeResult({ task, node }) {
+  return `
+    <button class="global-search-result" type="button" data-action="open-global-search-node" data-task-id="${task.id}" data-node-id="${node.id}">
+      <span class="global-search-result-icon" aria-hidden="true">${briefFieldIcon("git-branch", "global-search-result-svg")}</span>
+      <span class="global-search-result-copy">
+        <strong>${esc(node.title || "未命名节点")}</strong>
+        <span>${esc(task.title || "未命名任务")}</span>
+      </span>
+      ${briefFieldIcon("chevron-right", "global-search-result-arrow")}
+    </button>
+  `;
+}
+
+function renderGlobalSearchSection(label, items, renderItem) {
+  if (!items.length) return "";
+  return `
+    <section class="global-search-result-section">
+      <div class="global-search-result-heading"><span>${label}</span><b>${items.length}</b></div>
+      <div class="global-search-result-list">${items.map(renderItem).join("")}</div>
+    </section>
+  `;
+}
+
+function renderGlobalSearchResults() {
+  const matches = globalSearchMatches();
+  const content = [
+    renderGlobalSearchSection("最近任务", matches.recent, (task) => renderGlobalSearchTaskResult(task)),
+    renderGlobalSearchSection("任务", matches.tasks, (task) => renderGlobalSearchTaskResult(task)),
+    renderGlobalSearchSection("节点", matches.nodes, renderGlobalSearchNodeResult),
+    renderGlobalSearchSection("速记", matches.notes, (task) => renderGlobalSearchTaskResult(task, "note")),
+  ].join("");
+
+  if (content) return content;
+  return `
+    <div class="global-search-empty">
+      ${briefFieldIcon("search", "global-search-empty-icon")}
+      <strong>${state.query.trim() ? "没有找到相关内容" : "还没有可搜索的任务"}</strong>
+      <span>${state.query.trim() ? "试试任务标题、节点名称或记录中的关键词" : "创建任务后，可以从这里快速定位"}</span>
+    </div>
+  `;
+}
+
+function renderGlobalSearchPanel() {
+  return `
+    <section class="global-search-panel" data-global-search-panel role="dialog" aria-modal="false" aria-label="全局搜索结果">
+      <div class="global-search-results" data-global-search-results aria-live="polite">${renderGlobalSearchResults()}</div>
+      <footer class="global-search-footer"><span>输入关键词筛选</span><span><kbd>Esc</kbd> 关闭</span></footer>
+    </section>
+  `;
+}
+
+function renderAppTopbar() {
+  const todayActive = state.taskFilter === "today" && !state.calendarOpen && !state.reviewOpen;
+  const tasksActive = state.taskFilter !== "today" && !state.calendarOpen && !state.reviewOpen;
+  return `
+    <header class="app-command-bar" aria-label="应用导航">
+      <div class="app-command-brand">
+        <strong>Loop</strong>
+        ${renderSidebarUpdateControl()}
+      </div>
+      <nav class="app-primary-navigation" aria-label="主要功能">
+        <button class="app-nav-button ${todayActive ? "active" : ""}" type="button" data-setting-button="task-filter" data-value="today" aria-pressed="${todayActive}" title="今日">
+          ${briefFieldIcon("home", "app-command-icon")}<span>今日</span>
+        </button>
+        <button class="app-nav-button ${tasksActive ? "active" : ""}" type="button" data-setting-button="task-filter" data-value="all" aria-pressed="${tasksActive}" title="任务">
+          ${briefFieldIcon("check-square", "app-command-icon")}<span>任务</span>
+        </button>
+        <button class="app-nav-button ${state.calendarOpen ? "active" : ""}" type="button" data-action="toggle-calendar" aria-pressed="${state.calendarOpen}" title="日历">
+          ${briefFieldIcon("calendar", "app-command-icon")}<span>日历</span>
+        </button>
+        <button class="app-nav-button ${state.reviewOpen ? "active" : ""}" type="button" data-action="toggle-review" aria-pressed="${state.reviewOpen}" title="回顾">
+          ${briefFieldIcon("clock", "app-command-icon")}<span>回顾</span>
+        </button>
+      </nav>
+      <div class="app-topbar-search ${state.searchOpen ? "is-open" : ""}" data-topbar-search>
+        ${renderGlobalSearch()}
+        ${state.searchOpen ? renderGlobalSearchPanel() : ""}
+      </div>
+      <div class="app-command-status"><div class="topbar-rhythm-slot" aria-live="polite"></div></div>
+    </header>
+  `;
+}
+
+function renderSidebarFooter(todayMode) {
+  if (todayMode) {
+    return `
+      <footer class="rail-footer">
+        <div class="footer-actions">
+          <button class="settings-trigger settings-button ${state.settingsOpen ? "active" : ""}" type="button" data-action="toggle-settings" title="设置" aria-label="设置">
+            ${briefFieldIcon("settings", "sidebar-footer-icon")}<span>设置</span>
+          </button>
+          <span class="divider" aria-hidden="true"></span>
+          <button class="theme-toggle theme-switch ${state.theme === "dark" ? "on" : ""}" type="button" role="switch" data-action="toggle-theme" title="切换主题" aria-label="切换主题" aria-checked="${state.theme === "dark"}">
+            <span class="theme-switch-thumb" aria-hidden="true">${briefFieldIcon(state.theme === "dark" ? "moon" : "sun", "sidebar-theme-icon")}</span>
+          </button>
+        </div>
+        <div class="autosave"><i aria-hidden="true"></i>自动保存已开启</div>
+      </footer>
+    `;
+  }
+  return `
+    <div class="sidebar-foot task-footer">
+      <div class="sidebar-footer-actions">
+        <button class="settings-trigger settings-button ${state.settingsOpen ? "active" : ""}" type="button" data-action="toggle-settings" title="设置" aria-label="设置">
+          ${briefFieldIcon("settings", "sidebar-footer-icon")}<span>设置</span>
+        </button>
+        <span class="sidebar-footer-divider" aria-hidden="true"></span>
+        <button class="theme-toggle theme-switch ${state.theme === "dark" ? "active" : ""}" type="button" role="switch" data-action="toggle-theme" title="${state.theme === "dark" ? "切换到浅色主题" : "切换到深色主题"}" aria-label="${state.theme === "dark" ? "切换到浅色主题" : "切换到深色主题"}" aria-checked="${state.theme === "dark"}">
+          <span class="theme-switch-thumb" aria-hidden="true">${briefFieldIcon(state.theme === "dark" ? "moon" : "sun", "sidebar-theme-icon")}</span>
+        </button>
+      </div>
+      <span class="autosave-status">自动保存已开启</span>
+    </div>
+  `;
+}
+
 function renderSidebar() {
   const visibleCount = filteredTasks().length;
   const scopedTasks = taskListStatsTasks();
-  const openCount = scopedTasks.filter((task) => task.status !== "done").length;
-  const blockedCount = scopedTasks.filter((task) => task.tags.blocked || flatten(task.nodes).some((node) => node.status === "blocked")).length;
   const focusItems = todayFocusItems();
-  const searchOpen = state.searchOpen || Boolean(state.query.trim());
+  const todayMode = state.taskFilter === "today" && !state.calendarOpen && !state.reviewOpen;
+  const activeRepositoryFilterCount = Number(state.priorityFilter !== "all")
+    + Number(state.captureSourceFilter !== "all");
   return `
-    <aside class="sidebar rail">
+    <aside class="sidebar rail ${todayMode ? "sidebar-today-mode focus-rail" : "sidebar-tasks-mode"}" data-primary-view="${todayMode ? "today" : "tasks"}">
       <span class="sidebar-resizer" data-sidebar-resizer title="调整侧栏宽度"></span>
-      <div class="sidebar-head brand">
-        <div>
-          <strong>Loop</strong>
-        </div>
-        ${renderSidebarUpdateControl()}
-      </div>
+      ${todayMode ? renderTodayFocus(focusItems) : ""}
 
-      ${renderTodayFocus(focusItems)}
-
-      <div class="task-list task-repository" data-context="task-list">
+      ${todayMode ? "" : `<div class="task-list task-repository" data-context="task-list">
         <div class="repository-fixed-header">
-          <div class="repository-primary-row task-list-head section-label">
-            <div class="repository-group-slot" aria-label="分组">
-              ${renderRepositoryGroupPicker()}
+          <div class="repository-heading-row">
+            <div class="repository-library-heading">
+              <strong>任务仓库</strong>
+              <span class="task-list-count">${visibleCount === scopedTasks.length ? `${visibleCount} 项` : `${visibleCount} / ${scopedTasks.length} 项`}</span>
             </div>
-            <span class="task-list-count">${visibleCount} / ${scopedTasks.length} 项</span>
-            <div class="search-box search gooey-search ${searchOpen ? "is-open" : ""}" data-gooey-search data-open="${searchOpen}">
-              <svg class="gooey-search-filter-defs" aria-hidden="true" width="0" height="0">
-                <defs>
-                  <filter id="sidebar-gooey-filter" x="-45%" y="-110%" width="190%" height="320%" color-interpolation-filters="sRGB">
-                    <feGaussianBlur in="SourceGraphic" stdDeviation="4.2" result="blur"></feGaussianBlur>
-                    <feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 19 -8" result="gooey"></feColorMatrix>
-                    <feComposite in="SourceGraphic" in2="gooey" operator="atop"></feComposite>
-                  </filter>
-                </defs>
-              </svg>
-              <div class="gooey-search-filter-wrap">
-                <button class="gooey-search-trigger" type="button" data-gooey-search-trigger aria-expanded="${searchOpen}" aria-controls="search" title="搜索任务">
-                  <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7.2"></circle><path d="m20 20-3.9-3.9"></path></svg>
-                  <span class="gooey-search-trigger-label">搜索</span>
-                </button>
-                <label class="gooey-search-field" for="search">
-                  <svg class="gooey-search-field-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7.2"></circle><path d="m20 20-3.9-3.9"></path></svg>
-                  <input id="search" type="search" value="${escAttr(state.query)}" placeholder="搜索任务…" aria-label="搜索任务、节点或内容" autocomplete="off" enterkeyhint="search" tabindex="${searchOpen ? "0" : "-1"}" />
-                  <span class="search-shortcut" aria-hidden="true">⌘ K</span>
-                </label>
-              </div>
+            <div class="repository-context-actions">
+              <details class="repository-filter-menu">
+                <summary class="repository-filter-trigger" aria-label="打开任务筛选" title="筛选任务">
+                  ${briefFieldIcon("sliders", "repository-filter-icon")}
+                  ${activeRepositoryFilterCount ? `<b aria-label="${activeRepositoryFilterCount} 个筛选条件">${activeRepositoryFilterCount}</b>` : ""}
+                </summary>
+                <div class="repository-filter-popover">
+                  <section class="repository-filter-section">
+                    <span class="repository-filter-label">优先级</span>
+                    <label class="repository-priority-select" aria-label="优先级筛选">
+                      ${filterSelectHtml("priority-filter", state.priorityFilter, repositoryPriorityFilterLabels, "按优先级筛选")}
+                    </label>
+                  </section>
+                  <section class="repository-filter-section">
+                    <span class="repository-filter-label">记录类型</span>
+                    ${renderRepositoryTypeToggles()}
+                  </section>
+                </div>
+              </details>
+              <button class="add-task-floating" type="button" data-action="add-task" title="新增任务" aria-label="新增任务">
+                <svg class="add-task-floating-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+              </button>
             </div>
-            <span class="repository-action-divider" aria-hidden="true"></span>
-            <button class="add-task-floating" type="button" data-action="add-task" title="新增任务" aria-label="新增任务">
-              <svg class="add-task-floating-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
-              <span>新增</span>
-            </button>
           </div>
-          <div class="task-repository-toolbar">
-            ${renderRepositorySegmentedFilter("completion-segmented task-status-filters", "任务状态筛选", [
-              ["all", "全部"],
-              ["active", "未完成"],
-              ["done", "已完成"],
-            ], state.taskFilter, "task-filter")}
-            <label class="repository-priority-select" aria-label="优先级筛选">
-              <span>优先级 ·</span>
-              ${filterSelectHtml("priority-filter", state.priorityFilter, repositoryPriorityFilterLabels, "按优先级筛选")}
-            </label>
-            ${renderRepositoryTypeToggles()}
+          ${renderRepositorySegmentedFilter("completion-segmented task-status-filters", "任务状态筛选", [
+            ["all", "全部"],
+            ["active", "未完成"],
+            ["done", "已完成"],
+          ], state.taskFilter, "task-filter")}
+          <div class="repository-context-row">
+            <div class="repository-group-slot" aria-label="分组">${renderRepositoryGroupPicker()}</div>
           </div>
         </div>
         <div class="repository-list-wrapper">
@@ -1900,21 +2075,8 @@ function renderSidebar() {
             <div class="task-repository-rows">${renderTaskRepositoryRows()}</div>
           </div>
         </div>
-      </div>
-      <div class="sidebar-foot task-footer">
-        <button class="settings-trigger settings-button ${state.settingsOpen ? "active" : ""}" type="button" data-action="toggle-settings" title="设置" aria-label="设置">⚙</button>
-        <button
-          class="theme-toggle theme-switch ${state.theme === "dark" ? "active" : ""}"
-          type="button"
-          role="switch"
-          data-action="toggle-theme"
-          title="${state.theme === "dark" ? "切换到浅色主题" : "切换到深色主题"}"
-          aria-label="${state.theme === "dark" ? "切换到浅色主题" : "切换到深色主题"}"
-          aria-checked="${state.theme === "dark"}"
-        ><span class="theme-switch-thumb" aria-hidden="true"></span></button>
-        <span class="autosave-status">自动保存已开启</span>
-        <button class="review-shortcut calendar-shortcut" type="button" data-action="toggle-calendar">日历</button>
-      </div>
+      </div>`}
+      ${renderSidebarFooter(todayMode)}
     </aside>
   `;
 }
@@ -1928,34 +2090,32 @@ function renderRepositorySegmentedFilter(className, label, options, selected, se
 }
 
 function renderTodayFocus(items) {
-  const today = new Intl.DateTimeFormat("zh-CN", { month: "2-digit", day: "2-digit" }).format(new Date());
   return `
-    <section class="today-focus today-panel" aria-label="今日待办">
-      <div class="today-headline">
-        <strong>今日任务</strong>
-        <time class="today-date" datetime="${escAttr(new Date().toISOString())}">${today}</time>
-        <span><b>${items.length}</b> 项待办</span>
-      </div>
-      <div class="focus-list focus-stack">
-        ${
-          items.length
-            ? items.map((item) => renderTodayFocusItem(item)).join("")
-            : `<div class="focus-empty">今日暂无重点任务</div>`
-        }
-      </div>
-    </section>
+    <div class="rail-heading">
+      <h2>今日聚焦</h2>
+      <span>${items.length} 项待办</span>
+    </div>
+    <div class="focus-list" aria-label="今日待办">
+      ${
+        items.length
+          ? items.map((item, index) => renderTodayFocusItem(item, index)).join("")
+          : `<div class="focus-empty">今日暂无重点任务</div>`
+      }
+    </div>
   `;
 }
 
-function renderTodayFocusItem(item) {
-  const { task, node, kind, nextText } = item;
+function renderTodayFocusItem(item, index = 0) {
+  const { task, node } = item;
   // Today focus represents a task, not the currently opened flow node. A task
   // must remain visibly selected even when its suggested next step is different.
   const selected = task.id === state.activeTaskId;
   return `
-    <article class="focus-item focus-row ${kind} ${selected ? "selected" : ""}" role="button" tabindex="0" data-action="select-focus" data-task-id="${task.id}" data-node-id="${node?.id || ""}">
-      <span class="row-title"><strong>${esc(task.title || "未命名任务")}</strong><span>下一步：${esc(nextText)}</span></span>
-    </article>
+    <button class="focus-row ${selected ? "selected" : ""}" type="button" data-action="select-focus" data-task-id="${task.id}" data-node-id="${node?.id || ""}">
+      <b>${index + 1}</b>
+      <span>${esc(task.title || "未命名任务")}</span>
+      ${briefFieldIcon("chevron-right", "focus-row-chevron")}
+    </button>
   `;
 }
 
@@ -2014,7 +2174,7 @@ function renderRepositoryGroupPicker() {
   const isGrowthSource = activePersonalGroup?.id === growthSource;
   return `
     <div class="repository-group-picker ${open ? "is-open" : ""}">
-      <button class="repository-group-trigger" type="button" data-action="toggle-repository-group-picker" ${activePersonalGroup ? `data-group-context-id="${activePersonalGroup.id}"` : ""} aria-expanded="${open}" aria-haspopup="listbox" title="选择分组；双击可修改当前分组名称"><span class="repository-group-prefix">分组 ·</span><span class="repository-group-value">${esc(repositoryGroupLabel())}</span><span class="repository-group-chevron" aria-hidden="true">⌄</span></button>
+      <button class="repository-group-trigger" type="button" data-action="toggle-repository-group-picker" ${activePersonalGroup ? `data-group-context-id="${activePersonalGroup.id}"` : ""} aria-expanded="${open}" aria-haspopup="listbox" title="选择分组；双击可修改当前分组名称"><span class="repository-group-value">${esc(repositoryGroupLabel())}</span><span class="repository-group-chevron" aria-hidden="true">⌄</span></button>
       ${open ? `
         <div class="repository-group-popover" role="listbox" aria-label="选择分组">
           <label class="repository-group-search"><span aria-hidden="true">⌕</span><input type="search" value="${escAttr(repositoryGroupQuery)}" placeholder="搜索分组…" aria-label="搜索分组" autocomplete="off" /></label>
@@ -2056,19 +2216,19 @@ function renderGroupTabs() {
 }
 
 function renderTaskItem(task, displayOrder) {
-  const subtitle = taskSubtitle(task);
+  const groupTitle = state.taskGroups.find((group) => group.id === task.groupId)?.title || "未分组";
   return `
     <div class="task-item task-row ${task.id === state.activeTaskId ? "selected active" : ""} ${task.status === "done" ? "done" : ""}" draggable="true" data-context="task" data-task-id="${task.id}" data-task-drag-target="${task.id}">
-      <span class="task-sequence" aria-hidden="true">${String(displayOrder).padStart(2, "0")}</span>
+      <button class="task-check repository-complete ${task.status === "done" ? "is-checked" : ""}" type="button" title="${task.status === "done" ? "标记为未完成" : "标记为完成"}" aria-label="${task.status === "done" ? "标记为未完成" : "标记为完成"}" aria-pressed="${task.status === "done"}" data-action="toggle-task-done" data-task-id="${task.id}"></button>
       <span class="task-title-wrap row-title">
         <input class="task-title" placeholder="任务标题" aria-label="任务标题" data-edit-key="title" data-task-id="${task.id}" value="${escAttr(task.title)}" />
-        <span class="task-next-line">下一步：${esc(subtitle)}</span>
+        <span class="task-next-line">${esc(groupTitle)}</span>
       </span>
       <span class="task-row-meta">
         ${renderTaskDeadlineBadge(task)}
         <span class="task-priority-control ${task.priority}">${selectHtml("priority", task.priority, repositoryPriorityLabels, task.id)}</span>
       </span>
-      <button class="task-check repository-complete ${task.status === "done" ? "is-checked" : ""}" type="button" title="${task.status === "done" ? "标记为未完成" : "标记为完成"}" aria-label="${task.status === "done" ? "标记为未完成" : "标记为完成"}" aria-pressed="${task.status === "done"}" data-action="toggle-task-done" data-task-id="${task.id}"></button>
+      <span class="task-row-chevron" aria-hidden="true">›</span>
     </div>
   `;
 }
@@ -2093,12 +2253,13 @@ function setGooeySearchOpen(control, open, { focusInput = false, focusTrigger = 
   if (!control) return;
   const input = control.querySelector("#search");
   const trigger = control.querySelector("[data-gooey-search-trigger]");
-  const nextOpen = Boolean(open || state.query.trim());
+  const persistent = control.dataset.persistentSearch === "true";
+  const nextOpen = persistent || Boolean(open || state.query.trim());
   state.searchOpen = nextOpen;
   control.classList.toggle("is-open", nextOpen);
   control.dataset.open = String(nextOpen);
   trigger?.setAttribute("aria-expanded", String(nextOpen));
-  if (input) input.tabIndex = nextOpen ? 0 : -1;
+  if (input) input.tabIndex = persistent || nextOpen ? 0 : -1;
 
   if (focusInput && nextOpen && input) {
     window.requestAnimationFrame(() => {
@@ -2115,16 +2276,25 @@ function bindGooeySearch() {
   const control = document.querySelector("[data-gooey-search]");
   const search = control?.querySelector("#search");
   const trigger = control?.querySelector("[data-gooey-search-trigger]");
-  if (!control || !search || !trigger) return;
+  if (!control || !search) return;
+  const persistent = control.dataset.persistentSearch === "true";
+
+  search.addEventListener("focus", () => {
+    if (!persistent || state.searchOpen) return;
+    state.searchOpen = true;
+    state.focusSearch = true;
+    state.searchCursor = search.selectionStart ?? search.value.length;
+    render();
+  });
 
   let isComposing = false;
   const refreshSearch = () => {
     state.query = search.value;
     state.searchCursor = search.selectionStart ?? search.value.length;
-    refreshTaskRepository();
+    refreshGlobalSearchResults();
   };
 
-  trigger.addEventListener("click", (event) => {
+  trigger?.addEventListener("click", (event) => {
     event.preventDefault();
     event.stopPropagation();
     state.searchCursor = search.value.length;
@@ -2153,18 +2323,43 @@ function bindGooeySearch() {
       search.value = "";
       state.query = "";
       state.searchCursor = 0;
-      refreshTaskRepository();
+      refreshGlobalSearchResults();
       return;
     }
-    setGooeySearchOpen(control, false, { focusTrigger: true });
+    closeGlobalSearch();
   });
 
   control.addEventListener("focusout", () => {
     window.requestAnimationFrame(() => {
+      if (persistent) return;
       if (control.contains(document.activeElement) || search.value.trim()) return;
       setGooeySearchOpen(control, false);
     });
   });
+}
+
+function bindGlobalSearchResultActions(scope) {
+  scope?.querySelectorAll("[data-action]").forEach((element) => {
+    element.addEventListener("click", (event) => {
+      event.stopPropagation();
+      void action(element.dataset, event);
+    });
+  });
+}
+
+function refreshGlobalSearchResults() {
+  const results = document.querySelector("[data-global-search-results]");
+  if (!results) return;
+  results.innerHTML = renderGlobalSearchResults();
+  bindGlobalSearchResultActions(results);
+}
+
+function closeGlobalSearch() {
+  state.searchOpen = false;
+  state.focusSearch = false;
+  state.searchCursor = 0;
+  state.query = "";
+  render();
 }
 
 function taskSubtitle(task) {
@@ -2199,6 +2394,7 @@ function renderTaskPage(task) {
           </div>
         </div>
         <div class="actions">
+          <div class="topbar-rhythm-slot" aria-live="polite"></div>
           <button class="share-trigger icon-button" type="button" data-action="share-task" data-task-id="${task.id}" title="分享任务" aria-label="分享任务">
             分享
           </button>
@@ -2776,6 +2972,7 @@ function renderEmptyPage() {
   const hasTasks = state.tasks.length > 0;
   return `
     <section class="task-page empty-page">
+      <div class="empty-page-tools"><div class="topbar-rhythm-slot" aria-live="polite"></div></div>
       <h2>${hasTasks ? "没有符合筛选的任务" : "没有任务"}</h2>
       ${hasTasks ? "" : "<p>双击左侧任务列表的空白区域，即可创建新的处理流。</p>"}
     </section>
@@ -3590,11 +3787,14 @@ function renderSettingsPanel() {
         ${selectRow("任务范围", "task-filter", state.taskFilter, taskFilterLabels)}
         ${selectRow("优先级范围", "priority-filter", state.priorityFilter, priorityFilterLabels)}
         ${selectRow("新任务优先级", "new-task-priority", state.newTaskPriority, priorityLabels)}
+        ${row("今日任务浮窗", `
+          <button class="settings-switch" type="button" role="switch" aria-checked="${todayWidgetWindowState.visible === true}" data-action="toggle-today-widget-visibility" aria-label="显示今日任务浮窗" ${!desktopTodayWidget ? "disabled" : ""}></button>
+        `)}
         ${row("鼠标穿透", `
           <button class="settings-switch" type="button" role="switch" aria-checked="${todayWidgetWindowState.clickThrough === true}" data-action="toggle-today-widget-click-through" aria-label="今日任务浮窗鼠标穿透" ${!desktopTodayWidget ? "disabled" : ""}></button>
         `)}
       </section>
-      <p class="settings-page-note">快捷键：⌘/Ctrl + Shift + T</p>
+      <p class="settings-page-note">浮窗关闭后可在这里重新开启。快捷键：⌘/Ctrl + Shift + T</p>
     `,
     data: `
       <h3 class="settings-section-label" id="data-backup-title">备份与恢复</h3>
@@ -4239,11 +4439,10 @@ function renderCalendarCell(date, month, at = new Date()) {
     dateKey === state.calendarSelectedDate ? "selected" : "",
     overdue ? "has-overdue" : "",
   ].filter(Boolean).join(" ");
-  const dots = tasks.filter((_task, index) => index < 3).map((task) => `<i class="priority-${task.priority} ${task.status === "done" ? "done" : ""}"></i>`).join("");
   return `
     <button class="${classes}" type="button" data-action="select-calendar-date" data-date="${dateKey}" aria-label="${dateKey}${tasks.length ? `，${tasks.length} 项任务截止` : "，无截止任务"}">
       <span>${date.getDate()}</span>
-      ${tasks.length ? `<small>${tasks.length}</small><span class="calendar-deadline-rail">${dots}</span>` : ""}
+      ${tasks.length ? `<span class="calendar-task-count ${overdue ? "has-overdue" : ""}">${tasks.length} 项任务</span>` : ""}
     </button>
   `;
 }
@@ -4265,46 +4464,34 @@ function renderCalendarPanel() {
   const month = calendarMonthDate();
   const agendaTasks = calendarTasksForDate(state.calendarSelectedDate);
   return `
-    <div class="calendar-overlay" role="presentation">
-      <section class="calendar-panel" role="dialog" aria-modal="true" aria-labelledby="calendar-title">
-        <header class="calendar-head">
-          <div>
-            <span>Deadline Calendar</span>
-            <h2 id="calendar-title">日历</h2>
+    <section class="calendar-page" aria-labelledby="calendar-title">
+      <header class="calendar-page-head">
+        <div class="calendar-page-title">
+          <div class="calendar-month-navigation" aria-label="切换月份">
+            <button type="button" data-action="shift-calendar-month" data-direction="-1" aria-label="上个月">${briefFieldIcon("chevron-left", "calendar-nav-icon")}</button>
+            <span>${esc(calendarMonthTitle(month))}</span>
+            <button type="button" data-action="shift-calendar-month" data-direction="1" aria-label="下个月">${briefFieldIcon("chevron-right", "calendar-nav-icon")}</button>
           </div>
-          <div class="calendar-head-actions">
-            <button class="calendar-review-link" type="button" data-action="open-review-from-calendar">任务回顾</button>
-            <button class="settings-close" type="button" data-action="close-calendar" title="关闭">×</button>
+          <h1 id="calendar-title">日历</h1>
+        </div>
+        <button class="calendar-today-button" type="button" data-action="calendar-today">回到今天</button>
+      </header>
+      <div class="calendar-page-body">
+        <section class="calendar-month" aria-label="月历">
+          <div class="calendar-weekdays" aria-hidden="true">${["一", "二", "三", "四", "五", "六", "日"].map((day) => `<span>${day}</span>`).join("")}</div>
+          <div class="calendar-grid">${calendarGridDates(month).map((date) => renderCalendarCell(date, month)).join("")}</div>
+        </section>
+        <aside class="calendar-agenda" aria-label="选中日期的截止任务">
+          <header>
+            <div><span>选中日期</span><strong>${esc(calendarAgendaTitle(state.calendarSelectedDate))}</strong></div>
+            <button type="button" data-action="apply-calendar-date" ${agendaTasks.length ? "" : "disabled"}>在任务中查看</button>
+          </header>
+          <div class="calendar-agenda-list">
+            ${agendaTasks.length ? agendaTasks.map(renderCalendarAgendaTask).join("") : `<div class="calendar-agenda-empty">这一天没有设置截止时间的任务。</div>`}
           </div>
-        </header>
-        <div class="calendar-quick-filters" role="group" aria-label="截止范围筛选">
-          ${Object.entries(taskDeadlineFilterLabels).map(([value, label]) => `<button class="${state.taskDeadlineFilter === value && !state.taskDateFilter ? "active" : ""}" type="button" data-action="set-deadline-filter" data-value="${value}">${label}</button>`).join("")}
-        </div>
-        <div class="calendar-body">
-          <section class="calendar-month" aria-label="月历">
-            <div class="calendar-month-head">
-              <button type="button" data-action="shift-calendar-month" data-direction="-1" aria-label="上个月">‹</button>
-              <strong>${esc(calendarMonthTitle(month))}</strong>
-              <div>
-                <button type="button" data-action="calendar-today">今天</button>
-                <button type="button" data-action="shift-calendar-month" data-direction="1" aria-label="下个月">›</button>
-              </div>
-            </div>
-            <div class="calendar-weekdays" aria-hidden="true">${["一", "二", "三", "四", "五", "六", "日"].map((day) => `<span>${day}</span>`).join("")}</div>
-            <div class="calendar-grid">${calendarGridDates(month).map((date) => renderCalendarCell(date, month)).join("")}</div>
-          </section>
-          <aside class="calendar-agenda" aria-label="选中日期的截止任务">
-            <header>
-              <div><span>选中日期</span><strong>${esc(calendarAgendaTitle(state.calendarSelectedDate))}</strong></div>
-              <button type="button" data-action="apply-calendar-date" ${agendaTasks.length ? "" : "disabled"}>筛选该日</button>
-            </header>
-            <div class="calendar-agenda-list">
-              ${agendaTasks.length ? agendaTasks.map(renderCalendarAgendaTask).join("") : `<div class="calendar-agenda-empty">这一天没有设置截止时间的任务。</div>`}
-            </div>
-          </aside>
-        </div>
-      </section>
-    </div>
+        </aside>
+      </div>
+    </section>
   `;
 }
 
@@ -4976,6 +5163,13 @@ function bind() {
 
   bindGooeySearch();
 
+  const globalSearchLayer = document.querySelector("[data-global-search-layer]");
+  globalSearchLayer?.addEventListener("pointerdown", (event) => {
+    if (event.target !== globalSearchLayer) return;
+    event.preventDefault();
+    closeGlobalSearch();
+  });
+
   const taskFilter = document.querySelector("[data-task-filter]");
   if (taskFilter) {
     taskFilter.addEventListener("click", (event) => {
@@ -5409,6 +5603,12 @@ function bindTaskRepositoryRows(scope = document) {
   document.querySelectorAll("[data-setting-button]").forEach((element) => {
     element.addEventListener("click", (event) => {
       event.stopPropagation();
+      if (event.currentTarget.closest(".app-navigation-rail")) {
+        state.searchOpen = false;
+        state.focusSearch = false;
+        state.searchCursor = 0;
+        state.query = "";
+      }
       applySetting(event.currentTarget.dataset.settingButton, event.currentTarget.dataset.value);
       save();
       render();
@@ -5514,6 +5714,13 @@ function bindTaskRepositoryRows(scope = document) {
   });
 
   bindGooeySearch();
+
+  const globalSearchLayer = document.querySelector("[data-global-search-layer]");
+  globalSearchLayer?.addEventListener("pointerdown", (event) => {
+    if (event.target !== globalSearchLayer) return;
+    event.preventDefault();
+    closeGlobalSearch();
+  });
 
   const taskFilter = document.querySelector("[data-task-filter]");
   if (taskFilter) {
@@ -5737,6 +5944,9 @@ function bindTaskRepositoryRows(scope = document) {
   if (app) {
     app.addEventListener("pointerdown", (event) => {
       let needsRender = false;
+      document.querySelectorAll("details[open]").forEach((details) => {
+        if (!details.contains(event.target)) details.removeAttribute("open");
+      });
       const keepNodeDetail = event.target.closest(".node-detail, .node-detail-page, .flow-row:not(.flow-header), .context-menu, [data-action], [data-edit-key], button, input, textarea, select");
       const keepSettings = event.target.closest(".settings-overlay, .settings-trigger, .theme-toggle");
       const keepReview = event.target.closest(".review-overlay, .review-trigger");
@@ -5855,7 +6065,11 @@ function applySetting(key, value) {
   if (key === "zh-font") state.zhFont = normalizeZhFont(value);
   if (key === "en-font") state.enFont = normalizeEnFont(value);
   if (key === "font-scale") state.fontScale = normalizeFontScale(value);
-  if (key === "task-filter") state.taskFilter = normalizeTaskFilter(value);
+  if (key === "task-filter") {
+    state.taskFilter = normalizeTaskFilter(value);
+    state.calendarOpen = false;
+    state.reviewOpen = false;
+  }
   if (key === "priority-filter") state.priorityFilter = normalizePriorityFilter(value);
   if (key === "capture-source-filter") state.captureSourceFilter = normalizeCaptureSourceFilter(value);
   if (key === "new-task-priority") state.newTaskPriority = normalizePriority(value);
@@ -6756,9 +6970,45 @@ async function pickEditorImageFile() {
 async function action(data, event = null) {
   state.contextMenu = null;
   syncContextMenuRoot();
+  if (state.searchOpen && data.action !== "toggle-global-search" && event?.currentTarget?.closest?.(".app-command-bar")) {
+    state.searchOpen = false;
+    state.focusSearch = false;
+    state.searchCursor = 0;
+    state.query = "";
+  }
   if (data.action === "show-today-widget") {
     void desktopTodayWidget?.show();
     return;
+  }
+  if (data.action === "toggle-today-widget-visibility") {
+    if (!desktopTodayWidget) return;
+    if (todayWidgetWindowState.visible) await desktopTodayWidget.hide();
+    else await desktopTodayWidget.show();
+    todayWidgetWindowState = await desktopTodayWidget.getState();
+  }
+  if (data.action === "toggle-global-search") {
+    if (state.searchOpen) {
+      state.searchOpen = false;
+      state.focusSearch = false;
+      state.searchCursor = 0;
+      state.query = "";
+    } else {
+      state.searchOpen = true;
+      state.focusSearch = true;
+      state.searchCursor = 0;
+      state.query = "";
+    }
+  }
+  if (data.action === "open-global-search-task") {
+    openTaskFromGlobalList(data.taskId);
+    state.searchOpen = false;
+    state.focusSearch = false;
+  }
+  if (data.action === "open-global-search-node") {
+    openTaskFromGlobalList(data.taskId, data.nodeId);
+    state.taskPane = "flow";
+    state.searchOpen = false;
+    state.focusSearch = false;
   }
   if (data.action === "toggle-today-widget-click-through") {
     if (!desktopTodayWidget) return;
@@ -8805,6 +9055,11 @@ window.addEventListener("keydown", (event) => {
 
   if (event.key !== "Escape" && isEditableTarget(event.target)) return;
   if (event.key === "Escape") {
+    if (state.searchOpen) {
+      event.preventDefault();
+      closeGlobalSearch();
+      return;
+    }
     if (state.contextMenu) {
       event.preventDefault();
       state.contextMenu = null;

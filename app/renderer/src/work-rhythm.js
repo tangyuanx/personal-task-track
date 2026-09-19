@@ -70,16 +70,17 @@
   }
 
   function syncNav() {
-    const workspace = document.querySelector(".workspace");
-    if (!workspace) return;
-    const old = workspace.querySelector(":scope > .work-rhythm-rail");
+    const old = document.querySelector(".work-rhythm-rail");
+    const mount = document.querySelector(".topbar-rhythm-slot");
+    if (!mount) { old?.remove(); return; }
     if (!ui.enabled) { old?.remove(); return; }
     const data = snapshot();
     if (!data) return;
     const template = document.createElement("template");
     template.innerHTML = navHtml(data);
     const next = template.content.firstElementChild;
-    if (!old) workspace.prepend(next);
+    if (!old) mount.append(next);
+    else if (old.parentElement !== mount) { old.remove(); mount.append(next); }
     else if (old.outerHTML !== next.outerHTML) old.replaceWith(next);
   }
 
@@ -314,7 +315,14 @@
   function syncSettings() {
     const slot = document.querySelector("[data-settings-advanced-slot]");
     if (!slot || slot.querySelector("[data-wr-settings]")) return;
-    const data = snapshot(); if (data) slot.insertAdjacentHTML("beforeend", settingsHtml(data));
+    const data = snapshot();
+    if (!data) return;
+    slot.insertAdjacentHTML("beforeend", settingsHtml(data));
+    slot.querySelector("[data-wr-toggle]")?.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      toggleEnabled();
+    });
   }
 
   function toggleEnabled() {
@@ -397,7 +405,6 @@
     const phase = event.target.closest("[data-wr-select-phase]");
     if (phase) { const data = snapshot(); bridge.setRuntime({ manualPhaseId: phase.dataset.wrSelectPhase, manualPhaseExpiresAt: model.nextBoundaryAt(new Date(), data.navigation) }); closeOverlay(); syncNav(); toast("已手动切换，将在下一时间边界恢复"); }
     if (event.target.closest("[data-wr-close]")) closeOverlay();
-    if (event.target.closest("[data-wr-toggle]")) toggleEnabled();
     if (event.target.closest("[data-wr-unlock]")) unlock();
     const save = event.target.closest("[data-wr-save-settings]"); if (save) saveSettings(save);
     const reset = event.target.closest("[data-wr-reset-times]"); if (reset) resetTimes(reset);

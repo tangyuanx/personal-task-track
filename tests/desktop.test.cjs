@@ -2498,6 +2498,8 @@ test("settings use the selected categorized modal, grouped rows, mixed controls,
   assert.match(app, /\["appearance", "tasks", "data", "updates", "advanced", "help"\]/);
   assert.match(app, /class="settings-list"/);
   assert.match(app, /class="settings-switch"[^>]+role="switch"/);
+  assert.match(app, /data-action="toggle-today-widget-visibility"[^>]*aria-label="显示今日任务浮窗"/);
+  assert.match(app, /if \(data\.action === "toggle-today-widget-visibility"\)[\s\S]*desktopTodayWidget\.hide\(\)[\s\S]*desktopTodayWidget\.show\(\)[\s\S]*desktopTodayWidget\.getState\(\)/);
   assert.match(app, /data-settings-advanced-slot/);
   assert.doesNotMatch(app, /<h2 id="settings-title">界面与数据<\/h2>/);
   assert.match(styles, /\.settings-layout\s*\{[\s\S]*grid-template-columns:\s*178px minmax\(0, 1fr\)/);
@@ -2506,6 +2508,19 @@ test("settings use the selected categorized modal, grouped rows, mixed controls,
   assert.match(styles, /@media \(prefers-reduced-motion: reduce\)[\s\S]*settings-panel\.settings-panel-opening/);
   assert.match(workRhythm, /data-wr-growth-source/);
   assert.match(workRhythm, /data-settings-advanced-slot/);
+  assert.match(workRhythm, /slot\.querySelector\("\[data-wr-toggle\]"\)\?\.addEventListener\("click"[\s\S]*toggleEnabled\(\)/);
+  assert.doesNotMatch(workRhythm, /event\.target\.closest\("\[data-wr-toggle\]"\)/);
+});
+
+test("transient controls close on outside pointer presses without changing protected editor flows", async () => {
+  const app = await fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "app.js"), "utf8");
+
+  assert.match(app, /globalSearchLayer\?\.addEventListener\("pointerdown"[\s\S]*event\.target !== globalSearchLayer[\s\S]*closeGlobalSearch\(\)/);
+  assert.match(app, /app\.addEventListener\("pointerdown"[\s\S]*document\.querySelectorAll\("details\[open\]"\)\.forEach[\s\S]*!details\.contains\(event\.target\)[\s\S]*details\.removeAttribute\("open"\)/);
+  assert.match(app, /if \(recurrencePopoverTaskId && !keepRecurrence\)/);
+  assert.match(app, /if \(taskGroupSelectTaskId && !keepTaskGroup\)/);
+  assert.match(app, /if \(deadlinePopoverTaskId && !keepDeadline\)/);
+  assert.match(app, /if \(repositoryGroupPickerOpen && !keepRepositoryGroup\)/);
 });
 
 test("settings expose one-confirmation background update with a safe silent restart handshake", async () => {
@@ -3243,7 +3258,7 @@ test("task repository priority controls stay concise and completed rows are full
   const app = await fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "app.js"), "utf8");
   const styles = await fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "styles.css"), "utf8");
   const labelBlock = app.slice(app.indexOf("const repositoryPriorityLabels"), app.indexOf("const themeLabels"));
-  const finalRules = styles.slice(styles.lastIndexOf("v0.1.187 final cascade"));
+  const finalRules = styles.slice(styles.lastIndexOf("v0.1.188 final cascade"));
 
   assert.match(labelBlock, /high:\s*"高",[\s\S]*medium:\s*"中",[\s\S]*low:\s*"低"/);
   assert.doesNotMatch(labelBlock, /优先/);
@@ -3453,7 +3468,7 @@ test("workbench group selection uses a ReUI-style trigger and option menu", asyn
   assert.match(styles, /\.task-group-select-option\.selected\s*\{/);
 });
 
-test("task repository follows the approved compact ordering layout", async () => {
+test("task repository follows the approved 4174 control ordering", async () => {
   const [app, styles] = await Promise.all([
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "app.js"), "utf8"),
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "styles.css"), "utf8"),
@@ -3465,12 +3480,43 @@ test("task repository follows the approved compact ordering layout", async () =>
 
   assert.match(app, /\.map\(\(task, index\) => renderTaskItem\(task, index \+ 1\)\)/);
   assert.doesNotMatch(app, /class="task-repository-columns"/);
-  assert.match(html, /task-sequence" aria-hidden="true">03/);
   assert.match(html, /draggable="true"/);
-  assert.match(html, /repository-complete/);
+  assert.ok(html.indexOf("repository-complete") < html.indexOf("task-title-wrap"));
+  assert.match(html, /class="task-next-line">默认<\/span>/);
+  assert.match(html, /task-priority-control high/);
+  assert.match(html, /task-row-chevron/);
+  assert.doesNotMatch(html, /task-sequence/);
   assert.doesNotMatch(html, /task-drag-handle/);
-  assert.match(styles, /grid-template-columns: 42px minmax\(0, 1fr\) 82px 34px;/);
-  assert.match(styles, /\.task-row\.task-item \{[\s\S]*min-height: 48px;[\s\S]*border: 0;/);
+  const approvedShell = styles.slice(styles.lastIndexOf("2026-09-19 — restore the approved 4174 product shell"));
+  assert.match(approvedShell, /grid-template-columns:\s*24px minmax\(0, 1fr\) auto 18px;/);
+  assert.match(approvedShell, /min-height:\s*65px;/);
+  assert.match(approvedShell, /padding:\s*9px 10px;/);
+});
+
+test("approved 4174 shell is the final stylesheet authority", async () => {
+  const [index, approved] = await Promise.all([
+    fs.readFile(path.join(__dirname, "..", "app", "renderer", "index.html"), "utf8"),
+    fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "approved-4174.css"), "utf8"),
+  ]);
+
+  assert.ok(index.indexOf("approved-4174.css") > index.indexOf("milkdown-editor.css"));
+  assert.match(approved, /\.ops-app\.app\s*\{[\s\S]*grid-template-columns:\s*var\(--approved-rail-width\) minmax\(0, 1fr\);/);
+  assert.match(approved, /\.ops-app\.app\s*\{[\s\S]*padding:\s*0 8px 4px;/);
+  assert.match(approved, /\.app-command-bar\s*\{[\s\S]*margin:\s*0 -8px;/);
+  assert.match(approved, /\.app-command-bar\s*\{[\s\S]*grid-template-columns:\s*250px max-content minmax\(360px, 540px\)/);
+  assert.match(approved, /\.rail\.sidebar\.sidebar-today-mode\.focus-rail\s*\{[\s\S]*width:\s*100%;[\s\S]*height:\s*100%;[\s\S]*align-self:\s*stretch;[\s\S]*justify-self:\s*stretch;[\s\S]*padding:\s*28px 14px 86px;[\s\S]*border:\s*0;[\s\S]*background:\s*#315f51;/);
+  assert.doesNotMatch(approved, /\.rail\.sidebar\.sidebar-today-mode\.focus-rail\s*\{[^}]*margin-(?:left|bottom):\s*-/);
+  assert.match(approved, /\.focus-rail \.focus-row\s*\{[\s\S]*grid-template-columns:\s*28px minmax\(0, 1fr\) 22px;[\s\S]*border:\s*0;[\s\S]*background:\s*transparent;[\s\S]*box-shadow:\s*none;/);
+  assert.match(approved, /\.focus-rail \.focus-row:hover,[\s\S]*background:\s*rgba\(255, 255, 255, \.08\);/);
+  assert.match(approved, /\.focus-rail \.focus-row\.selected\s*\{[\s\S]*background:\s*rgba\(255, 255, 255, \.16\);[\s\S]*box-shadow:\s*none;/);
+  assert.match(approved, /\.focus-rail > \.rail-footer\s*\{[\s\S]*height:\s*70px;[\s\S]*padding:\s*0 22px;/);
+  assert.match(approved, /\.focus-rail \.theme-toggle\.theme-switch,[\s\S]*width:\s*45px;[\s\S]*height:\s*25px;/);
+  assert.match(approved, /\.rail\.sidebar \.task-row\.task-item \.repository-complete\s*\{[\s\S]*grid-column:\s*1;/);
+  assert.match(approved, /\.rail\.sidebar \.task-row\.task-item \.task-row-chevron\s*\{[\s\S]*grid-column:\s*4;/);
+  assert.match(approved, /\.app-topbar-search \.gooey-search-field,[\s\S]*border:\s*0;[\s\S]*box-shadow:\s*none;/);
+  assert.match(approved, /\.rail\.sidebar > \.task-footer\.sidebar-foot \.sidebar-footer-actions\s*\{[\s\S]*justify-content:\s*flex-start;[\s\S]*margin:\s*0 auto 0 0;/);
+  assert.match(approved, /\.settings-panel \.settings-row select\s*\{[\s\S]*width:\s*auto;[\s\S]*field-sizing:\s*content;[\s\S]*text-align:\s*left;/);
+  assert.match(approved, /\.settings-panel \.work-rhythm-settings-unlock button\.primary\s*\{[\s\S]*min-width:\s*max-content;[\s\S]*background:\s*var\(--approved-green\);/);
 });
 
 test("repository and flow cleanup leave no inherited separators or duplicate headings", async () => {
@@ -3601,7 +3647,56 @@ test("today focus highlights the active task even when it suggests a different n
     });
   })()`);
 
-  assert.match(html, /focus-row normal selected/);
+  assert.match(html, /<button class="focus-row selected"[^>]*data-action="select-focus"/);
+  assert.match(html, /<b>1<\/b>/);
+  assert.match(html, /<span>今日任务<\/span>/);
+  assert.match(html, /class="focus-row-chevron"/);
+  assert.doesNotMatch(html, /下一步/);
+});
+
+test("primary navigation separates the Today queue from the task repository", async () => {
+  const harness = await rendererHarness();
+  const surfaces = harness.evaluate(`(() => {
+    state.taskGroups = [{ id: "group_inbox", title: "默认", order: 1 }];
+    state.tasks = normalizeTasks([
+      { id: "today_task", title: "今日任务", groupId: "group_inbox", tags: { today: true }, nodes: [] }
+    ]);
+    state.taskFilter = "today";
+    const today = renderSidebar();
+    state.taskFilter = "all";
+    const tasks = renderSidebar();
+    return { today, tasks };
+  })()`);
+
+  assert.match(surfaces.today, /data-primary-view="today"/);
+  assert.match(surfaces.today, /sidebar-today-mode focus-rail/);
+  assert.match(surfaces.today, /class="rail-heading"[\s\S]*<h2>今日聚焦<\/h2>/);
+  assert.match(surfaces.today, /class="focus-list" aria-label="今日待办"/);
+  assert.match(surfaces.today, /class="rail-footer"[\s\S]*class="footer-actions"[\s\S]*class="divider"[\s\S]*class="autosave"/);
+  assert.doesNotMatch(surfaces.today, /class="task-list task-repository"/);
+  assert.doesNotMatch(surfaces.today, /today-date|下一步：/);
+  assert.match(surfaces.tasks, /data-primary-view="tasks"/);
+  assert.match(surfaces.tasks, /class="task-list task-repository"/);
+  assert.doesNotMatch(surfaces.tasks, /sidebar-today-mode focus-rail/);
+  assert.doesNotMatch(surfaces.tasks, /class="rail-footer"/);
+});
+
+test("Today and Tasks navigation leave calendar and review surfaces", async () => {
+  const harness = await rendererHarness();
+  const result = harness.json(`(() => {
+    state.calendarOpen = true;
+    state.reviewOpen = true;
+    applySetting("task-filter", "all");
+    const tasks = { filter: state.taskFilter, calendar: state.calendarOpen, review: state.reviewOpen };
+    state.calendarOpen = true;
+    state.reviewOpen = true;
+    applySetting("task-filter", "today");
+    const today = { filter: state.taskFilter, calendar: state.calendarOpen, review: state.reviewOpen };
+    return { tasks, today };
+  })()`);
+
+  assert.deepEqual(result.tasks, { filter: "all", calendar: false, review: false });
+  assert.deepEqual(result.today, { filter: "today", calendar: false, review: false });
 });
 
 test("Today widget snapshot reuses the main Today ordering and next-step content", async () => {
@@ -3811,7 +3906,8 @@ test("repository groups render only record scope and personal groups with manage
   assert.doesNotMatch(result.options, />最近</);
   assert.doesNotMatch(result.options, />全部分组</);
   assert.doesNotMatch(result.scope, /repository-group-icon/);
-  assert.match(result.sidebar, /class="repository-primary-row task-list-head section-label"[\s\S]*class="repository-group-slot"[\s\S]*class="repository-group-picker is-open"/);
+  assert.match(result.sidebar, /class="repository-heading-row"[\s\S]*class="repository-library-heading"[\s\S]*class="repository-context-actions"/);
+  assert.match(result.sidebar, /class="repository-segmented completion-segmented task-status-filters"[\s\S]*class="repository-context-row"[\s\S]*class="repository-group-slot"[\s\S]*class="repository-group-picker is-open"/);
   assert.match(result.sidebar, /placeholder="搜索分组…"/);
   assert.match(result.sidebar, /data-action="add-group">＋ 新建分组/);
   assert.doesNotMatch(result.sidebar, /<section class="group-panel"/);
@@ -3952,52 +4048,93 @@ test("quick captures and preserved group deletions remain truly ungrouped across
   assert.deepEqual(result.groupIds, []);
 });
 
-test("repository filters remain compact, aligned, and keep the add control visible", async () => {
+test("global search floats from the app rail while repository tools remain contextual", async () => {
+  {
+    const [harness, styles, app] = await Promise.all([
+      rendererHarness(),
+      fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "styles.css"), "utf8"),
+      fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "app.js"), "utf8"),
+    ]);
+    const surfaces = harness.evaluate(`(() => {
+      state.taskGroups = [{ id: "group_inbox", title: "默认", order: 1 }];
+      state.tasks = normalizeTasks([{ id: "task_shell", title: "示例任务", nodes: [] }]);
+      state.taskFilter = "active";
+      state.searchOpen = true;
+      return { sidebar: renderSidebar(), topbar: renderAppTopbar(), panel: renderGlobalSearchPanel() };
+    })()`);
+    const approvedShell = styles.slice(styles.lastIndexOf("2026-09-19 — restore the approved 4174 product shell"));
+
+    assert.match(surfaces.sidebar, /class="repository-heading-row"[\s\S]*任务仓库[\s\S]*class="task-list-count">1 项/);
+    assert.match(surfaces.sidebar, /completion-segmented task-status-filters/);
+    assert.match(surfaces.sidebar, /class="repository-context-row"[\s\S]*class="repository-group-slot"/);
+    assert.match(surfaces.sidebar, /data-action="toggle-settings"/);
+    assert.match(surfaces.topbar, /class="app-command-bar"[\s\S]*data-setting-button="task-filter" data-value="today"[\s\S]*data-action="toggle-review"/);
+    assert.match(surfaces.topbar, /class="app-topbar-search is-open"[\s\S]*id="search"[\s\S]*class="global-search-panel"/);
+    assert.doesNotMatch(surfaces.panel, /global-search-layer|id="search"/);
+    assert.match(app, /state\.searchOpen \? `<div class="global-search-layer"/);
+    assert.match(app, /search\.addEventListener\("focus"[\s\S]*state\.searchOpen = true;/);
+    assert.match(approvedShell, /\.app-command-bar\s*\{[\s\S]*grid-template-columns:\s*250px max-content minmax\(390px, 540px\)/);
+    assert.match(approvedShell, /\.app-topbar-search \.global-search-panel\s*\{[\s\S]*top:\s*calc\(100% \+ 8px\);/);
+    assert.match(approvedShell, /\.global-search-layer\s*\{[\s\S]*inset:\s*0;[\s\S]*background:\s*rgba\(28, 43, 35, \.035\);/);
+    assert.match(approvedShell, /\.rail\.sidebar\.sidebar-today-mode\s*\{[\s\S]*border:\s*1px solid[\s\S]*background:\s*var\(--loop-green\);/);
+    assert.match(approvedShell, /\.today-panel \.focus-row\.focus-item,[\s\S]*background:\s*var\(--loop-green-dark\);/);
+    assert.match(approvedShell, /\.rail\.sidebar\.sidebar-tasks-mode \.repository-fixed-header\s*\{[\s\S]*padding:\s*24px 12px 12px;/);
+    return;
+  }
   const [harness, styles, app] = await Promise.all([
     rendererHarness(),
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "styles.css"), "utf8"),
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "app.js"), "utf8"),
   ]);
-  const sidebars = harness.evaluate(`(() => {
+  const surfaces = harness.evaluate(`(() => {
     state.taskGroups = [{ id: "group_inbox", title: "默认", order: 1 }];
-    state.tasks = [];
+    state.tasks = normalizeTasks([{ id: "task_shell", title: "示例任务", nodes: [] }]);
     state.searchOpen = false;
-    const collapsed = renderSidebar();
+    const sidebar = renderSidebar();
     state.searchOpen = true;
-    const expanded = renderSidebar();
+    const searchPanel = renderGlobalSearchPanel();
     state.theme = "dark";
-    const dark = renderSidebar();
-    return { light: collapsed, expanded, dark };
+    const appRail = renderAppRail();
+    const taskPage = renderTaskPage(state.tasks[0]);
+    const emptyPage = renderEmptyPage();
+    return { light: sidebar, searchPanel, appRail, taskPage, emptyPage };
   })()`);
 
-  assert.match(sidebars.light, /class="type-filter-button is-checked"[^>]*data-type="task"/);
-  assert.match(sidebars.light, /class="type-filter-button is-checked"[^>]*data-type="note"/);
-  assert.doesNotMatch(sidebars.light, /全部类型/);
-  assert.match(sidebars.light, /completion-segmented task-status-filters/);
-  assert.match(sidebars.light, /class="task-repository-toolbar"[\s\S]*class="repository-priority-select"[\s\S]*class="repository-type-toggles"/);
-  assert.match(sidebars.light, /class="repository-primary-row task-list-head section-label"[\s\S]*class="repository-group-slot"[\s\S]*class="task-list-count"[\s\S]*class="search-box search gooey-search [^"]*"[\s\S]*class="add-task-floating"/);
-  assert.match(sidebars.light, /class="repository-group-prefix">分组 ·<\/span><span class="repository-group-value">/);
-  assert.doesNotMatch(sidebars.light, /任务分组/);
-  assert.match(sidebars.light, /class="repository-action-divider" aria-hidden="true"><\/span>[\s\S]*class="add-task-floating"/);
-  assert.match(sidebars.light, /class="add-task-floating-icon"[\s\S]*<path d="M12 5v14M5 12h14"><\/path>[\s\S]*<span>新增<\/span>/);
-  assert.match(sidebars.light, /class="repository-priority-select"[\s\S]*<span>优先级 ·<\/span>/);
-  assert.ok(sidebars.light.indexOf('class="add-task-floating"') < sidebars.light.indexOf('class="repository-list-wrapper"'));
-  assert.match(sidebars.light, /class="repository-fixed-header"[\s\S]*class="repository-scroll-area" data-task-repository-scroll/);
-  assert.match(sidebars.light, /class="add-task-floating"/);
-  assert.match(sidebars.light, /class="theme-toggle theme-switch[^"]*"/);
-  assert.match(sidebars.light, /role="switch"/);
-  assert.match(sidebars.light, /aria-checked="false"/);
-  assert.match(sidebars.light, /class="theme-switch-thumb"/);
-  assert.match(sidebars.light, /class="search-box search gooey-search "/);
-  assert.match(sidebars.light, /data-gooey-search[^>]+data-open="false"/);
-  assert.match(sidebars.light, /id="sidebar-gooey-filter"/);
-  assert.match(sidebars.light, /data-gooey-search-trigger aria-expanded="false"/);
-  assert.match(sidebars.light, /id="search"/);
-  assert.match(sidebars.light, /tabindex="-1"/);
-  assert.match(sidebars.expanded, /class="search-box search gooey-search is-open"/);
-  assert.match(sidebars.expanded, /data-gooey-search-trigger aria-expanded="true"/);
-  assert.match(sidebars.expanded, /tabindex="0"/);
-  assert.match(sidebars.dark, /aria-checked="true"/);
+  assert.match(surfaces.light, /class="type-filter-button is-checked"[^>]*data-type="task"/);
+  assert.match(surfaces.light, /class="type-filter-button is-checked"[^>]*data-type="note"/);
+  assert.doesNotMatch(surfaces.light, /全部类型/);
+  assert.match(surfaces.light, /completion-segmented task-status-filters/);
+  assert.match(surfaces.light, /class="repository-primary-row task-list-head section-label task-repository-toolbar repository-context-toolbar"[\s\S]*class="repository-context-summary"[\s\S]*class="repository-group-slot"[\s\S]*class="task-list-count">1 项<[\s\S]*class="repository-context-actions"[\s\S]*class="repository-filter-menu"[\s\S]*class="repository-filter-popover"[\s\S]*class="repository-priority-select"[\s\S]*class="repository-type-toggles"[\s\S]*class="add-task-floating"/);
+  assert.match(surfaces.light, /class="repository-group-value">全部记录<\/span><span class="repository-group-chevron"/);
+  assert.doesNotMatch(surfaces.light, /repository-group-prefix|分组 ·/);
+  assert.doesNotMatch(surfaces.light, /任务分组/);
+  assert.match(surfaces.light, /class="add-task-floating"[^>]*title="新增任务"[^>]*aria-label="新增任务"[\s\S]*class="add-task-floating-icon"[\s\S]*<path d="M12 5v14M5 12h14"><\/path>/);
+  assert.doesNotMatch(surfaces.light, /<span>新增<\/span>/);
+  assert.match(surfaces.light, /class="repository-filter-label">优先级<\/span>[\s\S]*class="repository-priority-select"/);
+  assert.match(surfaces.light, /class="repository-filter-trigger"[^>]*aria-label="打开任务筛选"[^>]*title="筛选任务"[\s\S]*class="repository-filter-icon"[\s\S]*<b aria-label="1 个筛选条件">1<\/b>/);
+  assert.doesNotMatch(surfaces.light, /<span>筛选<\/span>/);
+  assert.ok(surfaces.light.indexOf('class="add-task-floating"') < surfaces.light.indexOf('class="repository-list-wrapper"'));
+  assert.match(surfaces.light, /class="repository-fixed-header"[\s\S]*class="repository-scroll-area" data-task-repository-scroll/);
+  assert.match(surfaces.light, /class="add-task-floating"/);
+  assert.doesNotMatch(surfaces.light, /data-action="toggle-theme"|data-action="toggle-settings"/);
+  assert.match(surfaces.light, /class="autosave-status">已保存<\/span>/);
+  assert.doesNotMatch(surfaces.light, />任务仓库</);
+  assert.doesNotMatch(surfaces.light, /data-action="toggle-calendar"/);
+  assert.doesNotMatch(surfaces.light, /sidebar-search-region|id="search"/);
+  assert.match(surfaces.searchPanel, /class="global-search-layer"[^>]*data-global-search-layer/);
+  assert.match(surfaces.searchPanel, /class="global-search-panel"[^>]*role="dialog"[^>]*aria-label="全局搜索"/);
+  assert.match(surfaces.searchPanel, /class="app-global-search search-box search gooey-search is-open"[^>]*data-persistent-search="true"/);
+  assert.match(surfaces.searchPanel, /id="search"[^>]*placeholder="搜索任务、节点或内容…"/);
+  assert.match(surfaces.searchPanel, /class="global-search-result-heading"><span>最近任务<\/span><b>1<\/b>/);
+  assert.match(surfaces.taskPage, /class="actions"[\s\S]*class="topbar-rhythm-slot"[\s\S]*class="share-trigger icon-button"/);
+  assert.match(surfaces.emptyPage, /class="empty-page-tools"[\s\S]*class="topbar-rhythm-slot"/);
+  assert.match(surfaces.appRail, /<aside class="app-navigation-rail"[^>]*aria-label="应用导航"/);
+  assert.match(surfaces.appRail, /class="app-rail-button app-rail-search active"[^>]*data-action="toggle-global-search"[^>]*aria-pressed="true"[\s\S]*搜索/);
+  assert.match(surfaces.appRail, /data-setting-button="task-filter" data-value="today"[\s\S]*今日/);
+  assert.match(surfaces.appRail, /data-setting-button="task-filter" data-value="all"[\s\S]*任务/);
+  assert.match(surfaces.appRail, /data-action="toggle-calendar"[\s\S]*日历/);
+  assert.match(surfaces.appRail, /data-action="toggle-review"[\s\S]*回顾/);
+  assert.match(surfaces.appRail, /class="app-rail-utilities"[\s\S]*data-action="toggle-theme"[\s\S]*data-action="toggle-settings"/);
   assert.match(styles, /local acceptance — stable Today rail and compact repository controls/);
   assert.match(styles, /\.today-panel\.today-focus\s*\{\s*flex:\s*0 0 auto;/);
   assert.match(styles, /\.task-repository-toolbar\s*\{[\s\S]*gap:\s*8px;/);
@@ -4015,9 +4152,32 @@ test("repository filters remain compact, aligned, and keep the add control visib
   assert.match(styles, /\.gooey-search\.is-open \.gooey-search-trigger\s*\{[\s\S]*width:\s*var\(--gooey-search-bubble\);/);
   assert.match(styles, /\.gooey-search\.is-open \.gooey-search-field\s*\{[\s\S]*transform:\s*scaleX\(1\);/);
   assert.match(styles, /\.task-list\.task-repository\s*\{[\s\S]*overflow:\s*hidden;/);
+  assert.match(styles, /\.global-search-panel\s*\{[\s\S]*left:\s*calc\(var\(--global-rail-width\) \+ 10px\);/);
+  assert.match(styles, /\.global-search-result\s*\{[\s\S]*grid-template-columns:\s*30px minmax\(0, 1fr\) 16px;/);
   assert.match(styles, /\.repository-scroll-area\s*\{[\s\S]*overflow-y:\s*auto;/);
   assert.match(styles, /\.repository-fixed-header\s*\{[\s\S]*flex:\s*0 0 auto;/);
   assert.match(styles, /@media \(prefers-reduced-motion: reduce\)/);
+  const productionShell = styles.slice(styles.lastIndexOf("Production shell adaptation — accepted comfort-hybrid direction"));
+  assert.match(productionShell, /\.sidebar-search-region \.app-global-search/);
+  assert.match(productionShell, /\.topbar-rhythm-slot\s*\{/);
+  const surfaceContinuity = styles.slice(styles.lastIndexOf("2026-09-19 surface continuity"));
+  assert.match(surfaceContinuity, /\.global-search-layer\s*\{[^}]*z-index:\s*220;/);
+  assert.match(surfaceContinuity, /\.rail\.sidebar\.sidebar-today-mode\s*\{[^}]*background:\s*color-mix\(in srgb, var\(--loop-green\) 3%, var\(--loop-sidebar\)\);/);
+  assert.match(surfaceContinuity, /\.rail\.sidebar\.sidebar-today-mode > \.today-panel\.today-focus,[\s\S]*margin:\s*8px;[\s\S]*border-radius:\s*14px;[\s\S]*background:\s*color-mix\(in srgb, var\(--loop-green\) 9%, var\(--loop-sidebar\)\);/);
+  assert.match(surfaceContinuity, /\.rail\.sidebar \.repository-primary-row\.task-list-head\.task-repository-toolbar\.repository-context-toolbar\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) auto;/);
+  assert.match(surfaceContinuity, /\.rail\.sidebar \.repository-list-wrapper\s*\{[^}]*padding:\s*0 8px 10px;[^}]*overflow:\s*hidden;/);
+  assert.match(surfaceContinuity, /\.rail\.sidebar \.repository-scroll-area \.task-row\.task-item\s*\{[^}]*width:\s*100%;[^}]*max-width:\s*100%;[^}]*grid-template-columns:\s*25px minmax\(0, 1fr\) auto 20px;/);
+  assert.match(productionShell, /\.rail\.sidebar \.task-repository-toolbar\s*\{/);
+  const navigationDensity = styles.slice(styles.lastIndexOf("Navigation-density refinement"));
+  assert.match(navigationDensity, /\.ops-app\.app\s*\{[\s\S]*grid-template-columns:\s*var\(--global-rail-width\) var\(--context-rail-width\) minmax\(0, 1fr\);/);
+  assert.match(navigationDensity, /grid-template-rows:\s*minmax\(0, 1fr\);/);
+  assert.match(navigationDensity, /\.app-navigation-rail\s*\{[\s\S]*grid-row:\s*1;/);
+  assert.match(navigationDensity, /\.sidebar-search-region\s*\{[\s\S]*padding:\s*4px 12px 0 14px;/);
+  assert.match(navigationDensity, /\.sidebar-search-region \.app-global-search\.search-box\.gooey-search\s*\{[\s\S]*height:\s*42px;/);
+  assert.match(navigationDensity, /\.rail\.sidebar \.repository-fixed-header\s*\{[\s\S]*padding:\s*0 10px 8px 12px;/);
+  assert.match(navigationDensity, /\.rail\.sidebar \.repository-primary-row\.task-list-head\.task-repository-toolbar\.repository-context-toolbar\s*\{[\s\S]*display:\s*flex;[\s\S]*min-height:\s*36px;/);
+  assert.match(navigationDensity, /\.rail\.sidebar \.repository-primary-row \.add-task-floating,[\s\S]*background:\s*transparent;[\s\S]*color:\s*var\(--loop-green\);/);
+  assert.match(navigationDensity, /\.repository-filter-popover\s*\{[\s\S]*position:\s*absolute;[\s\S]*z-index:\s*60;/);
   const repositoryV1 = styles.slice(styles.lastIndexOf("v0.1.169 final cascade"));
   assert.match(repositoryV1, /\.rail\.sidebar \.repository-group-popover \{[^}]*top:calc\(100% \+ 6px\);[^}]*right:auto;[^}]*bottom:auto;[^}]*left:0;/);
   assert.match(repositoryV1, /\.rail\.sidebar \.repository-primary-row \.add-task-floating \{[^}]*position:absolute;[^}]*top:1px;[^}]*right:var\(--repository-padding-x\);[^}]*bottom:auto;/);
@@ -4039,7 +4199,7 @@ test("repository filters remain compact, aligned, and keep the add control visib
   assert.match(repositoryV172, /\.rail\.sidebar \.repository-primary-row \.gooey-search\.is-open \.gooey-search-trigger \{[^}]*display:none;/);
   assert.match(repositoryV172, /\.rail\.sidebar \.repository-primary-row \.gooey-search\.is-open \.gooey-search-field \{[^}]*position:relative;[^}]*display:flex;[^}]*width:100%;[^}]*height:32px;/);
   assert.match(repositoryV172, /\.rail\.sidebar \.repository-primary-row \.add-task-floating \{[^}]*grid-column:5;/);
-  assert.match(app, /class="gooey-search-trigger-label">搜索[\s\S]*class="gooey-search-field-icon"/);
+  assert.match(app, /function renderGlobalSearch\(\)[\s\S]*class="app-global-search search-box search gooey-search is-open"[\s\S]*id="search"/);
   assert.match(app, /function bindGooeySearch\(\)/);
   assert.match(app, /function renderRepositoryGroupPicker\(\)[\s\S]*placeholder="搜索分组…"[\s\S]*data-action="add-group">＋ 新建分组/);
   assert.match(app, /function openRepositoryGroupContextMenu\(groupId, event\)[\s\S]*kind: "group"/);
@@ -4251,16 +4411,49 @@ test("deadline ranges compose with status and order only deadline-scoped results
   assert.deepEqual(result.exact, ["tomorrow-early", "tomorrow-late"]);
 });
 
-test("calendar owns the footer entry, exposes review, and uses the ReUI-style deadline date and time picker", async () => {
+test("calendar owns one global navigation entry, fills the workspace, and uses the ReUI-style deadline date and time picker", async () => {
+  {
+    const [app, styles] = await Promise.all([
+      fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "app.js"), "utf8"),
+      fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "styles.css"), "utf8"),
+    ]);
+    const approvedShell = styles.slice(styles.lastIndexOf("2026-09-19 — restore the approved 4174 product shell"));
+
+    assert.match(app, /function renderAppTopbar\(\)[\s\S]*data-action="toggle-calendar"[^>]*>[\s\S]*日历[\s\S]*data-action="toggle-review"/);
+    assert.equal((app.match(/data-action="toggle-calendar"/g) || []).length, 1);
+    assert.equal((app.match(/data-action="toggle-review"/g) || []).length, 1);
+    assert.match(app, /function renderSidebarFooter\(todayMode\)[\s\S]*data-action="toggle-settings"/);
+    assert.match(app, /\$\{state\.calendarOpen \? "" : renderSidebar\(\)\}/);
+    assert.match(app, /class="workspace \$\{state\.calendarOpen \? "workspace-calendar" : ""\}"/);
+    assert.match(app, /state\.calendarOpen \? renderCalendarPanel\(\) : task \? renderTaskPage\(task\)/);
+    assert.match(app, /class="calendar-page"[^>]*aria-labelledby="calendar-title"/);
+    assert.match(app, /data-action="calendar-today">回到今天/);
+    assert.match(app, /data-action="toggle-deadline-picker"/);
+    assert.match(app, /data-action="select-deadline-date"/);
+    assert.match(app, /data-action="apply-deadline-time"/);
+    assert.match(approvedShell, /\.workspace\.workspace-calendar\s*\{[\s\S]*grid-column:\s*1 \/ -1;/);
+    assert.match(styles, /\.calendar-page \.calendar-grid\s*\{[\s\S]*grid-template-rows:\s*repeat\(6, minmax\(68px, 1fr\)\);/);
+    return;
+  }
   const [app, styles] = await Promise.all([
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "app.js"), "utf8"),
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "styles.css"), "utf8"),
   ]);
 
-  assert.match(app, /data-action="toggle-calendar"[^>]*>\s*日历\s*</);
+  assert.match(app, /function renderAppRail\(\)[\s\S]*data-action="toggle-calendar"[^>]*>[\s\S]*日历[\s\S]*data-action="toggle-review"/);
   assert.equal((app.match(/data-action="toggle-calendar"/g) || []).length, 1);
+  assert.equal((app.match(/data-action="toggle-review"/g) || []).length, 1);
+  assert.match(app, /function renderAppRail\(\)[\s\S]*data-action="toggle-settings"/);
+  assert.doesNotMatch(app.match(/function renderSidebar\(\)[\s\S]*?function renderRepositorySegmentedFilter/)?.[0] || "", /data-action="toggle-settings"/);
+  assert.doesNotMatch(app, /class="sidebar-foot[\s\S]*data-action="toggle-calendar"/);
   assert.match(app, /function renderCalendarPanel\(\)/);
-  assert.match(app, /class="calendar-head-actions"[\s\S]*data-action="open-review-from-calendar"[\s\S]*任务回顾/);
+  assert.match(app, /\$\{state\.calendarOpen \? "" : renderSidebar\(\)\}/);
+  assert.match(app, /class="workspace \$\{state\.calendarOpen \? "workspace-calendar" : ""\}"/);
+  assert.match(app, /state\.calendarOpen \? renderCalendarPanel\(\) : task \? renderTaskPage\(task\)/);
+  assert.match(app, /class="calendar-page"[^>]*aria-labelledby="calendar-title"/);
+  assert.match(app, /class="calendar-page-head"[\s\S]*id="calendar-title">日历<[\s\S]*data-action="calendar-today">回到今天/);
+  assert.match(app, /class="calendar-task-count[^>]*>\$\{tasks\.length\} 项任务/);
+  assert.doesNotMatch(app, /class="calendar-overlay"/);
   assert.match(app, /function renderTaskDeadlinePopover\(task\)/);
   assert.match(app, /data-action="toggle-deadline-picker"/);
   assert.match(app, /data-action="select-deadline-date"/);
@@ -4271,6 +4464,10 @@ test("calendar owns the footer entry, exposes review, and uses the ReUI-style de
   assert.doesNotMatch(app, /data-deadline-field|type="datetime-local"/);
   assert.match(app, /高优任务建议设置截止时间/);
   assert.match(styles, /\.calendar-grid/);
+  const calendarWorkspace = styles.slice(styles.lastIndexOf("2026-09-19 surface continuity"));
+  assert.match(calendarWorkspace, /\.workspace\.workspace-calendar\s*\{[^}]*grid-column:\s*2 \/ 4;/);
+  assert.match(calendarWorkspace, /\.calendar-page \.calendar-grid\s*\{[^}]*grid-template-rows:\s*repeat\(6, minmax\(68px, 1fr\)\);/);
+  assert.match(calendarWorkspace, /\.calendar-page \.calendar-agenda\s*\{[^}]*grid-template-columns:\s*166px minmax\(0, 1fr\);/);
   assert.match(styles, /\.task-deadline-popover/);
   assert.match(styles, /\.task-deadline-calendar-pane/);
   assert.match(styles, /\.task-deadline-time-list/);
@@ -4828,11 +5025,13 @@ test("processing-flow nodes move across parents, levels, and sibling positions w
 
 test("node record input focus stays within a quiet field boundary", async () => {
   const styles = await fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "styles.css"), "utf8");
-  const finalRecordFocusRules = styles.slice(styles.lastIndexOf("Node record editing stays inside the field"));
+  const recordSectionStart = styles.lastIndexOf("Node record editing stays inside the field");
+  const recordSectionEnd = styles.indexOf("/* Integrated deadline calendar", recordSectionStart);
+  const recordSection = styles.slice(recordSectionStart, recordSectionEnd > recordSectionStart ? recordSectionEnd : undefined);
 
-  assert.match(finalRecordFocusRules, /\.record-modal-textarea\s*\{[\s\S]*outline:\s*none;/);
-  assert.match(finalRecordFocusRules, /\.record-modal-textarea:focus\s*\{[\s\S]*box-shadow:\s*inset 0 0 0 1px/);
-  assert.doesNotMatch(finalRecordFocusRules, /\.record-modal-textarea:focus\s*\{[\s\S]*box-shadow:\s*0 0 0/);
+  assert.match(recordSection, /\.record-modal-textarea\s*\{[\s\S]*outline:\s*none;/);
+  assert.match(recordSection, /\.record-modal-textarea:focus\s*\{[\s\S]*box-shadow:\s*inset 0 0 0 1px/);
+  assert.doesNotMatch(recordSection, /\.record-modal-textarea:focus\s*\{[\s\S]*box-shadow:\s*0 0 0/);
 });
 
 test("knowledge images keep the caret beside the inline image node", async () => {
