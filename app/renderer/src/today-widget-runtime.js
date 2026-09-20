@@ -10,14 +10,16 @@
   const menu = document.querySelector("#widget-menu");
   const menuToggle = document.querySelector("#menu-toggle");
   const compactToggle = document.querySelector("#compact-toggle");
-  const quickCaptureToggle = document.querySelector("#quick-capture-toggle");
   const quickCaptureInput = document.querySelector("#quick-capture-input");
   const quickCaptureSection = document.querySelector("#quick-capture-section");
   const quickCaptureCount = document.querySelector("#quick-capture-count");
   const quickCaptureList = document.querySelector("#quick-capture-list");
   const quickCaptureOverflow = document.querySelector("#quick-capture-overflow");
   const todayTaskCount = document.querySelector("#today-task-count");
+  const todayTaskSection = document.querySelector(".today-task-section");
   const quickCaptureGroupMenu = document.querySelector("#quick-capture-group-menu");
+  const todayContextMenu = document.querySelector("#today-context-menu");
+  const deleteQuickCaptureButton = document.querySelector("#delete-quick-capture");
   const taskList = document.querySelector("#task-list");
   const emptyState = document.querySelector("#empty-state");
   const toast = document.querySelector("#toast");
@@ -40,8 +42,13 @@
   let draftSaveTimer = 0;
   let captureSubmitting = false;
   let promotingTaskId = "";
-  let reorderingTaskId = "";
+  let contextTaskId = "";
+  let rowDragState = null;
+  let suppressRowClickUntil = 0;
   let editingReleaseTimer = 0;
+
+  const LONG_PRESS_DELAY = 380;
+  const DRAG_START_DISTANCE = 6;
 
   function isTextEditingTarget(element) {
     return element === quickCaptureInput || element?.classList?.contains("task-inline-input");
@@ -117,27 +124,6 @@
     }
   }
 
-  function formatToday(value) {
-    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ""));
-    const date = match
-      ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
-      : new Date();
-    return new Intl.DateTimeFormat("zh-CN", { month: "2-digit", day: "2-digit", weekday: "short" }).format(date);
-  }
-
-  function orderControlsHtml(taskId, lane, index, total) {
-    const escapedTaskId = escapeHtml(taskId);
-    const escapedLane = escapeHtml(lane);
-    return `<span class="task-order-controls" aria-label="调整顺序">
-      <button class="task-order-button" type="button" data-reorder-task="${escapedTaskId}" data-reorder-lane="${escapedLane}" data-reorder-direction="-1" aria-label="上移" title="上移" ${index === 0 ? "disabled" : ""}>
-        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4.5 9.5 3.5-3 3.5 3"></path></svg>
-      </button>
-      <button class="task-order-button" type="button" data-reorder-task="${escapedTaskId}" data-reorder-lane="${escapedLane}" data-reorder-direction="1" aria-label="下移" title="下移" ${index === total - 1 ? "disabled" : ""}>
-        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4.5 6.5 3.5 3 3.5-3"></path></svg>
-      </button>
-    </span>`;
-  }
-
   function taskHtml(item, index, items) {
     const taskId = escapeHtml(item.taskId);
     const title = escapeHtml(item.title || "未命名任务");
@@ -145,11 +131,10 @@
     const kind = ["normal", "high", "blocked"].includes(item.kind) ? item.kind : "normal";
     const stateTitle = kind === "blocked" ? "被阻塞" : kind === "high" ? "高优先级" : "普通";
     return `
-      <article class="today-task ${kind}" data-task-id="${taskId}" data-title="${title}" tabindex="0" role="button">
+      <article class="today-task ${kind}" data-task-id="${taskId}" data-lane="task" data-title="${title}" tabindex="0" role="button">
         <button class="task-check" type="button" aria-label="完成：${title}"></button>
         <span class="task-copy"><strong>${title}</strong><span>下一步：${nextText}</span></span>
         <i class="task-state" title="${stateTitle}"></i>
-        ${orderControlsHtml(item.taskId, "task", index, items.length)}
       </article>
     `;
   }
@@ -160,11 +145,9 @@
     const stamp = item.updatedAt || item.createdAt;
     const time = stamp ? new Intl.DateTimeFormat("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(stamp)) : "刚刚";
     return `
-      <article class="today-task quick-capture-item" data-task-id="${taskId}" data-title="${title}" tabindex="0" role="button">
-        <button class="task-check" type="button" aria-label="完成速记：${title}"></button>
+      <article class="today-task quick-capture-item" data-task-id="${taskId}" data-lane="quick" data-title="${title}" tabindex="0" role="button">
+        <span class="quick-capture-note-icon" aria-hidden="true"><svg viewBox="0 0 16 20"><rect x="2" y="1.5" width="12" height="17" rx="2"></rect><path d="M5 7h6M5 11h6"></path></svg></span>
         <span class="task-copy"><strong>${title}</strong><span>速记 · ${escapeHtml(time)}</span></span>
-        <button class="quick-capture-promote" type="button" title="升级为任务" aria-label="将速记升级为任务"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 12V4m0 0L5 7m3-3 3 3"></path></svg></button>
-        ${orderControlsHtml(item.taskId, "quick", index, items.length)}
       </article>
     `;
   }
@@ -195,9 +178,6 @@
     currentSnapshot.quickCaptures = captures;
     currentSnapshot.groups = Array.isArray(currentSnapshot.groups) ? currentSnapshot.groups : [];
     applyAppearance(currentSnapshot.appearance);
-    const dateElement = document.querySelector("#today-date");
-    dateElement.textContent = formatToday(currentSnapshot.date);
-    dateElement.dateTime = currentSnapshot.date || new Date().toISOString();
     taskList.innerHTML = items.map(taskHtml).join("");
     quickCaptureList.innerHTML = captures.map(quickCaptureHtml).join("");
     const total = Math.max(captures.length, Number(currentSnapshot.quickCaptureTotal) || 0);
@@ -392,26 +372,171 @@
     document.body.classList.remove("is-resizing-widget");
   }
 
+  function closeContextMenu() {
+    contextTaskId = "";
+    todayContextMenu.hidden = true;
+  }
+
+  function openContextMenu(event, row) {
+    if (!row.classList.contains("quick-capture-item")) return;
+    event.preventDefault();
+    closeMenu();
+    closeGroupMenu();
+    contextTaskId = row.dataset.taskId || "";
+    todayContextMenu.hidden = false;
+    const menuRect = todayContextMenu.getBoundingClientRect();
+    const left = Math.max(8, Math.min(event.clientX, window.innerWidth - menuRect.width - 8));
+    const top = Math.max(8, Math.min(event.clientY, window.innerHeight - menuRect.height - 8));
+    todayContextMenu.style.left = `${left}px`;
+    todayContextMenu.style.top = `${top}px`;
+  }
+
+  function clearDropIndicators() {
+    document.querySelectorAll(".today-task.drag-over-before, .today-task.drag-over-after").forEach((row) => {
+      row.classList.remove("drag-over-before", "drag-over-after");
+    });
+    document.querySelectorAll(".widget-section.is-drop-target").forEach((section) => {
+      section.classList.remove("is-drop-target");
+    });
+  }
+
+  function cleanupRowDrag() {
+    if (!rowDragState) return;
+    window.clearTimeout(rowDragState.timer);
+    rowDragState.row.classList.remove("is-dragging");
+    widget.classList.remove("is-item-dragging");
+    clearDropIndicators();
+    if (currentSnapshot.quickCaptures.length === 0) quickCaptureSection.hidden = true;
+    rowDragState = null;
+  }
+
+  function rowLane(row) {
+    return row?.dataset?.lane === "quick" ? "quick" : "task";
+  }
+
+  function findDropTarget(clientX, clientY, sourceRow) {
+    const element = document.elementFromPoint(clientX, clientY);
+    const targetRow = element?.closest?.(".today-task");
+    if (targetRow && targetRow !== sourceRow) {
+      const bounds = targetRow.getBoundingClientRect();
+      return {
+        targetTaskId: targetRow.dataset.taskId || "",
+        targetLane: rowLane(targetRow),
+        position: clientY < bounds.top + bounds.height / 2 ? "before" : "after",
+        targetRow,
+      };
+    }
+    const section = element?.closest?.(".widget-section");
+    if (section === quickCaptureSection) return { targetTaskId: "", targetLane: "quick", position: "after", targetRow: null };
+    if (section === todayTaskSection) return { targetTaskId: "", targetLane: "task", position: "after", targetRow: null };
+    return null;
+  }
+
+  function updateDropTarget(target) {
+    clearDropIndicators();
+    if (!target) return;
+    const section = target.targetLane === "quick" ? quickCaptureSection : todayTaskSection;
+    section.classList.add("is-drop-target");
+    target.targetRow?.classList.add(target.position === "before" ? "drag-over-before" : "drag-over-after");
+    if (target.targetRow) section.classList.remove("is-drop-target");
+  }
+
+  function startRowDrag() {
+    if (!rowDragState || rowDragState.dragging) return;
+    rowDragState.dragging = true;
+    rowDragState.row.classList.add("is-dragging");
+    widget.classList.add("is-item-dragging");
+    suppressRowClickUntil = Date.now() + 900;
+    if (currentSnapshot.quickCaptures.length === 0) quickCaptureSection.hidden = false;
+    rowDragState.dropTarget = null;
+  }
+
+  function handleRowPointerDown(event) {
+    if (event.button !== 0 || editingInput || event.target.closest("button, input, textarea")) return;
+    const row = event.currentTarget;
+    window.clearTimeout(rowDragState?.timer);
+    rowDragState = {
+      row,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      dragging: false,
+      dropTarget: null,
+      timer: window.setTimeout(startRowDrag, LONG_PRESS_DELAY),
+    };
+    row.setPointerCapture?.(event.pointerId);
+  }
+
+  function handleRowPointerMove(event) {
+    if (!rowDragState || event.pointerId !== rowDragState.pointerId) return;
+    const distance = Math.hypot(event.clientX - rowDragState.startX, event.clientY - rowDragState.startY);
+    if (!rowDragState.dragging) {
+      if (distance > DRAG_START_DISTANCE) {
+        window.clearTimeout(rowDragState.timer);
+        rowDragState = null;
+      }
+      return;
+    }
+    event.preventDefault();
+    rowDragState.dropTarget = findDropTarget(event.clientX, event.clientY, rowDragState.row);
+    updateDropTarget(rowDragState.dropTarget);
+  }
+
+  async function handleRowPointerUp(event) {
+    if (!rowDragState || event.pointerId !== rowDragState.pointerId) return;
+    const state = rowDragState;
+    window.clearTimeout(state.timer);
+    if (!state.dragging) {
+      rowDragState = null;
+      return;
+    }
+    event.preventDefault();
+    const target = state.dropTarget || findDropTarget(event.clientX, event.clientY, state.row);
+    const taskId = state.row.dataset.taskId || "";
+    const sourceLane = rowLane(state.row);
+    const validTarget = target && !(target.targetRow === state.row);
+    cleanupRowDrag();
+    if (!validTarget || !taskId || (target.targetLane === sourceLane && target.targetTaskId === taskId)) return;
+    const result = await bridge.moveItem?.({
+      taskId,
+      sourceLane,
+      targetLane: target.targetLane,
+      targetTaskId: target.targetTaskId,
+      position: target.position,
+    });
+    if (!result?.success && result?.code !== "BOUNDARY") showToast("顺序调整失败，请稍后重试");
+  }
+
+  function handleRowPointerCancel(event) {
+    if (!rowDragState || event.pointerId !== rowDragState.pointerId) return;
+    cleanupRowDrag();
+  }
+
   function bindTaskRows() {
     document.querySelectorAll(".today-task").forEach((row) => {
       let clickTimer = 0;
       row.addEventListener("click", (event) => {
-        if (event.target.closest(".task-check, .task-inline-input, .quick-capture-promote, .task-order-button")) return;
+        if (Date.now() < suppressRowClickUntil || event.target.closest(".task-check, .task-inline-input")) return;
         window.clearTimeout(clickTimer);
         clickTimer = window.setTimeout(() => beginInlineEdit(row), 220);
       });
       row.addEventListener("dblclick", (event) => {
-        if (event.target.closest(".task-check, .task-inline-input, .quick-capture-promote, .task-order-button")) return;
+        if (Date.now() < suppressRowClickUntil || event.target.closest(".task-check, .task-inline-input")) return;
         event.preventDefault();
         window.clearTimeout(clickTimer);
         void bridge.openMain(row.dataset.taskId);
       });
+      row.addEventListener("contextmenu", (event) => openContextMenu(event, row));
+      row.addEventListener("pointerdown", handleRowPointerDown);
+      row.addEventListener("pointermove", handleRowPointerMove);
+      row.addEventListener("pointerup", handleRowPointerUp);
+      row.addEventListener("pointercancel", handleRowPointerCancel);
       row.addEventListener("keydown", (event) => {
         if (event.key !== "Enter" && event.key !== " ") return;
         event.preventDefault();
         if (event.key === "Enter") beginInlineEdit(row);
       });
-      row.querySelector(".task-check").addEventListener("click", async (event) => {
+      row.querySelector(".task-check")?.addEventListener("click", async (event) => {
         event.stopPropagation();
         if (completingTaskId) return;
         completingTaskId = row.dataset.taskId;
@@ -443,27 +568,6 @@
           queuedSnapshot = null;
         }
       });
-      row.querySelector(".quick-capture-promote")?.addEventListener("click", (event) => {
-        event.stopPropagation();
-        closeMenu();
-        openGroupMenu(event.currentTarget, row.dataset.taskId);
-      });
-      row.querySelectorAll(".task-order-button").forEach((button) => {
-        button.addEventListener("click", async (event) => {
-          event.stopPropagation();
-          if (button.disabled || reorderingTaskId) return;
-          reorderingTaskId = button.dataset.reorderTask || "";
-          row.classList.add("is-reordering");
-          const result = await bridge.reorderItem?.({
-            taskId: reorderingTaskId,
-            lane: button.dataset.reorderLane,
-            direction: Number(button.dataset.reorderDirection),
-          });
-          reorderingTaskId = "";
-          row.classList.remove("is-reordering");
-          if (!result?.success && result?.code !== "BOUNDARY") showToast("顺序调整失败，请稍后重试");
-        });
-      });
     });
   }
 
@@ -480,17 +584,6 @@
     event.preventDefault();
     void submitQuickCapture(event.ctrlKey || event.metaKey);
   });
-  quickCaptureToggle.addEventListener("click", async () => {
-    if (widget.classList.contains("is-compact")) {
-      const open = !widget.classList.contains("is-capture-open");
-      widget.classList.toggle("is-capture-open", open);
-      await bridge.resize({ width: open ? 360 : 296, height: open ? 160 : 49, transient: true });
-      if (open) quickCaptureInput.focus();
-      return;
-    }
-    quickCaptureInput.focus();
-  });
-
   menuToggle.addEventListener("click", (event) => {
     event.stopPropagation();
     const open = !menu.classList.contains("is-open");
@@ -502,11 +595,14 @@
   document.addEventListener("pointerdown", (event) => {
     if (!event.target.closest("#widget-menu, #menu-toggle")) closeMenu();
     if (!event.target.closest("#quick-capture-group-menu, .quick-capture-promote")) closeGroupMenu();
+    if (!event.target.closest("#today-context-menu, .quick-capture-item")) closeContextMenu();
   });
 
   window.addEventListener("blur", () => {
     closeMenu();
     closeGroupMenu();
+    closeContextMenu();
+    cleanupRowDrag();
   });
 
   window.addEventListener("focus", () => {
@@ -527,7 +623,20 @@
   });
 
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") closeGroupMenu();
+    if (event.key === "Escape") {
+      closeGroupMenu();
+      closeContextMenu();
+      cleanupRowDrag();
+    }
+  });
+
+  deleteQuickCaptureButton.addEventListener("click", async () => {
+    const taskId = contextTaskId;
+    closeContextMenu();
+    if (!taskId) return;
+    const result = await bridge.deleteQuickCapture?.({ taskId });
+    if (result?.code === "DELETE_CANCELLED") return;
+    showToast(result?.success ? "速记已删除" : "速记删除失败，请稍后重试");
   });
 
   document.querySelectorAll("[data-place]").forEach((button) => {

@@ -341,6 +341,8 @@ let unsubscribeTodayWidgetCompletion = null;
 let unsubscribeTodayWidgetCreateTask = null;
 let unsubscribeTodayWidgetUpdateTitle = null;
 let unsubscribeTodayWidgetPromote = null;
+let unsubscribeTodayWidgetDeleteQuickCapture = null;
+let unsubscribeTodayWidgetMoveItem = null;
 let unsubscribeTodayWidgetReorder = null;
 let unsubscribeDeadlineReminderTask = null;
 let unsubscribeDeadlineReminderCalendar = null;
@@ -3243,6 +3245,7 @@ function renderTaskGroupSelect(task) {
 function todayFocusItems() {
   const items = state.tasks
     .filter((task) => task.status !== "done")
+    .filter((task) => task.captureSource !== "today-widget")
     .filter((task) => isTaskScheduledForToday(task))
     .map((task) => {
       const tags = normalizeTaskTags(task.tags);
@@ -7770,6 +7773,15 @@ function promoteQuickCaptureFromWidget(taskId, groupId) {
   return { success: true, code: "PROMOTED", taskId: task.id };
 }
 
+async function deleteQuickCaptureFromWidget(taskId) {
+  const task = state.tasks.find((item) => item.id === taskId && item.captureSource === "today-widget");
+  if (!task) return { success: false, code: "TASK_NOT_FOUND", taskId };
+  const deleted = await deleteTask(taskId);
+  if (!deleted) return { success: false, code: "DELETE_CANCELLED", taskId };
+  render();
+  return { success: true, code: "DELETED", taskId };
+}
+
 /**
  * Select a task group by ID, switching the active view.
  * @param {string} groupId - Target group ID
@@ -8812,6 +8824,71 @@ function todayQuickCaptureItems() {
     }));
 }
 
+function todayWidgetLaneTaskIds(lane) {
+  if (lane === "task") return todayFocusItems().map((item) => item.task.id);
+  if (lane === "quick") return todayQuickCaptureItems().filter((item) => item.status !== "done").map((item) => item.taskId);
+  return [];
+}
+
+function moveTodayWidgetItem(taskId, sourceLane, targetLane, targetTaskId, position) {
+  if (!["task", "quick"].includes(sourceLane) || !["task", "quick"].includes(targetLane)) {
+    return { success: false, code: "INVALID_LANE", taskId };
+  }
+  if (!["before", "after"].includes(position)) return { success: false, code: "INVALID_POSITION", taskId };
+  const task = state.tasks.find((item) => item.id === taskId);
+  if (!task) return { success: false, code: "TASK_NOT_FOUND", taskId };
+
+  const sourceIds = todayWidgetLaneTaskIds(sourceLane);
+  const targetIds = sourceLane === targetLane ? sourceIds : todayWidgetLaneTaskIds(targetLane);
+  if (!sourceIds.includes(taskId)) return { success: false, code: "TASK_NOT_FOUND", taskId };
+
+  const nextSourceIds = sourceIds.filter((id) => id !== taskId);
+  const nextTargetIds = sourceLane === targetLane ? nextSourceIds : targetIds.filter((id) => id !== taskId);
+  const anchorIndex = targetTaskId ? nextTargetIds.indexOf(targetTaskId) : -1;
+  if (targetTaskId && anchorIndex < 0) return { success: false, code: "TASK_NOT_FOUND", taskId };
+  const insertionIndex = anchorIndex < 0
+    ? nextTargetIds.length
+    : anchorIndex + (position === "after" ? 1 : 0);
+
+  if (sourceLane !== targetLane) {
+    task.captureSource = targetLane === "quick" ? "today-widget" : "";
+    task.tags = normalizeTaskTags({
+      ...task.tags,
+      today: targetLane === "task",
+    });
+    if (targetLane === "quick") task.groupId = "";
+  }
+
+  const orderedTargetIds = [
+    ...nextTargetIds.slice(0, insertionIndex),
+    taskId,
+    ...nextTargetIds.slice(insertionIndex),
+  ];
+  const taskLaneIds = sourceLane === targetLane
+    ? orderedTargetIds
+    : targetLane === "task" ? orderedTargetIds : nextSourceIds;
+  const quickLaneIds = sourceLane === targetLane
+    ? orderedTargetIds
+    : targetLane === "quick" ? orderedTargetIds : nextSourceIds;
+
+  state.tasks.forEach((item) => {
+    item.todayTaskOrder = 0;
+    item.todayQuickCaptureOrder = 0;
+  });
+  taskLaneIds.forEach((id, index) => {
+    const item = state.tasks.find((entry) => entry.id === id);
+    if (item) item.todayTaskOrder = index + 1;
+  });
+  quickLaneIds.forEach((id, index) => {
+    const item = state.tasks.find((entry) => entry.id === id);
+    if (item) item.todayQuickCaptureOrder = index + 1;
+  });
+  task.updatedAt = now();
+  save();
+  render();
+  return { success: true, code: "MOVED", taskId };
+}
+
 function reorderTodayWidgetItem(taskId, lane, direction) {
   const orderKey = lane === "task"
     ? "todayTaskOrder"
@@ -8928,6 +9005,8 @@ async function initializeTodayWidgetBridge() {
   unsubscribeTodayWidgetCreateTask?.();
   unsubscribeTodayWidgetUpdateTitle?.();
   unsubscribeTodayWidgetPromote?.();
+  unsubscribeTodayWidgetDeleteQuickCapture?.();
+  unsubscribeTodayWidgetMoveItem?.();
   unsubscribeTodayWidgetReorder?.();
   unsubscribeTodayWidgetState = desktopTodayWidget.onState((nextState) => {
     todayWidgetWindowState = nextState && typeof nextState === "object" ? nextState : { visible: false };
@@ -8980,6 +9059,15 @@ async function initializeTodayWidgetBridge() {
   });
   unsubscribeTodayWidgetPromote = desktopTodayWidget.onPromoteQuickCaptureRequest?.(({ requestId, taskId, groupId } = {}) => {
     desktopTodayWidget.respondMutation?.({ requestId, ...promoteQuickCaptureFromWidget(taskId, groupId) });
+  });
+  unsubscribeTodayWidgetDeleteQuickCapture = desktopTodayWidget.onDeleteQuickCaptureRequest?.(async ({ requestId, taskId } = {}) => {
+    desktopTodayWidget.respondMutation?.({ requestId, ...(await deleteQuickCaptureFromWidget(taskId)) });
+  });
+  unsubscribeTodayWidgetMoveItem = desktopTodayWidget.onMoveItemRequest?.(({ requestId, taskId, sourceLane, targetLane, targetTaskId, position } = {}) => {
+    desktopTodayWidget.respondMutation?.({
+      requestId,
+      ...moveTodayWidgetItem(taskId, sourceLane, targetLane, targetTaskId, position),
+    });
   });
   unsubscribeTodayWidgetReorder = desktopTodayWidget.onReorderRequest?.(({ requestId, taskId, lane, direction } = {}) => {
     desktopTodayWidget.respondMutation?.({ requestId, ...reorderTodayWidgetItem(taskId, lane, direction) });

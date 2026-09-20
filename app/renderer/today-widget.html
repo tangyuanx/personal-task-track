@@ -466,7 +466,23 @@
       background: rgba(255, 255, 255, 0.075);
     }
 
-    .quick-capture-prefix { color: rgba(255, 255, 255, 0.64); font-size: 16px; }
+    .quick-capture-prefix {
+      display: grid;
+      width: 20px;
+      height: 20px;
+      place-items: center;
+      color: rgba(255, 255, 255, 0.68);
+    }
+
+    .quick-capture-prefix svg {
+      width: 16px;
+      height: 16px;
+      fill: none;
+      stroke: currentColor;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-width: 1.7;
+    }
 
     #quick-capture-input {
       width: 100%;
@@ -512,7 +528,7 @@
     .quick-capture-overflow[hidden] { display: none; }
     .today-task.quick-capture-item {
       min-height: 45px;
-      grid-template-columns: 25px minmax(0, 1fr) 26px 22px;
+      grid-template-columns: 25px minmax(0, 1fr);
       border-color: rgba(255, 255, 255, 0.25);
       border-style: dashed;
       background: rgba(255, 255, 255, 0.025);
@@ -525,29 +541,23 @@
     .quick-capture-section { margin-bottom: 4px; }
     .quick-capture-item .task-copy span { color: rgba(255, 255, 255, 0.54); }
     .quick-capture-overflow { margin: 0 3px; color: var(--widget-muted); font-size: calc(9px * var(--widget-font-scale)); }
-    .quick-capture-promote {
+
+    .quick-capture-note-icon {
       display: grid;
-      width: 24px;
-      height: 24px;
+      width: 20px;
+      height: 22px;
       place-items: center;
-      justify-self: end;
-      border: 0;
-      border-radius: 6px;
-      background: transparent;
-      color: rgba(255, 255, 255, 0.68);
-      cursor: pointer;
-      font-size: 16px;
-      line-height: 1;
+      color: #e0b764;
     }
-    .quick-capture-promote:hover { background: var(--widget-control-hover); color: var(--widget-title); }
-    .quick-capture-promote svg {
+
+    .quick-capture-note-icon svg {
       width: 15px;
-      height: 15px;
+      height: 19px;
       fill: none;
       stroke: currentColor;
       stroke-linecap: round;
       stroke-linejoin: round;
-      stroke-width: 1.7;
+      stroke-width: 1.25;
     }
     .task-inline-input {
       width: 100%;
@@ -569,7 +579,7 @@
     .today-task {
       position: relative;
       display: grid;
-      grid-template-columns: 25px minmax(0, 1fr) 18px 22px;
+      grid-template-columns: 25px minmax(0, 1fr) 18px;
       gap: 9px;
       align-items: center;
       min-height: 60px;
@@ -597,48 +607,68 @@
       transform: translateX(18px);
     }
 
-    .today-task.is-reordering { opacity: 0.72; }
-
-    .task-order-controls {
-      display: grid;
-      width: 22px;
-      gap: 1px;
-      justify-self: end;
+    .today-task.is-reordering,
+    .today-task.is-dragging {
+      opacity: 0.52;
+      transform: scale(0.985);
     }
 
-    .task-order-button {
-      display: grid;
-      width: 22px;
-      height: 19px;
-      place-items: center;
-      padding: 0;
+    .today-widget.is-item-dragging,
+    .today-widget.is-item-dragging * {
+      cursor: grabbing !important;
+    }
+
+    .today-task.drag-over-before {
+      box-shadow: inset 0 2px 0 #e4b75e;
+    }
+
+    .today-task.drag-over-after {
+      box-shadow: inset 0 -2px 0 #e4b75e;
+    }
+
+    .widget-section.is-drop-target .widget-section-heading {
+      color: #e4c47e;
+    }
+
+    .widget-section.is-drop-target .quick-capture-list:empty,
+    .widget-section.is-drop-target .task-list:empty {
+      min-height: 34px;
+      border: 1px dashed rgba(228, 183, 94, 0.72);
+      border-radius: 9px;
+      background: rgba(228, 183, 94, 0.06);
+    }
+
+    .widget-section.is-drop-target .task-list[hidden] { display: block; }
+
+    .today-context-menu {
+      position: fixed;
+      z-index: 40;
+      min-width: 118px;
+      padding: 5px;
+      border: 1px solid var(--widget-menu-line);
+      border-radius: 9px;
+      background: var(--widget-menu-bg);
+      box-shadow: 0 14px 32px rgba(13, 37, 28, 0.24);
+      color: var(--widget-menu-ink);
+    }
+
+    .today-context-menu[hidden] { display: none; }
+
+    .today-context-menu button {
+      width: 100%;
+      padding: 7px 9px;
       border: 0;
-      border-radius: 5px;
+      border-radius: 6px;
       background: transparent;
-      color: rgba(255, 255, 255, 0.78);
+      color: inherit;
+      font-size: calc(11px * var(--widget-font-scale));
+      text-align: left;
       cursor: pointer;
-      transition: background 120ms ease, color 120ms ease;
     }
 
-    .task-order-button:hover,
-    .task-order-button:focus-visible {
-      outline: 0;
-      background: var(--widget-control-hover);
-      color: var(--widget-title);
-    }
-
-    .task-order-button:focus-visible { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.52); }
-    .task-order-button:disabled { opacity: 0.2; cursor: default; }
-    .task-order-button:disabled:hover { background: transparent; color: rgba(255, 255, 255, 0.78); }
-
-    .task-order-button svg {
-      width: 13px;
-      height: 13px;
-      fill: none;
-      stroke: currentColor;
-      stroke-linecap: round;
-      stroke-linejoin: round;
-      stroke-width: 1.6;
+    .today-context-menu button:hover {
+      background: rgba(177, 77, 58, 0.1);
+      color: #a54c3b;
     }
 
     .task-check {
@@ -1085,12 +1115,8 @@
       <header class="widget-header" id="drag-region">
         <div class="widget-title" id="widget-title">
           <strong>今日任务</strong>
-          <time id="today-date" datetime="2026-08-16">08/16 周日</time>
         </div>
         <div class="widget-tools" data-no-drag>
-          <button class="icon-button quick-capture-toggle" id="quick-capture-toggle" type="button" title="快速记录" aria-label="快速记录">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
-          </button>
           <button class="icon-button" id="open-main" type="button" title="打开主窗口" aria-label="打开主窗口">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 5h5v5M19 5l-8 8"></path><path d="M17 13v5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1h5"></path></svg>
           </button>
@@ -1109,8 +1135,8 @@
       <div class="widget-content">
         <section class="quick-capture-panel" id="quick-capture-panel" aria-label="快速记录">
           <div class="quick-capture-input-row">
-            <span class="quick-capture-prefix" aria-hidden="true">＋</span>
-            <textarea id="quick-capture-input" rows="1" maxlength="4000" placeholder="快速记录，Enter 保存 ↵" aria-label="快速记录内容"></textarea>
+            <span class="quick-capture-prefix" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"></path></svg></span>
+            <textarea id="quick-capture-input" rows="1" maxlength="4000" placeholder="快速记录" aria-label="快速记录内容"></textarea>
           </div>
         </section>
         <section class="widget-section quick-capture-section" id="quick-capture-section" aria-label="速记" hidden>
@@ -1119,7 +1145,7 @@
           <p class="quick-capture-overflow" id="quick-capture-overflow" hidden></p>
         </section>
         <section class="widget-section today-task-section" aria-label="今日任务">
-          <header class="widget-section-heading"><span>今日任务</span><b id="today-task-count">0</b></header>
+          <header class="widget-section-heading"><span>任务</span><b id="today-task-count">0</b></header>
           <div class="task-list" id="task-list">
           <article class="today-task high" data-title="完善个人任务管理 app" tabindex="0" role="button">
             <button class="task-check" type="button" aria-label="完成：完善个人任务管理 app"></button>
@@ -1142,6 +1168,10 @@
       </div>
 
       <aside class="quick-capture-group-menu" id="quick-capture-group-menu" aria-label="选择任务分组" data-no-drag hidden></aside>
+
+      <aside class="today-context-menu" id="today-context-menu" aria-label="速记操作" data-no-drag hidden>
+        <button id="delete-quick-capture" type="button">删除速记</button>
+      </aside>
 
       <aside class="widget-menu" id="widget-menu" aria-label="今日窗口设置" data-no-drag>
         <span class="menu-label">窗口位置</span>
@@ -1216,9 +1246,6 @@
       emptyState.classList.toggle("is-visible", count === 0);
       taskList.hidden = count === 0;
     }
-
-    const date = new Date(2026, 7, 16);
-    document.querySelector("#today-date").textContent = new Intl.DateTimeFormat("zh-CN", { month: "2-digit", day: "2-digit", weekday: "short" }).format(date).replaceAll("/", "/");
 
     menuToggle.addEventListener("click", (event) => {
       event.stopPropagation();

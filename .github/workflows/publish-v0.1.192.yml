@@ -1,0 +1,142 @@
+name: Publish v0.1.192
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/publish-v0.1.192.yml
+
+concurrency:
+  group: publish-v0.1.192
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify v0.1.192 Today widget interactions
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Verify Today widget interactions
+        shell: bash
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          test "$version" = "0.1.192"
+          node --check app/renderer/src/app.js
+          node --check app/renderer/src/today-widget-runtime.js
+          node --check app/main/preload.cjs
+          node --check app/main/today-widget.cjs
+          node --test --test-name-pattern='Today widget (long-press movement|snapshot|task and quick-capture order)|production Today widget' tests/desktop.test.cjs
+
+  build:
+    name: Build v0.1.192 ${{ matrix.platform }}
+    needs: verify
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macOS
+            os: macos-latest
+            script: npm run dist:mac -- --x64 --arm64 --publish never
+            artifact: v0.1.192-macos
+          - platform: Windows
+            os: windows-latest
+            script: npm run dist:win -- --x64 --publish never
+            artifact: v0.1.192-windows
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Check JavaScript and tests
+        run: npm run check
+      - name: Build app
+        run: ${{ matrix.script }}
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+      - name: Test Windows installer upgrade matrix
+        if: matrix.platform == 'Windows'
+        shell: pwsh
+        run: |
+          $candidate = Get-ChildItem release -Filter "Loop-*-x64-setup.exe" | Select-Object -First 1
+          if (-not $candidate) { throw "Windows installer was not produced." }
+          ./tests/windows-upgrade-installer.test.ps1 -CandidateInstaller $candidate.FullName
+      - name: Verify update metadata
+        run: node tools/verify-update-artifacts.cjs release
+      - name: Stage v0.1.192 release assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            release/*.dmg
+            release/*.zip
+            release/*.exe
+            release/*.blockmap
+            release/latest.yml
+            release/latest-mac.yml
+          if-no-files-found: error
+          retention-days: 2
+
+  publish:
+    name: Publish v0.1.192 release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Refuse to replace an existing tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          if gh api "repos/${{ github.repository }}/git/ref/tags/v0.1.192" >/dev/null 2>&1; then
+            echo "v0.1.192 already exists; refusing to replace it."
+            exit 1
+          fi
+      - name: Collect v0.1.192 release assets
+        uses: actions/download-artifact@v4
+        with:
+          pattern: v0.1.192-*
+          path: release
+          merge-multiple: true
+      - name: Verify complete cross-platform update feed
+        run: node tools/verify-update-artifacts.cjs release --require-all-platforms
+      - name: Publish v0.1.192
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v0.1.192
+          target_commitish: ${{ github.sha }}
+          name: v0.1.192
+          body: |
+            ## 今日任务浮窗交互优化
+
+            - 简化浮窗顶部，仅保留打开主窗口、收起和设置入口。
+            - 快速记录入口改为加号图标和“快速记录”提示。
+            - 删除任务与速记右侧多余的进入/排序提示。
+            - 支持右键删除速记，并与主窗口数据保持一致。
+            - 支持长按拖拽调整任务顺序、速记顺序，以及在任务和速记之间切换。
+          make_latest: true
+          files: |
+            release/*.dmg
+            release/*.zip
+            release/*.exe
+            release/*.blockmap
+            release/latest.yml
+            release/latest-mac.yml

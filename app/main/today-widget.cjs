@@ -399,7 +399,7 @@ function createTodayWidgetController({ app, BrowserWindow, globalShortcut, ipcMa
     pendingMutations.delete(requestId);
     pending.resolve({
       success: value?.success === true,
-      code: ["CREATED", "UPDATED", "PROMOTED", "MOVED", "BOUNDARY", "INVALID_LANE", "INVALID_DIRECTION", "TASK_NOT_FOUND", "GROUP_NOT_FOUND", "INVALID_TITLE", "TIMEOUT"].includes(value?.code)
+      code: ["CREATED", "UPDATED", "PROMOTED", "DELETED", "DELETE_CANCELLED", "MOVED", "BOUNDARY", "INVALID_LANE", "INVALID_DIRECTION", "INVALID_POSITION", "TASK_NOT_FOUND", "GROUP_NOT_FOUND", "INVALID_TITLE", "TIMEOUT"].includes(value?.code)
         ? value.code
         : "TASK_NOT_FOUND",
       taskId: normalizeTaskId(value?.taskId),
@@ -479,6 +479,30 @@ function createTodayWidgetController({ app, BrowserWindow, globalShortcut, ipcMa
       if (!taskId) return { success: false, code: "TASK_NOT_FOUND" };
       if (!groupId) return { success: false, code: "GROUP_NOT_FOUND" };
       return requestMainMutation("today-widget:promote-quick-capture", { taskId, groupId });
+    });
+    ipcMain.handle("today-widget:delete-quick-capture", (_event, payload) => {
+      const raw = payload && typeof payload === "object" ? payload : {};
+      const taskId = normalizeTaskId(raw.taskId);
+      if (!taskId) return { success: false, code: "TASK_NOT_FOUND" };
+      return requestMainMutation("today-widget:delete-quick-capture", { taskId });
+    });
+    ipcMain.handle("today-widget:move-item", (_event, payload) => {
+      const raw = payload && typeof payload === "object" ? payload : {};
+      const taskId = normalizeTaskId(raw.taskId);
+      const sourceLane = raw.sourceLane === "task" || raw.sourceLane === "quick" ? raw.sourceLane : "";
+      const targetLane = raw.targetLane === "task" || raw.targetLane === "quick" ? raw.targetLane : "";
+      const targetTaskId = normalizeTaskId(raw.targetTaskId);
+      const position = raw.position === "before" || raw.position === "after" ? raw.position : "";
+      if (!taskId) return { success: false, code: "TASK_NOT_FOUND" };
+      if (!sourceLane || !targetLane) return { success: false, code: "INVALID_LANE" };
+      if (!position) return { success: false, code: "INVALID_POSITION" };
+      return requestMainMutation("today-widget:move-item", {
+        taskId,
+        sourceLane,
+        targetLane,
+        targetTaskId,
+        position,
+      });
     });
     ipcMain.handle("today-widget:reorder-item", (_event, payload) => {
       const raw = payload && typeof payload === "object" ? payload : {};

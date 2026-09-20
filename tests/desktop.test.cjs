@@ -2925,9 +2925,11 @@ test("production Today widget uses its dedicated frontend and a sandboxed Electr
   assert.match(runtime, /bridge\.completeTask/);
   assert.match(runtime, /bridge\.createTask/);
   assert.match(runtime, /bridge\.updateTaskTitle/);
-  assert.match(runtime, /bridge\.promoteQuickCapture/);
-  assert.match(runtime, /bridge\.reorderItem/);
-  assert.match(runtime, /data-reorder-lane/);
+  assert.match(runtime, /bridge\.deleteQuickCapture/);
+  assert.match(runtime, /bridge\.moveItem/);
+  assert.match(runtime, /data-lane="task"/);
+  assert.match(runtime, /LONG_PRESS_DELAY = 380/);
+  assert.match(runtime, /function openContextMenu/);
   assert.match(runtime, /FLOW_INCOMPLETE/);
   assert.match(runtime, /bridge\.setEditing/);
   assert.match(runtime, /function isTextEditingTarget/);
@@ -2940,8 +2942,10 @@ test("production Today widget uses its dedicated frontend and a sandboxed Electr
   assert.match(demo, /id="quick-capture-list"/);
   assert.match(demo, /quick-capture-item/);
   assert.match(demo, /quick-capture-section/);
-  assert.match(demo, /quick-capture-promote/);
-  assert.match(demo, /\.task-order-button/);
+  assert.match(demo, /id="today-context-menu"/);
+  assert.match(demo, /placeholder="快速记录"/);
+  assert.doesNotMatch(demo, /quick-capture-promote/);
+  assert.doesNotMatch(demo, /\.task-order-button/);
   assert.match(demo, /\.today-task\.quick-capture-item\s*\{[\s\S]*border-style:\s*dashed;[\s\S]*background:\s*rgba\(255, 255, 255, 0\.025\);/);
   assert.match(demo, /\.today-task\.quick-capture-item:hover\s*\{[\s\S]*border-style:\s*dashed;/);
   assert.match(runtime, /bridge\.setPreferences\(\{ clickThrough: enabled \}\)/);
@@ -2957,7 +2961,8 @@ test("production Today widget uses its dedicated frontend and a sandboxed Electr
   assert.match(widgetMain, /setIgnoreMouseEvents\(preferences\.clickThrough === true, \{ forward: true \}\)/);
   assert.match(widgetMain, /today-widget:create-task/);
   assert.match(widgetMain, /today-widget:update-task-title/);
-  assert.match(widgetMain, /today-widget:promote-quick-capture/);
+  assert.match(widgetMain, /today-widget:delete-quick-capture/);
+  assert.match(widgetMain, /today-widget:move-item/);
   assert.match(widgetMain, /today-widget:reorder-item/);
   assert.match(widgetMain, /FLOW_INCOMPLETE/);
   assert.match(widgetMain, /today-widget:set-editing/);
@@ -3869,6 +3874,39 @@ test("Today widget task and quick-capture order can be moved independently and s
   assert.deepEqual(result.quickIds, ["capture_b", "capture_a"]);
   assert.equal(result.taskOrders.today_b, 1);
   assert.equal(result.quickOrders.capture_b, 1);
+});
+
+test("Today widget long-press movement reorders within a lane and switches task and quick-note lanes", async () => {
+  const harness = await rendererHarness();
+  const result = harness.json(`(() => {
+    state.tasks = normalizeTasks([
+      { id: "today_a", title: "今日 A", tags: { today: true }, priority: "high", updatedAt: "2026-08-29T10:00:00.000Z" },
+      { id: "today_b", title: "今日 B", tags: { today: true }, priority: "low", updatedAt: "2026-08-29T09:00:00.000Z" },
+      { id: "capture_a", title: "速记 A", captureSource: "today-widget", updatedAt: "2026-08-29T08:00:00.000Z" },
+      { id: "capture_b", title: "速记 B", captureSource: "today-widget", updatedAt: "2026-08-29T07:00:00.000Z" }
+    ]);
+    render = () => {};
+    const withinLane = moveTodayWidgetItem("today_b", "task", "task", "today_a", "before");
+    const toQuick = moveTodayWidgetItem("today_a", "task", "quick", "capture_b", "before");
+    const toTask = moveTodayWidgetItem("capture_a", "quick", "task", "today_b", "after");
+    const snapshot = todayWidgetSnapshot();
+    return {
+      withinLane,
+      toQuick,
+      toTask,
+      taskIds: snapshot.items.map((item) => item.taskId),
+      quickIds: snapshot.quickCaptures.map((item) => item.taskId),
+      sources: Object.fromEntries(state.tasks.map((task) => [task.id, task.captureSource]))
+    };
+  })()`);
+
+  assert.equal(result.withinLane.code, "MOVED");
+  assert.equal(result.toQuick.code, "MOVED");
+  assert.equal(result.toTask.code, "MOVED");
+  assert.deepEqual(result.taskIds, ["today_b", "capture_a"]);
+  assert.deepEqual(result.quickIds, ["today_a", "capture_b"]);
+  assert.equal(result.sources.today_a, "today-widget");
+  assert.equal(result.sources.capture_a, "");
 });
 
 test("quick captures promote into a chosen real group and leave the quick-capture lane", async () => {
