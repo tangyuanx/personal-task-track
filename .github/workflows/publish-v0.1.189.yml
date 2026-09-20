@@ -1,0 +1,140 @@
+name: Publish v0.1.189
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/publish-v0.1.189.yml
+
+concurrency:
+  group: publish-v0.1.189
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify v0.1.189 task repository refinement
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Verify task repository behavior
+        shell: bash
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          test "$version" = "0.1.189"
+          node --check app/renderer/src/app.js
+          node --check tests/work-rhythm-ui.test.cjs
+          node --test --test-name-pattern='task repository renders priority|task repository priority controls|task repository follows|repository groups render|approved 4174 shell|release version, scripts and cache keys are aligned' tests/desktop.test.cjs tests/work-rhythm-ui.test.cjs
+
+  build:
+    name: Build v0.1.189 ${{ matrix.platform }}
+    needs: verify
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macOS
+            os: macos-latest
+            script: npm run dist:mac -- --x64 --arm64 --publish never
+            artifact: v0.1.189-macos
+          - platform: Windows
+            os: windows-latest
+            script: npm run dist:win -- --x64 --publish never
+            artifact: v0.1.189-windows
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Check JavaScript and tests
+        run: npm run check
+      - name: Build app
+        run: ${{ matrix.script }}
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+      - name: Test Windows installer upgrade matrix
+        if: matrix.platform == 'Windows'
+        shell: pwsh
+        run: |
+          $candidate = Get-ChildItem release -Filter "Loop-*-x64-setup.exe" | Select-Object -First 1
+          if (-not $candidate) { throw "Windows installer was not produced." }
+          ./tests/windows-upgrade-installer.test.ps1 -CandidateInstaller $candidate.FullName
+      - name: Verify update metadata
+        run: node tools/verify-update-artifacts.cjs release
+      - name: Stage v0.1.189 release assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            release/*.dmg
+            release/*.zip
+            release/*.exe
+            release/*.blockmap
+            release/latest.yml
+            release/latest-mac.yml
+          if-no-files-found: error
+          retention-days: 2
+
+  publish:
+    name: Publish v0.1.189 release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Refuse to replace an existing tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          if gh api "repos/${{ github.repository }}/git/ref/tags/v0.1.189" >/dev/null 2>&1; then
+            echo "v0.1.189 already exists; refusing to replace it."
+            exit 1
+          fi
+      - name: Collect v0.1.189 release assets
+        uses: actions/download-artifact@v4
+        with:
+          pattern: v0.1.189-*
+          path: release
+          merge-multiple: true
+      - name: Verify complete cross-platform update feed
+        run: node tools/verify-update-artifacts.cjs release --require-all-platforms
+      - name: Publish v0.1.189
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v0.1.189
+          target_commitish: ${{ github.sha }}
+          name: v0.1.189
+          body: |
+            ## 任务仓库界面优化
+
+            - 删除“任务仓库”标题，仅保留任务数量。
+            - 分组并入筛选弹层，完成状态三等分排列。
+            - 任务行增加序号，移除副行和右侧箭头，仅保留优先级与截止日期。
+            - 优先级改为“高 / 中 / 低”自定义弹层，支持点击外部或 Esc 关闭。
+            - 保留原有筛选与新增任务按钮的样式、尺寸和右上角排布。
+          make_latest: true
+          files: |
+            release/*.dmg
+            release/*.zip
+            release/*.exe
+            release/*.blockmap
+            release/latest.yml
+            release/latest-mac.yml
