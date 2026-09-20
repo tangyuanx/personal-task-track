@@ -2091,10 +2091,6 @@ function renderRepositorySegmentedFilter(className, label, options, selected, se
 
 function renderTodayFocus(items) {
   return `
-    <div class="rail-heading">
-      <h2>今日聚焦</h2>
-      <span>${items.length} 项待办</span>
-    </div>
     <div class="focus-list" aria-label="今日待办">
       ${
         items.length

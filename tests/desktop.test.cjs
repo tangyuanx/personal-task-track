@@ -3504,11 +3504,12 @@ test("approved 4174 shell is the final stylesheet authority", async () => {
   assert.match(approved, /\.ops-app\.app\s*\{[\s\S]*padding:\s*0 8px 4px;/);
   assert.match(approved, /\.app-command-bar\s*\{[\s\S]*margin:\s*0 -8px;/);
   assert.match(approved, /\.app-command-bar\s*\{[\s\S]*grid-template-columns:\s*250px max-content minmax\(360px, 540px\)/);
-  assert.match(approved, /\.rail\.sidebar\.sidebar-today-mode\.focus-rail\s*\{[\s\S]*width:\s*100%;[\s\S]*height:\s*100%;[\s\S]*align-self:\s*stretch;[\s\S]*justify-self:\s*stretch;[\s\S]*padding:\s*28px 14px 86px;[\s\S]*border:\s*0;[\s\S]*background:\s*#315f51;/);
+  assert.match(approved, /\.rail\.sidebar\.sidebar-today-mode\.focus-rail\s*\{[\s\S]*width:\s*100%;[\s\S]*height:\s*100%;[\s\S]*align-self:\s*stretch;[\s\S]*justify-self:\s*stretch;[\s\S]*padding:\s*18px 14px 86px;[\s\S]*border:\s*0;[\s\S]*background:\s*#315f51;/);
   assert.doesNotMatch(approved, /\.rail\.sidebar\.sidebar-today-mode\.focus-rail\s*\{[^}]*margin-(?:left|bottom):\s*-/);
-  assert.match(approved, /\.focus-rail \.focus-row\s*\{[\s\S]*grid-template-columns:\s*28px minmax\(0, 1fr\) 22px;[\s\S]*border:\s*0;[\s\S]*background:\s*transparent;[\s\S]*box-shadow:\s*none;/);
-  assert.match(approved, /\.focus-rail \.focus-row:hover,[\s\S]*background:\s*rgba\(255, 255, 255, \.08\);/);
-  assert.match(approved, /\.focus-rail \.focus-row\.selected\s*\{[\s\S]*background:\s*rgba\(255, 255, 255, \.16\);[\s\S]*box-shadow:\s*none;/);
+  assert.match(approved, /\.focus-rail \.focus-list\s*\{[\s\S]*gap:\s*4px;/);
+  assert.match(approved, /\.focus-rail \.focus-row\s*\{[\s\S]*min-height:\s*44px;[\s\S]*grid-template-columns:\s*28px minmax\(0, 1fr\) 22px;[\s\S]*border-radius:\s*9px;[\s\S]*background:\s*rgba\(255, 255, 255, \.025\);[\s\S]*box-shadow:\s*none;/);
+  assert.match(approved, /\.focus-rail \.focus-row:hover,[\s\S]*background:\s*rgba\(255, 255, 255, \.065\);/);
+  assert.match(approved, /\.focus-rail \.focus-row\.selected\s*\{[\s\S]*background:\s*rgba\(255, 255, 255, \.11\);[\s\S]*box-shadow:\s*none;/);
   assert.match(approved, /\.focus-rail > \.rail-footer\s*\{[\s\S]*height:\s*70px;[\s\S]*padding:\s*0 22px;/);
   assert.match(approved, /\.focus-rail \.theme-toggle\.theme-switch,[\s\S]*width:\s*45px;[\s\S]*height:\s*25px;/);
   assert.match(approved, /\.rail\.sidebar \.task-row\.task-item \.repository-complete\s*\{[\s\S]*grid-column:\s*1;/);
@@ -3670,7 +3671,7 @@ test("primary navigation separates the Today queue from the task repository", as
 
   assert.match(surfaces.today, /data-primary-view="today"/);
   assert.match(surfaces.today, /sidebar-today-mode focus-rail/);
-  assert.match(surfaces.today, /class="rail-heading"[\s\S]*<h2>今日聚焦<\/h2>/);
+  assert.doesNotMatch(surfaces.today, /class="rail-heading"|<h2>今日待办<\/h2>|<span>1 项<\/span>/);
   assert.match(surfaces.today, /class="focus-list" aria-label="今日待办"/);
   assert.match(surfaces.today, /class="rail-footer"[\s\S]*class="footer-actions"[\s\S]*class="divider"[\s\S]*class="autosave"/);
   assert.doesNotMatch(surfaces.today, /class="task-list task-repository"/);
