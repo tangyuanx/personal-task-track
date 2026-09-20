@@ -3707,6 +3707,48 @@ test("today focus highlights the active task even when it suggests a different n
   assert.doesNotMatch(html, /下一步/);
 });
 
+test("selecting a Today task keeps the Today view while sharing task state", async () => {
+  const harness = await rendererHarness();
+  const result = harness.json(`(() => {
+    state.taskGroups = [{ id: "today_group", title: "今日分组", order: 1 }];
+    state.activeGroupId = ALL_TASKS_GROUP_ID;
+    state.taskFilter = "today";
+    state.priorityFilter = "high";
+    state.tasks = normalizeTasks([
+      { id: "today_shared", title: "共享任务", groupId: "today_group", priority: "high", tags: { today: true }, nodes: [] },
+      { id: "other_task", title: "其他任务", groupId: "today_group", priority: "low", nodes: [] },
+    ]);
+    openTaskFromGlobalList("today_shared", "", { keepToday: true });
+    const shared = state.tasks.find((task) => task.id === "today_shared");
+    shared.title = "更新后的共享任务";
+    const updatedTodayRow = renderTodayFocus(todayFocusItems());
+    const updatedTaskPage = renderTaskPage(shared);
+    shared.status = "done";
+    return {
+      filter: state.taskFilter,
+      activeTaskId: state.activeTaskId,
+      activeGroupId: state.activeGroupId,
+      priorityFilter: state.priorityFilter,
+      sharedTitle: shared.title,
+      sharedPriority: shared.priority,
+      todayRow: updatedTodayRow,
+      taskPage: updatedTaskPage,
+      completedTodayCount: todayFocusItems().filter((item) => item.task.id === "today_shared").length,
+    };
+  })()`);
+
+  assert.equal(result.filter, "today");
+  assert.equal(result.activeTaskId, "today_shared");
+  assert.equal(result.activeGroupId, "today_group");
+  assert.equal(result.priorityFilter, "high");
+  assert.equal(result.sharedTitle, "更新后的共享任务");
+  assert.equal(result.sharedPriority, "high");
+  assert.match(result.todayRow, /更新后的共享任务/);
+  assert.match(result.taskPage, /更新后的共享任务/);
+  assert.equal(result.completedTodayCount, 0);
+  assert.match(result.taskPage, /data-task-id="today_shared"/);
+});
+
 test("primary navigation separates the Today queue from the task repository", async () => {
   const harness = await rendererHarness();
   const surfaces = harness.evaluate(`(() => {

@@ -7368,7 +7368,7 @@ async function action(data, event = null) {
   if (data.action === "delete-group-keep-tasks" && !(await deleteGroup(data.groupId, "ungroup"))) return;
   if (data.action === "delete-group-with-tasks" && !(await deleteGroup(data.groupId, "delete"))) return;
   if (data.action === "select-focus") {
-    openTaskFromGlobalList(data.taskId, "");
+    openTaskFromGlobalList(data.taskId, "", { keepToday: true });
   }
   if (data.action === "select-task") {
     activateRepositoryTask(data.taskId);
@@ -7596,19 +7596,22 @@ function syncTaskTitleInputs(taskId, value) {
   });
 }
 
-function openTaskFromGlobalList(taskId, nodeId = "") {
+function openTaskFromGlobalList(taskId, nodeId = "", options = {}) {
   const task = state.tasks.find((item) => item.id === taskId);
   if (!task) return;
+  const keepTodayView = options.keepToday === true && state.taskFilter === "today";
   state.activeGroupId = task.groupId || UNGROUPED_TASKS_GROUP_ID;
   state.activeTaskId = task.id;
   state.selectedNodeId = nodeId;
   state.recordDraft = nodeId ? findNode(task.nodes, nodeId)?.note || "" : "";
   state.nodeDetailFullscreen = false;
   state.nodeDetailPosition = null;
-  state.taskFilter = "all";
-  state.taskDateFilter = "";
-  state.taskDeadlineFilter = "all";
-  state.priorityFilter = "all";
+  if (!keepTodayView) {
+    state.taskFilter = "all";
+    state.taskDateFilter = "";
+    state.taskDeadlineFilter = "all";
+    state.priorityFilter = "all";
+  }
   state.query = "";
   state.reviewOpen = false;
   state.calendarOpen = false;
