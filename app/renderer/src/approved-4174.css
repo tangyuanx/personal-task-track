@@ -1364,3 +1364,267 @@
 :root[data-theme="dark"] .rail.sidebar .repository-filter-popover .type-filter-button {
   background: color-mix(in srgb, var(--approved-surface) 78%, #000);
 }
+
+/* v0.1.190 visual repair: make the update control a real topbar control. */
+.app-command-brand > .sidebar-update-action {
+  display: inline-flex;
+  width: auto;
+  min-width: 0;
+  max-width: 154px;
+  height: 28px;
+  flex: 0 1 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--approved-green) 35%, var(--approved-line-strong));
+  border-radius: 8px;
+  padding: 0 9px;
+  background: color-mix(in srgb, var(--approved-green) 10%, var(--approved-surface));
+  color: var(--approved-green);
+  font-family: var(--app-font);
+  font-size: calc(10.5 * var(--font-unit));
+  font-weight: 650;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.app-command-brand > .sidebar-update-action:hover,
+.app-command-brand > .sidebar-update-action:focus-visible {
+  border-color: color-mix(in srgb, var(--approved-green) 52%, var(--approved-line-strong));
+  background: color-mix(in srgb, var(--approved-green) 15%, var(--approved-surface));
+  outline: 0;
+  box-shadow: 0 2px 8px rgba(28, 48, 38, .1);
+}
+
+.app-command-brand > .sidebar-update-action:disabled {
+  cursor: default;
+  opacity: .78;
+}
+
+.app-command-brand > .sidebar-update-action .sidebar-update-icon {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.app-command-brand > .sidebar-update-action.is-busy .sidebar-update-icon {
+  animation: sidebar-update-spin 900ms linear infinite;
+}
+
+.app-command-brand > .sidebar-update-action > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Keep compact chrome readable at the smallest user-selected scale. */
+.app-nav-button {
+  color: color-mix(in srgb, var(--loop-ui-ink) 76%, var(--loop-ui-muted));
+  font-size: calc(11.5 * var(--font-unit));
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.app-nav-button.active,
+.app-nav-button[aria-pressed="true"] {
+  font-weight: 700;
+}
+
+/* Settings typography uses a readable floor while still following font-scale. */
+.settings-nav button {
+  color: color-mix(in srgb, var(--handoff-muted, var(--muted)) 88%, var(--handoff-ink, var(--heading)));
+  font-size: calc(13 * var(--font-unit));
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.settings-nav button.active,
+.settings-nav button[aria-current="page"] {
+  font-weight: 700;
+}
+
+.settings-page-head h3 {
+  font-size: calc(23 * var(--font-unit));
+  line-height: 1.25;
+}
+
+.settings-page-head p {
+  color: color-mix(in srgb, var(--handoff-muted, var(--muted)) 90%, var(--handoff-ink, var(--heading)));
+  font-size: calc(13 * var(--font-unit));
+  line-height: 1.5;
+}
+
+.settings-section-label,
+#software-update-title {
+  font-size: calc(12 * var(--font-unit));
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.settings-row-copy strong {
+  font-size: calc(13.5 * var(--font-unit));
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.settings-panel .settings-row select,
+.settings-row .settings-options button,
+.settings-current-value {
+  font-size: calc(12.5 * var(--font-unit));
+  letter-spacing: 0;
+}
+
+.settings-row .settings-options button {
+  min-height: 29px;
+  font-weight: 600;
+}
+
+/* The Today queue is intentionally title-free, so the list gets a stronger
+   optical top inset and slightly more substantial rows. */
+.rail.sidebar.sidebar-today-mode.focus-rail {
+  padding: 26px 14px 86px;
+}
+
+.focus-rail .focus-list {
+  gap: 6px;
+}
+
+.focus-rail .focus-row {
+  min-height: 49px;
+  border-radius: 10px;
+  padding-inline: 14px;
+}
+
+/* Repository header: align the count with the action controls and keep it
+   away from the rounded top-left corner. */
+.rail.sidebar.sidebar-tasks-mode .repository-fixed-header {
+  padding: 24px 12px 12px;
+}
+
+.rail.sidebar .repository-heading-row {
+  align-items: center;
+  padding-inline: 14px;
+}
+
+.rail.sidebar .repository-library-heading .task-list-count {
+  line-height: 1.2;
+}
+
+.rail.sidebar .repository-filter-trigger.is-active {
+  background: color-mix(in srgb, var(--approved-green) 11%, var(--approved-muted));
+  color: var(--approved-green);
+}
+
+/* One shared chevron treatment for group and priority controls. */
+.rail.sidebar .repository-group-trigger > .repository-group-chevron,
+.rail.sidebar .repository-filter-chevron {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 13px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.rail.sidebar .repository-group-trigger > .repository-group-chevron {
+  margin-left: 6px;
+}
+
+.rail.sidebar .repository-group-picker.is-open .repository-group-chevron,
+.rail.sidebar .repository-priority-menu[open] .repository-filter-chevron {
+  transform: rotate(180deg);
+}
+
+/* The priority filter is a single custom control, not a styled select inside
+   another styled control. */
+.rail.sidebar .repository-priority-menu {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+}
+
+.rail.sidebar .repository-priority-trigger {
+  display: flex;
+  width: 100%;
+  height: 31px;
+  align-items: center;
+  justify-content: space-between;
+  border: 1px solid var(--approved-line);
+  border-radius: 8px;
+  padding: 0 9px;
+  background: var(--approved-muted);
+  color: var(--loop-ui-ink);
+  font-family: var(--app-font);
+  font-size: calc(10.5 * var(--font-unit));
+  font-weight: 600;
+  list-style: none;
+}
+
+.rail.sidebar .repository-priority-trigger::-webkit-details-marker {
+  display: none;
+}
+
+.rail.sidebar .repository-priority-trigger:hover,
+.rail.sidebar .repository-priority-trigger:focus-visible,
+.rail.sidebar .repository-priority-menu[open] > .repository-priority-trigger {
+  border-color: color-mix(in srgb, var(--approved-green) 35%, var(--approved-line));
+  background: var(--approved-surface);
+  outline: 0;
+}
+
+.rail.sidebar .repository-priority-options {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  left: 0;
+  z-index: 95;
+  display: grid;
+  gap: 3px;
+  border: 1px solid var(--approved-line-strong);
+  border-radius: 10px;
+  padding: 5px;
+  background: var(--approved-surface);
+  box-shadow: 0 12px 30px rgba(28, 48, 38, .16);
+}
+
+.rail.sidebar .repository-priority-option {
+  display: flex;
+  width: 100%;
+  min-height: 30px;
+  align-items: center;
+  justify-content: space-between;
+  border: 0;
+  border-radius: 7px;
+  padding: 0 8px;
+  background: transparent;
+  color: var(--loop-ui-ink);
+  font-family: var(--app-font);
+  font-size: calc(10.5 * var(--font-unit));
+  font-weight: 600;
+  text-align: left;
+}
+
+.rail.sidebar .repository-priority-option:hover,
+.rail.sidebar .repository-priority-option:focus-visible,
+.rail.sidebar .repository-priority-option.selected {
+  background: color-mix(in srgb, var(--approved-green) 9%, var(--approved-surface));
+  color: var(--approved-green);
+  outline: 0;
+}
+
+/* Deadline is optional; priority is always the rightmost metadata control. */
+.rail.sidebar .task-row.task-item .task-deadline-badge {
+  order: 1;
+}
+
+.rail.sidebar .task-row.task-item .task-priority-control {
+  order: 2;
+}

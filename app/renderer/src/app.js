@@ -310,6 +310,7 @@ let recurrencePopoverTaskId = "";
 let taskGroupSelectTaskId = "";
 let repositoryGroupPickerOpen = false;
 let repositoryFilterMenuOpen = false;
+let repositoryPriorityFilterOpen = false;
 let repositoryGroupQuery = "";
 let repositoryGroupTriggerLastClickAt = 0;
 let taskPriorityMenu = null;
@@ -2042,14 +2043,13 @@ function renderSidebar() {
             </div>
             <div class="repository-context-actions">
               <details class="repository-filter-menu" ${repositoryFilterMenuOpen ? "open" : ""}>
-                <summary class="repository-filter-trigger" aria-label="打开任务筛选" title="筛选任务">
+                <summary class="repository-filter-trigger ${activeRepositoryFilterCount ? "is-active" : ""}" aria-label="打开任务筛选" title="筛选任务">
                   ${briefFieldIcon("sliders", "repository-filter-icon")}
-                  ${activeRepositoryFilterCount ? `<b aria-label="${activeRepositoryFilterCount} 个筛选条件">${activeRepositoryFilterCount}</b>` : ""}
                 </summary>
                 <div class="repository-filter-popover">
                   <div class="repository-filter-heading">
                     <strong>筛选任务</strong>
-                    <span>${activeRepositoryFilterCount ? `${activeRepositoryFilterCount} 项已启用` : "按条件缩小范围"}</span>
+                    <span>按条件缩小范围</span>
                   </div>
                   <section class="repository-filter-section repository-group-filter-section">
                     <span class="repository-filter-label">分组</span>
@@ -2057,9 +2057,19 @@ function renderSidebar() {
                   </section>
                   <section class="repository-filter-section">
                     <span class="repository-filter-label">优先级</span>
-                    <label class="repository-priority-select" aria-label="优先级筛选">
-                      ${filterSelectHtml("priority-filter", state.priorityFilter, repositoryPriorityFilterLabels, "按优先级筛选")}
-                    </label>
+                    <details class="repository-priority-menu" ${repositoryPriorityFilterOpen ? "open" : ""}>
+                      <summary class="repository-priority-trigger" aria-label="优先级筛选" title="按优先级筛选">
+                        <span>${esc(repositoryPriorityFilterLabels[state.priorityFilter] || repositoryPriorityFilterLabels.all)}</span>
+                        ${briefFieldIcon("chevron-down", "repository-filter-chevron")}
+                      </summary>
+                      <div class="repository-priority-options" role="listbox" aria-label="选择优先级">
+                        ${Object.entries(repositoryPriorityFilterLabels).map(([value, label]) => `
+                          <button class="repository-priority-option ${state.priorityFilter === value ? "selected" : ""}" type="button" role="option" aria-selected="${state.priorityFilter === value}" data-action="set-repository-priority-filter" data-value="${value}">
+                            <span>${esc(label)}</span>${state.priorityFilter === value ? '<span aria-hidden="true">✓</span>' : ""}
+                          </button>
+                        `).join("")}
+                      </div>
+                    </details>
                   </section>
                   <section class="repository-filter-section">
                     <span class="repository-filter-label">记录类型</span>
@@ -2178,7 +2188,7 @@ function renderRepositoryGroupPicker() {
   const isGrowthSource = activePersonalGroup?.id === growthSource;
   return `
     <div class="repository-group-picker ${open ? "is-open" : ""}">
-      <button class="repository-group-trigger" type="button" data-action="toggle-repository-group-picker" ${activePersonalGroup ? `data-group-context-id="${activePersonalGroup.id}"` : ""} aria-expanded="${open}" aria-haspopup="listbox" title="选择分组；双击可修改当前分组名称"><span class="repository-group-value">${esc(repositoryGroupLabel())}</span><span class="repository-group-chevron" aria-hidden="true">⌄</span></button>
+      <button class="repository-group-trigger" type="button" data-action="toggle-repository-group-picker" ${activePersonalGroup ? `data-group-context-id="${activePersonalGroup.id}"` : ""} aria-expanded="${open}" aria-haspopup="listbox" title="选择分组；双击可修改当前分组名称"><span class="repository-group-value">${esc(repositoryGroupLabel())}</span>${briefFieldIcon("chevron-down", "repository-group-chevron")}</button>
       ${open ? `
         <div class="repository-group-popover" role="listbox" aria-label="选择分组">
           <label class="repository-group-search"><span aria-hidden="true">⌕</span><input type="search" value="${escAttr(repositoryGroupQuery)}" placeholder="搜索分组…" aria-label="搜索分组" autocomplete="off" /></label>
@@ -2260,8 +2270,8 @@ function renderTaskItem(task, displayOrder) {
         <input class="task-title" placeholder="任务标题" aria-label="任务标题" data-edit-key="title" data-task-id="${task.id}" value="${escAttr(task.title)}" />
       </span>
       <span class="task-row-meta">
-        ${renderTaskPriorityControl(task)}
         ${renderTaskDeadlineBadge(task)}
+        ${renderTaskPriorityControl(task)}
       </span>
     </div>
   `;
@@ -4142,7 +4152,7 @@ function renderSidebarUpdateControl(update = appUpdateState) {
       title="${escAttr(description)}"
       ${busy ? 'aria-busy="true" disabled' : ""}
     >
-      <svg aria-hidden="true"><use href="./src/assets/feather/feather-sprite.svg#${icon}"></use></svg>
+      <svg class="sidebar-update-icon" aria-hidden="true"><use href="./src/assets/feather/feather-sprite.svg#${icon}"></use></svg>
       <span>${label}</span>
     </button>
   `;
@@ -5232,6 +5242,10 @@ function bindTaskRepositoryRows(scope = document) {
   const repositoryFilterMenu = scope.querySelector?.(".repository-filter-menu");
   repositoryFilterMenu?.addEventListener("toggle", () => {
     repositoryFilterMenuOpen = repositoryFilterMenu.open;
+    if (!repositoryFilterMenu.open) repositoryPriorityFilterOpen = false;
+  });
+  scope.querySelector?.(".repository-priority-menu")?.addEventListener("toggle", (event) => {
+    repositoryPriorityFilterOpen = event.currentTarget.open;
   });
 
   scope.querySelectorAll(".task-item[data-task-id]").forEach((element) => {
@@ -7313,6 +7327,13 @@ async function action(data, event = null) {
       save();
     }
   }
+  if (data.action === "set-repository-priority-filter") {
+    state.priorityFilter = normalizePriorityFilter(data.value);
+    state.selectedNodeId = "";
+    repositoryPriorityFilterOpen = false;
+    if (!filteredTasks({ includeQuery: false }).some((task) => task.id === state.activeTaskId)) state.activeTaskId = "";
+    save();
+  }
   if (data.action === "toggle-repository-group-picker") {
     const clickedAt = Date.now();
     const isDoubleClick = clickedAt - repositoryGroupTriggerLastClickAt < 360;
@@ -7761,6 +7782,7 @@ function selectGroup(groupId) {
   state.focusGroupTitleId = "";
   state.query = "";
   repositoryGroupPickerOpen = false;
+  repositoryPriorityFilterOpen = false;
   repositoryGroupQuery = "";
 }
 
@@ -9148,6 +9170,7 @@ window.addEventListener("keydown", (event) => {
       deadlinePopoverTaskId = "";
       repositoryGroupPickerOpen = false;
       repositoryFilterMenuOpen = false;
+      repositoryPriorityFilterOpen = false;
       repositoryGroupQuery = "";
       taskPriorityMenu = null;
       closeBugReport();

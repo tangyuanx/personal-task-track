@@ -2524,9 +2524,10 @@ test("transient controls close on outside pointer presses without changing prote
 });
 
 test("settings expose one-confirmation background update with a safe silent restart handshake", async () => {
-  const [app, styles, preload, updater, main] = await Promise.all([
+  const [app, styles, approved, preload, updater, main] = await Promise.all([
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "app.js"), "utf8"),
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "styles.css"), "utf8"),
+    fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "approved-4174.css"), "utf8"),
     fs.readFile(path.join(__dirname, "..", "app", "main", "preload.cjs"), "utf8"),
     fs.readFile(path.join(__dirname, "..", "app", "main", "updater.cjs"), "utf8"),
     fs.readFile(path.join(__dirname, "..", "app", "main", "main.cjs"), "utf8"),
@@ -2581,8 +2582,9 @@ test("settings expose one-confirmation background update with a safe silent rest
   assert.match(missingWindowsFeed, /打开发布页/);
   assert.doesNotMatch(available, /data-update-action="install"/);
   assert.match(styles, /\.settings-update-progress span\s*\{[\s\S]*background:\s*var\(--focus\);/);
-  assert.match(styles, /\.brand\.sidebar-head > \.sidebar-update-action\s*\{[\s\S]*height:28px;[\s\S]*background:var\(--handoff-focus-800, var\(--focus\)\);/);
-  assert.match(styles, /\.brand\.sidebar-head > \.sidebar-update-action:focus-visible\s*\{/);
+  assert.match(approved, /\.app-command-brand > \.sidebar-update-action\s*\{[\s\S]*height:\s*28px;[\s\S]*background:\s*color-mix\(in srgb, var\(--approved-green\)/);
+  assert.match(approved, /\.app-command-brand > \.sidebar-update-action \.sidebar-update-icon\s*\{[\s\S]*width:\s*14px;[\s\S]*height:\s*14px;[\s\S]*fill:\s*none;/);
+  assert.match(approved, /\.app-command-brand > \.sidebar-update-action:focus-visible\s*\{/);
   assert.match(styles, /@media \(prefers-reduced-motion:reduce\)[\s\S]*sidebar-update-action\.is-busy svg/);
   assert.match(styles, /\.update-install-overlay\s*\{/);
   assert.match(preload, /app-update:get-state/);
@@ -3247,7 +3249,7 @@ test("task repository renders priority without an update timestamp", async () =>
   const app = await fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "app.js"), "utf8");
 
   assert.match(app, /class="task-priority-control \$\{priority\}"/);
-  assert.match(app, /class="task-row-meta">[\s\S]*renderTaskPriorityControl\(task\)[\s\S]*renderTaskDeadlineBadge\(task\)/);
+  assert.match(app, /class="task-row-meta">[\s\S]*renderTaskDeadlineBadge\(task\)[\s\S]*renderTaskPriorityControl\(task\)/);
   assert.match(app, /class="task-priority-popover" role="menu" aria-label="设置优先级"/);
   assert.match(app, /data-action="set-task-priority"/);
   assert.doesNotMatch(app, /formatRepositoryStamp/);
@@ -3268,6 +3270,52 @@ test("task repository priority controls stay concise and completed rows are full
   assert.match(finalRules, /\.task-priority-popover\s*\{[\s\S]*width:\s*148px;[\s\S]*border-radius:\s*12px;/);
   assert.match(finalRules, /\.task-priority-option\.selected\s*\{[\s\S]*color:\s*var\(--approved-green\);/);
   assert.match(finalRules, /task-item\.done \.task-sequence,[\s\S]*task-item\.done \.task-row-meta\s*\{[\s\S]*opacity:\s*\.62;/);
+});
+
+test("v0.1.190 visual repair keeps update, typography, Today, and filter controls coherent", async () => {
+  const [app, approved] = await Promise.all([
+    fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "app.js"), "utf8"),
+    fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "approved-4174.css"), "utf8"),
+  ]);
+  const harness = await rendererHarness();
+  const surfaces = harness.json(`(() => {
+    state.tasks = normalizeTasks([
+      { id: "task_a", title: "有截止时间", priority: "high", deadlineAt: "2026-09-22T10:00:00.000Z", nodes: [] },
+      { id: "task_b", title: "没有截止时间", priority: "medium", nodes: [] },
+    ]);
+    state.taskFilter = "active";
+    state.priorityFilter = "high";
+    repositoryFilterMenuOpen = true;
+    repositoryPriorityFilterOpen = true;
+    appUpdateState = normalizeAppUpdateState({ status: "available", supported: true, currentVersion: "0.1.189", version: "0.1.190" });
+    return {
+      update: renderSidebarUpdateControl(),
+      nav: renderAppTopbar(),
+      today: renderTodayFocus(todayFocusItems()),
+      sidebar: renderSidebar(),
+      row: renderTaskItem(state.tasks[0], 1),
+    };
+  })()`);
+
+  assert.match(surfaces.update, /class="sidebar-update-action/);
+  assert.match(surfaces.update, /class="sidebar-update-icon"/);
+  assert.match(surfaces.nav, /class="app-nav-button/);
+  assert.match(surfaces.today, /class="focus-list"/);
+  assert.match(surfaces.sidebar, /class="repository-filter-trigger is-active"/);
+  assert.doesNotMatch(surfaces.sidebar, /个筛选条件|项已启用|<b aria-label/);
+  assert.match(surfaces.sidebar, /class="repository-priority-menu" open/);
+  assert.match(surfaces.sidebar, /class="repository-priority-trigger"/);
+  assert.match(surfaces.sidebar, /data-action="set-repository-priority-filter"/);
+  assert.match(surfaces.sidebar, /class="repository-group-chevron"/);
+  assert.ok(surfaces.row.indexOf("render") >= 0 || surfaces.row.indexOf("task-deadline-badge") < surfaces.row.indexOf("task-priority-control"));
+  assert.match(approved, /\.app-command-brand > \.sidebar-update-action \.sidebar-update-icon\s*\{[\s\S]*width:\s*14px;[\s\S]*height:\s*14px;/);
+  assert.match(approved, /\.app-nav-button\s*\{[\s\S]*font-size:\s*calc\(11\.5 \* var\(--font-unit\)\);[\s\S]*letter-spacing:\s*0;/);
+  assert.match(approved, /\.settings-row-copy strong\s*\{[\s\S]*font-size:\s*calc\(13\.5 \* var\(--font-unit\)\);/);
+  assert.match(approved, /\.rail\.sidebar\.sidebar-today-mode\.focus-rail\s*\{[\s\S]*padding:\s*26px 14px 86px;/);
+  assert.match(approved, /\.focus-rail \.focus-row\s*\{[\s\S]*min-height:\s*49px;[\s\S]*padding-inline:\s*14px;/);
+  assert.match(approved, /\.rail\.sidebar \.repository-priority-trigger\s*\{[\s\S]*background:\s*var\(--approved-muted\);/);
+  assert.match(approved, /\.rail\.sidebar \.task-row\.task-item \.task-deadline-badge\s*\{\s*order:\s*1;/);
+  assert.match(approved, /\.rail\.sidebar \.task-row\.task-item \.task-priority-control\s*\{\s*order:\s*2;/);
 });
 
 test("group editing preserves the horizontal group viewport across renders", async () => {
