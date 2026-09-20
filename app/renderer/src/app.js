@@ -309,8 +309,10 @@ let recurringTodaySignature = "";
 let recurrencePopoverTaskId = "";
 let taskGroupSelectTaskId = "";
 let repositoryGroupPickerOpen = false;
+let repositoryFilterMenuOpen = false;
 let repositoryGroupQuery = "";
 let repositoryGroupTriggerLastClickAt = 0;
+let taskPriorityMenu = null;
 let deadlinePopoverTaskId = "";
 let deadlinePickerDate = "";
 let deadlinePickerMonth = "";
@@ -1744,6 +1746,7 @@ function render() {
         ${state.calendarOpen ? renderCalendarPanel() : task ? renderTaskPage(task) : renderEmptyPage()}
       </section>
       <div id="context-menu-root">${renderContextMenu()}</div>
+      ${renderTaskPriorityPopover()}
       ${state.settingsOpen ? renderSettingsPanel() : ""}
       ${state.reviewOpen ? renderReviewPanel() : ""}
       ${state.feedbackOpen ? renderBugReportPanel() : ""}
@@ -2024,7 +2027,8 @@ function renderSidebar() {
   const focusItems = todayFocusItems();
   const todayMode = state.taskFilter === "today" && !state.calendarOpen && !state.reviewOpen;
   const activeRepositoryFilterCount = Number(state.priorityFilter !== "all")
-    + Number(state.captureSourceFilter !== "all");
+    + Number(state.captureSourceFilter !== "all")
+    + Number(state.activeGroupId !== ALL_TASKS_GROUP_ID);
   return `
     <aside class="sidebar rail ${todayMode ? "sidebar-today-mode focus-rail" : "sidebar-tasks-mode"}" data-primary-view="${todayMode ? "today" : "tasks"}">
       <span class="sidebar-resizer" data-sidebar-resizer title="调整侧栏宽度"></span>
@@ -2034,16 +2038,23 @@ function renderSidebar() {
         <div class="repository-fixed-header">
           <div class="repository-heading-row">
             <div class="repository-library-heading">
-              <strong>任务仓库</strong>
               <span class="task-list-count">${visibleCount === scopedTasks.length ? `${visibleCount} 项` : `${visibleCount} / ${scopedTasks.length} 项`}</span>
             </div>
             <div class="repository-context-actions">
-              <details class="repository-filter-menu">
+              <details class="repository-filter-menu" ${repositoryFilterMenuOpen ? "open" : ""}>
                 <summary class="repository-filter-trigger" aria-label="打开任务筛选" title="筛选任务">
                   ${briefFieldIcon("sliders", "repository-filter-icon")}
                   ${activeRepositoryFilterCount ? `<b aria-label="${activeRepositoryFilterCount} 个筛选条件">${activeRepositoryFilterCount}</b>` : ""}
                 </summary>
                 <div class="repository-filter-popover">
+                  <div class="repository-filter-heading">
+                    <strong>筛选任务</strong>
+                    <span>${activeRepositoryFilterCount ? `${activeRepositoryFilterCount} 项已启用` : "按条件缩小范围"}</span>
+                  </div>
+                  <section class="repository-filter-section repository-group-filter-section">
+                    <span class="repository-filter-label">分组</span>
+                    <div class="repository-group-slot" aria-label="分组">${renderRepositoryGroupPicker()}</div>
+                  </section>
                   <section class="repository-filter-section">
                     <span class="repository-filter-label">优先级</span>
                     <label class="repository-priority-select" aria-label="优先级筛选">
@@ -2066,9 +2077,6 @@ function renderSidebar() {
             ["active", "未完成"],
             ["done", "已完成"],
           ], state.taskFilter, "task-filter")}
-          <div class="repository-context-row">
-            <div class="repository-group-slot" aria-label="分组">${renderRepositoryGroupPicker()}</div>
-          </div>
         </div>
         <div class="repository-list-wrapper">
           <div class="repository-scroll-area" data-task-repository-scroll data-task-repository-view="${escAttr(taskRepositoryViewKey())}">
@@ -2211,20 +2219,50 @@ function renderGroupTabs() {
   `;
 }
 
+function renderTaskPriorityControl(task) {
+  const priority = normalizePriority(task.priority);
+  return `
+    <button class="task-priority-control ${priority}" type="button" data-action="toggle-task-priority-menu" data-task-id="${task.id}" aria-haspopup="menu" aria-expanded="${taskPriorityMenu?.taskId === task.id}" title="修改优先级">
+      <span class="task-priority-dot" aria-hidden="true"></span>
+      <span>${repositoryPriorityLabels[priority]}</span>
+      <svg class="task-priority-chevron" viewBox="0 0 12 12" aria-hidden="true"><path d="m3.5 4.75 2.5 2.5 2.5-2.5"></path></svg>
+    </button>
+  `;
+}
+
+function renderTaskPriorityPopover() {
+  if (!taskPriorityMenu) return "";
+  const task = state.tasks.find((item) => item.id === taskPriorityMenu.taskId);
+  if (!task) return "";
+  const priority = normalizePriority(task.priority);
+  return `
+    <div class="task-priority-layer" data-action="close-task-priority-menu">
+      <div class="task-priority-popover" role="menu" aria-label="设置优先级" style="left:${taskPriorityMenu.x}px;top:${taskPriorityMenu.y}px">
+        <span class="task-priority-popover-label">优先级</span>
+        ${Object.entries(repositoryPriorityLabels).map(([value, label]) => `
+          <button class="task-priority-option ${value} ${priority === value ? "selected" : ""}" type="button" role="menuitemradio" aria-checked="${priority === value}" data-action="set-task-priority" data-task-id="${task.id}" data-priority="${value}">
+            <span class="task-priority-option-dot" aria-hidden="true"></span>
+            <span>${label}</span>
+            <span class="task-priority-option-check" aria-hidden="true">${priority === value ? "✓" : ""}</span>
+          </button>
+        `).join("")}
+      </div>
+    </div>
+  `;
+}
+
 function renderTaskItem(task, displayOrder) {
-  const groupTitle = state.taskGroups.find((group) => group.id === task.groupId)?.title || "未分组";
   return `
     <div class="task-item task-row ${task.id === state.activeTaskId ? "selected active" : ""} ${task.status === "done" ? "done" : ""}" draggable="true" data-context="task" data-task-id="${task.id}" data-task-drag-target="${task.id}">
       <button class="task-check repository-complete ${task.status === "done" ? "is-checked" : ""}" type="button" title="${task.status === "done" ? "标记为未完成" : "标记为完成"}" aria-label="${task.status === "done" ? "标记为未完成" : "标记为完成"}" aria-pressed="${task.status === "done"}" data-action="toggle-task-done" data-task-id="${task.id}"></button>
+      <span class="task-sequence" aria-hidden="true">${displayOrder}</span>
       <span class="task-title-wrap row-title">
         <input class="task-title" placeholder="任务标题" aria-label="任务标题" data-edit-key="title" data-task-id="${task.id}" value="${escAttr(task.title)}" />
-        <span class="task-next-line">${esc(groupTitle)}</span>
       </span>
       <span class="task-row-meta">
+        ${renderTaskPriorityControl(task)}
         ${renderTaskDeadlineBadge(task)}
-        <span class="task-priority-control ${task.priority}">${selectHtml("priority", task.priority, repositoryPriorityLabels, task.id)}</span>
       </span>
-      <span class="task-row-chevron" aria-hidden="true">›</span>
     </div>
   `;
 }
@@ -5191,6 +5229,11 @@ function bind() {
 }
 
 function bindTaskRepositoryRows(scope = document) {
+  const repositoryFilterMenu = scope.querySelector?.(".repository-filter-menu");
+  repositoryFilterMenu?.addEventListener("toggle", () => {
+    repositoryFilterMenuOpen = repositoryFilterMenu.open;
+  });
+
   scope.querySelectorAll(".task-item[data-task-id]").forEach((element) => {
     element.addEventListener("pointerdown", (event) => {
       startTaskLongPress(event);
@@ -6966,6 +7009,7 @@ async function pickEditorImageFile() {
 async function action(data, event = null) {
   state.contextMenu = null;
   syncContextMenuRoot();
+  if (taskPriorityMenu && !["toggle-task-priority-menu", "set-task-priority"].includes(data.action)) taskPriorityMenu = null;
   if (state.searchOpen && data.action !== "toggle-global-search" && event?.currentTarget?.closest?.(".app-command-bar")) {
     state.searchOpen = false;
     state.focusSearch = false;
@@ -7308,6 +7352,37 @@ async function action(data, event = null) {
   if (data.action === "select-task") {
     activateRepositoryTask(data.taskId);
   }
+  if (data.action === "toggle-task-priority-menu") {
+    const task = state.tasks.find((item) => item.id === data.taskId);
+    if (!task) return;
+    if (taskPriorityMenu?.taskId === task.id) {
+      taskPriorityMenu = null;
+    } else {
+      const rect = event?.currentTarget?.getBoundingClientRect?.() || { left: 16, right: 88, top: 16, bottom: 44 };
+      const menuWidth = 148;
+      const menuHeight = 142;
+      const viewportWidth = window.innerWidth || 1024;
+      const viewportHeight = window.innerHeight || 768;
+      taskPriorityMenu = {
+        taskId: task.id,
+        x: Math.max(10, Math.min(rect.right - menuWidth, viewportWidth - menuWidth - 10)),
+        y: rect.bottom + menuHeight + 8 <= viewportHeight ? rect.bottom + 6 : Math.max(10, rect.top - menuHeight - 6),
+      };
+    }
+    render();
+    window.requestAnimationFrame(() => document.querySelector(".task-priority-option.selected")?.focus({ preventScroll: true }));
+    return;
+  }
+  if (data.action === "set-task-priority") {
+    const task = state.tasks.find((item) => item.id === data.taskId);
+    if (task) {
+      task.priority = normalizePriority(data.priority);
+      task.updatedAt = now();
+      save();
+    }
+    taskPriorityMenu = null;
+  }
+  if (data.action === "close-task-priority-menu") taskPriorityMenu = null;
   if (data.action === "add-task") addBlankTask();
   if (data.action === "delete-task" && !(await deleteTask(data.taskId))) return;
   if (data.action === "select-node") {
@@ -9062,7 +9137,7 @@ window.addEventListener("keydown", (event) => {
       syncContextMenuRoot();
       return;
     }
-    if (state.selectedNodeId || state.settingsOpen || state.calendarOpen || state.reviewOpen || state.feedbackOpen || recurrencePopoverTaskId || taskGroupSelectTaskId || deadlinePopoverTaskId || repositoryGroupPickerOpen) {
+    if (state.selectedNodeId || state.settingsOpen || state.calendarOpen || state.reviewOpen || state.feedbackOpen || recurrencePopoverTaskId || taskGroupSelectTaskId || deadlinePopoverTaskId || repositoryGroupPickerOpen || repositoryFilterMenuOpen || taskPriorityMenu) {
       event.preventDefault();
       exitNodeDetail();
       state.settingsOpen = false;
@@ -9072,7 +9147,9 @@ window.addEventListener("keydown", (event) => {
       taskGroupSelectTaskId = "";
       deadlinePopoverTaskId = "";
       repositoryGroupPickerOpen = false;
+      repositoryFilterMenuOpen = false;
       repositoryGroupQuery = "";
+      taskPriorityMenu = null;
       closeBugReport();
       render();
       return;

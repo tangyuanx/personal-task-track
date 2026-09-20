@@ -3246,8 +3246,10 @@ test("node detail records autosave to the original node before selection changes
 test("task repository renders priority without an update timestamp", async () => {
   const app = await fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "app.js"), "utf8");
 
-  assert.match(app, /class="task-priority-control \$\{task\.priority\}"/);
-  assert.match(app, /class="task-row-meta">[\s\S]*renderTaskDeadlineBadge\(task\)[\s\S]*class="task-priority-control/);
+  assert.match(app, /class="task-priority-control \$\{priority\}"/);
+  assert.match(app, /class="task-row-meta">[\s\S]*renderTaskPriorityControl\(task\)[\s\S]*renderTaskDeadlineBadge\(task\)/);
+  assert.match(app, /class="task-priority-popover" role="menu" aria-label="设置优先级"/);
+  assert.match(app, /data-action="set-task-priority"/);
   assert.doesNotMatch(app, /formatRepositoryStamp/);
   assert.doesNotMatch(app, /<time datetime="\$\{escAttr\(task\.updatedAt\)\}">/);
   assert.match(app, /class="add-task-floating" type="button" data-action="add-task"/);
@@ -3256,17 +3258,16 @@ test("task repository renders priority without an update timestamp", async () =>
 
 test("task repository priority controls stay concise and completed rows are fully de-emphasized", async () => {
   const app = await fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "app.js"), "utf8");
-  const styles = await fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "styles.css"), "utf8");
+  const styles = await fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "approved-4174.css"), "utf8");
   const labelBlock = app.slice(app.indexOf("const repositoryPriorityLabels"), app.indexOf("const themeLabels"));
-  const finalRules = styles.slice(styles.lastIndexOf("v0.1.188 final cascade"));
+  const finalRules = styles.slice(styles.lastIndexOf("Task repository refinement"));
 
   assert.match(labelBlock, /high:\s*"高",[\s\S]*medium:\s*"中",[\s\S]*low:\s*"低"/);
   assert.doesNotMatch(labelBlock, /优先/);
-  assert.match(finalRules, /\.task-priority-control\s*\{[\s\S]*min-width:56px;[\s\S]*height:27px;[\s\S]*background:color-mix\(in srgb,var\(--handoff-ink\) 3\.5%,transparent\);/);
-  assert.match(finalRules, /\.task-priority-control select\s*\{[\s\S]*width:100%;[\s\S]*height:100%;[\s\S]*padding:0 8px 0 23px;/);
-  assert.match(finalRules, /task-item\.done \.task-priority-control\.low\s*\{[\s\S]*background:transparent;[\s\S]*color:var\(--handoff-soft\);/);
-  assert.match(finalRules, /task-item\.done \.task-priority-control\.low::before\s*\{[\s\S]*background:currentColor;/);
-  assert.match(finalRules, /task-item\.done \.repository-complete:hover\s*\{[\s\S]*background:color-mix\(in srgb,var\(--handoff-muted\) 18%,transparent\);[\s\S]*opacity:\.56;/);
+  assert.match(finalRules, /\.task-priority-control\s*\{[\s\S]*min-width:\s*56px;[\s\S]*height:\s*28px;[\s\S]*grid-template-columns:\s*6px minmax\(0, 1fr\) 10px;/);
+  assert.match(finalRules, /\.task-priority-popover\s*\{[\s\S]*width:\s*148px;[\s\S]*border-radius:\s*12px;/);
+  assert.match(finalRules, /\.task-priority-option\.selected\s*\{[\s\S]*color:\s*var\(--approved-green\);/);
+  assert.match(finalRules, /task-item\.done \.task-sequence,[\s\S]*task-item\.done \.task-row-meta\s*\{[\s\S]*opacity:\s*\.62;/);
 });
 
 test("group editing preserves the horizontal group viewport across renders", async () => {
@@ -3471,7 +3472,7 @@ test("workbench group selection uses a ReUI-style trigger and option menu", asyn
 test("task repository follows the approved 4174 control ordering", async () => {
   const [app, styles] = await Promise.all([
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "app.js"), "utf8"),
-    fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "styles.css"), "utf8"),
+    fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "approved-4174.css"), "utf8"),
   ]);
   const harness = await rendererHarness();
   const html = harness.evaluate(`renderTaskItem(normalizeTasks([{
@@ -3481,16 +3482,16 @@ test("task repository follows the approved 4174 control ordering", async () => {
   assert.match(app, /\.map\(\(task, index\) => renderTaskItem\(task, index \+ 1\)\)/);
   assert.doesNotMatch(app, /class="task-repository-columns"/);
   assert.match(html, /draggable="true"/);
-  assert.ok(html.indexOf("repository-complete") < html.indexOf("task-title-wrap"));
-  assert.match(html, /class="task-next-line">默认<\/span>/);
+  assert.ok(html.indexOf("repository-complete") < html.indexOf("task-sequence"));
+  assert.ok(html.indexOf("task-sequence") < html.indexOf("task-title-wrap"));
+  assert.match(html, /class="task-sequence"[^>]*>3<\/span>/);
   assert.match(html, /task-priority-control high/);
-  assert.match(html, /task-row-chevron/);
-  assert.doesNotMatch(html, /task-sequence/);
+  assert.doesNotMatch(html, /task-next-line|task-row-chevron/);
   assert.doesNotMatch(html, /task-drag-handle/);
-  const approvedShell = styles.slice(styles.lastIndexOf("2026-09-19 — restore the approved 4174 product shell"));
-  assert.match(approvedShell, /grid-template-columns:\s*24px minmax\(0, 1fr\) auto 18px;/);
-  assert.match(approvedShell, /min-height:\s*65px;/);
-  assert.match(approvedShell, /padding:\s*9px 10px;/);
+  const repositoryRefinement = styles.slice(styles.lastIndexOf("Task repository refinement"));
+  assert.match(repositoryRefinement, /grid-template-columns:\s*22px 22px minmax\(0, 1fr\) auto;/);
+  assert.match(repositoryRefinement, /min-height:\s*52px;/);
+  assert.match(repositoryRefinement, /padding:\s*0 10px;/);
 });
 
 test("approved 4174 shell is the final stylesheet authority", async () => {
@@ -3513,11 +3514,14 @@ test("approved 4174 shell is the final stylesheet authority", async () => {
   assert.match(approved, /\.focus-rail > \.rail-footer\s*\{[\s\S]*height:\s*70px;[\s\S]*padding:\s*0 22px;/);
   assert.match(approved, /\.focus-rail \.theme-toggle\.theme-switch,[\s\S]*width:\s*45px;[\s\S]*height:\s*25px;/);
   assert.match(approved, /\.rail\.sidebar \.task-row\.task-item \.repository-complete\s*\{[\s\S]*grid-column:\s*1;/);
-  assert.match(approved, /\.rail\.sidebar \.task-row\.task-item \.task-row-chevron\s*\{[\s\S]*grid-column:\s*4;/);
+  assert.match(approved, /\.rail\.sidebar \.task-row\.task-item \.task-sequence\s*\{[\s\S]*grid-column:\s*2;/);
   assert.match(approved, /\.app-topbar-search \.gooey-search-field,[\s\S]*border:\s*0;[\s\S]*box-shadow:\s*none;/);
   assert.match(approved, /\.rail\.sidebar > \.task-footer\.sidebar-foot \.sidebar-footer-actions\s*\{[\s\S]*justify-content:\s*flex-start;[\s\S]*margin:\s*0 auto 0 0;/);
   assert.match(approved, /\.settings-panel \.settings-row select\s*\{[\s\S]*width:\s*auto;[\s\S]*field-sizing:\s*content;[\s\S]*text-align:\s*left;/);
   assert.match(approved, /\.settings-panel \.work-rhythm-settings-unlock button\.primary\s*\{[\s\S]*min-width:\s*max-content;[\s\S]*background:\s*var\(--approved-green\);/);
+  const repositoryRefinement = approved.slice(approved.lastIndexOf("Task repository refinement"));
+  assert.match(repositoryRefinement, /\.rail\.sidebar \.repository-filter-trigger,[\s\S]*\.rail\.sidebar \.add-task-floating\s*\{[\s\S]*width:\s*34px;[\s\S]*height:\s*34px;[\s\S]*border-radius:\s*10px;[\s\S]*background:\s*var\(--approved-muted\);/);
+  assert.match(repositoryRefinement, /\.rail\.sidebar \.repository-heading-row\s*\{[\s\S]*align-items:\s*flex-start;[\s\S]*padding:\s*0 10px;/);
 });
 
 test("repository and flow cleanup leave no inherited separators or duplicate headings", async () => {
@@ -3908,7 +3912,8 @@ test("repository groups render only record scope and personal groups with manage
   assert.doesNotMatch(result.options, />全部分组</);
   assert.doesNotMatch(result.scope, /repository-group-icon/);
   assert.match(result.sidebar, /class="repository-heading-row"[\s\S]*class="repository-library-heading"[\s\S]*class="repository-context-actions"/);
-  assert.match(result.sidebar, /class="repository-segmented completion-segmented task-status-filters"[\s\S]*class="repository-context-row"[\s\S]*class="repository-group-slot"[\s\S]*class="repository-group-picker is-open"/);
+  assert.match(result.sidebar, /class="repository-filter-popover"[\s\S]*class="repository-filter-label">分组<\/span>[\s\S]*class="repository-group-slot"[\s\S]*class="repository-group-picker is-open"[\s\S]*class="repository-segmented completion-segmented task-status-filters"/);
+  assert.doesNotMatch(result.sidebar, /repository-context-row/);
   assert.match(result.sidebar, /placeholder="搜索分组…"/);
   assert.match(result.sidebar, /data-action="add-group">＋ 新建分组/);
   assert.doesNotMatch(result.sidebar, /<section class="group-panel"/);
@@ -4065,9 +4070,11 @@ test("global search floats from the app rail while repository tools remain conte
     })()`);
     const approvedShell = styles.slice(styles.lastIndexOf("2026-09-19 — restore the approved 4174 product shell"));
 
-    assert.match(surfaces.sidebar, /class="repository-heading-row"[\s\S]*任务仓库[\s\S]*class="task-list-count">1 项/);
+    assert.match(surfaces.sidebar, /class="repository-heading-row"[\s\S]*class="task-list-count">1 项/);
+    assert.doesNotMatch(surfaces.sidebar, />任务仓库</);
     assert.match(surfaces.sidebar, /completion-segmented task-status-filters/);
-    assert.match(surfaces.sidebar, /class="repository-context-row"[\s\S]*class="repository-group-slot"/);
+    assert.match(surfaces.sidebar, /class="repository-filter-popover"[\s\S]*class="repository-filter-label">分组<\/span>[\s\S]*class="repository-group-slot"/);
+    assert.doesNotMatch(surfaces.sidebar, /class="repository-context-row"/);
     assert.match(surfaces.sidebar, /data-action="toggle-settings"/);
     assert.match(surfaces.topbar, /class="app-command-bar"[\s\S]*data-setting-button="task-filter" data-value="today"[\s\S]*data-action="toggle-review"/);
     assert.match(surfaces.topbar, /class="app-topbar-search is-open"[\s\S]*id="search"[\s\S]*class="global-search-panel"/);
