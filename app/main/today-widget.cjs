@@ -120,7 +120,8 @@ function applyTodayWidgetTopmost(window, enabled, platform = process.platform) {
     });
     window.setHiddenInMissionControl(topmost);
   }
-  window.setAlwaysOnTop(topmost, topmost ? "screen-saver" : "normal", topmost && platform === "darwin" ? 1 : 0);
+  const level = topmost ? (platform === "darwin" ? "screen-saver" : "floating") : "normal";
+  window.setAlwaysOnTop(topmost, level, topmost && platform === "darwin" ? 1 : 0);
   if (topmost && window.isVisible()) window.moveTop();
 }
 
@@ -267,7 +268,10 @@ function createTodayWidgetController({ app, BrowserWindow, globalShortcut, ipcMa
     });
     widgetWindow.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
     widgetWindow.on("show", applyAlwaysOnTop);
-    widgetWindow.on("focus", applyClickThrough);
+    widgetWindow.on("focus", () => {
+      applyAlwaysOnTop();
+      applyClickThrough();
+    });
     widgetWindow.on("move", () => {
       if (Date.now() < suppressMoveUntil || !widgetWindow || widgetWindow.isDestroyed()) return;
       const { x, y } = widgetWindow.getBounds();

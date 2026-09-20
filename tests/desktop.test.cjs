@@ -2806,6 +2806,18 @@ test("Today widget topmost policy joins macOS fullscreen Spaces without hiding t
   ]);
 });
 
+test("Today widget uses a portable floating topmost level outside macOS", () => {
+  const calls = [];
+  const window = {
+    isDestroyed: () => false,
+    isVisible: () => true,
+    setAlwaysOnTop: (...args) => calls.push(args),
+    moveTop: () => {},
+  };
+  applyTodayWidgetTopmost(window, true, "win32");
+  assert.deepEqual(calls, [[true, "floating", 0]]);
+});
+
 test("Today widget restores topmost after app deactivation releases temporary editing state", async (t) => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "personal-task-track-widget-lifecycle-test-"));
   t.after(() => fs.rm(directory, { recursive: true, force: true }));
@@ -2872,7 +2884,7 @@ test("Today widget restores topmost after app deactivation releases temporary ed
 
   controller.restoreAlwaysOnTopAfterAppDeactivation();
   assert.deepEqual(topmostCalls.slice(-2), [
-    ["always-on-top", true, "screen-saver", process.platform === "darwin" ? 1 : 0],
+    ["always-on-top", true, process.platform === "darwin" ? "screen-saver" : "floating", process.platform === "darwin" ? 1 : 0],
     ["move-top"],
   ]);
 });
@@ -2913,6 +2925,7 @@ test("production Today widget uses its dedicated frontend and a sandboxed Electr
   assert.doesNotMatch(demo, /按优先级与阻塞状态排序|项待办|刚刚同步|在主窗口查看全部|corner-anchor/);
   assert.match(demo, /data-place="top-left"/);
   assert.match(demo, /<span>始终显示在最上层<\/span>/);
+  assert.match(demo, /id="always-on-top-toggle"[^>]*aria-pressed="true"/);
   assert.match(demo, /<span>随应用启动<\/span>/);
   assert.match(demo, /<span>窗口透明度<\/span>/);
   assert.match(demo, /<span>鼠标穿透显示<\/span>/);
@@ -2925,6 +2938,9 @@ test("production Today widget uses its dedicated frontend and a sandboxed Electr
   assert.match(runtime, /bridge\.completeTask/);
   assert.match(runtime, /bridge\.createTask/);
   assert.match(runtime, /bridge\.updateTaskTitle/);
+  assert.match(runtime, /row\.classList\.contains\("quick-capture-item"\) \? 120 : 220/);
+  assert.match(runtime, /aria-label", row\.classList\.contains\("quick-capture-item"\) \? "编辑速记"/);
+  assert.match(runtime, /alwaysOnTopToggle/);
   assert.match(runtime, /bridge\.deleteQuickCapture/);
   assert.match(runtime, /bridge\.moveItem/);
   assert.match(runtime, /data-lane="task"/);
@@ -2989,10 +3005,10 @@ test("production Today widget uses its dedicated frontend and a sandboxed Electr
   assert.match(widgetMain, /type: process\.platform === "darwin" \? "panel" : undefined/);
   assert.match(widgetMain, /preferences\.alwaysOnTop && !editingText/);
   assert.match(widgetMain, /function restoreAlwaysOnTopAfterAppDeactivation\(\)[\s\S]*editingText = false;[\s\S]*applyAlwaysOnTop\(\)/);
-  assert.match(widgetMain, /setAlwaysOnTop\(topmost, topmost \? "screen-saver" : "normal"/);
+  assert.match(widgetMain, /const level = topmost \? \(platform === "darwin" \? "screen-saver" : "floating"\) : "normal"/);
   assert.match(widgetMain, /visibleOnFullScreen: topmost/);
   assert.match(widgetMain, /skipTransformProcessType: true/);
-  assert.match(widgetMain, /setAlwaysOnTop[\s\S]*"screen-saver"/);
+  assert.match(widgetMain, /setAlwaysOnTop\(topmost, level, topmost && platform === "darwin" \? 1 : 0\)/);
   assert.match(widgetMain, /moveTop\(\)/);
   assert.match(widgetMain, /getDisplayMatching/);
   assert.match(widgetMain, /if \(preferences\.compact\)[\s\S]*size\?\.transient !== true[\s\S]*height:\s*Math\.max\(49, Math\.min\(420/);
@@ -3842,6 +3858,28 @@ test("Today widget quick captures reuse tasks, timestamps, source filtering, and
   assert.deepEqual(result.snapshot.quickCaptures.map((item) => item.taskId), ["capture_new", "capture_third", "capture_fourth", "capture_fifth", "capture_old"]);
   assert.equal(result.snapshot.quickCaptures[0].createdAt, "2026-08-29T08:00:00.000Z");
   assert.deepEqual(result.snapshot.groups, [{ id: "group_inbox", title: "默认" }]);
+});
+
+test("Today widget quick captures can be edited from a single click and stay ordinary tasks", async () => {
+  const harness = await rendererHarness();
+  const result = harness.json(`(() => {
+    state.tasks = normalizeTasks([{
+      id: "capture_edit",
+      title: "原始速记",
+      captureSource: "today-widget",
+      updatedAt: "2026-08-29T08:00:00.000Z"
+    }]);
+    render = () => {};
+    const updated = updateTaskTitleFromWidget("capture_edit", "修改后的速记");
+    const task = state.tasks.find((item) => item.id === "capture_edit");
+    return { updated, title: task.title, captureSource: task.captureSource };
+  })()`);
+  assert.equal(result.updated.code, "UPDATED");
+  assert.deepEqual(result, {
+    updated: { success: true, code: "UPDATED", taskId: "capture_edit" },
+    title: "修改后的速记",
+    captureSource: "today-widget",
+  });
 });
 
 test("Today widget task and quick-capture order can be moved independently and survives normalization", async () => {

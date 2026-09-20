@@ -24,6 +24,7 @@
   const emptyState = document.querySelector("#empty-state");
   const toast = document.querySelector("#toast");
   const alwaysOnTop = document.querySelector("#always-on-top");
+  const alwaysOnTopToggle = document.querySelector("#always-on-top-toggle");
   const clickThrough = document.querySelector("#click-through");
   const clickThroughHint = document.querySelector("#click-through-hint");
   const launchWithApp = document.querySelector("#launch-with-app");
@@ -198,6 +199,15 @@
     opacityValue.textContent = `${percentage}%`;
   }
 
+  function syncAlwaysOnTopControl(enabled) {
+    const pinned = enabled !== false;
+    alwaysOnTop.checked = pinned;
+    alwaysOnTopToggle?.setAttribute("aria-pressed", String(pinned));
+    alwaysOnTopToggle?.setAttribute("aria-label", pinned ? "取消置顶" : "始终置顶");
+    alwaysOnTopToggle?.setAttribute("title", pinned ? "取消置顶" : "始终置顶");
+    widget.classList.toggle("is-unpinned", !pinned);
+  }
+
   function applyWindowState(value) {
     const state = value && typeof value === "object" ? value : {};
     const position = ["top-left", "top-right", "bottom-left", "bottom-right", "custom"].includes(state.position)
@@ -205,9 +215,8 @@
       : "top-right";
     widget.dataset.position = position;
     widget.classList.toggle("is-compact", state.compact === true);
-    widget.classList.toggle("is-unpinned", state.alwaysOnTop === false);
+    syncAlwaysOnTopControl(state.alwaysOnTop);
     widget.classList.toggle("is-click-through", state.clickThrough === true);
-    alwaysOnTop.checked = state.alwaysOnTop !== false;
     clickThrough.checked = state.clickThrough === true;
     clickThroughHint.hidden = state.clickThrough !== true;
     quickCaptureInput.value = String(state.quickCaptureDraft || "");
@@ -262,6 +271,7 @@
     const strong = document.createElement("strong");
     strong.textContent = title;
     editingInput.replaceWith(strong);
+    row?.classList.remove("is-editing");
     editingInput = null;
     editingTaskId = "";
     setTextEditing(false);
@@ -282,6 +292,7 @@
       showToast(result?.code === "INVALID_TITLE" ? "标题不能为空" : "标题保存失败");
       return;
     }
+    row.classList.remove("is-editing");
     editingInput = null;
     editingTaskId = "";
     setTextEditing(false);
@@ -301,8 +312,9 @@
     input.className = "task-inline-input";
     input.value = strong.textContent || "";
     input.maxLength = 240;
-    input.setAttribute("aria-label", "编辑任务标题");
+    input.setAttribute("aria-label", row.classList.contains("quick-capture-item") ? "编辑速记" : "编辑任务标题");
     strong.replaceWith(input);
+    row.classList.add("is-editing");
     editingTaskId = row.dataset.taskId || "";
     editingInput = input;
     setTextEditing(true);
@@ -518,7 +530,11 @@
       row.addEventListener("click", (event) => {
         if (Date.now() < suppressRowClickUntil || event.target.closest(".task-check, .task-inline-input")) return;
         window.clearTimeout(clickTimer);
-        clickTimer = window.setTimeout(() => beginInlineEdit(row), 220);
+        // Keep quick captures explicitly single-click editable. They share
+        // the task row shell, but are a capture/edit surface rather than a
+        // navigation-only item.
+        const editDelay = row.classList.contains("quick-capture-item") ? 120 : 220;
+        clickTimer = window.setTimeout(() => beginInlineEdit(row), editDelay);
       });
       row.addEventListener("dblclick", (event) => {
         if (Date.now() < suppressRowClickUntil || event.target.closest(".task-check, .task-inline-input")) return;
@@ -659,9 +675,17 @@
   });
 
   alwaysOnTop.addEventListener("change", async (event) => {
-    widget.classList.toggle("is-unpinned", !event.target.checked);
-    showToast(event.target.checked ? "已开启始终置顶" : "已关闭始终置顶");
-    await bridge.setPreferences({ alwaysOnTop: event.target.checked });
+    const pinned = event.target.checked === true;
+    syncAlwaysOnTopControl(pinned);
+    showToast(pinned ? "已开启始终置顶" : "已关闭始终置顶");
+    await bridge.setPreferences({ alwaysOnTop: pinned });
+  });
+
+  alwaysOnTopToggle?.addEventListener("click", async () => {
+    const pinned = alwaysOnTop.checked !== true;
+    syncAlwaysOnTopControl(pinned);
+    showToast(pinned ? "已开启始终置顶" : "已关闭始终置顶");
+    await bridge.setPreferences({ alwaysOnTop: pinned });
   });
 
   clickThrough.addEventListener("change", async (event) => {
