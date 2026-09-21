@@ -2925,7 +2925,8 @@ test("production Today widget uses its dedicated frontend and a sandboxed Electr
   assert.doesNotMatch(demo, /按优先级与阻塞状态排序|项待办|刚刚同步|在主窗口查看全部|corner-anchor/);
   assert.match(demo, /data-place="top-left"/);
   assert.match(demo, /<span>始终显示在最上层<\/span>/);
-  assert.match(demo, /id="always-on-top-toggle"[^>]*aria-pressed="true"/);
+  assert.match(demo, /id="always-on-top"/);
+  assert.doesNotMatch(demo, /id="always-on-top-toggle"/);
   assert.match(demo, /<span>随应用启动<\/span>/);
   assert.match(demo, /<span>窗口透明度<\/span>/);
   assert.match(demo, /<span>鼠标穿透显示<\/span>/);
@@ -2940,7 +2941,7 @@ test("production Today widget uses its dedicated frontend and a sandboxed Electr
   assert.match(runtime, /bridge\.updateTaskTitle/);
   assert.match(runtime, /row\.classList\.contains\("quick-capture-item"\) \? 120 : 220/);
   assert.match(runtime, /aria-label", row\.classList\.contains\("quick-capture-item"\) \? "编辑速记"/);
-  assert.match(runtime, /alwaysOnTopToggle/);
+  assert.doesNotMatch(runtime, /alwaysOnTopToggle/);
   assert.match(runtime, /bridge\.deleteQuickCapture/);
   assert.match(runtime, /bridge\.moveItem/);
   assert.match(runtime, /data-lane="task"/);

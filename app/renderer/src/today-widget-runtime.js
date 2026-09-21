@@ -24,7 +24,6 @@
   const emptyState = document.querySelector("#empty-state");
   const toast = document.querySelector("#toast");
   const alwaysOnTop = document.querySelector("#always-on-top");
-  const alwaysOnTopToggle = document.querySelector("#always-on-top-toggle");
   const clickThrough = document.querySelector("#click-through");
   const clickThroughHint = document.querySelector("#click-through-hint");
   const launchWithApp = document.querySelector("#launch-with-app");
@@ -202,10 +201,6 @@
   function syncAlwaysOnTopControl(enabled) {
     const pinned = enabled !== false;
     alwaysOnTop.checked = pinned;
-    alwaysOnTopToggle?.setAttribute("aria-pressed", String(pinned));
-    alwaysOnTopToggle?.setAttribute("aria-label", pinned ? "取消置顶" : "始终置顶");
-    alwaysOnTopToggle?.setAttribute("title", pinned ? "取消置顶" : "始终置顶");
-    widget.classList.toggle("is-unpinned", !pinned);
   }
 
   function applyWindowState(value) {
@@ -676,13 +671,6 @@
 
   alwaysOnTop.addEventListener("change", async (event) => {
     const pinned = event.target.checked === true;
-    syncAlwaysOnTopControl(pinned);
-    showToast(pinned ? "已开启始终置顶" : "已关闭始终置顶");
-    await bridge.setPreferences({ alwaysOnTop: pinned });
-  });
-
-  alwaysOnTopToggle?.addEventListener("click", async () => {
-    const pinned = alwaysOnTop.checked !== true;
     syncAlwaysOnTopControl(pinned);
     showToast(pinned ? "已开启始终置顶" : "已关闭始终置顶");
     await bridge.setPreferences({ alwaysOnTop: pinned });
