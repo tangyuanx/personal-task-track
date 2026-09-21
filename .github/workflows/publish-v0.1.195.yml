@@ -8,6 +8,7 @@ on:
     paths:
       - .github/workflows/publish-v0.1.195.yml
       - app/renderer/today-widget.html
+      - app/renderer/src/today-widget-runtime.js
 
 concurrency:
   group: publish-v0.1.195
