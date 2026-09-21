@@ -2568,7 +2568,8 @@ test("settings expose one-confirmation background update with a safe silent rest
   assert.match(available, /v0\.1\.110 可用/);
   assert.match(available, /data-update-action="download">升级并重启/);
   assert.match(preparing, /正在保存并准备升级/);
-  assert.match(sidebar.latest, /class="sidebar-version"[^>]*>v0\.1\.109<\/span>/);
+  assert.match(sidebar.latest, /class="topbar-update-slot"[^>]*data-sidebar-update-slot hidden/);
+  assert.doesNotMatch(sidebar.latest, /v0\.1\.109|sidebar-version/);
   assert.doesNotMatch(sidebar.latest, /sidebar-update-action/);
   assert.match(sidebar.available, /class="sidebar-update-action/);
   assert.match(sidebar.available, /data-sidebar-update-action/);
@@ -2582,9 +2583,9 @@ test("settings expose one-confirmation background update with a safe silent rest
   assert.match(missingWindowsFeed, /打开发布页/);
   assert.doesNotMatch(available, /data-update-action="install"/);
   assert.match(styles, /\.settings-update-progress span\s*\{[\s\S]*background:\s*var\(--focus\);/);
-  assert.match(approved, /\.app-command-brand > \.sidebar-update-action\s*\{[\s\S]*height:\s*28px;[\s\S]*background:\s*color-mix\(in srgb, var\(--approved-green\)/);
-  assert.match(approved, /\.app-command-brand > \.sidebar-update-action \.sidebar-update-icon\s*\{[\s\S]*width:\s*14px;[\s\S]*height:\s*14px;[\s\S]*fill:\s*none;/);
-  assert.match(approved, /\.app-command-brand > \.sidebar-update-action:focus-visible\s*\{/);
+  assert.match(approved, /\.app-primary-navigation > \.sidebar-update-action\s*\{[\s\S]*height:\s*28px;[\s\S]*background:\s*color-mix\(in srgb, var\(--approved-green\)/);
+  assert.match(approved, /\.app-primary-navigation > \.sidebar-update-action \.sidebar-update-icon\s*\{[\s\S]*width:\s*14px;[\s\S]*height:\s*14px;[\s\S]*fill:\s*none;/);
+  assert.match(approved, /\.app-primary-navigation > \.sidebar-update-action:focus-visible\s*\{/);
   assert.match(styles, /@media \(prefers-reduced-motion:reduce\)[\s\S]*sidebar-update-action\.is-busy svg/);
   assert.match(styles, /\.update-install-overlay\s*\{/);
   assert.match(preload, /app-update:get-state/);
@@ -3330,7 +3331,7 @@ test("v0.1.190 visual repair keeps update, typography, Today, and filter control
   assert.match(surfaces.sidebar, /data-action="set-repository-priority-filter"/);
   assert.match(surfaces.sidebar, /class="repository-group-chevron"/);
   assert.ok(surfaces.row.indexOf("render") >= 0 || surfaces.row.indexOf("task-deadline-badge") < surfaces.row.indexOf("task-priority-control"));
-  assert.match(approved, /\.app-command-brand > \.sidebar-update-action \.sidebar-update-icon\s*\{[\s\S]*width:\s*14px;[\s\S]*height:\s*14px;/);
+  assert.match(approved, /\.app-primary-navigation > \.sidebar-update-action \.sidebar-update-icon\s*\{[\s\S]*width:\s*14px;[\s\S]*height:\s*14px;/);
   assert.match(approved, /\.app-nav-button\s*\{[\s\S]*font-size:\s*calc\(11\.5 \* var\(--font-unit\)\);[\s\S]*letter-spacing:\s*0;/);
   assert.match(approved, /\.settings-row-copy strong\s*\{[\s\S]*font-size:\s*calc\(13\.5 \* var\(--font-unit\)\);/);
   assert.match(approved, /\.rail\.sidebar\.sidebar-today-mode\.focus-rail\s*\{[\s\S]*padding:\s*26px 14px 18px;/);
@@ -3574,7 +3575,7 @@ test("approved 4174 shell is the final stylesheet authority", async () => {
   assert.match(approved, /\.ops-app\.app\s*\{[\s\S]*grid-template-columns:\s*var\(--approved-rail-width\) minmax\(0, 1fr\);/);
   assert.match(approved, /\.ops-app\.app\s*\{[\s\S]*padding:\s*0 8px 4px;/);
   assert.match(approved, /\.app-command-bar\s*\{[\s\S]*margin:\s*0 -8px;/);
-  assert.match(approved, /\.app-command-bar\s*\{[\s\S]*grid-template-columns:\s*max-content max-content minmax\(360px, 540px\)/);
+  assert.match(approved, /\.app-command-bar\s*\{[\s\S]*grid-template-columns:\s*max-content minmax\(280px, 1fr\) max-content;/);
   assert.match(approved, /\.rail\.sidebar\.sidebar-today-mode\.focus-rail\s*\{[\s\S]*width:\s*100%;[\s\S]*height:\s*100%;[\s\S]*align-self:\s*stretch;[\s\S]*justify-self:\s*stretch;[\s\S]*padding:\s*18px 14px 18px;[\s\S]*border:\s*0;[\s\S]*background:\s*#315f51;/);
   assert.doesNotMatch(approved, /\.rail\.sidebar\.sidebar-today-mode\.focus-rail\s*\{[^}]*margin-(?:left|bottom):\s*-/);
   assert.match(approved, /\.focus-rail \.focus-list\s*\{[\s\S]*gap:\s*4px;/);
@@ -3583,7 +3584,8 @@ test("approved 4174 shell is the final stylesheet authority", async () => {
   assert.match(approved, /\.focus-rail \.focus-row\.selected\s*\{[\s\S]*background:\s*rgba\(255, 255, 255, \.11\);[\s\S]*box-shadow:\s*none;/);
   assert.match(approved, /\.focus-rail\s*\{[\s\S]*padding:\s*18px 14px 18px;/);
   assert.match(approved, /\.app-command-utilities\s*\{[\s\S]*display:\s*flex;[\s\S]*align-items:\s*center;/);
-  assert.match(approved, /\.app-command-utilities \.theme-toggle\.theme-switch\s*\{[\s\S]*width:\s*36px;[\s\S]*height:\s*20px;/);
+  assert.match(approved, /\.app-command-utilities \.app-command-utility\s*\{[\s\S]*width:\s*36px;[\s\S]*height:\s*36px;/);
+  assert.match(approved, /\.app-topbar-search\s*\{[\s\S]*width:\s*min\(540px, 100%\);[\s\S]*justify-self:\s*end;/);
   assert.match(approved, /\.rail\.sidebar \.task-row\.task-item \.repository-complete\s*\{[\s\S]*grid-column:\s*1;/);
   assert.match(approved, /\.rail\.sidebar \.task-row\.task-item \.task-sequence\s*\{[\s\S]*grid-column:\s*2;/);
   assert.match(approved, /\.app-topbar-search \.gooey-search-field,[\s\S]*border:\s*0;[\s\S]*box-shadow:\s*none;/);
@@ -4244,7 +4246,8 @@ test("global search floats from the app rail while repository tools remain conte
     assert.match(surfaces.sidebar, /class="repository-filter-popover"[\s\S]*class="repository-filter-label">分组<\/span>[\s\S]*class="repository-group-slot"/);
     assert.doesNotMatch(surfaces.sidebar, /class="repository-context-row"/);
     assert.doesNotMatch(surfaces.sidebar, /data-action="toggle-settings"|data-action="toggle-theme"|自动保存已开启|class="rail-footer"|class="task-footer sidebar-foot"/);
-    assert.match(surfaces.topbar, /class="app-command-bar"[\s\S]*data-setting-button="task-filter" data-value="today"[\s\S]*data-action="toggle-review"[\s\S]*class="app-command-brand"/);
+    assert.match(surfaces.topbar, /class="app-command-bar"[\s\S]*data-setting-button="task-filter" data-value="today"[\s\S]*data-action="toggle-review"[\s\S]*class="topbar-update-slot"[\s\S]*class="app-topbar-search/);
+    assert.doesNotMatch(surfaces.topbar, /<strong>Loop<\/strong>|class="app-command-brand"|class="sidebar-version"/);
     assert.match(surfaces.topbar, /class="app-command-utilities"[\s\S]*data-action="toggle-settings"[\s\S]*data-action="toggle-theme"/);
     assert.match(surfaces.topbar, /class="app-topbar-search is-open"[\s\S]*id="search"[\s\S]*class="global-search-panel"/);
     assert.doesNotMatch(surfaces.panel, /global-search-layer|id="search"/);

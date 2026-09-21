@@ -1977,11 +1977,8 @@ function renderAppTopbar() {
         <button class="app-nav-button ${state.reviewOpen ? "active" : ""}" type="button" data-action="toggle-review" aria-pressed="${state.reviewOpen}" title="回顾">
           ${briefFieldIcon("clock", "app-command-icon")}<span>回顾</span>
         </button>
-      </nav>
-      <div class="app-command-brand">
-        <strong>Loop</strong>
         ${renderSidebarUpdateControl()}
-      </div>
+      </nav>
       <div class="app-topbar-search ${state.searchOpen ? "is-open" : ""}" data-topbar-search>
         ${renderGlobalSearch()}
         ${state.searchOpen ? renderGlobalSearchPanel() : ""}
@@ -1989,11 +1986,11 @@ function renderAppTopbar() {
       <div class="app-command-status">
         <div class="topbar-rhythm-slot" aria-live="polite"></div>
         <div class="app-command-utilities">
-          <button class="settings-trigger settings-button ${state.settingsOpen ? "active" : ""}" type="button" data-action="toggle-settings" title="设置" aria-label="设置">
-            ${briefFieldIcon("settings", "app-command-utility-icon")}<span>设置</span>
+          <button class="app-command-utility settings-trigger settings-button ${state.settingsOpen ? "active" : ""}" type="button" data-action="toggle-settings" title="设置" aria-label="设置">
+            ${briefFieldIcon("settings", "app-command-utility-icon")}
           </button>
-          <button class="theme-toggle theme-switch ${state.theme === "dark" ? "on" : ""}" type="button" role="switch" data-action="toggle-theme" title="${state.theme === "dark" ? "切换到浅色主题" : "切换到深色主题"}" aria-label="${state.theme === "dark" ? "切换到浅色主题" : "切换到深色主题"}" aria-checked="${state.theme === "dark"}">
-            <span class="theme-switch-thumb" aria-hidden="true">${briefFieldIcon(state.theme === "dark" ? "moon" : "sun", "app-command-theme-icon")}</span>
+          <button class="app-command-utility theme-toggle theme-button" type="button" role="switch" data-action="toggle-theme" title="${state.theme === "dark" ? "切换到浅色主题" : "切换到深色主题"}" aria-label="${state.theme === "dark" ? "切换到浅色主题" : "切换到深色主题"}" aria-checked="${state.theme === "dark"}">
+            ${briefFieldIcon(state.theme === "dark" ? "moon" : "sun", "app-command-utility-icon")}
           </button>
         </div>
       </div>
@@ -4107,7 +4104,7 @@ function renderSidebarUpdateControl(update = appUpdateState) {
   const pendingStatuses = ["available", "downloading", "downloaded", "preparing", "installing"];
   const hasPendingUpdate = Boolean(update.version) && pendingStatuses.includes(update.status);
   if (!hasPendingUpdate) {
-    return `<span class="sidebar-version" data-sidebar-update-slot>v${esc(update.currentVersion || APP_VERSION || "dev")}</span>`;
+    return `<span class="topbar-update-slot" data-sidebar-update-slot hidden></span>`;
   }
 
   const busy = ["downloading", "preparing", "installing"].includes(update.status);

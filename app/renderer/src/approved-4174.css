@@ -33,9 +33,9 @@
   display: grid;
   width: auto;
   min-width: 0;
-  grid-template-columns: max-content max-content minmax(360px, 540px) minmax(120px, 1fr);
+  grid-template-columns: max-content minmax(280px, 1fr) max-content;
   align-items: center;
-  gap: 18px;
+  gap: 20px;
   margin: 0 -8px;
   padding: 0 22px;
   border: 0;
@@ -44,7 +44,6 @@
   color: var(--loop-ui-ink);
 }
 
-.app-command-brand,
 .app-primary-navigation,
 .app-topbar-search,
 .app-command-status {
@@ -53,35 +52,6 @@
   min-width: 0;
   margin: 0;
   transform: none;
-}
-
-.app-command-brand {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-}
-
-.app-command-brand > strong {
-  flex: 0 0 auto;
-  color: var(--loop-ui-ink);
-  font-size: calc(16 * var(--font-unit));
-  font-weight: 720;
-  letter-spacing: -.025em;
-}
-
-.app-command-brand .sidebar-update-control {
-  min-width: 0;
-  max-width: 154px;
-}
-
-.app-command-brand .sidebar-update-control > button,
-.app-command-brand .sidebar-update-control > span,
-.app-command-brand .sidebar-version {
-  overflow: hidden;
-  color: var(--loop-ui-soft);
-  font-size: calc(8.5 * var(--font-unit));
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .app-primary-navigation {
@@ -153,7 +123,8 @@
 .app-topbar-search {
   z-index: 230;
   display: block;
-  width: auto;
+  width: min(540px, 100%);
+  justify-self: end;
 }
 
 .app-topbar-search .app-global-search.search-box.gooey-search,
@@ -241,7 +212,7 @@
   display: flex;
   min-width: 0;
   align-items: center;
-  gap: 13px;
+  gap: 12px;
   justify-content: flex-end;
 }
 
@@ -249,98 +220,45 @@
   display: flex;
   flex: 0 0 auto;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
 }
 
-.app-command-utilities .settings-button.settings-trigger {
+.app-command-utilities .app-command-utility {
   display: inline-grid;
-  width: 34px;
-  height: 34px;
-  min-height: 34px;
+  width: 36px;
+  height: 36px;
+  min-height: 36px;
   place-items: center;
   border: 0;
-  border-radius: 9px;
+  border-radius: 10px;
   padding: 0;
   background: transparent;
   color: var(--loop-ui-muted);
-  font-size: 0;
+  box-shadow: none;
+  transition: color 140ms ease, background-color 140ms ease, transform 100ms ease-out;
 }
 
-.app-command-utilities .settings-button.settings-trigger:hover,
-.app-command-utilities .settings-button.settings-trigger:focus-visible,
-.app-command-utilities .settings-button.settings-trigger.active {
+.app-command-utilities .app-command-utility:hover,
+.app-command-utilities .app-command-utility:focus-visible,
+.app-command-utilities .app-command-utility.active,
+.app-command-utilities .theme-button[aria-checked="true"] {
   background: color-mix(in srgb, var(--approved-green) 7%, transparent);
   color: var(--approved-green);
   outline: 0;
 }
 
+.app-command-utilities .app-command-utility:active {
+  transform: scale(.94);
+}
+
 .app-command-utility-icon {
-  width: 16px;
-  height: 16px;
+  width: 17px;
+  height: 17px;
   fill: none;
   stroke: currentColor;
   stroke-linecap: round;
   stroke-linejoin: round;
-  stroke-width: 1.8;
-}
-
-.app-command-utilities .theme-toggle.theme-switch {
-  display: inline-flex;
-  width: 36px;
-  height: 20px;
-  min-height: 20px;
-  align-items: center;
-  justify-content: flex-start;
-  border: 1px solid var(--approved-line-strong);
-  border-radius: 999px;
-  padding: 2px;
-  background: color-mix(in srgb, var(--approved-line) 72%, var(--approved-surface));
-  color: var(--loop-ui-muted);
-}
-
-.app-command-utilities .theme-toggle.theme-switch:hover,
-.app-command-utilities .theme-toggle.theme-switch:focus-visible {
-  border-color: color-mix(in srgb, var(--approved-green) 52%, var(--approved-line-strong));
-  outline: 0;
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--approved-green) 12%, transparent);
-}
-
-.app-command-utilities .theme-toggle.theme-switch[aria-checked="true"] {
-  border-color: var(--approved-green);
-  background: var(--approved-green);
-}
-
-.app-command-utilities .theme-switch-thumb {
-  display: grid;
-  width: 14px;
-  height: 14px;
-  flex: 0 0 14px;
-  place-items: center;
-  border-radius: 50%;
-  background: var(--approved-surface);
-  color: var(--loop-ui-muted);
-  box-shadow: 0 1px 2px rgba(19, 35, 28, .2);
-  transform: translateX(0);
-  transition: transform 160ms ease, background-color 160ms ease;
-}
-
-.app-command-utilities .theme-toggle.theme-switch[aria-checked="true"] .app-command-theme-icon {
-  color: var(--approved-green);
-}
-
-.app-command-utilities .theme-toggle.theme-switch[aria-checked="true"] .theme-switch-thumb {
-  background: #fff;
-  transform: translateX(16px);
-}
-
-.app-command-theme-icon {
-  width: 11px;
-  height: 11px;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 1.8;
+  stroke-width: 1.75;
 }
 
 .global-search-layer {
@@ -783,11 +701,11 @@
   }
 
   .app-command-bar {
-    grid-template-columns: max-content max-content minmax(280px, 1fr) max-content;
+    grid-template-columns: max-content minmax(240px, 1fr) max-content;
     gap: 14px;
   }
 
-  .app-command-status {
+  .app-command-status .topbar-rhythm-slot {
     display: none;
   }
 
@@ -1311,8 +1229,8 @@
   background: color-mix(in srgb, var(--approved-surface) 78%, #000);
 }
 
-/* v0.1.190 visual repair: make the update control a real topbar control. */
-.app-command-brand > .sidebar-update-action {
+/* Keep the update action beside Review without restoring product chrome. */
+.app-primary-navigation > .sidebar-update-action {
   display: inline-flex;
   width: auto;
   min-width: 0;
@@ -1335,20 +1253,20 @@
   white-space: nowrap;
 }
 
-.app-command-brand > .sidebar-update-action:hover,
-.app-command-brand > .sidebar-update-action:focus-visible {
+.app-primary-navigation > .sidebar-update-action:hover,
+.app-primary-navigation > .sidebar-update-action:focus-visible {
   border-color: color-mix(in srgb, var(--approved-green) 52%, var(--approved-line-strong));
   background: color-mix(in srgb, var(--approved-green) 15%, var(--approved-surface));
   outline: 0;
   box-shadow: 0 2px 8px rgba(28, 48, 38, .1);
 }
 
-.app-command-brand > .sidebar-update-action:disabled {
+.app-primary-navigation > .sidebar-update-action:disabled {
   cursor: default;
   opacity: .78;
 }
 
-.app-command-brand > .sidebar-update-action .sidebar-update-icon {
+.app-primary-navigation > .sidebar-update-action .sidebar-update-icon {
   width: 14px;
   height: 14px;
   flex: 0 0 14px;
@@ -1359,11 +1277,11 @@
   stroke-width: 1.8;
 }
 
-.app-command-brand > .sidebar-update-action.is-busy .sidebar-update-icon {
+.app-primary-navigation > .sidebar-update-action.is-busy .sidebar-update-icon {
   animation: sidebar-update-spin 900ms linear infinite;
 }
 
-.app-command-brand > .sidebar-update-action > span {
+.app-primary-navigation > .sidebar-update-action > span {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
