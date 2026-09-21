@@ -33,9 +33,9 @@
   display: grid;
   width: auto;
   min-width: 0;
-  grid-template-columns: 250px max-content minmax(360px, 540px) minmax(120px, 1fr);
+  grid-template-columns: max-content max-content minmax(360px, 540px) minmax(120px, 1fr);
   align-items: center;
-  gap: 22px;
+  gap: 18px;
   margin: 0 -8px;
   padding: 0 22px;
   border: 0;
@@ -64,7 +64,7 @@
 .app-command-brand > strong {
   flex: 0 0 auto;
   color: var(--loop-ui-ink);
-  font-size: calc(20 * var(--font-unit));
+  font-size: calc(16 * var(--font-unit));
   font-weight: 720;
   letter-spacing: -.025em;
 }
@@ -124,10 +124,23 @@
 
 .app-nav-button.active,
 .app-nav-button[aria-pressed="true"] {
-  background: color-mix(in srgb, var(--approved-green) 11%, var(--approved-surface));
+  position: relative;
+  background: transparent;
   color: var(--approved-green);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--approved-green) 7%, transparent);
+  box-shadow: none;
   font-weight: 620;
+}
+
+.app-nav-button.active::after,
+.app-nav-button[aria-pressed="true"]::after {
+  position: absolute;
+  right: 11px;
+  bottom: -20px;
+  left: 11px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--approved-green);
+  content: "";
 }
 
 .app-nav-button .app-command-icon {
@@ -226,7 +239,108 @@
 
 .app-command-status {
   display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 13px;
   justify-content: flex-end;
+}
+
+.app-command-utilities {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+}
+
+.app-command-utilities .settings-button.settings-trigger {
+  display: inline-grid;
+  width: 34px;
+  height: 34px;
+  min-height: 34px;
+  place-items: center;
+  border: 0;
+  border-radius: 9px;
+  padding: 0;
+  background: transparent;
+  color: var(--loop-ui-muted);
+  font-size: 0;
+}
+
+.app-command-utilities .settings-button.settings-trigger:hover,
+.app-command-utilities .settings-button.settings-trigger:focus-visible,
+.app-command-utilities .settings-button.settings-trigger.active {
+  background: color-mix(in srgb, var(--approved-green) 7%, transparent);
+  color: var(--approved-green);
+  outline: 0;
+}
+
+.app-command-utility-icon {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.app-command-utilities .theme-toggle.theme-switch {
+  display: inline-flex;
+  width: 36px;
+  height: 20px;
+  min-height: 20px;
+  align-items: center;
+  justify-content: flex-start;
+  border: 1px solid var(--approved-line-strong);
+  border-radius: 999px;
+  padding: 2px;
+  background: color-mix(in srgb, var(--approved-line) 72%, var(--approved-surface));
+  color: var(--loop-ui-muted);
+}
+
+.app-command-utilities .theme-toggle.theme-switch:hover,
+.app-command-utilities .theme-toggle.theme-switch:focus-visible {
+  border-color: color-mix(in srgb, var(--approved-green) 52%, var(--approved-line-strong));
+  outline: 0;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--approved-green) 12%, transparent);
+}
+
+.app-command-utilities .theme-toggle.theme-switch[aria-checked="true"] {
+  border-color: var(--approved-green);
+  background: var(--approved-green);
+}
+
+.app-command-utilities .theme-switch-thumb {
+  display: grid;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--approved-surface);
+  color: var(--loop-ui-muted);
+  box-shadow: 0 1px 2px rgba(19, 35, 28, .2);
+  transform: translateX(0);
+  transition: transform 160ms ease, background-color 160ms ease;
+}
+
+.app-command-utilities .theme-toggle.theme-switch[aria-checked="true"] .app-command-theme-icon {
+  color: var(--approved-green);
+}
+
+.app-command-utilities .theme-toggle.theme-switch[aria-checked="true"] .theme-switch-thumb {
+  background: #fff;
+  transform: translateX(16px);
+}
+
+.app-command-theme-icon {
+  width: 11px;
+  height: 11px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
 }
 
 .global-search-layer {
@@ -316,7 +430,7 @@
   align-self: stretch;
   justify-self: stretch;
   box-sizing: border-box;
-  padding: 18px 14px 86px;
+  padding: 18px 14px 18px;
   overflow: hidden;
   border: 0;
   border-radius: 18px;
@@ -422,133 +536,6 @@
 .work-surface.task-page .task-brief textarea {
   font-size: calc(11.5 * var(--font-unit));
   line-height: 1.55;
-}
-
-.focus-rail > .rail-footer {
-  position: absolute;
-  inset: auto 0 0;
-  display: flex;
-  width: 100%;
-  height: 70px;
-  align-items: center;
-  justify-content: space-between;
-  border-top: 1px solid rgba(255, 255, 255, .13);
-  padding: 0 22px;
-  background: transparent;
-  color: rgba(255, 255, 255, .83);
-}
-
-.focus-rail .footer-actions {
-  display: flex;
-  align-items: center;
-  gap: 13px;
-}
-
-.focus-rail .settings-button.settings-trigger {
-  display: flex;
-  width: auto;
-  min-height: 0;
-  align-items: center;
-  gap: 8px;
-  border: 0;
-  border-radius: 0;
-  padding: 5px 0;
-  background: transparent;
-  color: inherit;
-  font-size: 14px;
-  font-weight: 400;
-  cursor: pointer;
-}
-
-.focus-rail .settings-button.settings-trigger:hover,
-.focus-rail .settings-button.settings-trigger:focus-visible,
-.focus-rail .settings-button.settings-trigger.active {
-  background: transparent;
-  color: #fff;
-  outline: 0;
-}
-
-.focus-rail .sidebar-footer-icon {
-  width: 18px;
-  height: 18px;
-  flex: 0 0 18px;
-}
-
-.focus-rail .divider {
-  width: 1px;
-  height: 18px;
-  background: rgba(255, 255, 255, .2);
-}
-
-.focus-rail .theme-toggle.theme-switch,
-.focus-rail .theme-toggle.theme-switch[aria-checked="true"] {
-  display: inline-flex;
-  width: 45px;
-  height: 25px;
-  flex: 0 0 45px;
-  align-items: center;
-  justify-content: flex-start;
-  border: 0;
-  border-radius: 99px;
-  padding: 3px;
-  background: rgba(255, 255, 255, .27);
-  box-shadow: none;
-  cursor: pointer;
-}
-
-.focus-rail .theme-toggle.theme-switch:hover,
-.focus-rail .theme-toggle.theme-switch:focus-visible {
-  border: 0;
-  background: rgba(255, 255, 255, .27);
-  outline: 0;
-  box-shadow: none;
-}
-
-.focus-rail .theme-switch-thumb {
-  display: grid;
-  width: 19px;
-  height: 19px;
-  flex: 0 0 19px;
-  place-items: center;
-  border-radius: 50%;
-  background: #fff;
-  color: #607269;
-  box-shadow: none;
-  transform: translateX(0);
-  transition: transform .2s ease;
-}
-
-.focus-rail .theme-toggle.theme-switch.on .theme-switch-thumb,
-.focus-rail .theme-toggle.theme-switch[aria-checked="true"] .theme-switch-thumb {
-  background: #fff;
-  transform: translateX(20px);
-}
-
-.focus-rail .sidebar-theme-icon {
-  width: 13px;
-  height: 13px;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 1.8;
-}
-
-.focus-rail .autosave {
-  display: flex;
-  align-items: center;
-  color: inherit;
-  font-size: 13px;
-  white-space: nowrap;
-}
-
-.focus-rail .autosave > i {
-  display: inline-block;
-  width: 7px;
-  height: 7px;
-  margin-right: 8px;
-  border-radius: 50%;
-  background: #87c5a7;
 }
 
 .rail.sidebar .task-list.task-repository {
@@ -724,47 +711,6 @@
   text-align: right;
 }
 
-.rail.sidebar > .task-footer.sidebar-foot {
-  display: flex;
-  min-height: 70px;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 14px;
-  margin-top: auto;
-  padding: 0 22px;
-  border-top: 1px solid var(--approved-line);
-  background: transparent;
-}
-
-.rail.sidebar > .task-footer.sidebar-foot .sidebar-footer-actions {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 10px;
-  margin: 0 auto 0 0;
-}
-
-.rail.sidebar > .task-footer.sidebar-foot .autosave-status {
-  flex: 0 1 auto;
-  margin-left: auto;
-  text-align: right;
-}
-
-.rail.sidebar.sidebar-today-mode > .task-footer.sidebar-foot {
-  border-top-color: rgba(255, 255, 255, .13);
-  color: rgba(255, 255, 255, .74);
-}
-
-.rail.sidebar.sidebar-today-mode .settings-trigger,
-.rail.sidebar.sidebar-today-mode .autosave-status {
-  color: rgba(255, 255, 255, .74);
-}
-
-.rail.sidebar.sidebar-today-mode .sidebar-footer-divider {
-  background: rgba(255, 255, 255, .16);
-}
-
 /* Final settings polish: compact controls and a native-looking unlock action. */
 .settings-panel .settings-row-control {
   flex: 0 0 auto;
@@ -837,7 +783,7 @@
   }
 
   .app-command-bar {
-    grid-template-columns: 140px max-content minmax(280px, 1fr);
+    grid-template-columns: max-content max-content minmax(280px, 1fr) max-content;
     gap: 14px;
   }
 
@@ -1488,7 +1434,7 @@
 /* The Today queue is intentionally title-free, so the list gets a stronger
    optical top inset and slightly more substantial rows. */
 .rail.sidebar.sidebar-today-mode.focus-rail {
-  padding: 26px 14px 86px;
+  padding: 26px 14px 18px;
 }
 
 .focus-rail .focus-list {

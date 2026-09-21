@@ -1,4 +1,4 @@
-name: Publish v0.1.194
+name: Publish v0.1.195
 
 on:
   workflow_dispatch:
@@ -6,15 +6,15 @@ on:
     branches:
       - main
     paths:
-      - .github/workflows/publish-v0.1.194.yml
+      - .github/workflows/publish-v0.1.195.yml
 
 concurrency:
-  group: publish-v0.1.194
+  group: publish-v0.1.195
   cancel-in-progress: false
 
 jobs:
   verify:
-    name: Verify v0.1.194 Today widget interactions
+    name: Verify v0.1.195 Today widget interactions
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -30,7 +30,7 @@ jobs:
         shell: bash
         run: |
           version="$(node -p "require('./package.json').version")"
-          test "$version" = "0.1.194"
+          test "$version" = "0.1.195"
           node --check app/renderer/src/app.js
           node --check app/renderer/src/today-widget-runtime.js
           node --check app/main/preload.cjs
@@ -38,7 +38,7 @@ jobs:
           node --test --test-name-pattern='Today widget (quick captures|long-press movement|snapshot|task and quick-capture order|topmost)|production Today widget' tests/desktop.test.cjs
 
   build:
-    name: Build v0.1.194 ${{ matrix.platform }}
+    name: Build v0.1.195 ${{ matrix.platform }}
     needs: verify
     runs-on: ${{ matrix.os }}
     strategy:
@@ -48,11 +48,11 @@ jobs:
           - platform: macOS
             os: macos-latest
             script: npm run dist:mac -- --x64 --arm64 --publish never
-            artifact: v0.1.194-macos
+            artifact: v0.1.195-macos
           - platform: Windows
             os: windows-latest
             script: npm run dist:win -- --x64 --publish never
-            artifact: v0.1.194-windows
+            artifact: v0.1.195-windows
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -78,7 +78,7 @@ jobs:
           ./tests/windows-upgrade-installer.test.ps1 -CandidateInstaller $candidate.FullName
       - name: Verify update metadata
         run: node tools/verify-update-artifacts.cjs release
-      - name: Stage v0.1.194 release assets
+      - name: Stage v0.1.195 release assets
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
@@ -93,7 +93,7 @@ jobs:
           retention-days: 2
 
   publish:
-    name: Publish v0.1.194 release
+    name: Publish v0.1.195 release
     needs: build
     runs-on: ubuntu-latest
     permissions:
@@ -106,30 +106,31 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          if gh api "repos/${{ github.repository }}/git/ref/tags/v0.1.194" >/dev/null 2>&1; then
-            echo "v0.1.194 already exists; refusing to replace it."
+          if gh api "repos/${{ github.repository }}/git/ref/tags/v0.1.195" >/dev/null 2>&1; then
+            echo "v0.1.195 already exists; refusing to replace it."
             exit 1
           fi
-      - name: Collect v0.1.194 release assets
+      - name: Collect v0.1.195 release assets
         uses: actions/download-artifact@v4
         with:
-          pattern: v0.1.194-*
+          pattern: v0.1.195-*
           path: release
           merge-multiple: true
       - name: Verify complete cross-platform update feed
         run: node tools/verify-update-artifacts.cjs release --require-all-platforms
-      - name: Publish v0.1.194
+      - name: Publish v0.1.195
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v0.1.194
+          tag_name: v0.1.195
           target_commitish: ${{ github.sha }}
-          name: v0.1.194
+          name: v0.1.195
           body: |
-            ## 今日任务浮窗界面整理
+            ## 顶部导航与侧栏整理
 
-            - 删除浮窗顶部的置顶图钉按钮。
-            - 保留右上角设置菜单和主界面的置顶功能。
-            - 其他今日任务、速记编辑和拖拽交互保持不变。
+            - 导航从顶部左侧开始，当前项使用轻量底部强调线。
+            - 将 Loop、版本号/更新入口移动到“回顾”之后。
+            - 将设置与主题切换移动到搜索框右侧。
+            - 移除左下角常驻操作、自动保存状态和分割线，释放任务区域。
           make_latest: true
           files: |
             release/*.dmg

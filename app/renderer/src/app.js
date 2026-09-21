@@ -1964,10 +1964,6 @@ function renderAppTopbar() {
   const tasksActive = state.taskFilter !== "today" && !state.calendarOpen && !state.reviewOpen;
   return `
     <header class="app-command-bar" aria-label="应用导航">
-      <div class="app-command-brand">
-        <strong>Loop</strong>
-        ${renderSidebarUpdateControl()}
-      </div>
       <nav class="app-primary-navigation" aria-label="主要功能">
         <button class="app-nav-button ${todayActive ? "active" : ""}" type="button" data-setting-button="task-filter" data-value="today" aria-pressed="${todayActive}" title="今日">
           ${briefFieldIcon("home", "app-command-icon")}<span>今日</span>
@@ -1982,46 +1978,31 @@ function renderAppTopbar() {
           ${briefFieldIcon("clock", "app-command-icon")}<span>回顾</span>
         </button>
       </nav>
+      <div class="app-command-brand">
+        <strong>Loop</strong>
+        ${renderSidebarUpdateControl()}
+      </div>
       <div class="app-topbar-search ${state.searchOpen ? "is-open" : ""}" data-topbar-search>
         ${renderGlobalSearch()}
         ${state.searchOpen ? renderGlobalSearchPanel() : ""}
       </div>
-      <div class="app-command-status"><div class="topbar-rhythm-slot" aria-live="polite"></div></div>
+      <div class="app-command-status">
+        <div class="topbar-rhythm-slot" aria-live="polite"></div>
+        <div class="app-command-utilities">
+          <button class="settings-trigger settings-button ${state.settingsOpen ? "active" : ""}" type="button" data-action="toggle-settings" title="设置" aria-label="设置">
+            ${briefFieldIcon("settings", "app-command-utility-icon")}<span>设置</span>
+          </button>
+          <button class="theme-toggle theme-switch ${state.theme === "dark" ? "on" : ""}" type="button" role="switch" data-action="toggle-theme" title="${state.theme === "dark" ? "切换到浅色主题" : "切换到深色主题"}" aria-label="${state.theme === "dark" ? "切换到浅色主题" : "切换到深色主题"}" aria-checked="${state.theme === "dark"}">
+            <span class="theme-switch-thumb" aria-hidden="true">${briefFieldIcon(state.theme === "dark" ? "moon" : "sun", "app-command-theme-icon")}</span>
+          </button>
+        </div>
+      </div>
     </header>
   `;
 }
 
-function renderSidebarFooter(todayMode) {
-  if (todayMode) {
-    return `
-      <footer class="rail-footer">
-        <div class="footer-actions">
-          <button class="settings-trigger settings-button ${state.settingsOpen ? "active" : ""}" type="button" data-action="toggle-settings" title="设置" aria-label="设置">
-            ${briefFieldIcon("settings", "sidebar-footer-icon")}<span>设置</span>
-          </button>
-          <span class="divider" aria-hidden="true"></span>
-          <button class="theme-toggle theme-switch ${state.theme === "dark" ? "on" : ""}" type="button" role="switch" data-action="toggle-theme" title="切换主题" aria-label="切换主题" aria-checked="${state.theme === "dark"}">
-            <span class="theme-switch-thumb" aria-hidden="true">${briefFieldIcon(state.theme === "dark" ? "moon" : "sun", "sidebar-theme-icon")}</span>
-          </button>
-        </div>
-        <div class="autosave"><i aria-hidden="true"></i>自动保存已开启</div>
-      </footer>
-    `;
-  }
-  return `
-    <div class="sidebar-foot task-footer">
-      <div class="sidebar-footer-actions">
-        <button class="settings-trigger settings-button ${state.settingsOpen ? "active" : ""}" type="button" data-action="toggle-settings" title="设置" aria-label="设置">
-          ${briefFieldIcon("settings", "sidebar-footer-icon")}<span>设置</span>
-        </button>
-        <span class="sidebar-footer-divider" aria-hidden="true"></span>
-        <button class="theme-toggle theme-switch ${state.theme === "dark" ? "active" : ""}" type="button" role="switch" data-action="toggle-theme" title="${state.theme === "dark" ? "切换到浅色主题" : "切换到深色主题"}" aria-label="${state.theme === "dark" ? "切换到浅色主题" : "切换到深色主题"}" aria-checked="${state.theme === "dark"}">
-          <span class="theme-switch-thumb" aria-hidden="true">${briefFieldIcon(state.theme === "dark" ? "moon" : "sun", "sidebar-theme-icon")}</span>
-        </button>
-      </div>
-      <span class="autosave-status">自动保存已开启</span>
-    </div>
-  `;
+function renderSidebarFooter() {
+  return "";
 }
 
 function renderSidebar() {
