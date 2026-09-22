@@ -978,7 +978,7 @@
   max-width: 100%;
   min-width: 0;
   min-height: 52px;
-  grid-template-columns: 22px 22px minmax(0, 1fr) auto;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
   align-items: center;
   column-gap: 7px;
   margin: 0 0 3px;
@@ -998,33 +998,58 @@
   box-shadow: none;
 }
 
+.rail.sidebar .task-row.task-item .task-sequence-action {
+  display: grid;
+  grid-column: 1;
+  grid-row: 1;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+}
+
 .rail.sidebar .task-row.task-item .repository-complete {
   position: relative;
   inset: auto;
-  grid-column: 1;
-  grid-row: 1;
+  grid-area: 1 / 1;
   width: 17px;
   min-width: 17px;
   height: 17px;
   min-height: 17px;
   justify-self: center;
   margin: 0;
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(.82);
+  transition: opacity 120ms ease, transform 120ms ease;
 }
 
 .rail.sidebar .task-row.task-item .task-sequence {
-  grid-column: 2;
-  grid-row: 1;
+  grid-area: 1 / 1;
   color: var(--loop-ui-soft);
   font-family: var(--app-font);
   font-size: calc(9.5 * var(--font-unit));
   font-variant-numeric: tabular-nums;
   font-weight: 560;
   text-align: center;
+  transition: opacity 120ms ease;
+}
+
+.rail.sidebar .repository-scroll-area .task-row.task-item:hover .task-sequence,
+.rail.sidebar .task-row.task-item .task-sequence-action:focus-within .task-sequence {
+  opacity: 0;
+}
+
+.rail.sidebar .repository-scroll-area .task-row.task-item:hover .repository-complete,
+.rail.sidebar .task-row.task-item .task-sequence-action:focus-within .repository-complete,
+.rail.sidebar .repository-scroll-area .task-row.task-item.done:hover .repository-complete {
+  opacity: 1;
+  pointer-events: auto;
+  transform: scale(1);
 }
 
 .rail.sidebar .task-row.task-item .task-title-wrap {
   display: block;
-  grid-column: 3;
+  grid-column: 2;
   grid-row: 1;
   min-width: 0;
   padding: 0;
@@ -1060,7 +1085,7 @@
   display: flex;
   min-width: 0;
   max-width: none;
-  grid-column: 4;
+  grid-column: 3;
   grid-row: 1;
   align-items: center;
   justify-content: flex-end;
@@ -1220,6 +1245,17 @@
 .rail.sidebar .task-row.task-item.done .task-sequence,
 .rail.sidebar .task-row.task-item.done .task-row-meta {
   opacity: .62;
+}
+
+.rail.sidebar .task-row.task-item.done .repository-complete {
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rail.sidebar .task-row.task-item .task-sequence,
+  .rail.sidebar .task-row.task-item .repository-complete {
+    transition: none;
+  }
 }
 
 :root[data-theme="dark"] .rail.sidebar .repository-segmented.completion-segmented,

@@ -3540,7 +3540,7 @@ test("workbench group selection uses a ReUI-style trigger and option menu", asyn
   assert.match(styles, /\.task-group-select-option\.selected\s*\{/);
 });
 
-test("task repository follows the approved 4174 control ordering", async () => {
+test("task repository merges its sequence and completion control", async () => {
   const [app, styles] = await Promise.all([
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "app.js"), "utf8"),
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "approved-4174.css"), "utf8"),
@@ -3553,16 +3553,18 @@ test("task repository follows the approved 4174 control ordering", async () => {
   assert.match(app, /\.map\(\(task, index\) => renderTaskItem\(task, index \+ 1\)\)/);
   assert.doesNotMatch(app, /class="task-repository-columns"/);
   assert.match(html, /draggable="true"/);
-  assert.ok(html.indexOf("repository-complete") < html.indexOf("task-sequence"));
-  assert.ok(html.indexOf("task-sequence") < html.indexOf("task-title-wrap"));
+  assert.match(html, /class="task-sequence-action">[\s\S]*class="task-sequence"[\s\S]*repository-complete[\s\S]*class="task-title-wrap/);
   assert.match(html, /class="task-sequence"[^>]*>3<\/span>/);
   assert.match(html, /task-priority-control high/);
   assert.doesNotMatch(html, /task-next-line|task-row-chevron/);
   assert.doesNotMatch(html, /task-drag-handle/);
   const repositoryRefinement = styles.slice(styles.lastIndexOf("Task repository refinement"));
-  assert.match(repositoryRefinement, /grid-template-columns:\s*22px 22px minmax\(0, 1fr\) auto;/);
+  assert.match(repositoryRefinement, /grid-template-columns:\s*24px minmax\(0, 1fr\) auto;/);
   assert.match(repositoryRefinement, /min-height:\s*52px;/);
   assert.match(repositoryRefinement, /padding:\s*0 10px;/);
+  assert.match(repositoryRefinement, /\.task-sequence-action\s*\{[\s\S]*grid-column:\s*1;[\s\S]*place-items:\s*center;/);
+  assert.match(repositoryRefinement, /task-item:hover \.task-sequence,[\s\S]*opacity:\s*0;/);
+  assert.match(repositoryRefinement, /task-item:hover \.repository-complete,[\s\S]*opacity:\s*1;[\s\S]*pointer-events:\s*auto;/);
 });
 
 test("approved 4174 shell is the final stylesheet authority", async () => {
@@ -3586,8 +3588,8 @@ test("approved 4174 shell is the final stylesheet authority", async () => {
   assert.match(approved, /\.app-command-utilities\s*\{[\s\S]*display:\s*flex;[\s\S]*align-items:\s*center;/);
   assert.match(approved, /\.app-command-utilities \.app-command-utility\s*\{[\s\S]*width:\s*36px;[\s\S]*height:\s*36px;/);
   assert.match(approved, /\.app-topbar-search\s*\{[\s\S]*width:\s*min\(540px, 100%\);[\s\S]*justify-self:\s*end;/);
-  assert.match(approved, /\.rail\.sidebar \.task-row\.task-item \.repository-complete\s*\{[\s\S]*grid-column:\s*1;/);
-  assert.match(approved, /\.rail\.sidebar \.task-row\.task-item \.task-sequence\s*\{[\s\S]*grid-column:\s*2;/);
+  assert.match(approved, /\.rail\.sidebar \.task-row\.task-item \.task-sequence-action\s*\{[\s\S]*grid-column:\s*1;/);
+  assert.match(approved, /\.rail\.sidebar \.task-row\.task-item \.task-title-wrap\s*\{[\s\S]*grid-column:\s*2;/);
   assert.match(approved, /\.app-topbar-search \.gooey-search-field,[\s\S]*border:\s*0;[\s\S]*box-shadow:\s*none;/);
   assert.match(approved, /\.app-command-status\s*\{[\s\S]*justify-content:\s*flex-end;/);
   assert.match(approved, /\.settings-panel \.settings-row select\s*\{[\s\S]*width:\s*auto;[\s\S]*field-sizing:\s*content;[\s\S]*text-align:\s*left;/);

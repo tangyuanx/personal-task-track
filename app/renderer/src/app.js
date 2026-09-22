@@ -2244,8 +2244,10 @@ function renderTaskPriorityPopover() {
 function renderTaskItem(task, displayOrder) {
   return `
     <div class="task-item task-row ${task.id === state.activeTaskId ? "selected active" : ""} ${task.status === "done" ? "done" : ""}" draggable="true" data-context="task" data-task-id="${task.id}" data-task-drag-target="${task.id}">
-      <button class="task-check repository-complete ${task.status === "done" ? "is-checked" : ""}" type="button" title="${task.status === "done" ? "标记为未完成" : "标记为完成"}" aria-label="${task.status === "done" ? "标记为未完成" : "标记为完成"}" aria-pressed="${task.status === "done"}" data-action="toggle-task-done" data-task-id="${task.id}"></button>
-      <span class="task-sequence" aria-hidden="true">${displayOrder}</span>
+      <span class="task-sequence-action">
+        <span class="task-sequence" aria-hidden="true">${displayOrder}</span>
+        <button class="task-check repository-complete ${task.status === "done" ? "is-checked" : ""}" type="button" title="${task.status === "done" ? "标记为未完成" : "标记为完成"}" aria-label="${task.status === "done" ? "标记为未完成" : "标记为完成"}" aria-pressed="${task.status === "done"}" data-action="toggle-task-done" data-task-id="${task.id}"></button>
+      </span>
       <span class="task-title-wrap row-title">
         <input class="task-title" placeholder="任务标题" aria-label="任务标题" data-edit-key="title" data-task-id="${task.id}" value="${escAttr(task.title)}" />
       </span>
