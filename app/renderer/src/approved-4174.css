@@ -1528,3 +1528,65 @@
 .rail.sidebar .task-row.task-item .task-priority-control {
   order: 2;
 }
+
+/* v0.1.198 typography clarity pass. Preserve the approved layout while
+   giving compact controls a legible floor and one consistent font source. */
+.app-command-bar,
+.rail.sidebar,
+.work-surface,
+.workspace {
+  font-family: var(--app-font);
+}
+
+.app-topbar-search .gooey-search-field input {
+  font-size: calc(11.5 * var(--font-unit));
+  letter-spacing: .005em;
+}
+
+.rail.sidebar .repository-segmented.completion-segmented button {
+  font-size: calc(11.5 * var(--font-unit));
+  font-weight: 600;
+}
+
+.rail.sidebar .task-row.task-item .task-title {
+  font-size: calc(12 * var(--font-unit));
+  font-weight: 600;
+  letter-spacing: .005em;
+}
+
+.rail.sidebar .task-row.task-item .task-sequence {
+  font-size: calc(10 * var(--font-unit));
+}
+
+.rail.sidebar .task-row.task-item .task-deadline-badge {
+  font-size: calc(10.5 * var(--font-unit));
+  font-weight: 600;
+}
+
+.rail.sidebar .task-row.task-item .task-priority-control {
+  font-size: calc(10.75 * var(--font-unit));
+}
+
+.work-surface.task-page .meta-line.page-properties .task-context-item,
+.work-surface.task-page .meta-line.page-properties .task-context-progress,
+.work-surface.task-page .meta-line.page-properties .task-deadline-trigger,
+.work-surface.task-page .meta-line.page-properties .task-recurrence-trigger,
+.work-surface.task-page .meta-line.page-properties .task-group-select-trigger {
+  font-size: calc(11 * var(--font-unit));
+  font-weight: 560;
+  letter-spacing: .005em;
+}
+
+.work-surface.task-page .task-brief textarea {
+  font-size: calc(12.5 * var(--font-unit));
+  line-height: 1.58;
+}
+
+.task-pane-tab {
+  color: var(--loop-ui-muted);
+  font-weight: 560;
+}
+
+.task-pane-tab.active {
+  font-weight: 700;
+}

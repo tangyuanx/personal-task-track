@@ -3341,6 +3341,24 @@ test("v0.1.190 visual repair keeps update, typography, Today, and filter control
   assert.match(approved, /\.rail\.sidebar \.task-row\.task-item \.task-priority-control\s*\{\s*order:\s*2;/);
 });
 
+test("typography clarity pass uses native rasterization, consistent fonts, and readable compact text", async () => {
+  const [styles, approved] = await Promise.all([
+    fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "styles.css"), "utf8"),
+    fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "approved-4174.css"), "utf8"),
+  ]);
+  const clarityRules = approved.slice(approved.lastIndexOf("v0.1.198 typography clarity pass"));
+
+  assert.match(styles, /-webkit-font-smoothing:\s*auto;/);
+  assert.match(styles, /text-rendering:\s*auto;/);
+  assert.match(styles, /--loop-ui-font:\s*var\(--app-font\);/);
+  assert.match(styles, /--loop-ui-muted:\s*#59645e;/);
+  assert.match(styles, /--loop-ui-soft:\s*#69746e;/);
+  assert.match(styles, /local\("Microsoft YaHei UI"\)/);
+  assert.match(clarityRules, /\.repository-segmented\.completion-segmented button\s*\{[\s\S]*font-size:\s*calc\(11\.5 \* var\(--font-unit\)\);/);
+  assert.match(clarityRules, /\.task-deadline-badge\s*\{[\s\S]*font-size:\s*calc\(10\.5 \* var\(--font-unit\)\);/);
+  assert.match(clarityRules, /\.task-brief textarea\s*\{[\s\S]*font-size:\s*calc\(12\.5 \* var\(--font-unit\)\);/);
+});
+
 test("group editing preserves the horizontal group viewport across renders", async () => {
   const app = await fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "app.js"), "utf8");
 
