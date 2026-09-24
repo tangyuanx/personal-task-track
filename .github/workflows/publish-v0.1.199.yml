@@ -32,7 +32,7 @@ jobs:
           version="$(node -p "require('./package.json').version")"
           test "$version" = "0.1.199"
           node --check app/renderer/src/app.js
-          node --test --test-name-pattern='processing flow matches the compact reference tree' tests/desktop.test.cjs tests/work-rhythm-ui.test.cjs
+          node --test --test-name-pattern='processing flow matches the compact reference tree|release version, scripts and cache keys are aligned' tests/desktop.test.cjs tests/work-rhythm-ui.test.cjs
 
   build:
     name: Build v0.1.199 ${{ matrix.platform }}
