@@ -13074,6 +13074,11 @@ body.flow-node-reordering * {
   stroke-width: 2;
 }
 
+.flow-outline-node { --flow-status-ink: #4f766f; }
+.flow-outline-node.later { --flow-status-ink: #84671e; }
+.flow-outline-node.done { --flow-status-ink: #6f7774; }
+.flow-outline-node.blocked { --flow-status-ink: #8b4f4f; }
+
 .flow-status-badge {
   appearance: none;
   display: inline-grid;
@@ -13084,7 +13089,7 @@ body.flow-node-reordering * {
   border: 0;
   border-radius: 2px;
   padding: 0 6px;
-  color: #4f766f;
+  color: var(--flow-status-ink);
   background: #dcebe7;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: calc(10 * var(--font-unit));
@@ -13096,18 +13101,15 @@ body.flow-node-reordering * {
 }
 
 .flow-status-badge.status-later {
-  color: #84671e;
   background: #f3e4b8;
 }
 
 .flow-status-badge.status-done {
-  color: #6f7774;
   background: #e6e8e7;
   text-decoration: line-through;
 }
 
 .flow-status-badge.status-blocked {
-  color: #8b4f4f;
   background: #f1dddd;
 }
 
@@ -13571,13 +13573,13 @@ body.flow-node-reordering * {
   border: 0;
   border-radius: 50%;
   padding: 0;
-  color: var(--todo);
+  color: var(--flow-status-ink);
   background: currentColor;
 }
 
-.flow-node-marker.flow-status-bullet.status-done { color: var(--focus); background: currentColor; }
-.flow-node-marker.flow-status-bullet.status-blocked { color: var(--red); background: currentColor; }
-.flow-node-marker.flow-status-bullet.status-later { color: var(--muted); background: currentColor; }
+.flow-node-marker.flow-status-bullet.status-done,
+.flow-node-marker.flow-status-bullet.status-blocked,
+.flow-node-marker.flow-status-bullet.status-later { color: var(--flow-status-ink); background: currentColor; }
 .flow-node-marker-icon { display: none; }
 
 .node-detail-page {
