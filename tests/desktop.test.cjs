@@ -431,7 +431,7 @@ test("the main process locks task-data writes while a data import is running", a
   const mainSource = await fs.readFile(path.join(__dirname, "..", "app", "main", "main.cjs"), "utf8");
   assert.match(mainSource, /task-data:write"[\s\S]*dataMaintenance\.assertWritable\(\)[\s\S]*writeTaskData\(app\.getPath\("userData"\), data\)/);
   assert.match(mainSource, /dataMaintenance\.begin\("manual-import"\)/);
-  assert.match(mainSource, /\} catch \(error\) \{\n\s+dataMaintenance\.end\(\);\n\s+throw error;/);
+  assert.match(mainSource, /\} catch \(error\) \{\r?\n\s+dataMaintenance\.end\(\);\r?\n\s+throw error;/);
 });
 
 test("the renderer stops writing task data while a data import is in progress", async () => {
@@ -2904,9 +2904,9 @@ test("the active workflows declare an explicit permission scope", async () => {
     fs.readFile(path.join(workflowDirectory, "build.yml"), "utf8"),
     fs.readFile(path.join(workflowDirectory, "release.yml"), "utf8"),
   ]);
-  assert.match(build, /^permissions:\n  contents: read$/m, "the build workflow only needs read access");
-  assert.match(release, /^permissions:\n  contents: read$/m, "the release workflow defaults to read");
-  assert.match(release, /^ {4}permissions:\n {6}contents: write$/m, "only the publish job may write");
+  assert.match(build, /^permissions:\r?\n  contents: read$/m, "the build workflow only needs read access");
+  assert.match(release, /^permissions:\r?\n  contents: read$/m, "the release workflow defaults to read");
+  assert.match(release, /^ {4}permissions:\r?\n {6}contents: write$/m, "only the publish job may write");
   assert.ok(
     !/pull_request_target|workflow_run/.test(build),
     "the untrusted pull_request trigger must not gain a privileged companion workflow",
@@ -3038,7 +3038,7 @@ test("an isolated profile never triggers legacy user-data recovery", async () =>
   assert.match(mainSource, /const desktopIdentity = configureDesktopIdentity\(app\)/);
   assert.match(
     mainSource,
-    /if \(!desktopIdentity\.usesExplicitProfile\) \{\n\s+await recoverLegacyUserData\(\{/,
+    /if \(!desktopIdentity\.usesExplicitProfile\) \{\r?\n\s+await recoverLegacyUserData\(\{/,
     "a caller-provided profile must not pull the real database in",
   );
 });
@@ -3338,7 +3338,7 @@ test("every Today widget IPC channel inspects its sender and the duplicated bind
 
   // bind() used to contain a second, unreachable copy of the whole binding pass
   // that even called functions which do not exist.
-  assert.match(appSource, /function bind\(\) \{\n  return bindTaskRepositoryRows\(document\);\n\}/);
+  assert.match(appSource, /function bind\(\) \{\r?\n  return bindTaskRepositoryRows\(document\);\r?\n\}/);
   assert.doesNotMatch(appSource, /bindEditableField|bindContextMenu/, "the dead duplicated binding pass must not return");
 });
 
