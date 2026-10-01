@@ -24,6 +24,7 @@ const {
   writeKnowledgeRecovery,
 } = require("../app/main/recovery.cjs");
 const knowledgeFile = require("../app/main/knowledge-file.cjs");
+const knowledgeAccess = require("../app/main/knowledge-access.cjs");
 const knowledgeAssets = require("../app/main/knowledge-assets.cjs");
 const { createKnowledgeFileWatcher } = require("../app/main/knowledge-watcher.cjs");
 const {
@@ -400,6 +401,57 @@ test("a normal save never overwrites a database written by a newer app version",
   } finally {
     await fs.rm(directory, { recursive: true, force: true });
   }
+});
+
+test("the knowledge path gate only allows bound, dialog-approved or recovery paths", async () => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "personal-task-track-gate-"));
+  const dataFilePath = path.join(directory, DATA_FILE);
+  const boundPath = path.join(directory, "notes", "bound.md");
+  const otherPath = path.join(directory, "notes", "other.md");
+  await fs.mkdir(path.dirname(boundPath), { recursive: true });
+  await fs.writeFile(boundPath, "# bound\n", "utf8");
+  await fs.writeFile(otherPath, "# other\n", "utf8");
+  await fs.writeFile(dataFilePath, `${JSON.stringify({
+    version: 2,
+    tasks: [{ id: "task_gate", knowledgeNote: { noteId: "note_gate", filePath: boundPath } }],
+  })}\n`, "utf8");
+
+  try {
+    const gate = knowledgeAccess.createKnowledgePathGate({ userDataPath: directory, dataFilePath });
+    assert.equal(await gate.isAllowed(boundPath), true, "a persisted binding stays readable");
+    assert.equal(await gate.isAllowed(otherPath), false, "an unrelated path is rejected");
+    assert.equal(await gate.isAllowed(""), false, "an empty path is rejected");
+    assert.equal(await gate.isAllowed("   "), false, "a blank path is rejected");
+
+    gate.approve(otherPath);
+    assert.equal(await gate.isAllowed(otherPath), true, "a dialog-approved path becomes readable");
+
+    const recoveryAsset = path.join(directory, knowledgeAccess.RECOVERY_ASSETS_DIR, "abc123", "attachments", "asset-x.png");
+    assert.equal(gate.isRecoveryAssetPath(recoveryAsset), true);
+    assert.equal(gate.isRecoveryAssetPath(path.join(directory, "elsewhere", "asset-x.png")), false);
+    assert.equal(gate.isRecoveryAssetPath(path.join(directory, knowledgeAccess.RECOVERY_ASSETS_DIR, "..", "task-data.json")), false);
+    assert.equal(gate.isRecoveryAssetPath("/etc/passwd"), false);
+
+    // A rewritten database is picked up without restarting the app.
+    await fs.writeFile(dataFilePath, `${JSON.stringify({
+      version: 2,
+      tasks: [{ id: "task_gate2", knowledgeNote: { noteId: "note_gate2", filePath: otherPath } }],
+    })}\n`, "utf8");
+    const reloaded = knowledgeAccess.createKnowledgePathGate({ userDataPath: directory, dataFilePath });
+    assert.equal(await reloaded.isAllowed(otherPath), true);
+    assert.equal(await reloaded.isAllowed(boundPath), false);
+  } finally {
+    await fs.rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("the main process gates every knowledge file channel behind the path allowlist", async () => {
+  const mainSource = await fs.readFile(path.join(__dirname, "..", "app", "main", "main.cjs"), "utf8");
+  assert.match(mainSource, /const knowledgeGate = createKnowledgePathGate\(\{/);
+  assert.match(mainSource, /knowledge-document:read"[\s\S]*knowledgeGate\.isAllowed\(payload\?\.filePath\)[\s\S]*deniedPathResult/);
+  assert.match(mainSource, /knowledge-document:save"[\s\S]*knowledgeGate\.isAllowed\(payload\.filePath\)[\s\S]*isRecoveryAssetPath/);
+  assert.match(mainSource, /knowledge-document:watch"[\s\S]*knowledgeGate\.isAllowed\(payload\?\.filePath\)/);
+  assert.match(mainSource, /knowledge-document:choose"[\s\S]*knowledgeGate\.approve\(result\.filePath\)/);
 });
 
 test("imported identifiers are escaped so task, node and group ids cannot inject markup", async () => {

@@ -14,7 +14,8 @@ const os = require("node:os");
 const path = require("node:path");
 const { autoUpdater } = require("electron-updater");
 const { BugReportClientError, createBugReportClient } = require("./bug-report-client.cjs");
-const { readTaskData, writeTaskData } = require("./storage.cjs");
+const { dataFilePath, readTaskData, writeTaskData } = require("./storage.cjs");
+const { assetSourcePaths, createKnowledgePathGate, deniedPathResult } = require("./knowledge-access.cjs");
 const {
   chooseKnowledgeDocument,
   readKnowledgeDocument,
@@ -205,6 +206,10 @@ function requestUpdateInstallPreparation() {
 }
 
 function registerStorageHandlers() {
+  const knowledgeGate = createKnowledgePathGate({
+    userDataPath: app.getPath("userData"),
+    dataFilePath: dataFilePath(app.getPath("userData")),
+  });
   ipcMain.on("app:version", (event) => {
     event.returnValue = app.getVersion();
   });
@@ -278,7 +283,18 @@ function registerStorageHandlers() {
   });
   ipcMain.handle("knowledge-document:save", async (event, payload) => {
     const parent = BrowserWindow.fromWebContents(event.sender);
+    // A save without a path, or an explicit "save as", is decided by a native
+    // dialog. Every other write must name a path the user already bound.
+    const usesDialog = !payload?.filePath || payload?.saveAs === true;
+    if (!usesDialog && !(await knowledgeGate.isAllowed(payload.filePath))) {
+      return deniedPathResult(payload?.filePath, "save");
+    }
+    const blockedAsset = assetSourcePaths(payload).find(
+      (sourcePath) => !knowledgeGate.isRecoveryAssetPath(sourcePath),
+    );
+    if (blockedAsset) return deniedPathResult(blockedAsset, "asset");
     const result = await saveKnowledgeDocument(payload, { dialog, parent, platform: process.platform });
+    if (result?.success && result.filePath) knowledgeGate.approve(result.filePath);
     if (result?.success && payload?.noteId) knowledgeWatcher.updateBaseline(payload.noteId, result);
     return result;
   });
@@ -286,17 +302,32 @@ function registerStorageHandlers() {
     app.getPath("userData"),
     payload,
   ));
-  ipcMain.handle("knowledge-document:read", (_event, payload) => readKnowledgeDocument(payload?.filePath));
+  ipcMain.handle("knowledge-document:read", async (_event, payload) => {
+    if (!(await knowledgeGate.isAllowed(payload?.filePath))) return deniedPathResult(payload?.filePath, "read");
+    return readKnowledgeDocument(payload?.filePath);
+  });
   ipcMain.handle("knowledge-document:choose", async (event, payload) => {
     const parent = BrowserWindow.fromWebContents(event.sender);
-    return chooseKnowledgeDocument({
+    const result = await chooseKnowledgeDocument({
       dialog,
       parent,
       boundPaths: payload?.boundPaths,
       platform: process.platform,
     });
+    if (result?.success && result.filePath) knowledgeGate.approve(result.filePath);
+    return result;
   });
-  ipcMain.handle("knowledge-document:watch", (_event, payload) => knowledgeWatcher.watch(payload));
+  ipcMain.handle("knowledge-document:watch", async (_event, payload) => {
+    if (!(await knowledgeGate.isAllowed(payload?.filePath))) {
+      return {
+        success: false,
+        code: "PATH_NOT_ALLOWED",
+        noteId: payload?.noteId,
+        message: "该文件未绑定到任何任务的 Markdown 笔记，已阻止监听。",
+      };
+    }
+    return knowledgeWatcher.watch(payload);
+  });
   ipcMain.handle("knowledge-document:unwatch", (_event, payload) => knowledgeWatcher.unwatch(payload?.noteId));
   ipcMain.handle("knowledge-document:update-baseline", (_event, payload) => knowledgeWatcher.updateBaseline(payload?.noteId, payload));
   ipcMain.handle("knowledge-recovery:read", () => readKnowledgeRecovery(app.getPath("userData")));
