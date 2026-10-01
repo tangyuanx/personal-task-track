@@ -1,9 +1,9 @@
 # Personal Task Track 项目持续交接说明
 
 > 文档性质：**生产项目的持续交接入口（Living Handoff）**
-> 当前生产版本：**v0.1.159**
-> 当前生产提交：**见标签 `v0.1.159`**
-> 最近核对日期：**2026-09-03（Asia/Shanghai）**
+> 当前生产版本：**v0.1.200**
+> 当前生产提交：**见标签 `v0.1.200`**
+> 最近核对日期：**2026-10-01（Asia/Shanghai）**
 > 远程仓库：`git@github.com:tangyuanx/personal-task-track.git`
 > 当前生产形态：**Electron 桌面应用 + Vanilla JavaScript + 本地 Milkdown/Crepe**
 > 生产数据持久化：Electron `userData/task-data.json`；浏览器预览使用 `localStorage` 降级

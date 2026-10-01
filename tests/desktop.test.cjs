@@ -2883,21 +2883,38 @@ test("update metadata is verified against the real artifact bytes", async () => 
   }
 });
 
-test("every workflow declares an explicit permission scope", async () => {
+test("the active workflows declare an explicit permission scope", async () => {
   const workflowDirectory = path.join(__dirname, "..", ".github", "workflows");
   const names = (await fs.readdir(workflowDirectory))
     .filter((name) => name.endsWith(".yml") && !name.startsWith("._"));
   assert.ok(names.length > 0);
-  for (const name of names) {
+
+  // publish-vX.yml files are historical one-shot records: their trigger is a
+  // change to their own path, so giving them a workflow-level default would
+  // replay thirty obsolete publications on the next push.
+  const legacy = names.filter((name) => /^publish-v\d/.test(name));
+  const active = names.filter((name) => !legacy.includes(name));
+  assert.ok(active.length >= 2, "the build and release workflows must be present");
+  for (const name of active) {
     const source = await fs.readFile(path.join(workflowDirectory, name), "utf8");
     assert.match(source, /^permissions:/m, `${name} must declare an explicit permission scope`);
   }
-  const build = await fs.readFile(path.join(workflowDirectory, "build.yml"), "utf8");
+
+  const [build, release] = await Promise.all([
+    fs.readFile(path.join(workflowDirectory, "build.yml"), "utf8"),
+    fs.readFile(path.join(workflowDirectory, "release.yml"), "utf8"),
+  ]);
   assert.match(build, /^permissions:\n  contents: read$/m, "the build workflow only needs read access");
+  assert.match(release, /^permissions:\n  contents: read$/m, "the release workflow defaults to read");
+  assert.match(release, /^ {4}permissions:\n {6}contents: write$/m, "only the publish job may write");
   assert.ok(
     !/pull_request_target|workflow_run/.test(build),
     "the untrusted pull_request trigger must not gain a privileged companion workflow",
   );
+  for (const name of legacy) {
+    const source = await fs.readFile(path.join(workflowDirectory, name), "utf8");
+    assert.match(source, /^\s+permissions:$/m, `${name} must still scope its own publish job`);
+  }
 });
 
 test("release configuration uses deterministic updater artifacts and excludes debug metadata", async () => {

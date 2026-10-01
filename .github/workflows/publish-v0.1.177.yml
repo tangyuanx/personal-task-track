@@ -8,10 +8,6 @@ on:
     paths:
       - .github/workflows/publish-v0.1.177.yml
 
-# Least privilege by default; the publish job raises its own scope.
-permissions:
-  contents: read
-
 concurrency:
   group: publish-v0.1.177
   cancel-in-progress: false

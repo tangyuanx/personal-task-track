@@ -970,3 +970,20 @@
   - macOS packaging reports the established unsigned-build warning (`identity` explicitly set to `null`); no release build errors occurred.
   - The first pre-sync `git stash push -u` could not write `.git/index` under the default sandbox. No worktree content changed; retry with explicit Git write approval is required.
   - The first post-`v0.1.129` complete check passed 124 of 125 desktop/client tests but failed the remote Today no-truncation source assertion because the calendar independently used `.slice(0, 3)` for date-cell rails. Today data was not truncated; changed the equivalent calendar cap to an index filter so the remote regression remains enforceable.
+
+## Session: 2026-10-01 Reliability, Security, and Release Hardening
+
+### Phase 39: Full review, nine verified fixes, and v0.1.200 publication
+- **Status:** ready for publication
+- Actions taken:
+  - Installed dependencies and confirmed the published baseline: `npm run check` green with 206 desktop/client tests and 11 bug-report service tests, plus a real Electron launch.
+  - Reproduced the two highest-impact data findings end to end: a newer-schema `task-data.json` was replaced by an empty database at startup with no user notice, and rendering an imported identifier injected elements (15 `<img>` and 125 `<b>` in the probe).
+  - Fixed them and seven further findings, each on its own branch with "fails before, passes after" evidence: refuse to overwrite a newer database; escape identifiers in rendered attributes and selectors; gate knowledge-note file access behind a bound-path allowlist; lock task-data writes during import and report a failed rollback; verify update artifacts by sha512 and size; declare read-only workflow permissions on the active build and release pipelines (the thirty historical publish-vX workflows were left untouched so the release push does not replay them); keep the UI suite inside its own profile; stop state echoes from clobbering widget input; keep file watches alive across atomic replacement; validate today-widget IPC senders; parse Markdown link schemes instead of blacklisting them.
+  - Deleted the 183-line unreachable duplicate binding pass inside `bind()`; it called functions that do not exist, so any fix applied there would have had no effect.
+  - Measured the renderer hot path before touching it: 200 tasks render in ~20 ms and 1000 in ~97 ms, while `filteredTasks()` costs 1.3 ms at 1000 tasks. With the real database at 11 tasks the recorded performance items are not user-visible, so performance engineering was explicitly dropped.
+  - Recorded the corrected findings in `docs/architecture/KNOWLEDGE_NOTE_RISK_REGISTER.md` terms: R015/R017/R029 were marked FIXED but the write path and the renderer alert did not actually hold.
+- Errors:
+  - `electron` refused to start inside the outer sandbox until the isolated profile was moved into the workspace and `ELECTRON_RUN_AS_NODE` was cleared; the repository UI suite had inherited that variable, which is now handled in the suite itself.
+  - The first two attempts at a release-blocking artifact verifier assumed the wrong line endings in the fixture (tamper changed the size first, so only the size check fired); corrected to same-length tampering so the digest check is the one under test.
+  - Playwright's main-process evaluation has no `require`; the maintenance-lock probe reaches the shared module instance through `process.mainModule.require`.
+  - Git cannot run through the Xcode shim on this machine (`xcodebuild -license`); all git commands use `DEVELOPER_DIR=/Library/Developer/CommandLineTools`.

@@ -10,10 +10,6 @@ on:
       - app/renderer/today-widget.html
       - app/renderer/src/today-widget-runtime.js
 
-# Least privilege by default; the publish job raises its own scope.
-permissions:
-  contents: read
-
 concurrency:
   group: publish-v0.1.195
   cancel-in-progress: false
