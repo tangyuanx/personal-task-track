@@ -30,6 +30,7 @@ const knowledgeAssets = require("../app/main/knowledge-assets.cjs");
 const { createKnowledgeFileWatcher } = require("../app/main/knowledge-watcher.cjs");
 const {
   APP_DISPLAY_NAME,
+  explicitUserDataPath,
   DESKTOP_APP_ID,
   LEGACY_USER_DATA_DIRECTORY,
   WINDOWS_INSTALLER_GUID,
@@ -2849,6 +2850,78 @@ test("Loop preserves the legacy task-data location on macOS and Windows", () => 
   assert.equal(identity.appId, DESKTOP_APP_ID);
   assert.equal(path.win32.basename(identity.userDataPath), LEGACY_USER_DATA_DIRECTORY);
   assert.equal(path.win32.join(identity.userDataPath, DATA_FILE), "C:\\Users\\example\\AppData\\Roaming\\Personal Task Track\\task-data.json");
+});
+
+test("an explicitly requested profile overrides the legacy user-data redirect", () => {
+  const macAppData = "/Users/example/Library/Application Support";
+  assert.equal(explicitUserDataPath([], {}), "", "no request means no override");
+  assert.equal(explicitUserDataPath(["--no-sandbox"], {}), "");
+  assert.equal(
+    explicitUserDataPath(["--no-sandbox", "--user-data-dir=/tmp/loop-profile", "/repo"], {}),
+    "/tmp/loop-profile",
+  );
+  assert.equal(
+    explicitUserDataPath([], { LOOP_USER_DATA_DIR: "  /tmp/loop-env-profile  " }),
+    "/tmp/loop-env-profile",
+    "the environment override must win and be trimmed",
+  );
+
+  const calls = [];
+  const fakeApp = {
+    getPath(name) {
+      calls.push(["getPath", name]);
+      return macAppData;
+    },
+    setName(name) {
+      calls.push(["name", name]);
+    },
+    setPath(name, value) {
+      calls.push([name, value]);
+    },
+  };
+  const identity = configureDesktopIdentity(fakeApp, path.posix, {
+    argv: ["--user-data-dir=/tmp/loop-profile"],
+    env: {},
+  });
+  assert.deepEqual(calls, [
+    ["name", APP_DISPLAY_NAME],
+    ["userData", "/tmp/loop-profile"],
+  ]);
+  assert.equal(identity.userDataPath, "/tmp/loop-profile");
+  assert.equal(identity.usesExplicitProfile, true);
+
+  const legacyCalls = [];
+  const legacyApp = {
+    getPath: () => macAppData,
+    setName() {},
+    setPath(name, value) { legacyCalls.push([name, value]); },
+  };
+  const legacyIdentity = configureDesktopIdentity(legacyApp, path.posix, { argv: [], env: {} });
+  assert.equal(legacyIdentity.usesExplicitProfile, false);
+  assert.equal(legacyIdentity.userDataPath, path.posix.join(macAppData, LEGACY_USER_DATA_DIRECTORY));
+});
+
+test("an isolated profile never triggers legacy user-data recovery", async () => {
+  const mainSource = await fs.readFile(path.join(__dirname, "..", "app", "main", "main.cjs"), "utf8");
+  assert.match(mainSource, /const desktopIdentity = configureDesktopIdentity\(app\)/);
+  assert.match(
+    mainSource,
+    /if \(!desktopIdentity\.usesExplicitProfile\) \{\n\s+await recoverLegacyUserData\(\{/,
+    "a caller-provided profile must not pull the real database in",
+  );
+});
+
+test("the group context menu UI suite runs against its own isolated profile", async () => {
+  const suiteSource = await fs.readFile(path.join(__dirname, "group-context-menu.ui.cjs"), "utf8");
+  assert.match(suiteSource, /--user-data-dir=\$\{profile\}/);
+  assert.match(suiteSource, /await seedProfile\(profile\)/, "the suite must seed the profile it owns");
+  assert.match(suiteSource, /delete env\.ELECTRON_RUN_AS_NODE/, "the binary must start as the app, not as plain Node");
+  assert.match(
+    suiteSource,
+    /the UI write must land in the isolated profile/,
+    "the suite must prove where its writes went",
+  );
+  assert.doesNotMatch(suiteSource, /querySelector\("\.repository-group-trigger"\)/, "the picker lives in the filter popover");
 });
 
 test("repository structure keeps production, tooling, documentation, and prototypes separate", async () => {

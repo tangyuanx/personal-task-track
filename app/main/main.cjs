@@ -40,7 +40,7 @@ const {
   recoverLegacyUserData,
 } = require("./data-continuity.cjs");
 
-configureDesktopIdentity(app);
+const desktopIdentity = configureDesktopIdentity(app);
 
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
 if (!hasSingleInstanceLock) app.quit();
@@ -628,11 +628,15 @@ function createMenu() {
 app.whenReady().then(async () => {
   if (!hasSingleInstanceLock) return;
   try {
-    await recoverLegacyUserData({
-      appDataPath: app.getPath("appData"),
-      canonicalUserDataPath: app.getPath("userData"),
-      recoverRicherLegacy: process.argv.includes("--updated"),
-    });
+    // A caller-provided profile is isolated on purpose: never pull the machine's
+    // real task database into it (and never write backups next to it).
+    if (!desktopIdentity.usesExplicitProfile) {
+      await recoverLegacyUserData({
+        appDataPath: app.getPath("appData"),
+        canonicalUserDataPath: app.getPath("userData"),
+        recoverRicherLegacy: process.argv.includes("--updated"),
+      });
+    }
   } catch (error) {
     console.error("Unable to complete legacy task-data recovery.", error?.code || error);
     dialog.showErrorBox(
