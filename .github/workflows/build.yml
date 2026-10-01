@@ -11,6 +11,11 @@ on:
       - main
   workflow_dispatch:
 
+# The build workflow only reads the repository; artifact upload uses the Actions
+# runtime token, so no write scope is required.
+permissions:
+  contents: read
+
 jobs:
   build:
     name: Build ${{ matrix.platform }}

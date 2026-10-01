@@ -7,6 +7,10 @@ on:
     paths:
       - .github/workflows/publish-v0.1.168.yml
 
+# Least privilege by default; the publish job raises its own scope.
+permissions:
+  contents: read
+
 concurrency:
   group: publish-v0.1.168
   cancel-in-progress: false

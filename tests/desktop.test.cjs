@@ -1,4 +1,5 @@
 const assert = require("node:assert/strict");
+const crypto = require("node:crypto");
 const { spawn } = require("node:child_process");
 const { EventEmitter } = require("node:events");
 const fs = require("node:fs/promises");
@@ -2783,6 +2784,85 @@ test("settings expose one-confirmation background update with a safe silent rest
   assert.match(main, /UPDATE_INSTALL_PREPARATION_TIMEOUT_MS/);
   assert.match(app, /flushPendingKnowledgeRecoveries\(\{ strict: true \}\)/);
   assert.doesNotMatch(app, /自动安装更新/);
+});
+
+function runUpdateVerifier(directory, extraArgs = []) {
+  const script = path.join(__dirname, "..", "tools", "verify-update-artifacts.cjs");
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [script, directory, ...extraArgs], { cwd: path.join(__dirname, "..") });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (chunk) => { stdout += String(chunk); });
+    child.stderr.on("data", (chunk) => { stderr += String(chunk); });
+    child.once("error", reject);
+    child.once("exit", (code) => resolve({ code, stdout, stderr }));
+  });
+}
+
+test("update metadata is verified against the real artifact bytes", async () => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "loop-update-verify-"));
+  const artifact = "Loop-0.1.199-arm64.dmg";
+  const bytes = Buffer.from("loop artifact payload used for sha512 verification");
+  const digest = crypto.createHash("sha512").update(bytes).digest("base64");
+  const metadataFor = (size) => [
+    "version: 0.1.199",
+    "files:",
+    `  - url: ${artifact}`,
+    `    sha512: ${digest}`,
+    `    size: ${size}`,
+    `path: ${artifact}`,
+    `sha512: ${digest}`,
+    "releaseDate: '2026-10-01T00:00:00.000Z'",
+    "",
+  ].join("\n");
+  try {
+    await fs.writeFile(path.join(directory, artifact), bytes);
+    await fs.writeFile(path.join(directory, "latest-mac.yml"), metadataFor(bytes.length), "utf8");
+    const verified = await runUpdateVerifier(directory);
+    assert.equal(verified.code, 0, verified.stderr);
+    assert.match(verified.stdout, /Verified 1 update metadata file\(s\) and 1 artifact digest\(s\)/);
+
+    // Tamper without changing the length, so only the digest can catch it.
+    await fs.writeFile(path.join(directory, artifact), Buffer.from("X".repeat(bytes.length)));
+    const tampered = await runUpdateVerifier(directory);
+    assert.equal(tampered.code, 1, "a tampered artifact must fail verification");
+    assert.match(tampered.stderr, /sha512 mismatch/);
+
+    await fs.writeFile(path.join(directory, artifact), bytes);
+    await fs.writeFile(path.join(directory, "latest-mac.yml"), metadataFor(bytes.length + 1), "utf8");
+    const wrongSize = await runUpdateVerifier(directory);
+    assert.equal(wrongSize.code, 1, "a declared size that disagrees with the file must fail verification");
+    assert.match(wrongSize.stderr, /bytes but the file is/);
+
+    await fs.writeFile(path.join(directory, "latest-mac.yml"), metadataFor(bytes.length).replace(`    sha512: ${digest}\n    size`, "    size"), "utf8");
+    const missingDigest = await runUpdateVerifier(directory);
+    assert.equal(missingDigest.code, 1, "metadata without a digest cannot prove anything and must fail");
+    assert.match(missingDigest.stderr, /does not record a sha512/);
+
+    await fs.writeFile(path.join(directory, "latest-mac.yml"), metadataFor(bytes.length).replace(artifact, "Loop-0.1.199-arm64-renamed.dmg"), "utf8");
+    const missingArtifact = await runUpdateVerifier(directory);
+    assert.equal(missingArtifact.code, 1);
+    assert.match(missingArtifact.stderr, /references missing artifact/);
+  } finally {
+    await fs.rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("every workflow declares an explicit permission scope", async () => {
+  const workflowDirectory = path.join(__dirname, "..", ".github", "workflows");
+  const names = (await fs.readdir(workflowDirectory))
+    .filter((name) => name.endsWith(".yml") && !name.startsWith("._"));
+  assert.ok(names.length > 0);
+  for (const name of names) {
+    const source = await fs.readFile(path.join(workflowDirectory, name), "utf8");
+    assert.match(source, /^permissions:/m, `${name} must declare an explicit permission scope`);
+  }
+  const build = await fs.readFile(path.join(workflowDirectory, "build.yml"), "utf8");
+  assert.match(build, /^permissions:\n  contents: read$/m, "the build workflow only needs read access");
+  assert.ok(
+    !/pull_request_target|workflow_run/.test(build),
+    "the untrusted pull_request trigger must not gain a privileged companion workflow",
+  );
 });
 
 test("release configuration uses deterministic updater artifacts and excludes debug metadata", async () => {
