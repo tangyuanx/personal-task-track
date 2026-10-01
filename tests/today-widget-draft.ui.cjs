@@ -1,0 +1,81 @@
+const assert = require("node:assert/strict");
+const fs = require("node:fs/promises");
+const os = require("node:os");
+const path = require("node:path");
+const { _electron: electron } = require("playwright-core");
+
+/**
+ * Regression for the today-widget quick-capture draft.
+ *
+ * The main process echoes the stored draft on every state broadcast (dragging,
+ * resizing, opacity). That echo used to replace text the user had typed but not
+ * yet published, silently dropping the last keystrokes. A deliberate clear from
+ * the main window (promote, delete) must still reach the widget.
+ */
+(async () => {
+  const repository = path.join(__dirname, "..");
+  const profile = await fs.mkdtemp(path.join(os.tmpdir(), "loop-widget-draft-ui-"));
+  let app;
+  try {
+    const env = { ...process.env, ELECTRON_DISABLE_SANDBOX: "1" };
+    delete env.ELECTRON_RUN_AS_NODE;
+    app = await electron.launch({
+      executablePath: require("electron"),
+      args: ["--no-sandbox", `--user-data-dir=${profile}`, repository],
+      cwd: repository,
+      env,
+    });
+    await app.firstWindow();
+    const deadline = Date.now() + 15_000;
+    let main = null;
+    let widget = null;
+    while (Date.now() < deadline && !(main && widget)) {
+      for (const candidate of app.windows()) {
+        if (candidate.url().endsWith("/app/renderer/index.html")) main = candidate;
+        if (candidate.url().endsWith("/app/renderer/today-widget.html")) widget = candidate;
+      }
+      if (!main || !widget) await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    if (!main || !widget) throw new Error("Loop must open both the main window and the today widget");
+    await main.locator(".ops-app").waitFor();
+    await widget.locator("#quick-capture-input").waitFor();
+
+    const readDraft = () => widget.evaluate(() => document.querySelector("#quick-capture-input").value);
+    const storeDraft = (draft) => main.evaluate(
+      (value) => window.personalTaskTrack.todayWidget.setPreferences({ quickCaptureDraft: value }),
+      draft,
+    );
+    const broadcastState = () => main.evaluate(
+      () => window.personalTaskTrack.todayWidget.setPreferences({ opacity: 0.9 }),
+    );
+
+    await storeDraft("已恢复的草稿");
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    assert.equal(await readDraft(), "已恢复的草稿", "a stored draft must still be restored into the widget");
+
+    await widget.evaluate(() => {
+      const input = document.querySelector("#quick-capture-input");
+      input.focus();
+      input.value = "已恢复的草稿 + 新输入";
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await broadcastState();
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    assert.equal(
+      await readDraft(),
+      "已恢复的草稿 + 新输入",
+      "a state broadcast must not replace text the user is still typing",
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    await storeDraft("");
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    assert.equal(await readDraft(), "", "an explicit clear must still reach the widget");
+  } finally {
+    await app?.close();
+    await fs.rm(profile, { recursive: true, force: true });
+  }
+})().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

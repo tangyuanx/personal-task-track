@@ -1,5 +1,8 @@
 (() => {
   const bridge = window.personalTaskTrack?.todayWidget;
+  // The value this window last published; the main process echoes it back on
+  // every state broadcast, and that echo can be older than what is on screen.
+  let lastPublishedDraft = "";
   if (!bridge) return;
 
   const COMPACT_MENU_WINDOW_HEIGHT = 340;
@@ -214,8 +217,7 @@
     widget.classList.toggle("is-click-through", state.clickThrough === true);
     clickThrough.checked = state.clickThrough === true;
     clickThroughHint.hidden = state.clickThrough !== true;
-    quickCaptureInput.value = String(state.quickCaptureDraft || "");
-    autosizeCaptureInput();
+    applyCaptureDraft(state.quickCaptureDraft);
     launchWithApp.checked = state.launchWithApp !== false;
     applyOpacity(state.opacity);
     compactToggle.title = state.compact ? "展开" : "收起";
@@ -230,11 +232,33 @@
     quickCaptureInput.style.height = `${Math.min(72, Math.max(24, quickCaptureInput.scrollHeight))}px`;
   }
 
+  function applyCaptureDraft(value) {
+    const next = String(value || "");
+    const current = quickCaptureInput.value;
+    if (next === current) return;
+    // The main process echoes the last published draft on every state broadcast
+    // (dragging, resizing, opacity ...). Those echoes must never replace newer
+    // text the user is still typing.
+    if (next === lastPublishedDraft) return;
+    if (current !== lastPublishedDraft && isTextEditingTarget(document.activeElement)) return;
+    quickCaptureInput.value = next;
+    autosizeCaptureInput();
+  }
+
+  function publishCaptureDraft(value) {
+    lastPublishedDraft = String(value || "");
+    void bridge.setPreferences({ quickCaptureDraft: lastPublishedDraft });
+  }
+
   function persistCaptureDraft() {
     window.clearTimeout(draftSaveTimer);
-    draftSaveTimer = window.setTimeout(() => {
-      void bridge.setPreferences({ quickCaptureDraft: quickCaptureInput.value.slice(0, 4000) });
-    }, 260);
+    draftSaveTimer = window.setTimeout(flushCaptureDraft, 260);
+  }
+
+  function flushCaptureDraft() {
+    window.clearTimeout(draftSaveTimer);
+    draftSaveTimer = 0;
+    publishCaptureDraft(quickCaptureInput.value.slice(0, 4000));
   }
 
   function parseCaptureDraft() {
@@ -255,7 +279,7 @@
     }
     quickCaptureInput.value = "";
     autosizeCaptureInput();
-    void bridge.setPreferences({ quickCaptureDraft: "" });
+    publishCaptureDraft("");
     showToast(addToToday ? "已保存并加入今日任务" : "已保存到速记");
   }
 
@@ -587,7 +611,12 @@
     persistCaptureDraft();
   });
   quickCaptureInput.addEventListener("focus", () => setTextEditing(true));
-  quickCaptureInput.addEventListener("blur", () => setTextEditing(false));
+  quickCaptureInput.addEventListener("blur", () => {
+    setTextEditing(false);
+    // Store the draft the moment the field loses focus instead of waiting for
+    // the debounce, so no other broadcast can race the newer text.
+    flushCaptureDraft();
+  });
   quickCaptureInput.addEventListener("compositionstart", () => { quickCaptureInput.dataset.composing = "true"; });
   quickCaptureInput.addEventListener("compositionend", () => { quickCaptureInput.dataset.composing = "false"; });
   quickCaptureInput.addEventListener("keydown", (event) => {

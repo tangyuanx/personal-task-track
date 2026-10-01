@@ -1499,6 +1499,41 @@ test("knowledge file watcher debounces changes and suppresses matching self-writ
   }
 });
 
+test("knowledge file watcher keeps reporting after an atomic replacement", async () => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "personal-task-track-knowledge-watcher-rename-"));
+  const filePath = path.join(directory, "note.md");
+  await fs.writeFile(filePath, "初始内容", "utf8");
+  const events = [];
+  // No injected watch: this exercises the real filesystem behaviour that made a
+  // file-bound watch go silent after an editor replaced the file.
+  const watcher = createKnowledgeFileWatcher({
+    debounceMs: 30,
+    onChange: (event) => events.push(event),
+  });
+  try {
+    const baseline = await knowledgeFile.readKnowledgeDocument(filePath);
+    assert.equal(watcher.watch({ noteId: "watch_rename", ...baseline }).success, true);
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    events.length = 0;
+
+    const temporary = path.join(directory, ".note.md.tmp-rename");
+    await fs.writeFile(temporary, "外部原子替换", "utf8");
+    await fs.rename(temporary, filePath);
+    await waitForCondition(() => events.some((event) => event.type === "external-changed"), 3000);
+    assert.equal(events.find((event) => event.type === "external-changed").content, "外部原子替换");
+
+    // A later in-place write must still be reported, which proves the watch
+    // survived the replacement instead of silently dying with the old inode.
+    events.length = 0;
+    await fs.writeFile(filePath, "替换后再次修改", "utf8");
+    await waitForCondition(() => events.some((event) => event.type === "external-changed"), 3000);
+    assert.equal(events.find((event) => event.type === "external-changed").content, "替换后再次修改");
+  } finally {
+    watcher.closeAll();
+    await fs.rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("knowledge file watcher reports deletion, unavailable paths, and read-only files", async () => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "personal-task-track-knowledge-watcher-state-"));
   const filePath = path.join(directory, "note.md");

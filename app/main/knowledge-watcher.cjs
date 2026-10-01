@@ -1,4 +1,5 @@
 const fs = require("node:fs");
+const path = require("node:path");
 const {
   canonicalFilePath,
   readKnowledgeDocument,
@@ -160,8 +161,16 @@ function createKnowledgeFileWatcher({
       timer: null,
     };
     entries.set(normalizedNoteId, entry);
+    const watchedDirectory = path.dirname(normalizedPath);
+    const watchedName = path.basename(normalizedPath);
     try {
-      entry.watcher = fsApi.watch(normalizedPath, { persistent: false }, () => schedule(entry));
+      // Watch the parent directory instead of the file itself: editors save with
+      // an atomic rename, which leaves a watch bound to the old inode silent
+      // forever and lets the next in-app save overwrite the external change.
+      entry.watcher = fsApi.watch(watchedDirectory, { persistent: false }, (_eventType, changedName) => {
+        if (changedName && String(changedName) !== watchedName) return;
+        schedule(entry);
+      });
       if (typeof entry.watcher?.on === "function") {
         entry.watcher.on("error", (error) => {
           if (entries.get(normalizedNoteId) === entry) emitUnavailable(entry, error);
