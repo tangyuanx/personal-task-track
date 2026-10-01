@@ -392,7 +392,22 @@ async function importBackup({
     return { imported: true, tasks: restored.tasks, nodes: restored.nodes, safetyBackupPath: current?.backupPath || "" };
   } catch (error) {
     await removeManagedData(userDataPath, fileSystem).catch(() => {});
-    if (current) await restoreManagedBackup(current, userDataPath, fileSystem);
+    let rollbackFailure = null;
+    if (current) {
+      try {
+        await restoreManagedBackup(current, userDataPath, fileSystem);
+      } catch (failure) {
+        rollbackFailure = failure;
+      }
+    }
+    if (rollbackFailure) {
+      // The safety backup still exists, so never hide it behind a generic error.
+      const safetyBackupPath = current?.backupPath || "";
+      throw Object.assign(
+        new Error(`导入失败，且自动回滚未能完成（${rollbackFailure.code || "UNKNOWN"}）。当前数据可能不完整；校验过的安全备份位于：${safetyBackupPath || "未生成"}`),
+        { code: "IMPORT_ROLLBACK_FAILED", safetyBackupPath, importError: error, cause: rollbackFailure },
+      );
+    }
     throw Object.assign(new Error("Import failed and the previous data was restored."), { code: "IMPORT_ROLLED_BACK", cause: error });
   } finally {
     if (incoming.temporary) await fileSystem.rm(incoming.cleanupPath || incoming.backupPath, { recursive: true, force: true }).catch(() => {});

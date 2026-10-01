@@ -16,6 +16,7 @@ const { autoUpdater } = require("electron-updater");
 const { BugReportClientError, createBugReportClient } = require("./bug-report-client.cjs");
 const { dataFilePath, readTaskData, writeTaskData } = require("./storage.cjs");
 const { assetSourcePaths, createKnowledgePathGate, deniedPathResult } = require("./knowledge-access.cjs");
+const dataMaintenance = require("./data-maintenance.cjs");
 const {
   chooseKnowledgeDocument,
   readKnowledgeDocument,
@@ -226,7 +227,10 @@ function registerStorageHandlers() {
  * @param {object} payload - { taskTitle, markdown?, html? }
  * @returns {Promise<{ canceled: boolean, filePath?: string }>}
  */
-  ipcMain.handle("task-data:write", (_event, data) => writeTaskData(app.getPath("userData"), data));
+  ipcMain.handle("task-data:write", (_event, data) => {
+    dataMaintenance.assertWritable();
+    return writeTaskData(app.getPath("userData"), data);
+  });
   ipcMain.handle("data-backup:export", async (event) => {
     const parent = BrowserWindow.fromWebContents(event.sender);
     const stamp = new Date().toISOString().slice(0, 19).replaceAll(":", "-");
@@ -268,13 +272,23 @@ function registerStorageHandlers() {
       noLink: true,
     });
     if (confirmation.response !== 1) return { canceled: true };
-    const result = await importBackup({
-      selectedPath,
-      selectionType,
-      appDataPath: app.getPath("appData"),
-      userDataPath: app.getPath("userData"),
-      installDirectory: process.platform === "win32" ? path.dirname(process.execPath) : "",
-    });
+    // From here on the managed data files are replaced in place. Block renderer
+    // writes for the whole operation and keep them blocked until the relaunch,
+    // so no late autosave can overwrite the restored database.
+    dataMaintenance.begin("manual-import");
+    let result;
+    try {
+      result = await importBackup({
+        selectedPath,
+        selectionType,
+        appDataPath: app.getPath("appData"),
+        userDataPath: app.getPath("userData"),
+        installDirectory: process.platform === "win32" ? path.dirname(process.execPath) : "",
+      });
+    } catch (error) {
+      dataMaintenance.end();
+      throw error;
+    }
     setTimeout(() => {
       app.relaunch();
       app.exit(0);

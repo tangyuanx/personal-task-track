@@ -293,6 +293,7 @@ let state = {
 };
 
 let dataProtectionMessage = "";
+let dataTransferInProgress = false;
 let saveTimer = 0;
 let nodeDetailSaveFeedbackTimer = 0;
 let activeSettingsPage = "appearance";
@@ -1535,7 +1536,7 @@ async function loadAppData() {
  * In browser environment, writes directly to individual localStorage keys.
  */
 function save() {
-  if (dataProtectionMessage) return;
+  if (dataProtectionMessage || dataTransferInProgress) return;
   const payload = {
     version: DATA_VERSION,
     knowledgeSchemaVersion: KNOWLEDGE_MIGRATION_VERSION,
@@ -1596,7 +1597,7 @@ function saveFlowWidths() {
 async function flushSave() {
   window.clearTimeout(saveTimer);
   saveTimer = 0;
-  if (dataProtectionMessage) {
+  if (dataProtectionMessage || dataTransferInProgress) {
     pendingPayload = null;
     return false;
   }
@@ -4228,11 +4229,22 @@ function bindDataBackupControls() {
       if (status) status.textContent = action === "export" ? "正在保存并生成完整备份…" : "正在保存当前数据并校验所选备份…";
       try {
         await flushAllDataForTransfer();
-        const result = action === "export"
-          ? await desktopDataBackup.export()
-          : action === "import-directory"
-            ? await desktopDataBackup.importDirectory()
-            : await desktopDataBackup.importFile();
+        // An import replaces the whole data set in place, so stop accepting
+        // further renderer writes until the app restarts.
+        const isImport = action !== "export";
+        if (isImport) dataTransferInProgress = true;
+        let result;
+        try {
+          result = action === "export"
+            ? await desktopDataBackup.export()
+            : action === "import-directory"
+              ? await desktopDataBackup.importDirectory()
+              : await desktopDataBackup.importFile();
+        } catch (error) {
+          if (isImport) dataTransferInProgress = false;
+          throw error;
+        }
+        if (result?.canceled && isImport) dataTransferInProgress = false;
         if (result?.canceled) {
           if (status) status.textContent = "操作已取消，当前数据未发生变化。";
         } else if (action === "export") {
@@ -4244,7 +4256,10 @@ function bindDataBackupControls() {
       } catch (error) {
         console.error("Loop data backup operation failed.", error);
         if (status) status.textContent = `操作失败（${String(error?.code || "DATA_BACKUP_FAILED")}），当前数据已保留。`;
-        globalThis.alert("数据迁移或恢复未完成。Loop 已保留当前数据与安全备份，请检查文件、磁盘空间或目录权限后重试。");
+        const detail = String(error?.message || "").split("Error: ").pop().trim();
+        globalThis.alert(detail && /回滚|备份/.test(detail)
+          ? `数据迁移或恢复未完成：${detail}`
+          : "数据迁移或恢复未完成。Loop 已保留当前数据与安全备份，请检查文件、磁盘空间或目录权限后重试。");
       } finally {
         buttons.forEach((control) => { control.disabled = false; });
       }

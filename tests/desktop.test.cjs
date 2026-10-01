@@ -25,6 +25,7 @@ const {
 } = require("../app/main/recovery.cjs");
 const knowledgeFile = require("../app/main/knowledge-file.cjs");
 const knowledgeAccess = require("../app/main/knowledge-access.cjs");
+const dataMaintenance = require("../app/main/data-maintenance.cjs");
 const knowledgeAssets = require("../app/main/knowledge-assets.cjs");
 const { createKnowledgeFileWatcher } = require("../app/main/knowledge-watcher.cjs");
 const {
@@ -401,6 +402,68 @@ test("a normal save never overwrites a database written by a newer app version",
   } finally {
     await fs.rm(directory, { recursive: true, force: true });
   }
+});
+
+test("the data maintenance lock blocks task-data writes until every holder releases it", () => {
+  const lock = dataMaintenance.createDataMaintenanceLock();
+  assert.equal(lock.isActive(), false);
+  assert.doesNotThrow(() => lock.assertWritable());
+
+  const releaseImport = lock.begin("manual-import");
+  assert.equal(lock.isActive(), true);
+  assert.equal(lock.reason(), "manual-import");
+  assert.throws(() => lock.assertWritable(), (error) => error.code === "DATA_MAINTENANCE");
+
+  const releaseNested = lock.begin("second-holder");
+  releaseNested();
+  assert.equal(lock.isActive(), true, "one remaining holder keeps the lock engaged");
+  assert.throws(() => lock.assertWritable(), (error) => error.code === "DATA_MAINTENANCE");
+
+  releaseImport();
+  assert.equal(lock.isActive(), false);
+  assert.equal(lock.reason(), "");
+  assert.doesNotThrow(() => lock.assertWritable());
+});
+
+test("the main process locks task-data writes while a data import is running", async () => {
+  const mainSource = await fs.readFile(path.join(__dirname, "..", "app", "main", "main.cjs"), "utf8");
+  assert.match(mainSource, /task-data:write"[\s\S]*dataMaintenance\.assertWritable\(\)[\s\S]*writeTaskData\(app\.getPath\("userData"\), data\)/);
+  assert.match(mainSource, /dataMaintenance\.begin\("manual-import"\)/);
+  assert.match(mainSource, /\} catch \(error\) \{\n\s+dataMaintenance\.end\(\);\n\s+throw error;/);
+});
+
+test("the renderer stops writing task data while a data import is in progress", async () => {
+  const writes = [];
+  const harness = await rendererHarness({
+    storage: {
+      read: async () => null,
+      write: async (data) => { writes.push(data); },
+    },
+  });
+
+  await harness.evaluate(`(async () => {
+    state.tasks = normalizeTasks([{ id: "task_transfer", title: "导入前保存", status: "active", priority: "medium", notes: "", nodes: [] }]);
+    save();
+    await flushSave();
+  })()`);
+  assert.equal(writes.length, 1, "a normal edit must still be persisted");
+
+  await harness.evaluate(`(async () => {
+    dataTransferInProgress = true;
+    state.tasks[0].title = "导入期间不应落盘";
+    save();
+    await flushSave();
+  })()`);
+  assert.equal(writes.length, 1, "no write may happen while a data import is in progress");
+
+  await harness.evaluate(`(async () => {
+    dataTransferInProgress = false;
+    state.tasks[0].title = "导入结束后的保存";
+    save();
+    await flushSave();
+  })()`);
+  assert.equal(writes.length, 2, "writes resume after the transfer is abandoned or fails");
+  assert.equal(writes[1].tasks[0].title, "导入结束后的保存");
 });
 
 test("the knowledge path gate only allows bound, dialog-approved or recovery paths", async () => {

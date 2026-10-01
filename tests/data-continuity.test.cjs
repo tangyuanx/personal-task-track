@@ -270,6 +270,51 @@ test("failed import rolls back to the verified pre-import database", async (t) =
   assert.deepEqual(JSON.parse(await fs.readFile(path.join(target, "task-data.json"), "utf8")), completeTaskData("current"));
 });
 
+test("an import whose rollback also fails reports the safety backup instead of hiding it", async (t) => {
+  const root = await tempRoot(t, "loop-import-rollback-failed");
+  const source = path.join(root, "source");
+  const appData = path.join(root, "app-data");
+  const target = path.join(appData, "Personal Task Track");
+  const portablePath = path.join(root, "incoming.loopbackup");
+  await writeCompleteUserData(source, "incoming");
+  await writeCompleteUserData(target, "current");
+  await exportPortableBackup({ userDataPath: source, destinationPath: portablePath, appVersion: "0.1.142", now: fixedNow });
+
+  let failures = 0;
+  const fileSystem = {
+    ...fs,
+    async rename(sourcePath, destinationPath) {
+      if (failures < 2 && destinationPath === path.join(target, "task-data.json") && sourcePath.includes(".migration-")) {
+        failures += 1;
+        throw Object.assign(new Error("simulated disk failure"), { code: "EIO" });
+      }
+      return fs.rename(sourcePath, destinationPath);
+    },
+  };
+  let reportedBackupPath = "";
+  await assert.rejects(
+    importBackup({
+      selectedPath: portablePath,
+      selectionType: "file",
+      appDataPath: appData,
+      userDataPath: target,
+      installDirectory: path.join(root, "install"),
+      fileSystem,
+      now: fixedNow,
+    }),
+    (error) => {
+      assert.equal(error?.code, "IMPORT_ROLLBACK_FAILED", "a failed rollback must not be reported as a clean rollback");
+      reportedBackupPath = error?.safetyBackupPath || "";
+      assert.ok(reportedBackupPath, "the safety backup path must be surfaced to the caller");
+      assert.match(String(error?.message || ""), /安全备份/);
+      return true;
+    },
+  );
+  assert.equal(failures, 2, "the import restore and the rollback restore must both have been attempted");
+  const safetyTaskData = JSON.parse(await fs.readFile(path.join(reportedBackupPath, "data", "task-data.json"), "utf8"));
+  assert.equal(safetyTaskData.tasks[0].id, "task-current", "the safety backup must hold the pre-import database");
+});
+
 test("Windows installer backs up before uninstall and preserves the legacy install folder identity", async () => {
   const installer = await fs.readFile(path.join(__dirname, "..", "build", "installer.nsh"), "utf8");
   const packageJson = JSON.parse(await fs.readFile(path.join(__dirname, "..", "package.json"), "utf8"));
