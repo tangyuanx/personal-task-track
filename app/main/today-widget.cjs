@@ -441,23 +441,53 @@ function createTodayWidgetController({ app, BrowserWindow, globalShortcut, ipcMa
     });
   }
 
+  function isWidgetSender(event) {
+    const sender = event?.sender;
+    return Boolean(sender) && Boolean(widgetWindow) && !widgetWindow.isDestroyed() && sender === widgetWindow.webContents;
+  }
+
+  function isMainWindowSender(event) {
+    const sender = event?.sender;
+    const main = getMainWindow();
+    return Boolean(sender) && Boolean(main) && !main.isDestroyed() && sender === main.webContents;
+  }
+
+  function rejectUnknownSender(channel) {
+    return { success: false, code: "UNKNOWN_SENDER", channel };
+  }
+
   function registerIpc() {
-    ipcMain.handle("today-widget:get-state", () => ({ ...widgetState(), snapshot }));
-    ipcMain.handle("today-widget:show", () => showWidget());
-    ipcMain.handle("today-widget:hide", () => hideWidget());
-    ipcMain.handle("today-widget:set-preferences", (_event, patch) => updatePreferences(patch));
+    ipcMain.handle("today-widget:get-state", (event) => (isWidgetSender(event) || isMainWindowSender(event)
+      ? { ...widgetState(), snapshot }
+      : rejectUnknownSender("today-widget:get-state")));
+    ipcMain.handle("today-widget:show", (event) => (isWidgetSender(event) || isMainWindowSender(event)
+      ? showWidget()
+      : rejectUnknownSender("today-widget:show")));
+    ipcMain.handle("today-widget:hide", (event) => (isWidgetSender(event) || isMainWindowSender(event)
+      ? hideWidget()
+      : rejectUnknownSender("today-widget:hide")));
+    ipcMain.handle("today-widget:set-preferences", (event, patch) => (isWidgetSender(event) || isMainWindowSender(event)
+      ? updatePreferences(patch)
+      : rejectUnknownSender("today-widget:set-preferences")));
     ipcMain.handle("today-widget:set-editing", (event, enabled) => {
-      if (!widgetWindow || widgetWindow.isDestroyed() || event.sender !== widgetWindow.webContents) {
+      if (!isWidgetSender(event)) {
         return { success: false, editing: editingText };
       }
       editingText = enabled === true;
       applyAlwaysOnTop();
       return { success: true, editing: editingText };
     });
-    ipcMain.handle("today-widget:resize", (_event, size) => resizeWidget(size));
-    ipcMain.handle("today-widget:open-main", (_event, taskId) => showMainWindow(taskId));
-    ipcMain.handle("today-widget:complete-task", (_event, taskId) => requestCompletion(taskId));
-    ipcMain.handle("today-widget:create-task", (_event, payload) => {
+    ipcMain.handle("today-widget:resize", (event, size) => (isWidgetSender(event)
+      ? resizeWidget(size)
+      : rejectUnknownSender("today-widget:resize")));
+    ipcMain.handle("today-widget:open-main", (event, taskId) => (isWidgetSender(event)
+      ? showMainWindow(taskId)
+      : rejectUnknownSender("today-widget:open-main")));
+    ipcMain.handle("today-widget:complete-task", (event, taskId) => (isWidgetSender(event)
+      ? requestCompletion(taskId)
+      : rejectUnknownSender("today-widget:complete-task")));
+    ipcMain.handle("today-widget:create-task", (event, payload) => {
+      if (!isWidgetSender(event)) return rejectUnknownSender("today-widget:create-task");
       const raw = payload && typeof payload === "object" ? payload : {};
       const title = String(raw.title || "").trim().slice(0, 240);
       const description = String(raw.description || "").slice(0, 4000);
@@ -468,7 +498,8 @@ function createTodayWidgetController({ app, BrowserWindow, globalShortcut, ipcMa
         addToToday: raw.addToToday === true,
       });
     });
-    ipcMain.handle("today-widget:update-task-title", (_event, payload) => {
+    ipcMain.handle("today-widget:update-task-title", (event, payload) => {
+      if (!isWidgetSender(event)) return rejectUnknownSender("today-widget:update-task-title");
       const raw = payload && typeof payload === "object" ? payload : {};
       const taskId = normalizeTaskId(raw.taskId);
       const title = String(raw.title || "").trim().slice(0, 240);
@@ -476,7 +507,8 @@ function createTodayWidgetController({ app, BrowserWindow, globalShortcut, ipcMa
       if (!title) return { success: false, code: "INVALID_TITLE" };
       return requestMainMutation("today-widget:update-task-title", { taskId, title });
     });
-    ipcMain.handle("today-widget:promote-quick-capture", (_event, payload) => {
+    ipcMain.handle("today-widget:promote-quick-capture", (event, payload) => {
+      if (!isWidgetSender(event)) return rejectUnknownSender("today-widget:promote-quick-capture");
       const raw = payload && typeof payload === "object" ? payload : {};
       const taskId = normalizeTaskId(raw.taskId);
       const groupId = normalizeTaskId(raw.groupId);
@@ -484,13 +516,15 @@ function createTodayWidgetController({ app, BrowserWindow, globalShortcut, ipcMa
       if (!groupId) return { success: false, code: "GROUP_NOT_FOUND" };
       return requestMainMutation("today-widget:promote-quick-capture", { taskId, groupId });
     });
-    ipcMain.handle("today-widget:delete-quick-capture", (_event, payload) => {
+    ipcMain.handle("today-widget:delete-quick-capture", (event, payload) => {
+      if (!isWidgetSender(event)) return rejectUnknownSender("today-widget:delete-quick-capture");
       const raw = payload && typeof payload === "object" ? payload : {};
       const taskId = normalizeTaskId(raw.taskId);
       if (!taskId) return { success: false, code: "TASK_NOT_FOUND" };
       return requestMainMutation("today-widget:delete-quick-capture", { taskId });
     });
-    ipcMain.handle("today-widget:move-item", (_event, payload) => {
+    ipcMain.handle("today-widget:move-item", (event, payload) => {
+      if (!isWidgetSender(event)) return rejectUnknownSender("today-widget:move-item");
       const raw = payload && typeof payload === "object" ? payload : {};
       const taskId = normalizeTaskId(raw.taskId);
       const sourceLane = raw.sourceLane === "task" || raw.sourceLane === "quick" ? raw.sourceLane : "";
@@ -508,7 +542,8 @@ function createTodayWidgetController({ app, BrowserWindow, globalShortcut, ipcMa
         position,
       });
     });
-    ipcMain.handle("today-widget:reorder-item", (_event, payload) => {
+    ipcMain.handle("today-widget:reorder-item", (event, payload) => {
+      if (!isWidgetSender(event)) return rejectUnknownSender("today-widget:reorder-item");
       const raw = payload && typeof payload === "object" ? payload : {};
       const taskId = normalizeTaskId(raw.taskId);
       const lane = raw.lane === "task" || raw.lane === "quick" ? raw.lane : "";
@@ -519,7 +554,7 @@ function createTodayWidgetController({ app, BrowserWindow, globalShortcut, ipcMa
       return requestMainMutation("today-widget:reorder-item", { taskId, lane, direction });
     });
     ipcMain.on("today-widget:publish", (event, value) => {
-      if (event.sender === getMainWindow()?.webContents) publishSnapshot(value);
+      if (isMainWindowSender(event)) publishSnapshot(value);
     });
     ipcMain.on("today-widget:complete-result", resolveCompletion);
     ipcMain.on("today-widget:mutation-result", resolveMutation);

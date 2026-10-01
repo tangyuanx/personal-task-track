@@ -3231,6 +3231,8 @@ test("Today widget restores topmost after app deactivation releases temporary ed
     }
     static getAllWindows() { return widgetWindow ? [widgetWindow] : []; }
   };
+  // The main window is the one that shows the widget, so it must be the sender.
+  const mainWindowStub = { isDestroyed: () => false, webContents: { id: 1, kind: "main-window" } };
   const controller = createTodayWidgetController({
     app: { getPath: () => directory },
     BrowserWindow,
@@ -3244,15 +3246,33 @@ test("Today widget restores topmost after app deactivation releases temporary ed
       getDisplayNearestPoint: () => ({ workArea: { x: 0, y: 0, width: 1280, height: 800 } }),
       getPrimaryDisplay: () => ({ workArea: { x: 0, y: 0, width: 1280, height: 800 } }),
     },
-    getMainWindow: () => null,
+    getMainWindow: () => mainWindowStub,
     ensureMainWindow: () => null,
   });
   controller.registerIpc();
-  await ipcHandlers.get("today-widget:show")();
+  await ipcHandlers.get("today-widget:show")({ sender: mainWindowStub.webContents });
   assert.equal(widgetWindowOptions.type, process.platform === "darwin" ? "panel" : undefined);
 
   await ipcHandlers.get("today-widget:set-editing")({ sender: widgetWindow.webContents }, true);
   assert.deepEqual(topmostCalls.at(-1), ["always-on-top", false, "normal", 0]);
+
+  const unknownSender = { sender: { id: "not-a-loop-window" } };
+  const widgetOnlyChannels = [
+    "today-widget:resize",
+    "today-widget:open-main",
+    "today-widget:complete-task",
+    "today-widget:create-task",
+    "today-widget:update-task-title",
+    "today-widget:promote-quick-capture",
+    "today-widget:delete-quick-capture",
+    "today-widget:move-item",
+    "today-widget:reorder-item",
+  ];
+  for (const channel of ["today-widget:get-state", "today-widget:show", "today-widget:hide", "today-widget:set-preferences", ...widgetOnlyChannels]) {
+    const result = await ipcHandlers.get(channel)(unknownSender, {});
+    assert.equal(result?.code, "UNKNOWN_SENDER", `${channel} must reject an unknown sender`);
+  }
+  assert.equal((await ipcHandlers.get("today-widget:set-editing")(unknownSender, true)).success, false);
 
   controller.restoreAlwaysOnTopAfterAppDeactivation();
   assert.deepEqual(topmostCalls.slice(-2), [
@@ -3281,6 +3301,28 @@ test("Today widget preferences persist atomically outside task data", async (t) 
   assert.equal(read.opacity, 82);
   assert.equal(read.height, 380);
   await assert.rejects(fs.access(path.join(directory, "today-widget-preferences.json.tmp")));
+});
+
+test("every Today widget IPC channel inspects its sender and the duplicated binding pass stays gone", async () => {
+  const [widgetMain, appSource] = await Promise.all([
+    fs.readFile(path.join(__dirname, "..", "app", "main", "today-widget.cjs"), "utf8"),
+    fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "app.js"), "utf8"),
+  ]);
+
+  assert.match(widgetMain, /function isWidgetSender\(event\)/);
+  assert.match(widgetMain, /function isMainWindowSender\(event\)/);
+  assert.doesNotMatch(
+    widgetMain,
+    /today-widget:[a-z-]+", \(_event/,
+    "no widget channel may ignore the sender it came from",
+  );
+  const channels = [...widgetMain.matchAll(/ipcMain\.(?:handle|on)\("today-widget:([a-z-]+)"/g)].map((match) => match[1]);
+  assert.ok(channels.length >= 15, `expected the full channel list, saw ${channels.length}`);
+
+  // bind() used to contain a second, unreachable copy of the whole binding pass
+  // that even called functions which do not exist.
+  assert.match(appSource, /function bind\(\) \{\n  return bindTaskRepositoryRows\(document\);\n\}/);
+  assert.doesNotMatch(appSource, /bindEditableField|bindContextMenu/, "the dead duplicated binding pass must not return");
 });
 
 test("production Today widget uses its dedicated frontend and a sandboxed Electron window", async () => {
