@@ -974,7 +974,7 @@
 ## Session: 2026-10-01 Reliability, Security, and Release Hardening
 
 ### Phase 39: Full review, nine verified fixes, and v0.1.200 publication
-- **Status:** ready for publication
+- **Status:** published as `v0.1.200` (Release Desktop Apps and Build Desktop Apps are green)
 - Actions taken:
   - Installed dependencies and confirmed the published baseline: `npm run check` green with 206 desktop/client tests and 11 bug-report service tests, plus a real Electron launch.
   - Reproduced the two highest-impact data findings end to end: a newer-schema `task-data.json` was replaced by an empty database at startup with no user notice, and rendering an imported identifier injected elements (15 `<img>` and 125 `<b>` in the probe).
@@ -987,3 +987,5 @@
   - The first two attempts at a release-blocking artifact verifier assumed the wrong line endings in the fixture (tamper changed the size first, so only the size check fired); corrected to same-length tampering so the digest check is the one under test.
   - Playwright's main-process evaluation has no `require`; the maintenance-lock probe reaches the shared module instance through `process.mainModule.require`.
   - Git cannot run through the Xcode shim on this machine (`xcodebuild -license`); all git commands use `DEVELOPER_DIR=/Library/Developer/CommandLineTools`.
+  - The first `v0.1.200` tag failed the Windows release job at `Check JavaScript`: the Windows runner checks out CRLF, and four new source assertions used a literal `\n` (the existing suite avoids this with `[\s\S]*` or `\r?\n`). Reproduced locally by converting all 126 tracked text files to CRLF, fixed the four assertions, re-verified the full 222-test suite under CRLF, then moved the tag to the fixed commit because no Release had been created yet.
+  - The first push also replayed the historical `publish-v0.1.195.yml` workflow, which watches `app/renderer/src/today-widget-runtime.js`; it stopped at its own version guard (`test "$version" = "0.1.195"`) without building or publishing. The other twenty-nine historical publish workflows were left untouched so they do not replay on a normal push.
