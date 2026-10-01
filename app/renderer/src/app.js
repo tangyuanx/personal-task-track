@@ -8545,11 +8545,32 @@ function renderInlineMarkdown(value) {
   return output;
 }
 
+const ALLOWED_MARKDOWN_LINK_SCHEMES = new Set(["http:", "https:", "mailto:"]);
+
+/**
+ * Read the URL scheme the way a browser does. ASCII control characters and
+ * spaces inside a scheme are ignored during URL parsing, so "java\tscript:"
+ * still executes and a blacklist cannot catch it.
+ */
+function markdownLinkScheme(value) {
+  const normalized = String(value || "").replace(/[\u0000-\u0020\u007f]+/g, "");
+  const match = /^([a-z][a-z0-9+.-]*):/i.exec(normalized);
+  return match ? `${match[1].toLowerCase()}:` : "";
+}
+
 function safeMarkdownUrl(value) {
   const cleaned = cleanMarkdownUrl(value);
-  const lower = cleaned.toLowerCase();
-  if (!cleaned || /^(javascript|vbscript):/.test(lower)) return "";
-  if (lower.startsWith("data:") && !lower.startsWith("data:image/")) return "";
+  if (!cleaned) return "";
+  const scheme = markdownLinkScheme(cleaned);
+  if (scheme) {
+    if (scheme === "data:") {
+      return /^data:image\//i.test(cleaned.replace(/[\u0000-\u0020\u007f]+/g, "")) ? escAttr(cleaned) : "";
+    }
+    if (!ALLOWED_MARKDOWN_LINK_SCHEMES.has(scheme)) return "";
+  } else if (cleaned.startsWith("//")) {
+    // A protocol-relative link inherits the file:// page scheme.
+    return "";
+  }
   return escAttr(cleaned);
 }
 

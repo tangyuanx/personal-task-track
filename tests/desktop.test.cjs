@@ -5741,12 +5741,44 @@ test("node mutation rejects invalid statuses and clears deleted descendant detai
 
 test("Markdown URLs reject executable schemes", async () => {
   const harness = await rendererHarness();
-  assert.equal(harness.evaluate(`safeMarkdownUrl("javascript:alert(1)")`), "");
-  assert.equal(harness.evaluate(`safeMarkdownUrl("data:text/html,hello")`), "");
-  assert.equal(
-    harness.evaluate(`safeMarkdownUrl("https://example.com/path?q=1&x=2")`),
-    "https://example.com/path?q=1&amp;x=2",
-  );
+  // A blacklist cannot work here: browsers ignore control characters inside a
+  // scheme, so "java\tscript:" is parsed as javascript: and would execute.
+  const cases = [
+    ["javascript:alert(1)", ""],
+    ["JavaScript:alert(1)", ""],
+    ["  javascript:alert(1)", ""],
+    ["java\tscript:alert(1)", ""],
+    ["java\nscript:alert(1)", ""],
+    ["java\u0000script:alert(1)", ""],
+    ["vbscript:msgbox(1)", ""],
+    ["data:text/html,hello", ""],
+    ["data:image/png;base64,AAAA", "data:image/png;base64,AAAA"],
+    ["file:///etc/passwd", ""],
+    ["blob:https://example.com/uuid", ""],
+    ["//evil.example/beacon", ""],
+    ["https://example.com/path?q=1&x=2", "https://example.com/path?q=1&amp;x=2"],
+    ["mailto:someone@example.com", "mailto:someone@example.com"],
+    ["notes/relative.md", "notes/relative.md"],
+    ["#section", "#section"],
+  ];
+  for (const [input, expected] of cases) {
+    assert.equal(
+      harness.evaluate(`safeMarkdownUrl(${JSON.stringify(input)})`),
+      expected,
+      `safeMarkdownUrl(${JSON.stringify(input)})`,
+    );
+  }
+});
+
+test("exported PDF documents declare a restrictive content security policy", async () => {
+  const main = await fs.readFile(path.join(__dirname, "..", "app", "main", "main.cjs"), "utf8");
+  const policies = main.match(/<meta http-equiv="Content-Security-Policy"[^>]*>/g) || [];
+  assert.equal(policies.length, 2, "both PDF templates must carry a CSP");
+  for (const policy of policies) {
+    assert.match(policy, /default-src 'none'/);
+    assert.match(policy, /script-src 'none'/);
+    assert.match(policy, /object-src 'none'/);
+  }
 });
 
 test("bug feedback prevents a second rapid submission while one is in flight", async () => {

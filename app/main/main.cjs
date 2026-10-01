@@ -514,6 +514,7 @@ function nodeDetailPdfHtml({ taskTitle, nodeTitle, status, updatedAt, bodyHtml }
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: https:; style-src 'unsafe-inline'; script-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'" />
   <style>
     :root { color: #24221f; font-family: Inter, "Microsoft YaHei", "PingFang SC", Arial, sans-serif; }
     body { margin: 0; padding: 34px 38px; background: #ffffff; }
@@ -561,6 +562,7 @@ function taskDocumentPdfHtml({ taskTitle, bodyHtml }) {
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: https:; style-src 'unsafe-inline'; script-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'" />
   <style>
 /**
  * Escape HTML special characters for safe rendering in PDF templates.
