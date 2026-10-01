@@ -402,6 +402,53 @@ test("a normal save never overwrites a database written by a newer app version",
   }
 });
 
+test("imported identifiers are escaped so task, node and group ids cannot inject markup", async () => {
+  const harness = await rendererHarness();
+  const result = harness.json(`(() => {
+    const hostile = 'x"><img src="https://evil.example/beacon" id="pwned"><b id="pwned2" data-x="';
+    const task = normalizeTasks([{
+      id: hostile,
+      title: "恶意 id 任务",
+      status: "active",
+      priority: "medium",
+      notes: "",
+      nodes: [{ id: hostile, title: "恶意 id 节点", status: "todo", children: [] }],
+    }])[0];
+    const group = normalizeTaskGroups([{ id: hostile, title: "恶意 id 分组", order: 1 }], [task])[0];
+    state.tasks = [task];
+    state.taskGroups = [group];
+    state.activeTaskId = task.id;
+    state.activeGroupId = group.id;
+    state.taskPane = "flow";
+    state.selectedNodeId = "";
+    const page = renderTaskPage(task);
+    const tree = renderFlowNode(task.id, task.nodes[0], 0, 0, [], true);
+    const selector = escSelectorValue(hostile);
+    const codes = Array.from(selector).map((character) => character.charCodeAt(0));
+    const quotes = codes.filter((code) => code === 34).length;
+    const escapedQuotes = codes.filter((code, index) => code === 34 && codes[index - 1] === 92).length;
+    const rawQuotes = Array.from(hostile).filter((character) => character === '"').length;
+    return {
+      page,
+      tree,
+      quotes,
+      rawQuotes,
+      escapedQuotes,
+      unescapedQuotes: quotes - escapedQuotes,
+      idPreserved: page.includes('data-task-id="x&quot;&gt;&lt;img'),
+    };
+  })()`);
+
+  for (const html of [result.page, result.tree]) {
+    assert.doesNotMatch(html, /<img/, "a hostile id must never produce an <img> element");
+    assert.doesNotMatch(html, /<b id="pwned2"/, "a hostile id must not be able to close the attribute");
+  }
+  assert.ok(result.idPreserved, "the identifier must still render, only escaped");
+  assert.equal(result.quotes, result.rawQuotes, "escaping must not drop characters");
+  assert.equal(result.unescapedQuotes, 0, "selector escaping must neutralise every double quote");
+  assert.equal(result.escapedQuotes, result.rawQuotes, "every quote must be escaped, not removed");
+});
+
 test("knowledge recovery stores independent content with its file baseline", async () => {
   const data = knowledgeRecovery.normalizeRecoveryData({
     records: {
@@ -3279,7 +3326,7 @@ test("node detail records autosave to the original node before selection changes
     };
   })()`);
 
-  assert.match(app, /data-record-input data-task-id="\$\{taskId\}" data-node-id="\$\{node\.id\}"/);
+  assert.match(app, /data-record-input data-task-id="\$\{escAttr\(taskId\)\}" data-node-id="\$\{escAttr\(node\.id\)\}"/);
   assert.match(app, /recordInput\.addEventListener\("input"[\s\S]*updateNodeNoteDraft\(taskId, nodeId, state\.recordDraft\)/);
   assert.deepEqual(result, {
     changed: true,

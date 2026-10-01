@@ -1839,9 +1839,9 @@ function renderKnowledgeDraftPrompt() {
         </div>
         <div class="knowledge-draft-context">${esc(task.title || "未命名任务")}</div>
         <div class="knowledge-draft-actions">
-          <button type="button" data-action="keep-knowledge-draft" data-task-id="${task.id}">保留为草稿</button>
-          <button type="button" data-action="delete-knowledge-draft" data-task-id="${task.id}">删除草稿</button>
-          <button class="primary" type="button" data-action="${closingEditor ? "save-knowledge-before-close" : "save-knowledge-before-delete"}" data-task-id="${task.id}">保存</button>
+          <button type="button" data-action="keep-knowledge-draft" data-task-id="${escAttr(task.id)}">保留为草稿</button>
+          <button type="button" data-action="delete-knowledge-draft" data-task-id="${escAttr(task.id)}">删除草稿</button>
+          <button class="primary" type="button" data-action="${closingEditor ? "save-knowledge-before-close" : "save-knowledge-before-delete"}" data-task-id="${escAttr(task.id)}">保存</button>
         </div>
       </section>
     </div>
@@ -1908,7 +1908,7 @@ function globalSearchMatches() {
 function renderGlobalSearchTaskResult(task, kind = "task") {
   const completed = task.status === "done";
   return `
-    <button class="global-search-result" type="button" data-action="open-global-search-task" data-task-id="${task.id}">
+    <button class="global-search-result" type="button" data-action="open-global-search-task" data-task-id="${escAttr(task.id)}">
       <span class="global-search-result-icon ${completed ? "is-complete" : ""}" aria-hidden="true">
         ${briefFieldIcon(kind === "note" ? "file-text" : completed ? "check" : "circle", "global-search-result-svg")}
       </span>
@@ -1923,7 +1923,7 @@ function renderGlobalSearchTaskResult(task, kind = "task") {
 
 function renderGlobalSearchNodeResult({ task, node }) {
   return `
-    <button class="global-search-result" type="button" data-action="open-global-search-node" data-task-id="${task.id}" data-node-id="${node.id}">
+    <button class="global-search-result" type="button" data-action="open-global-search-node" data-task-id="${escAttr(task.id)}" data-node-id="${escAttr(node.id)}">
       <span class="global-search-result-icon" aria-hidden="true">${briefFieldIcon("git-branch", "global-search-result-svg")}</span>
       <span class="global-search-result-copy">
         <strong>${esc(node.title || "未命名节点")}</strong>
@@ -2118,7 +2118,7 @@ function renderTodayFocusItem(item, index = 0) {
   // must remain visibly selected even when its suggested next step is different.
   const selected = task.id === state.activeTaskId;
   return `
-    <button class="focus-row ${selected ? "selected" : ""}" type="button" data-action="select-focus" data-task-id="${task.id}" data-node-id="${node?.id || ""}">
+    <button class="focus-row ${selected ? "selected" : ""}" type="button" data-action="select-focus" data-task-id="${escAttr(task.id)}" data-node-id="${escAttr(node?.id || "")}">
       <b>${index + 1}</b>
       <span>${esc(task.title || "未命名任务")}</span>
       ${briefFieldIcon("chevron-right", "focus-row-chevron")}
@@ -2149,9 +2149,9 @@ function renderRepositoryGroupOption(groupId, title) {
   const selected = state.activeGroupId === groupId;
   const personalGroup = state.taskGroups.some((group) => group.id === groupId);
   if (personalGroup && state.editingGroupId === groupId) {
-    return `<div class="repository-group-option is-editing" role="option" aria-selected="${selected}" data-group-id="${groupId}" data-personal-group="true" data-group-context-id="${groupId}"><input class="repository-group-edit" data-group-title="${groupId}" value="${escAttr(title)}" aria-label="修改分组名称" /></div>`;
+    return `<div class="repository-group-option is-editing" role="option" aria-selected="${selected}" data-group-id="${escAttr(groupId)}" data-personal-group="true" data-group-context-id="${escAttr(groupId)}"><input class="repository-group-edit" data-group-title="${escAttr(groupId)}" value="${escAttr(title)}" aria-label="修改分组名称" /></div>`;
   }
-  return `<button class="repository-group-option ${selected ? "selected" : ""}" type="button" role="option" aria-selected="${selected}" data-action="select-repository-group" data-group-id="${groupId}" ${personalGroup ? `data-personal-group="true" data-group-context-id="${groupId}"` : ""}><span>${esc(title)}</span>${selected ? `<span class="repository-group-check" aria-hidden="true">✓</span>` : ""}</button>`;
+  return `<button class="repository-group-option ${selected ? "selected" : ""}" type="button" role="option" aria-selected="${selected}" data-action="select-repository-group" data-group-id="${escAttr(groupId)}" ${personalGroup ? `data-personal-group="true" data-group-context-id="${escAttr(groupId)}"` : ""}><span>${esc(title)}</span>${selected ? `<span class="repository-group-check" aria-hidden="true">✓</span>` : ""}</button>`;
 }
 
 function renderRepositoryGroupOptions() {
@@ -2181,7 +2181,7 @@ function renderRepositoryGroupPicker() {
   const isGrowthSource = activePersonalGroup?.id === growthSource;
   return `
     <div class="repository-group-picker ${open ? "is-open" : ""}">
-      <button class="repository-group-trigger" type="button" data-action="toggle-repository-group-picker" ${activePersonalGroup ? `data-group-context-id="${activePersonalGroup.id}"` : ""} aria-expanded="${open}" aria-haspopup="listbox" title="选择分组；双击可修改当前分组名称"><span class="repository-group-value">${esc(repositoryGroupLabel())}</span>${briefFieldIcon("chevron-down", "repository-group-chevron")}</button>
+      <button class="repository-group-trigger" type="button" data-action="toggle-repository-group-picker" ${activePersonalGroup ? `data-group-context-id="${escAttr(activePersonalGroup.id)}"` : ""} aria-expanded="${open}" aria-haspopup="listbox" title="选择分组；双击可修改当前分组名称"><span class="repository-group-value">${esc(repositoryGroupLabel())}</span>${briefFieldIcon("chevron-down", "repository-group-chevron")}</button>
       ${open ? `
         <div class="repository-group-popover" role="listbox" aria-label="选择分组">
           <label class="repository-group-search"><span aria-hidden="true">⌕</span><input type="search" value="${escAttr(repositoryGroupQuery)}" placeholder="搜索分组…" aria-label="搜索分组" autocomplete="off" /></label>
@@ -2190,7 +2190,7 @@ function renderRepositoryGroupPicker() {
           </div>
           <div class="repository-group-footer">
             <button type="button" data-action="add-group">＋ 新建分组</button>
-            ${activePersonalGroup ? `<button class="repository-batch-add" type="button" data-action="batch-add-tasks" data-group-id="${activePersonalGroup.id}"><span>批量添加任务…</span>${isGrowthSource ? '<small>成长来源</small>' : ""}</button>` : ""}
+            ${activePersonalGroup ? `<button class="repository-batch-add" type="button" data-action="batch-add-tasks" data-group-id="${escAttr(activePersonalGroup.id)}"><span>批量添加任务…</span>${isGrowthSource ? '<small>成长来源</small>' : ""}</button>` : ""}
           </div>
         </div>
       ` : ""}
@@ -2215,7 +2215,7 @@ function renderGroupTabs() {
     <div class="sheet-bar group-nav" aria-label="分组">
       <button class="sheet-nav scroll-button" type="button" data-action="scroll-sheets" data-direction="-1" title="查看前面的分组" aria-label="查看前面的分组">‹</button>
       <span class="sheet-tab-all-wrap"><button class="sheet-tab sheet-tab-all ${state.activeGroupId === ALL_TASKS_GROUP_ID ? "active" : ""}" type="button" data-action="select-group" data-group-id="${ALL_TASKS_GROUP_ID}" title="查看全部分组中的任务">全部任务</button></span>
-      <div class="sheet-tabs task-tabs" data-sheet-tabs>${sort(state.taskGroups).map((group) => `<span class="sheet-tab-wrap" draggable="true" data-group-id="${group.id}">${state.editingGroupId === group.id ? `<input class="sheet-edit" data-group-title="${group.id}" value="${escAttr(group.title)}" aria-label="分组名称" />` : `<button class="sheet-tab ${group.id === state.activeGroupId ? "active" : ""}" type="button" data-action="select-group" data-group-id="${group.id}" title="${escAttr(group.title)}">${esc(group.title)}</button>`}</span>`).join("")}</div>
+      <div class="sheet-tabs task-tabs" data-sheet-tabs>${sort(state.taskGroups).map((group) => `<span class="sheet-tab-wrap" draggable="true" data-group-id="${escAttr(group.id)}">${state.editingGroupId === group.id ? `<input class="sheet-edit" data-group-title="${escAttr(group.id)}" value="${escAttr(group.title)}" aria-label="分组名称" />` : `<button class="sheet-tab ${group.id === state.activeGroupId ? "active" : ""}" type="button" data-action="select-group" data-group-id="${escAttr(group.id)}" title="${escAttr(group.title)}">${esc(group.title)}</button>`}</span>`).join("")}</div>
       <button class="sheet-nav scroll-button" type="button" data-action="scroll-sheets" data-direction="1" title="查看后面的分组" aria-label="查看后面的分组">›</button>
       <button class="sheet-add add-group-button" type="button" data-action="add-group" title="新增分组" aria-label="新增分组">+</button>
     </div>
@@ -2225,7 +2225,7 @@ function renderGroupTabs() {
 function renderTaskPriorityControl(task) {
   const priority = normalizePriority(task.priority);
   return `
-    <button class="task-priority-control ${priority}" type="button" data-action="toggle-task-priority-menu" data-task-id="${task.id}" aria-haspopup="menu" aria-expanded="${taskPriorityMenu?.taskId === task.id}" title="修改优先级">
+    <button class="task-priority-control ${priority}" type="button" data-action="toggle-task-priority-menu" data-task-id="${escAttr(task.id)}" aria-haspopup="menu" aria-expanded="${taskPriorityMenu?.taskId === task.id}" title="修改优先级">
       <span class="task-priority-dot" aria-hidden="true"></span>
       <span>${repositoryPriorityLabels[priority]}</span>
       <svg class="task-priority-chevron" viewBox="0 0 12 12" aria-hidden="true"><path d="m3.5 4.75 2.5 2.5 2.5-2.5"></path></svg>
@@ -2243,7 +2243,7 @@ function renderTaskPriorityPopover() {
       <div class="task-priority-popover" role="menu" aria-label="设置优先级" style="left:${taskPriorityMenu.x}px;top:${taskPriorityMenu.y}px">
         <span class="task-priority-popover-label">优先级</span>
         ${Object.entries(repositoryPriorityLabels).map(([value, label]) => `
-          <button class="task-priority-option ${value} ${priority === value ? "selected" : ""}" type="button" role="menuitemradio" aria-checked="${priority === value}" data-action="set-task-priority" data-task-id="${task.id}" data-priority="${value}">
+          <button class="task-priority-option ${value} ${priority === value ? "selected" : ""}" type="button" role="menuitemradio" aria-checked="${priority === value}" data-action="set-task-priority" data-task-id="${escAttr(task.id)}" data-priority="${value}">
             <span class="task-priority-option-dot" aria-hidden="true"></span>
             <span>${label}</span>
             <span class="task-priority-option-check" aria-hidden="true">${priority === value ? "✓" : ""}</span>
@@ -2256,13 +2256,13 @@ function renderTaskPriorityPopover() {
 
 function renderTaskItem(task, displayOrder) {
   return `
-    <div class="task-item task-row ${task.id === state.activeTaskId ? "selected active" : ""} ${task.status === "done" ? "done" : ""}" draggable="true" data-context="task" data-task-id="${task.id}" data-task-drag-target="${task.id}">
+    <div class="task-item task-row ${task.id === state.activeTaskId ? "selected active" : ""} ${task.status === "done" ? "done" : ""}" draggable="true" data-context="task" data-task-id="${escAttr(task.id)}" data-task-drag-target="${escAttr(task.id)}">
       <span class="task-sequence-action">
         <span class="task-sequence" aria-hidden="true">${displayOrder}</span>
-        <button class="task-check repository-complete ${task.status === "done" ? "is-checked" : ""}" type="button" title="${task.status === "done" ? "标记为未完成" : "标记为完成"}" aria-label="${task.status === "done" ? "标记为未完成" : "标记为完成"}" aria-pressed="${task.status === "done"}" data-action="toggle-task-done" data-task-id="${task.id}"></button>
+        <button class="task-check repository-complete ${task.status === "done" ? "is-checked" : ""}" type="button" title="${task.status === "done" ? "标记为未完成" : "标记为完成"}" aria-label="${task.status === "done" ? "标记为未完成" : "标记为完成"}" aria-pressed="${task.status === "done"}" data-action="toggle-task-done" data-task-id="${escAttr(task.id)}"></button>
       </span>
       <span class="task-title-wrap row-title">
-        <input class="task-title" placeholder="任务标题" aria-label="任务标题" data-edit-key="title" data-task-id="${task.id}" value="${escAttr(task.title)}" />
+        <input class="task-title" placeholder="任务标题" aria-label="任务标题" data-edit-key="title" data-task-id="${escAttr(task.id)}" value="${escAttr(task.title)}" />
       </span>
       <span class="task-row-meta">
         ${renderTaskDeadlineBadge(task)}
@@ -2418,7 +2418,7 @@ function renderTaskPage(task) {
     <div class="task-page work-surface">
       <header class="page-header topbar">
         <div class="page-title-block title-block">
-          <input class="page-title" aria-label="任务标题" data-edit-key="title" data-task-id="${task.id}" value="${escAttr(task.title)}" />
+          <input class="page-title" aria-label="任务标题" data-edit-key="title" data-task-id="${escAttr(task.id)}" value="${escAttr(task.title)}" />
           <div class="page-properties meta-line">
             ${renderTaskActiveTagPills(task)}
             <span class="task-context-item task-context-badge priority ${task.priority}" data-slot="badge">${priorityLabels[task.priority]}优先</span>
@@ -2434,7 +2434,7 @@ function renderTaskPage(task) {
         </div>
         <div class="actions">
           <div class="topbar-rhythm-slot" aria-live="polite"></div>
-          <button class="share-trigger icon-button" type="button" data-action="share-task" data-task-id="${task.id}" title="分享任务" aria-label="分享任务">
+          <button class="share-trigger icon-button" type="button" data-action="share-task" data-task-id="${escAttr(task.id)}" title="分享任务" aria-label="分享任务">
             分享
           </button>
         </div>
@@ -2450,11 +2450,11 @@ function renderTaskPage(task) {
 
       <section class="task-workbench lower">
         ${state.taskPane === "flow" ? `<section class="task-workspace flow-workspace ${selectedNode ? "has-node-page" : ""}">
-          <section class="flow-section flow-main" data-context="flow-root" data-task-id="${task.id}" data-processing-flow-scroll data-processing-flow-view="${escAttr(processingFlowViewKey(task))}">
+          <section class="flow-section flow-main" data-context="flow-root" data-task-id="${escAttr(task.id)}" data-processing-flow-scroll data-processing-flow-view="${escAttr(processingFlowViewKey(task))}">
           ${
             topNodes.length
-              ? `<div class="flow-list flow-outline" style="--flow-visible-row-count:${visibleFlowRowCount(topNodes)}" data-context="flow-root" data-task-id="${task.id}">${topNodes.map((node, index) => renderFlowNode(task.id, node, 0, index, [], index === topNodes.length - 1)).join("")}</div>`
-              : `<div class="flow-list flow-outline empty-flow" data-context="flow-root" data-task-id="${task.id}"></div>`
+              ? `<div class="flow-list flow-outline" style="--flow-visible-row-count:${visibleFlowRowCount(topNodes)}" data-context="flow-root" data-task-id="${escAttr(task.id)}">${topNodes.map((node, index) => renderFlowNode(task.id, node, 0, index, [], index === topNodes.length - 1)).join("")}</div>`
+              : `<div class="flow-list flow-outline empty-flow" data-context="flow-root" data-task-id="${escAttr(task.id)}"></div>`
           }
           </section>
           ${selectedNode ? renderNodeDetailPage(task.id, selectedNode) : ""}
@@ -2477,7 +2477,7 @@ function renderTaskPaneTabs(task) {
           ([pane, label]) => `<button class="task-pane-tab ${state.taskPane === pane ? "active" : ""}" type="button" data-action="switch-task-pane" data-pane="${pane}">${label}</button>`,
         )
         .join("")}
-      ${state.taskPane === "flow" && flatten(task.nodes).some((node) => node.children.length) ? `<button class="task-pane-collapse" type="button" data-action="toggle-all-nodes" data-task-id="${task.id}">${flatten(task.nodes).some((node) => node.collapsed) ? "展开全部" : "收起全部"}</button>` : ""}
+      ${state.taskPane === "flow" && flatten(task.nodes).some((node) => node.children.length) ? `<button class="task-pane-collapse" type="button" data-action="toggle-all-nodes" data-task-id="${escAttr(task.id)}">${flatten(task.nodes).some((node) => node.collapsed) ? "展开全部" : "收起全部"}</button>` : ""}
     </nav>
   `;
 }
@@ -2499,22 +2499,22 @@ function renderTaskKnowledge(task) {
     : stateDetails[note.documentState] || stateDetails.DRAFT;
   const stateClass = String(note.documentState || "DRAFT").toLowerCase();
   const conflictActions = note.documentState === "EXTERNAL_CHANGED"
-    ? `<button type="button" data-action="reload-knowledge" data-task-id="${task.id}">重新加载</button>
-       <button type="button" data-action="save-knowledge-overwrite" data-task-id="${task.id}">仍然覆盖</button>`
+    ? `<button type="button" data-action="reload-knowledge" data-task-id="${escAttr(task.id)}">重新加载</button>
+       <button type="button" data-action="save-knowledge-overwrite" data-task-id="${escAttr(task.id)}">仍然覆盖</button>`
     : note.documentState === "FILE_MISSING"
-      ? `<button type="button" data-action="relocate-knowledge" data-task-id="${task.id}">重新定位</button>`
+      ? `<button type="button" data-action="relocate-knowledge" data-task-id="${escAttr(task.id)}">重新定位</button>`
       : note.documentState === "READ_ONLY"
-        ? `<button type="button" data-action="retry-knowledge" data-task-id="${task.id}">重试</button>`
+        ? `<button type="button" data-action="retry-knowledge" data-task-id="${escAttr(task.id)}">重试</button>`
       : "";
   const removeBindingAction = note.filePath
-    ? `<button type="button" data-action="remove-knowledge-binding" data-task-id="${task.id}">从软件中移除</button>`
+    ? `<button type="button" data-action="remove-knowledge-binding" data-task-id="${escAttr(task.id)}">从软件中移除</button>`
     : "";
   const closeDraftAction = note.documentState === "DRAFT"
-    ? `<button type="button" data-action="close-knowledge-editor" data-task-id="${task.id}">关闭笔记</button>`
+    ? `<button type="button" data-action="close-knowledge-editor" data-task-id="${escAttr(task.id)}">关闭笔记</button>`
     : "";
   return `
-    <section class="task-knowledge-pane" data-task-id="${task.id}">
-      <section class="markdown-panel milkdown-panel task-knowledge-editor-panel" data-task-id="${task.id}" data-editor-focus-target="task">
+    <section class="task-knowledge-pane" data-task-id="${escAttr(task.id)}">
+      <section class="markdown-panel milkdown-panel task-knowledge-editor-panel" data-task-id="${escAttr(task.id)}" data-editor-focus-target="task">
         <div class="knowledge-save-bar">
           <div class="knowledge-state-meta state-${stateClass}" data-knowledge-state="${escAttr(note.documentState || "DRAFT")}" aria-live="polite">
             <span class="knowledge-state-label">${esc(stateDetail.label)}</span>
@@ -2524,11 +2524,11 @@ function renderTaskKnowledge(task) {
             ${conflictActions}
             ${removeBindingAction}
             ${closeDraftAction}
-            <button type="button" data-action="save-knowledge" data-task-id="${task.id}">保存</button>
-            <button type="button" data-action="save-knowledge-as" data-task-id="${task.id}">另存为</button>
+            <button type="button" data-action="save-knowledge" data-task-id="${escAttr(task.id)}">保存</button>
+            <button type="button" data-action="save-knowledge-as" data-task-id="${escAttr(task.id)}">另存为</button>
           </div>
         </div>
-        <div class="milkdown-editor-host" data-editor-kind="task" data-task-id="${task.id}" data-knowledge-scroll data-knowledge-view="${escAttr(knowledgeViewKey(task))}">
+        <div class="milkdown-editor-host" data-editor-kind="task" data-task-id="${escAttr(task.id)}" data-knowledge-scroll data-knowledge-view="${escAttr(knowledgeViewKey(task))}">
           <div class="milkdown-loading">正在加载 Milkdown 编辑器...</div>
         </div>
         <div class="milkdown-status">
@@ -2578,7 +2578,7 @@ function renderFlowSplitResizer() {
 
 function renderTaskTagButton(task, tag, label) {
   const active = normalizeTaskTags(task.tags)[tag];
-  return `<button class="task-tag-toggle ${active ? "active" : ""}" type="button" data-action="toggle-task-tag" data-task-id="${task.id}" data-tag="${tag}">${label}</button>`;
+  return `<button class="task-tag-toggle ${active ? "active" : ""}" type="button" data-action="toggle-task-tag" data-task-id="${escAttr(task.id)}" data-tag="${tag}">${label}</button>`;
 }
 
 function renderTaskTagRow(task) {
@@ -2666,7 +2666,7 @@ function renderTaskDeadlinePopover(task) {
     : String(normalizeDeadlineReminderMinutes(task.deadlineReminderMinutes));
   const timeSlots = deadlineTimeSlots(deadline);
   return `
-    <section class="task-deadline-popover" id="task-deadline-popover-${task.id}" role="dialog" aria-label="选择任务截止时间">
+    <section class="task-deadline-popover" id="task-deadline-popover-${escAttr(task.id)}" role="dialog" aria-label="选择任务截止时间">
       <div class="task-deadline-calendar-pane">
         <header class="task-deadline-month-head">
           <strong>${esc(calendarMonthTitle(month))}</strong>
@@ -2679,7 +2679,7 @@ function renderTaskDeadlinePopover(task) {
         <div class="task-deadline-grid">${calendarGridDates(month).map((date) => renderDeadlinePickerDay(date, month)).join("")}</div>
         <footer class="task-deadline-calendar-foot">
           <button type="button" data-action="deadline-picker-today">今天</button>
-          ${deadline ? `<button type="button" data-action="clear-task-deadline" data-task-id="${task.id}">清除</button>` : ""}
+          ${deadline ? `<button type="button" data-action="clear-task-deadline" data-task-id="${escAttr(task.id)}">清除</button>` : ""}
         </footer>
       </div>
       <div class="task-deadline-time-pane">
@@ -2688,7 +2688,7 @@ function renderTaskDeadlinePopover(task) {
           <strong>${esc(new Intl.DateTimeFormat("zh-CN", { month: "long", day: "numeric", weekday: "short" }).format(selectedDate))}</strong>
         </header>
         <div class="task-deadline-time-list" role="listbox" aria-label="截止时间段">
-          ${timeSlots.map((time) => `<button class="task-deadline-time ${selectedTime === time ? "selected" : ""}" type="button" role="option" aria-selected="${selectedTime === time}" data-action="apply-deadline-time" data-task-id="${task.id}" data-time="${time}">${time}</button>`).join("")}
+          ${timeSlots.map((time) => `<button class="task-deadline-time ${selectedTime === time ? "selected" : ""}" type="button" role="option" aria-selected="${selectedTime === time}" data-action="apply-deadline-time" data-task-id="${escAttr(task.id)}" data-time="${time}">${time}</button>`).join("")}
         </div>
       </div>
       <label class="task-deadline-reminder-control">
@@ -2696,7 +2696,7 @@ function renderTaskDeadlinePopover(task) {
           <svg class="task-deadline-reminder-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"></path><path d="M10 21h4"></path></svg>
           <span><strong>系统提醒</strong><small>到达所选时间后发送一次通知</small></span>
         </span>
-        <select data-deadline-reminder data-task-id="${task.id}" aria-label="选择截止前提醒时间">
+        <select data-deadline-reminder data-task-id="${escAttr(task.id)}" aria-label="选择截止前提醒时间">
           ${Object.entries(deadlineReminderLabels).map(([value, label]) => `<option value="${value}" ${value === reminderValue ? "selected" : ""}>${label}</option>`).join("")}
         </select>
       </label>
@@ -2731,7 +2731,7 @@ function renderTaskDeadlineControl(task) {
     : "";
   return `
     <div class="task-deadline-picker ${status} ${deadline ? "has-value" : "is-empty"}">
-      <button class="task-deadline-trigger" type="button" data-action="toggle-deadline-picker" data-task-id="${task.id}" aria-expanded="${open}" aria-controls="task-deadline-popover-${task.id}" title="截止时间可选，不会使用任务创建时间自动推断">
+      <button class="task-deadline-trigger" type="button" data-action="toggle-deadline-picker" data-task-id="${escAttr(task.id)}" aria-expanded="${open}" aria-controls="task-deadline-popover-${escAttr(task.id)}" title="截止时间可选，不会使用任务创建时间自动推断">
         <svg class="task-deadline-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M16 3v4M8 3v4M3 10h18"></path></svg>
         <span>${esc(deadline ? deadlineTriggerLabel(deadline) : "设置截止时间")}</span>
         <svg class="task-deadline-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4 4 4-4"></path></svg>
@@ -2751,9 +2751,9 @@ function renderTaskRecurrenceControls(task) {
         class="task-recurrence-trigger"
         type="button"
         data-recurrence-toggle
-        data-task-id="${task.id}"
+        data-task-id="${escAttr(task.id)}"
         aria-expanded="${open}"
-        aria-controls="task-recurrence-popover-${task.id}"
+        aria-controls="task-recurrence-popover-${escAttr(task.id)}"
       >
         <svg class="task-recurrence-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5"></path><path d="M4 17v-5h5"></path><path d="M6.1 9a7 7 0 0 1 11.5-2L20 9"></path><path d="m4 15 2.4 2A7 7 0 0 0 18 15"></path></svg>
         <span>${esc(recurrenceSummaryLabel(recurrence))}</span>
@@ -2761,7 +2761,7 @@ function renderTaskRecurrenceControls(task) {
       </button>
       ${
         open
-          ? `<section class="task-recurrence-popover" id="task-recurrence-popover-${task.id}" role="dialog" aria-label="循环设置">
+          ? `<section class="task-recurrence-popover" id="task-recurrence-popover-${escAttr(task.id)}" role="dialog" aria-label="循环设置">
               <header class="task-recurrence-popover-head">
                 <strong>循环设置</strong>
               </header>
@@ -2772,7 +2772,7 @@ function renderTaskRecurrenceControls(task) {
                       class="task-recurrence-mode ${recurrence.frequency === value ? "active" : ""}"
                       type="button"
                       data-recurrence-mode="${value}"
-                      data-task-id="${task.id}"
+                      data-task-id="${escAttr(task.id)}"
                       aria-pressed="${recurrence.frequency === value}"
                     >${label}</button>`)
                     .join("")}
@@ -2780,7 +2780,7 @@ function renderTaskRecurrenceControls(task) {
                 ${
                   recurrence.frequency !== "none"
                     ? `<label class="task-recurrence-time">
-                        <input type="time" data-recurrence-field="time" data-task-id="${task.id}" value="${escAttr(recurrence.time)}" aria-label="循环时间" />
+                        <input type="time" data-recurrence-field="time" data-task-id="${escAttr(task.id)}" value="${escAttr(recurrence.time)}" aria-label="循环时间" />
                       </label>`
                     : ""
                 }
@@ -2794,7 +2794,7 @@ function renderTaskRecurrenceControls(task) {
                             class="task-recurrence-weekday ${recurrence.weekdays.includes(value) ? "active" : ""}"
                             type="button"
                             data-recurrence-weekday="${value}"
-                            data-task-id="${task.id}"
+                            data-task-id="${escAttr(task.id)}"
                             aria-pressed="${recurrence.weekdays.includes(value)}"
                             aria-label="${recurrenceWeekdayLabels[value]}"
                           >${recurrenceWeekdayLabels[value].replace("周", "")}</button>`,
@@ -2838,17 +2838,17 @@ function renderFlowNode(taskId, node, depth, rootIndex = 0, lineage = [], isLast
   const statusLabel = nodeStatusText(node.status);
   const statusBadgeLabel = nodeStatusBadgeText(node.status);
   const collapseControl = children.length
-    ? `<button class="flow-collapse-toggle" type="button" data-action="toggle-node-collapse" data-task-id="${taskId}" data-node-id="${node.id}" aria-label="${node.collapsed ? "展开" : "折叠"}节点" aria-expanded="${!node.collapsed}">${briefFieldIcon(node.collapsed ? "chevron-right" : "chevron-down", "flow-row-icon")}</button>`
+    ? `<button class="flow-collapse-toggle" type="button" data-action="toggle-node-collapse" data-task-id="${escAttr(taskId)}" data-node-id="${escAttr(node.id)}" aria-label="${node.collapsed ? "展开" : "折叠"}节点" aria-expanded="${!node.collapsed}">${briefFieldIcon(node.collapsed ? "chevron-right" : "chevron-down", "flow-row-icon")}</button>`
     : `<span class="flow-collapse-spacer" aria-hidden="true"></span>`;
   return `
-    <article class="flow-outline-node ${node.status} ${isSelected ? "selected" : ""}" style="--tree-depth:${depth}" data-context="node" data-task-id="${taskId}" data-node-id="${node.id}" data-flow-depth="${depth}">
-      <div class="flow-outline-row" data-flow-drag-source data-flow-drag-target data-flow-select data-task-id="${taskId}" data-node-id="${node.id}" title="长按节点行后拖动；落在上下区域调整同级顺序，落在中间区域设为子级">
+    <article class="flow-outline-node ${node.status} ${isSelected ? "selected" : ""}" style="--tree-depth:${depth}" data-context="node" data-task-id="${escAttr(taskId)}" data-node-id="${escAttr(node.id)}" data-flow-depth="${depth}">
+      <div class="flow-outline-row" data-flow-drag-source data-flow-drag-target data-flow-select data-task-id="${escAttr(taskId)}" data-node-id="${escAttr(node.id)}" title="长按节点行后拖动；落在上下区域调整同级顺序，落在中间区域设为子级">
         <span class="flow-tree-zone">${treeGuides}</span>
-        <button class="flow-node-marker flow-status-bullet status-${node.status}" type="button" data-action="cycle-node-status" data-task-id="${taskId}" data-node-id="${node.id}" aria-label="${escAttr(statusLabel)}：点击切换状态">${briefFieldIcon("disc", "flow-node-marker-icon")}</button>
-        <button class="flow-status-badge status-${node.status}" type="button" data-action="cycle-node-status" data-task-id="${taskId}" data-node-id="${node.id}" aria-label="${escAttr(`${statusBadgeLabel}，点击切换状态`)}">${statusBadgeLabel}</button>
+        <button class="flow-node-marker flow-status-bullet status-${node.status}" type="button" data-action="cycle-node-status" data-task-id="${escAttr(taskId)}" data-node-id="${escAttr(node.id)}" aria-label="${escAttr(statusLabel)}：点击切换状态">${briefFieldIcon("disc", "flow-node-marker-icon")}</button>
+        <button class="flow-status-badge status-${node.status}" type="button" data-action="cycle-node-status" data-task-id="${escAttr(taskId)}" data-node-id="${escAttr(node.id)}" aria-label="${escAttr(`${statusBadgeLabel}，点击切换状态`)}">${statusBadgeLabel}</button>
         ${nodeTitleInputHtml(node, taskId)}
         ${collapseControl}
-        <button class="flow-node-more" type="button" data-action="open-node-detail" data-task-id="${taskId}" data-node-id="${node.id}" aria-label="打开节点详情">${briefFieldIcon("more-horizontal", "flow-row-icon")}</button>
+        <button class="flow-node-more" type="button" data-action="open-node-detail" data-task-id="${escAttr(taskId)}" data-node-id="${escAttr(node.id)}" aria-label="打开节点详情">${briefFieldIcon("more-horizontal", "flow-row-icon")}</button>
       </div>
       ${
         children.length && !node.collapsed
@@ -2917,7 +2917,7 @@ function renderNodeDetailPage(taskId, node) {
     ["blocked", "已阻塞"],
   ];
   return `
-    <aside class="node-detail-page" data-task-id="${taskId}" data-node-id="${node.id}" aria-label="节点详情页面">
+    <aside class="node-detail-page" data-task-id="${escAttr(taskId)}" data-node-id="${escAttr(node.id)}" aria-label="节点详情页面">
       <header class="node-detail-header">
         <div class="node-detail-heading">
           ${inputHtml("title", node.title, taskId, "node-detail-title", node.id)}
@@ -2935,7 +2935,7 @@ function renderNodeDetailPage(taskId, node) {
             <div class="node-detail-status-options" role="menu" aria-label="节点状态">
               ${statusOptions
                 .map(
-                  ([status, label]) => `<button class="node-detail-status-option ${node.status === status ? "selected" : ""}" type="button" role="menuitemradio" aria-checked="${node.status === status}" data-action="mark-node-status" data-task-id="${taskId}" data-node-id="${node.id}" data-status="${status}"><span>${label}</span>${node.status === status ? briefFieldIcon("check", "node-detail-status-check") : ""}</button>`,
+                  ([status, label]) => `<button class="node-detail-status-option ${node.status === status ? "selected" : ""}" type="button" role="menuitemradio" aria-checked="${node.status === status}" data-action="mark-node-status" data-task-id="${escAttr(taskId)}" data-node-id="${escAttr(node.id)}" data-status="${status}"><span>${label}</span>${node.status === status ? briefFieldIcon("check", "node-detail-status-check") : ""}</button>`,
                 )
                 .join("")}
             </div>
@@ -2949,12 +2949,12 @@ function renderNodeDetailPage(taskId, node) {
             <label for="node-detail-record-${escAttr(node.id)}">详情</label>
             <span class="node-detail-save-state" data-node-detail-save-state><span aria-hidden="true"></span><b>已自动保存</b></span>
           </div>
-          <textarea id="node-detail-record-${escAttr(node.id)}" class="record-modal-textarea node-inspector-note" data-record-input data-task-id="${taskId}" data-node-id="${node.id}" placeholder="记录必要的处理过程、关键数据或下一步……">${esc(state.recordDraft)}</textarea>
+          <textarea id="node-detail-record-${escAttr(node.id)}" class="record-modal-textarea node-inspector-note" data-record-input data-task-id="${escAttr(taskId)}" data-node-id="${escAttr(node.id)}" placeholder="记录必要的处理过程、关键数据或下一步……">${esc(state.recordDraft)}</textarea>
         </section>
         <nav class="node-detail-pagination" aria-label="切换处理流节点">
-          <button type="button" data-action="navigate-node-detail" data-task-id="${taskId}" data-node-id="${previousNode?.id || ""}" ${previousNode ? "" : "disabled"}>${briefFieldIcon("arrow-left", "node-detail-nav-icon")}<span>上一节点</span></button>
+          <button type="button" data-action="navigate-node-detail" data-task-id="${escAttr(taskId)}" data-node-id="${escAttr(previousNode?.id || "")}" ${previousNode ? "" : "disabled"}>${briefFieldIcon("arrow-left", "node-detail-nav-icon")}<span>上一节点</span></button>
           <span>${orderedNodes.length ? nodeIndex + 1 : 0} / ${orderedNodes.length}</span>
-          <button type="button" data-action="navigate-node-detail" data-task-id="${taskId}" data-node-id="${nextNode?.id || ""}" ${nextNode ? "" : "disabled"}><span>下一节点</span>${briefFieldIcon("arrow-right", "node-detail-nav-icon")}</button>
+          <button type="button" data-action="navigate-node-detail" data-task-id="${escAttr(taskId)}" data-node-id="${escAttr(nextNode?.id || "")}" ${nextNode ? "" : "disabled"}><span>下一节点</span>${briefFieldIcon("arrow-right", "node-detail-nav-icon")}</button>
         </nav>
       </div>
     </aside>
@@ -3045,12 +3045,12 @@ function renderContextMenu() {
   if (menu.kind === "group") {
     return `
       <div class="context-menu" style="left:${menu.x}px; top:${menu.y}px">
-        <button data-action="select-group" data-group-id="${menu.groupId}">打开分组</button>
-        <button data-action="rename-group" data-group-id="${menu.groupId}">重命名分组</button>
-        <button data-action="batch-add-tasks" data-group-id="${menu.groupId}">批量添加任务…</button>
+        <button data-action="select-group" data-group-id="${escAttr(menu.groupId)}">打开分组</button>
+        <button data-action="rename-group" data-group-id="${escAttr(menu.groupId)}">重命名分组</button>
+        <button data-action="batch-add-tasks" data-group-id="${escAttr(menu.groupId)}">批量添加任务…</button>
         <hr />
-        <button class="danger" data-action="delete-group-keep-tasks" data-group-id="${menu.groupId}">删除分组，任务移至未分组</button>
-        <button class="danger" data-action="delete-group-with-tasks" data-group-id="${menu.groupId}">删除分组及其中任务</button>
+        <button class="danger" data-action="delete-group-keep-tasks" data-group-id="${escAttr(menu.groupId)}">删除分组，任务移至未分组</button>
+        <button class="danger" data-action="delete-group-with-tasks" data-group-id="${escAttr(menu.groupId)}">删除分组及其中任务</button>
       </div>
     `;
   }
@@ -3060,13 +3060,13 @@ function renderContextMenu() {
     const tags = normalizeTaskTags(task?.tags);
     return `
       <div class="context-menu" style="left:${menu.x}px; top:${menu.y}px">
-        <button data-action="select-task" data-task-id="${menu.taskId}">打开任务</button>
-        <button data-action="toggle-task-done" data-task-id="${menu.taskId}">${task?.status === "done" ? "标记为未完成" : "标记为完成"}</button>
-        <button data-action="toggle-task-tag" data-task-id="${menu.taskId}" data-tag="today">${tags.today ? "取消 Today" : "标记 Today"}</button>
-        <button data-action="toggle-task-tag" data-task-id="${menu.taskId}" data-tag="later">${tags.later ? "取消稍后" : "标记稍后"}</button>
-        <button data-action="toggle-task-tag" data-task-id="${menu.taskId}" data-tag="blocked">${tags.blocked ? "取消卡住" : "标记卡住"}</button>
+        <button data-action="select-task" data-task-id="${escAttr(menu.taskId)}">打开任务</button>
+        <button data-action="toggle-task-done" data-task-id="${escAttr(menu.taskId)}">${task?.status === "done" ? "标记为未完成" : "标记为完成"}</button>
+        <button data-action="toggle-task-tag" data-task-id="${escAttr(menu.taskId)}" data-tag="today">${tags.today ? "取消 Today" : "标记 Today"}</button>
+        <button data-action="toggle-task-tag" data-task-id="${escAttr(menu.taskId)}" data-tag="later">${tags.later ? "取消稍后" : "标记稍后"}</button>
+        <button data-action="toggle-task-tag" data-task-id="${escAttr(menu.taskId)}" data-tag="blocked">${tags.blocked ? "取消卡住" : "标记卡住"}</button>
         <hr />
-        <button class="danger" data-action="delete-task" data-task-id="${menu.taskId}">删除任务</button>
+        <button class="danger" data-action="delete-task" data-task-id="${escAttr(menu.taskId)}">删除任务</button>
       </div>
     `;
   }
@@ -3074,16 +3074,16 @@ function renderContextMenu() {
   if (menu.kind === "flow-root") {
     return `
       <div class="context-menu" style="left:${menu.x}px; top:${menu.y}px">
-        <button data-action="add-root-node" data-task-id="${menu.taskId}">新增节点</button>
+        <button data-action="add-root-node" data-task-id="${escAttr(menu.taskId)}">新增节点</button>
       </div>
     `;
   }
 
   return `
     <div class="context-menu" style="left:${menu.x}px; top:${menu.y}px">
-      <button data-action="add-child-node" data-task-id="${menu.taskId}" data-node-id="${menu.nodeId}">添加子节点</button>
-      <button data-action="add-sibling-node" data-task-id="${menu.taskId}" data-node-id="${menu.nodeId}">添加兄弟节点</button>
-      <button class="danger" data-action="delete-node" data-task-id="${menu.taskId}" data-node-id="${menu.nodeId}">删除节点</button>
+      <button data-action="add-child-node" data-task-id="${escAttr(menu.taskId)}" data-node-id="${escAttr(menu.nodeId)}">添加子节点</button>
+      <button data-action="add-sibling-node" data-task-id="${escAttr(menu.taskId)}" data-node-id="${escAttr(menu.nodeId)}">添加兄弟节点</button>
+      <button class="danger" data-action="delete-node" data-task-id="${escAttr(menu.taskId)}" data-node-id="${escAttr(menu.nodeId)}">删除节点</button>
     </div>
   `;
 }
@@ -3216,15 +3216,15 @@ function renderTaskGroupSelect(task) {
   const popoverId = `task-group-select-${task.id}`;
   return `
     <div class="task-context-group task-group-select ${open ? "is-open" : ""}" data-task-group-select>
-      <button class="task-group-select-trigger" type="button" data-action="toggle-task-group-select" data-task-id="${task.id}" aria-expanded="${open}" aria-haspopup="listbox" aria-controls="${popoverId}">
+      <button class="task-group-select-trigger" type="button" data-action="toggle-task-group-select" data-task-id="${escAttr(task.id)}" aria-expanded="${open}" aria-haspopup="listbox" aria-controls="${escAttr(popoverId)}">
         <span class="task-group-select-label">分组</span>
         <span class="task-group-select-value">${esc(selectedLabel)}</span>
         <svg class="task-group-select-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4 4 4-4"></path></svg>
       </button>
       ${open ? `
-        <div class="task-group-select-content" id="${popoverId}" role="listbox" aria-label="选择分组">
+        <div class="task-group-select-content" id="${escAttr(popoverId)}" role="listbox" aria-label="选择分组">
           ${Object.entries(options).map(([groupId, label]) => `
-            <button class="task-group-select-option ${groupId === selectedId ? "selected" : ""}" type="button" role="option" aria-selected="${groupId === selectedId}" data-action="select-task-group" data-task-id="${task.id}" data-group-id="${groupId}">
+            <button class="task-group-select-option ${groupId === selectedId ? "selected" : ""}" type="button" role="option" aria-selected="${groupId === selectedId}" data-action="select-task-group" data-task-id="${escAttr(task.id)}" data-group-id="${escAttr(groupId)}">
               <span>${esc(label)}</span>
               ${groupId === selectedId ? `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"></path></svg>` : ""}
             </button>
@@ -3745,20 +3745,20 @@ function nextOpenNode(nodes) {
 // HTML HELPER FUNCTIONS (input, select, textarea builders)
 // ============================================================
 function inputHtml(key, value, taskId, className = "", nodeId = "") {
-  return `<input class="${className}" aria-label="${escAttr(editFieldLabels[key] || key)}" data-edit-key="${key}" data-task-id="${taskId}" data-node-id="${nodeId}" value="${escAttr(value)}" />`;
+  return `<input class="${className}" aria-label="${escAttr(editFieldLabels[key] || key)}" data-edit-key="${key}" data-task-id="${escAttr(taskId)}" data-node-id="${escAttr(nodeId)}" value="${escAttr(value)}" />`;
 }
 
 function nodeTitleInputHtml(node, taskId) {
-  return `<input class="flow-title-input" placeholder="填写节点标题" aria-label="节点标题" data-edit-key="title" data-task-id="${taskId}" data-node-id="${node.id}" value="${escAttr(node.title)}" />`;
+  return `<input class="flow-title-input" placeholder="填写节点标题" aria-label="节点标题" data-edit-key="title" data-task-id="${escAttr(taskId)}" data-node-id="${escAttr(node.id)}" value="${escAttr(node.title)}" />`;
 }
 
 function textareaHtml(key, value, taskId, nodeId = "") {
-  return `<textarea aria-label="${escAttr(editFieldLabels[key] || key)}" data-edit-key="${key}" data-task-id="${taskId}" data-node-id="${nodeId}">${esc(value)}</textarea>`;
+  return `<textarea aria-label="${escAttr(editFieldLabels[key] || key)}" data-edit-key="${key}" data-task-id="${escAttr(taskId)}" data-node-id="${escAttr(nodeId)}">${esc(value)}</textarea>`;
 }
 
 function selectHtml(key, value, options, taskId, nodeId = "") {
   return `
-    <select aria-label="${escAttr(editFieldLabels[key] || key)}" data-edit-key="${key}" data-task-id="${taskId}" data-node-id="${nodeId}">
+    <select aria-label="${escAttr(editFieldLabels[key] || key)}" data-edit-key="${key}" data-task-id="${escAttr(taskId)}" data-node-id="${escAttr(nodeId)}">
       ${Object.entries(options)
         .map(([optionValue, label]) => `<option value="${optionValue}" ${optionValue === value ? "selected" : ""}>${label}</option>`)
         .join("")}
@@ -4492,7 +4492,7 @@ function renderCalendarAgendaTask(task) {
   const status = taskDeadlineStatus(task);
   const group = state.taskGroups.find((item) => item.id === task.groupId);
   return `
-    <button class="calendar-agenda-task ${status}" type="button" data-action="open-calendar-task" data-task-id="${task.id}">
+    <button class="calendar-agenda-task ${status}" type="button" data-action="open-calendar-task" data-task-id="${escAttr(task.id)}">
       <span class="calendar-agenda-time">${deadline ? `${String(deadline.getHours()).padStart(2, "0")}:${String(deadline.getMinutes()).padStart(2, "0")}` : "--:--"}</span>
       <span><strong>${esc(task.title || "未命名任务")}</strong><small>${esc(group?.title || "未分组")} · ${task.status === "done" ? "已完成" : status === "overdue" ? "已逾期" : `${priorityLabels[task.priority]}优先`}</small></span>
     </button>
@@ -4608,7 +4608,7 @@ function renderReviewItem({ task, date }) {
   const group = state.taskGroups.find((item) => item.id === task.groupId);
   const summary = taskSummary(task);
   return `
-    <article class="review-item" role="button" tabindex="0" data-action="open-review-task" data-task-id="${task.id}">
+    <article class="review-item" role="button" tabindex="0" data-action="open-review-task" data-task-id="${escAttr(task.id)}">
       <div>
         <strong>${esc(task.title || "未命名任务")}</strong>
         <p>${esc((task.conclusion || task.hypothesis || task.description || "").trim() || "没有摘要")}</p>
@@ -6459,7 +6459,7 @@ function focusPendingElement() {
   }
 
   if (state.focusTaskTitleId) {
-    const input = document.querySelector(`.task-title[data-task-id="${state.focusTaskTitleId}"]`);
+    const input = document.querySelector(`.task-title[data-task-id="${escSelectorValue(state.focusTaskTitleId)}"]`);
     state.focusTaskTitleId = "";
     if (input) {
       input.focus({ preventScroll: true });
@@ -6469,7 +6469,7 @@ function focusPendingElement() {
   }
 
   if (state.focusNodeTitleId) {
-    const input = document.querySelector(`.flow-title-input[data-node-id="${state.focusNodeTitleId}"]`);
+    const input = document.querySelector(`.flow-title-input[data-node-id="${escSelectorValue(state.focusNodeTitleId)}"]`);
     state.focusNodeTitleId = "";
     if (input) {
       input.focus({ preventScroll: true });
@@ -6478,7 +6478,7 @@ function focusPendingElement() {
   }
 
   if (state.focusGroupTitleId) {
-    const input = document.querySelector(`[data-group-title="${state.focusGroupTitleId}"]`);
+    const input = document.querySelector(`[data-group-title="${escSelectorValue(state.focusGroupTitleId)}"]`);
     state.focusGroupTitleId = "";
     if (input) {
       input.focus({ preventScroll: true });
@@ -6500,8 +6500,8 @@ function focusPendingElement() {
 function revealPendingTask() {
   const taskId = state.revealTaskId;
   if (!taskId) return;
-  const input = document.querySelector(`.task-title[data-task-id="${taskId}"]`);
-  const row = input?.closest?.(".task-item") || document.querySelector(`.task-item[data-task-id="${taskId}"]`);
+  const input = document.querySelector(`.task-title[data-task-id="${escSelectorValue(taskId)}"]`);
+  const row = input?.closest?.(".task-item") || document.querySelector(`.task-item[data-task-id="${escSelectorValue(taskId)}"]`);
   if (!row) return;
   row.scrollIntoView?.({ block: "nearest", inline: "nearest" });
   state.revealTaskId = "";
@@ -6598,7 +6598,7 @@ function storeMarkdownSelection(editor = activeMarkdownEditor(), shouldRestore =
 function restoreMarkdownSelection() {
   const selection = state.markdownSelection;
   if (!state.restoreMarkdownFocus || !selection || state.markdownMode !== "edit" || state.selectedNodeId !== selection.nodeId) return;
-  const editor = document.querySelector(`.markdown-editor[data-node-id="${selection.nodeId}"]`);
+  const editor = document.querySelector(`.markdown-editor[data-node-id="${escSelectorValue(selection.nodeId)}"]`);
   if (!editor) return;
   const start = Math.min(selection.start, editor.value.length);
   const end = Math.min(selection.end, editor.value.length);
@@ -6801,7 +6801,7 @@ function mountFallbackMarkdownEditor(host) {
   const rawMarkdown = nodeNoteDrafts.get(noteDraftKey(taskId, nodeId))?.markdown ?? (node ? node.note : task.notes) ?? "";
   const markdown = node ? rawMarkdown : hydrateKnowledgeEditorMarkdown(rawMarkdown);
   const placeholder = node ? "记录处理过程" : "记录分析过程、知识点和可复用结论……";
-  host.innerHTML = `<textarea class="markdown-editor codex-editor milkdown-fallback" data-task-id="${taskId}" data-node-id="${nodeId}" placeholder="${placeholder}">${esc(markdown)}</textarea>${renderEditorImagePreview(markdown)}`;
+  host.innerHTML = `<textarea class="markdown-editor codex-editor milkdown-fallback" data-task-id="${escAttr(taskId)}" data-node-id="${escAttr(nodeId)}" placeholder="${placeholder}">${esc(markdown)}</textarea>${renderEditorImagePreview(markdown)}`;
   host.querySelectorAll(".markdown-editor").forEach((editor) => {
     editor.addEventListener("input", (event) => {
       updateNodeNoteDraft(taskId, nodeId, event.target.value, host);
@@ -6849,7 +6849,7 @@ function updateMarkdownStatsForMarkdown(host, markdown) {
 
 function focusNodeDetailEditor(nodeId) {
   if (!nodeId) return false;
-  const scope = document.querySelector(`.node-detail.fullscreen-editor[data-node-id="${nodeId}"]`) || document.querySelector(`.node-detail[data-node-id="${nodeId}"]`);
+  const scope = document.querySelector(`.node-detail.fullscreen-editor[data-node-id="${escSelectorValue(nodeId)}"]`) || document.querySelector(`.node-detail[data-node-id="${escSelectorValue(nodeId)}"]`);
   const editor = scope?.querySelector(".ProseMirror, .markdown-editor");
   if (!editor) return false;
   editor.focus({ preventScroll: true });
@@ -7580,7 +7580,7 @@ function edit(data, value) {
   save();
 
   if (data.editKey === "title") {
-    const title = document.querySelector(`.flow-title-input[data-node-id="${data.nodeId}"]`);
+    const title = document.querySelector(`.flow-title-input[data-node-id="${escSelectorValue(data.nodeId)}"]`);
     if (title) title.value = value || "";
   }
 }
@@ -9111,6 +9111,14 @@ function esc(value) {
 
 function escAttr(value) {
   return esc(value).replaceAll("\n", " ");
+}
+
+/**
+ * Escape an identifier for use inside a quoted CSS attribute selector.
+ * escAttr() produces HTML entities, which CSS selectors must not contain.
+ */
+function escSelectorValue(value) {
+  return String(value || "").replaceAll("\\", "\\\\").replaceAll('"', '\\"');
 }
 
 
