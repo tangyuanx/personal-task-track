@@ -292,6 +292,7 @@ let state = {
   nodeDetailPosition: null,
 };
 
+let dataProtectionMessage = "";
 let saveTimer = 0;
 let nodeDetailSaveFeedbackTimer = 0;
 let activeSettingsPage = "appearance";
@@ -1494,7 +1495,14 @@ async function loadAppData() {
       return { tasks, taskGroups, activeGroupId, flowWidths, sidebarWidth, detailHeight, attachments, theme, zhFont, enFont, fontScale, taskFilter, priorityFilter, captureSourceFilter, newTaskPriority, installationId, workNavigation };
     } catch (error) {
       console.error("Failed to read local task data.", error);
-      if (error?.code === "CORRUPT_TASK_DATA") {
+      // Electron only forwards the message of an error thrown inside an
+      // ipcMain.handle, so the main-process error code has to be recovered
+      // from the message text as well.
+      const failureText = `${error?.code || ""} ${error?.message || ""}`;
+      if (error?.code === "UNSUPPORTED_DATA_VERSION" || failureText.includes("版本高于当前应用支持范围")) {
+        dataProtectionMessage = "本地任务数据由更高版本的 Loop 写入。已进入保护模式并停止写入，请升级 Loop 后再打开，数据未被修改。";
+        alert(dataProtectionMessage);
+      } else if (error?.code === "CORRUPT_TASK_DATA" || failureText.includes("任务数据文件已损坏")) {
         alert("本地任务数据已损坏，应用已保留损坏文件备份。请先复制备份文件后再继续操作。");
       }
     }
@@ -1527,6 +1535,7 @@ async function loadAppData() {
  * In browser environment, writes directly to individual localStorage keys.
  */
 function save() {
+  if (dataProtectionMessage) return;
   const payload = {
     version: DATA_VERSION,
     knowledgeSchemaVersion: KNOWLEDGE_MIGRATION_VERSION,
@@ -1587,6 +1596,10 @@ function saveFlowWidths() {
 async function flushSave() {
   window.clearTimeout(saveTimer);
   saveTimer = 0;
+  if (dataProtectionMessage) {
+    pendingPayload = null;
+    return false;
+  }
   if (!desktopStorage?.write) return true;
   if (saveInFlight) return saveInFlightPromise ? saveInFlightPromise.then(() => flushSave()) : false;
   if (!pendingPayload) return true;

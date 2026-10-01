@@ -381,6 +381,27 @@ test("future task-data versions are rejected without normalization or overwrite"
   }
 });
 
+test("a normal save never overwrites a database written by a newer app version", async () => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "personal-task-track-downgrade-"));
+  const filePath = path.join(directory, "task-data.json");
+  const futureData = { version: 2 + 1, knowledgeSchemaVersion: 1, tasks: [{ id: "keep_me", title: "未来的任务", notes: "保留" }] };
+  const raw = `${JSON.stringify(futureData, null, 2)}\n`;
+  await fs.writeFile(filePath, raw, "utf8");
+  try {
+    await assert.rejects(
+      writeTaskData(directory, {
+        version: 2,
+        knowledgeSchemaVersion: 1,
+        tasks: [{ id: "new_task", title: "当前版本新建的任务", notes: "" }],
+      }),
+      (error) => error.code === "UNSUPPORTED_DATA_VERSION",
+    );
+    assert.equal(await fs.readFile(filePath, "utf8"), raw, "the newer database must stay byte-identical");
+  } finally {
+    await fs.rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("knowledge recovery stores independent content with its file baseline", async () => {
   const data = knowledgeRecovery.normalizeRecoveryData({
     records: {

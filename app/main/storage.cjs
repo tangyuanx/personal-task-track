@@ -73,6 +73,15 @@ async function readTaskData(userDataPath) {
 
 async function writeTaskData(userDataPath, data) {
   assertSupportedDataVersion(data);
+  // The renderer sends data it already normalized to the current schema, so the
+  // assertion above cannot notice that the file on disk belongs to a newer Loop.
+  // Never let a downgrade overwrite a database written by a newer app version.
+  if (isNewerThanSupported(await readOnDiskDataVersion(userDataPath))) {
+    throw Object.assign(
+      new Error("磁盘上的任务数据由更高版本的 Loop 写入，已停止写入以保护数据"),
+      { code: "UNSUPPORTED_DATA_VERSION" },
+    );
+  }
   const normalized = normalizeTaskData(data);
   await fs.mkdir(userDataPath, { recursive: true });
   const filePath = dataFilePath(userDataPath);
@@ -98,6 +107,31 @@ async function writeTaskData(userDataPath, data) {
  * @returns {object} Normalized data with all required fields
  */
   return normalized;
+}
+
+/**
+ * Read only the version markers that are currently stored on disk.
+ * Returns null when the file is missing or cannot be parsed; the existing
+ * read path already handles those cases with its own backup routine.
+ */
+async function readOnDiskDataVersion(userDataPath) {
+  try {
+    const raw = await fs.readFile(dataFilePath(userDataPath), "utf8");
+    const parsed = JSON.parse(raw);
+    if (!isRecord(parsed)) return null;
+    return {
+      version: Number(parsed.version),
+      knowledgeSchemaVersion: Number(parsed.knowledgeSchemaVersion),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function isNewerThanSupported(record) {
+  if (!record) return false;
+  return (Number(record.version) > DATA_VERSION)
+    || (Number(record.knowledgeSchemaVersion) > KNOWLEDGE_MIGRATION_VERSION);
 }
 
 function assertSupportedDataVersion(data) {
@@ -423,6 +457,8 @@ async function backupCorruptData(userDataPath) {
 
 module.exports = {
   DATA_FILE,
+  isNewerThanSupported,
+  readOnDiskDataVersion,
   KNOWLEDGE_MIGRATION_VERSION,
   dataFilePath,
   migrateKnowledgeTaskData,
