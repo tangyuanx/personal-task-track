@@ -3602,7 +3602,8 @@ test("production Today widget uses its dedicated frontend and a sandboxed Electr
   assert.match(surfaceRuntime, /bridge\.close\("|bridge\.close\(\{/);
   assert.match(surfaceCss, /--surface-pad: 20px/);
   assert.match(surfaceCss, /position: static !important/);
-  assert.match(surfaceCss, /\.surface-popover,\n\.widget12-settings,\n\.dialog \{\n  max-height: none !important;\n\}/);
+  // \r?\n: the Windows runner checks the repository out with CRLF.
+  assert.match(surfaceCss, /\.surface-popover,\r?\n\.widget12-settings,\r?\n\.dialog \{\r?\n  max-height: none !important;\r?\n\}/);
 
   // Main process: content-driven window sizing, Demo placement maths, and the
   // surface window that lets a panel extend past the widget window.

@@ -13,6 +13,10 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # This workflow is the release record for v0.1.202: it runs on demand, and on
+  # any push to main that touches this file (the path filter is what re-runs a
+  # release after a fix). The Windows runner checks the tree out with CRLF, so
+  # every multi-line assertion in tests/ matches on \r?\n.
   verify:
     name: Verify v0.1.202 Today widget port
     runs-on: ubuntu-latest
