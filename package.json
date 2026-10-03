@@ -1,6 +1,6 @@
 {
   "name": "personal-task-track",
-  "version": "0.1.200",
+  "version": "0.1.202",
   "description": "Loop is a local-first personal task flow tracker for closing work from creation to completion.",
   "private": true,
   "license": "UNLICENSED",
@@ -39,6 +39,7 @@
     "files": [
       "app/renderer/index.html",
       "app/renderer/today-widget.html",
+      "app/renderer/widget-surface.html",
       "app/renderer/src/**/*",
       "app/main/**/*",
       "app/resources/icon.*",

@@ -1,0 +1,64 @@
+/* ============================================================
+   Loop -- today-widget popover surface host.
+   The Demo mounts .surface-popover / .dialog into the page overlay and places
+   them with mountSurface()/placePreferences() in viewport coordinates. The
+   product gives each surface its own frameless transparent window: the main
+   process reproduces the placement in screen coordinates, so here the surface
+   is a static box and the window is sized to it plus the ring that carries its
+   own drop shadow (0 10px 36px #0003 / 0 16px 55px #0003).
+   ============================================================ */
+
+:root {
+  --surface-pad: 20px;
+  --surface-pad-bottom: 26px;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  background: transparent;
+  overflow: hidden;
+}
+
+/* Fixed ring, so the surface is never shifted by document scrolling. */
+#surface-host {
+  position: fixed;
+  inset: 0;
+  padding: var(--surface-pad) var(--surface-pad) var(--surface-pad-bottom);
+  /* The window is sized from the surface's natural box; if the display clamps
+     it, the whole host scrolls instead of squeezing the panel. */
+  overflow: auto;
+}
+
+/* shell-refinement.css pins the in-page panel to --widget-prefs-*; the window
+   is the anchor now. */
+.surface-popover {
+  position: static !important;
+  left: auto !important;
+  top: auto !important;
+}
+
+/* .surface-popover clamps to the page (100vh - 64px), .widget12-settings to
+   (100dvh - 76px) and .dialog to (100vh - 48px). In a window that is exactly the
+   panel, those clamps would feed the window its own height back and clip the
+   surface; the panel keeps its natural box and the host scrolls if the display
+   is smaller than the surface. */
+.surface-popover,
+.widget12-settings,
+.dialog {
+  max-height: none !important;
+}
+
+.dialog {
+  overflow: visible !important;
+}
+
+/* The Demo centres .dialog inside its backdrop; the dialog surface window is
+   the dialog itself, so no backdrop is painted here (the widget window paints
+   the modal barrier instead). */
+.dialog {
+  margin: 0;
+}

@@ -3298,7 +3298,10 @@ function todayFocusItems() {
       const node = blockedNode || openNode || null;
       const kind = blockedNode || tags.blocked ? "blocked" : task.priority === "high" ? "high" : "normal";
       const badge = blockedNode || tags.blocked ? "卡住" : task.priority === "high" ? "高" : "Today";
-      const nextText = node?.title || (task.description.trim() ? task.description.trim() : "补充任务背景或新增第一个节点");
+      // The Demo renders the next-step line only when there is one, so an empty
+      // string is meaningful here (it decides the row height). The "补充任务背景"
+      // prompt belongs to the in-page placeholders, not to the widget row.
+      const nextText = node?.title || (task.description.trim() ? task.description.trim() : "");
       return { task, node, kind, badge, nextText, score, updatedAt: latestTaskTime(task) };
     })
     .sort((a, b) => b.score - a.score || b.updatedAt - a.updatedAt || a.task.order - b.task.order);
@@ -7611,21 +7614,28 @@ function createQuickCapture(title, description = "", addToToday = false) {
   };
   const task = createTask(String(title || "").trim(), false);
   if (!task) return null;
+  const asTodayTask = addToToday === true;
   task.groupId = "";
   task.priority = "low";
-  task.captureSource = "today-widget";
-  const orderedCaptures = state.tasks.filter((item) => (
-    item.id !== task.id &&
-    item.captureSource === "today-widget" &&
-    item.status !== "done" &&
-    item.todayQuickCaptureOrder > 0
-  ));
-  if (orderedCaptures.length) {
-    orderedCaptures.forEach((item) => { item.todayQuickCaptureOrder += 1; });
-    task.todayQuickCaptureOrder = 1;
+  // "加入今日任务" makes the record a Today task, not a quick note that merely
+  // carries the today tag: the Today lane lists tasks, and a capture keeps its
+  // quick identity only while it stays in the capture lane. This mirrors the
+  // cross-lane move (moveTodayWidgetItem), which clears captureSource the same way.
+  task.captureSource = asTodayTask ? "" : "today-widget";
+  if (!asTodayTask) {
+    const orderedCaptures = state.tasks.filter((item) => (
+      item.id !== task.id &&
+      item.captureSource === "today-widget" &&
+      item.status !== "done" &&
+      item.todayQuickCaptureOrder > 0
+    ));
+    if (orderedCaptures.length) {
+      orderedCaptures.forEach((item) => { item.todayQuickCaptureOrder += 1; });
+      task.todayQuickCaptureOrder = 1;
+    }
   }
   task.description = String(description || "").trim();
-  task.tags = normalizeTaskTags({ today: addToToday === true });
+  task.tags = normalizeTaskTags({ today: asTodayTask });
   task.updatedAt = now();
   state.activeGroupId = previousActiveGroupId;
   state.activeTaskId = previousActiveTaskId;
@@ -7665,7 +7675,7 @@ function promoteQuickCaptureFromWidget(taskId, groupId) {
 async function deleteQuickCaptureFromWidget(taskId) {
   const task = state.tasks.find((item) => item.id === taskId && item.captureSource === "today-widget");
   if (!task) return { success: false, code: "TASK_NOT_FOUND", taskId };
-  const deleted = await deleteTask(taskId);
+  const deleted = await deleteTask(taskId, { skipConfirm: true });
   if (!deleted) return { success: false, code: "DELETE_CANCELLED", taskId };
   render();
   return { success: true, code: "DELETED", taskId };
@@ -8068,7 +8078,7 @@ function updateTaskRecurrence(taskId, field, value) {
  * Delete a task and all its nodes.
  * @param {string} taskId - Task ID to delete
  */
-async function deleteTask(taskId, { skipDraftPrompt = false } = {}) {
+async function deleteTask(taskId, { skipDraftPrompt = false, skipConfirm = false } = {}) {
   const task = state.tasks.find((item) => item.id === taskId);
   if (!task) return false;
   if (!skipDraftPrompt && task.knowledgeNote?.documentState === "DRAFT" && String(task.notes || "").trim()) {
@@ -8076,7 +8086,10 @@ async function deleteTask(taskId, { skipDraftPrompt = false } = {}) {
     render();
     return false;
   }
-  if (!task || !(await confirmDestructiveAction(`确定删除任务「${task.title || "未命名任务"}」及其所有节点？`))) return false;
+  // skipConfirm: the Today widget already confirmed in the Demo's own dialog, so
+  // the native prompt would be a second, redundant confirmation. The knowledge
+  // draft prompt above still applies.
+  if (!skipConfirm && !(await confirmDestructiveAction(`确定删除任务「${task.title || "未命名任务"}」及其所有节点？`))) return false;
   const index = state.tasks.findIndex((item) => item.id === taskId);
   if (desktopKnowledgeFile?.unwatch) {
     void desktopKnowledgeFile.unwatch({ noteId: task.knowledgeNote?.noteId || task.id });
@@ -8834,6 +8847,7 @@ function reorderTodayWidgetItem(taskId, lane, direction) {
 function todayWidgetSnapshot() {
   const rootFontSize = Number.parseFloat(window.getComputedStyle?.(document.documentElement)?.fontSize);
   const rootFontScale = window.getComputedStyle?.(document.documentElement)?.getPropertyValue("--font-scale")?.trim();
+  const rootFontSans = window.getComputedStyle?.(document.documentElement)?.getPropertyValue("--sans")?.trim();
   return {
     date: localDateKey(new Date()),
     appearance: {
@@ -8844,6 +8858,11 @@ function todayWidgetSnapshot() {
       // the phase-12/13 widget layers size everything with --font-scale, so the
       // widget window has to receive the same multiplier the main window uses.
       fontScale: rootFontScale || "1",
+      // shell.js composes --sans from the font preferences ("TaskTrack English
+      // Inter","TaskTrack Chinese System",...). The widget window loads the same
+      // @font-face sheet, so passing the composed stack keeps both windows on
+      // one font pipeline instead of duplicating the family tables.
+      sans: rootFontSans || "",
     },
     // the Demo marks the row open in the main window with .current
     activeTaskId: state.activeTaskId || "",

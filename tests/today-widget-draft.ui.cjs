@@ -37,10 +37,15 @@ const { _electron: electron } = require("playwright-core");
       if (!main || !widget) await new Promise((resolve) => setTimeout(resolve, 100));
     }
     if (!main || !widget) throw new Error("Loop must open both the main window and the today widget");
-    await main.locator(".ops-app").waitFor();
-    await widget.locator("#quick-capture-input").waitFor();
+    // The main window's root is `.app` (the `.ops-app` class this test used to
+    // wait for no longer exists anywhere in the rebuilt front end).
+    await main.locator(".app").first().waitFor();
+    // The Demo only mounts the composer in the 速记 lane.
+    await widget.locator(".today-widget").waitFor();
+    await widget.evaluate(() => document.querySelector('[data-widget-type="quick"]')?.click());
+    await widget.locator("#widget-capture").waitFor();
 
-    const readDraft = () => widget.evaluate(() => document.querySelector("#quick-capture-input").value);
+    const readDraft = () => widget.evaluate(() => document.querySelector("#widget-capture").value);
     const storeDraft = (draft) => main.evaluate(
       (value) => window.personalTaskTrack.todayWidget.setPreferences({ quickCaptureDraft: value }),
       draft,
@@ -54,7 +59,7 @@ const { _electron: electron } = require("playwright-core");
     assert.equal(await readDraft(), "已恢复的草稿", "a stored draft must still be restored into the widget");
 
     await widget.evaluate(() => {
-      const input = document.querySelector("#quick-capture-input");
+      const input = document.querySelector("#widget-capture");
       input.focus();
       input.value = "已恢复的草稿 + 新输入";
       input.dispatchEvent(new Event("input", { bubbles: true }));
@@ -65,6 +70,17 @@ const { _electron: electron } = require("playwright-core");
       await readDraft(),
       "已恢复的草稿 + 新输入",
       "a state broadcast must not replace text the user is still typing",
+    );
+
+    // Hiding and re-showing the window must not drop what has been typed.
+    await main.evaluate(() => window.personalTaskTrack.todayWidget.hide());
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    await main.evaluate(() => window.personalTaskTrack.todayWidget.show());
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    assert.equal(
+      await readDraft(),
+      "已恢复的草稿 + 新输入",
+      "an unsubmitted draft must survive hiding and re-showing the widget",
     );
 
     await new Promise((resolve) => setTimeout(resolve, 500));

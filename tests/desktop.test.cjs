@@ -2742,48 +2742,92 @@ test("Chinese and English font settings stay isolated in the application font ch
 test("Today widget is rebuilt from the frozen phase 12/13 widget layers", async () => {
   const rendererDir = path.join(__dirname, "..", "app", "renderer");
   const frozenDir = path.join(__dirname, "..", "prototypes", "baseline", "loop-plane-phase17-frozen");
-  const [widget, bridge, widget12, widget13, base12, base13, runtime] = await Promise.all([
+  const [widget, surface, bridge, widget12, widget13, base12, base13, runtime, surfaceRuntime, shell, typography, baseShell, fonts, baseFonts, refinement, baseRefinement] = await Promise.all([
     fs.readFile(path.join(rendererDir, "today-widget.html"), "utf8"),
+    fs.readFile(path.join(rendererDir, "widget-surface.html"), "utf8"),
     fs.readFile(path.join(rendererDir, "src", "widget-bridge.css"), "utf8"),
     fs.readFile(path.join(rendererDir, "src", "widget12.css"), "utf8"),
     fs.readFile(path.join(rendererDir, "src", "widget13.css"), "utf8"),
     fs.readFile(path.join(frozenDir, "loop-widget-phase12-refinement.css"), "utf8"),
     fs.readFile(path.join(frozenDir, "loop-widget-phase13.css"), "utf8"),
     fs.readFile(path.join(rendererDir, "src", "today-widget-runtime.js"), "utf8"),
+    fs.readFile(path.join(rendererDir, "src", "widget-surface-runtime.js"), "utf8"),
+    fs.readFile(path.join(rendererDir, "src", "shell.css"), "utf8"),
+    fs.readFile(path.join(rendererDir, "src", "typography.css"), "utf8"),
+    fs.readFile(path.join(frozenDir, "loop-plane-phase1.html"), "utf8").then((html) => html.match(/<style>([\s\S]*?)<\/style>/)[1]),
+    fs.readFile(path.join(rendererDir, "src", "fonts.css"), "utf8"),
+    fs.readFile(path.join(frozenDir, "loop-settings-fonts.css"), "utf8"),
+    fs.readFile(path.join(rendererDir, "src", "shell-refinement.css"), "utf8"),
+    fs.readFile(path.join(frozenDir, "loop-shell-refinement.css"), "utf8"),
   ]);
 
-  // The two widget stylesheets must stay byte-identical to the frozen Demo.
+  // Every layer the widget inherits from the Demo stays byte-identical to it.
   assert.equal(widget12, base12, "src/widget12.css must stay byte-identical to the frozen phase 12 refinement");
   assert.equal(widget13, base13, "src/widget13.css must stay byte-identical to the frozen phase 13 sheet");
+  assert.equal(shell.trim(), baseShell.trim(), "src/shell.css must stay byte-identical to the Demo's inline stylesheet (tokens + base rules)");
+  assert.equal(fonts, baseFonts, "src/fonts.css must stay byte-identical to the Demo's @font-face sheet");
+  assert.equal(refinement, baseRefinement, "src/shell-refinement.css must stay byte-identical to the Demo's shell refinement");
 
-  // The 1095-line dark mock design is gone; the Demo's contract is in place.
+  // The windows are hosts: the Demo's markup lives in the renderers, uncluttered.
   assert.doesNotMatch(widget, /--widget-focus:/);
   assert.doesNotMatch(widget, /mock-sidebar|mock-app|mock-repository/);
-  assert.match(widget, /class="today-widget widget12 widget13"/);
-  assert.match(widget, /class="widget-logo"/);
-  assert.match(widget, /class="widget-tabs"/);
-  assert.match(widget, /class="widget-compose"/);
-  assert.match(widget, /class="widget13-resize top"/);
-  assert.match(widget, /class="widget13-resize bottom"/);
-  assert.match(widget, /class="surface-popover widget12-settings"/);
-  assert.match(widget, /shell\.css\?v=0\.1\.200/);
-  assert.match(widget, /widget12\.css\?v=0\.1\.200/);
-  assert.match(widget, /widget13\.css\?v=0\.1\.200/);
-  assert.match(widget, /widget-bridge\.css\?v=0\.1\.200/);
+  for (const sheet of ["fonts.css", "shell.css", "typography.css", "widget12.css", "widget13.css", "shell-refinement.css", "widget-bridge.css"]) {
+    assert.match(widget, new RegExp(sheet.replace(".", "\\.") + "\\?v=0\\.1\\.202"), `today-widget.html must load ${sheet}`);
+  }
+  assert.match(widget, /id="widget-host"/);
+  assert.match(surface, /id="surface-host"/);
 
-  // The bridge layer is the only deviation: the Demo's page-fixed panel becomes a window.
-  assert.match(bridge, /\.today-widget\s*\{[\s\S]*position:\s*static;/);
+  // The bridge layer is the only deviation: the Demo's page-fixed panel becomes
+  // a window whose content box is the panel plus the ring carrying its shadow.
+  assert.match(bridge, /--widget-pad-x: 22px/);
+  assert.match(bridge, /--widget-pad-top: 22px/);
+  assert.match(bridge, /--widget-pad-bottom: 36px/);
+  assert.match(bridge, /\.today-widget \{[\s\S]*position: relative;/);
   assert.match(bridge, /max-height:\s*none;/);
+  assert.match(bridge, /-webkit-app-region: drag/);
+  assert.doesNotMatch(bridge, /#widget-menu/);
 
-  // Rows follow the Demo's phase-13 row contract.
-  assert.match(runtime, /class="widget-row today-task/);
-  assert.match(runtime, /widget13-grip/);
+  // The widget renderer carries the Demo's own template and interactions.
+  assert.match(runtime, /class="today-widget widget12 widget13 '/);
+  assert.match(runtime, /data-widget-lane="' \+ lane/);
+  assert.match(runtime, /class="widget-logo" src="\.\/assets\/loop-icon\.png"/);
+  assert.match(runtime, /class="widget-tabs"/);
+  assert.match(runtime, /class="widget-compose"/);
+  assert.match(runtime, /class="widget-empty"/);
+  assert.match(runtime, /class="widget13-resize ' \+ edge/);
+  assert.match(runtime, /class="widget13-grip"/);
   assert.match(runtime, /data-widget-drag=/);
   assert.match(runtime, /data-widget-open=/);
   assert.match(runtime, /widget13-more/);
-  assert.match(runtime, /dataset\.widgetLane/);
-  assert.match(runtime, /function applyLane\(\)/);
-  assert.match(runtime, /widget-tabs/);
+  assert.match(runtime, /data-action="compact-widget"/);
+  assert.match(runtime, /data-action="widget-preferences"/);
+  assert.match(runtime, /data-action="toggle-widget"/);
+  assert.match(runtime, /placeholder="记一条速记…"/);
+  assert.match(runtime, /data-widget12="submit"/);
+  assert.match(runtime, /id="widget-feedback"/);
+  // the Demo's own glyphs, not lookalikes
+  assert.match(runtime, /M19\.4 15a1\.65 1\.65 0 0 0 \.33 1\.82/);
+  assert.match(runtime, /M5 3h\.01M5 8h\.01M5 13h\.01M10 3h\.01M10 8h\.01M10 13h\.01/);
+  assert.match(runtime, /icon\("circle"\)/);
+  // the next-step line only exists when the record has one
+  assert.match(runtime, /next \? "<small>" \+ \(blocked \? icon\("blocked"\) : ""\)/);
+  assert.match(runtime, /t\.kind === "blocked"/);
+  assert.match(runtime, /isQuickLane\(\)/);
+  // popover surfaces keep the Demo's own classes, widths and markup
+  assert.match(surfaceRuntime, /surface-popover widget12-settings/);
+  assert.match(surfaceRuntime, /class="dialog-head"/);
+  assert.match(surfaceRuntime, /class="widget12-positions"/);
+  assert.match(surfaceRuntime, /aria-pressed="' \+ String\(settings\.position === value\)/);
+  assert.match(surfaceRuntime, /<output id="widget12-opacity-value"/);
+  assert.match(surfaceRuntime, /class="widget12-opacity" type="range"/);
+  assert.match(surfaceRuntime, /text-button widget13-reset/);
+  assert.match(surfaceRuntime, /text-button widget12-hide/);
+  assert.match(surfaceRuntime, /surface-popover widget13-menu/);
+  assert.match(surfaceRuntime, /widget13-menu-rule/);
+  assert.match(surfaceRuntime, /surface-popover widget13-promote/);
+  assert.match(surfaceRuntime, /class="dialog" role="dialog"/);
+  assert.match(surfaceRuntime, /danger-action/);
+  assert.match(typography, /font-scale/);
 });
 
 test("settings use the selected categorized modal, grouped rows, mixed controls, and spring motion", async () => {
@@ -3140,6 +3184,7 @@ test("repository structure keeps production, tooling, documentation, and prototy
   assert.ok(packageJson.build.files.every((entry) => entry === "package.json" || entry.startsWith("app/") || entry.startsWith("!")));
   assert.ok(packageJson.build.files.includes("app/renderer/index.html"));
   assert.ok(packageJson.build.files.includes("app/renderer/today-widget.html"));
+  assert.ok(packageJson.build.files.includes("app/renderer/widget-surface.html"));
 
   await Promise.all([
     "app/main/main.cjs",
@@ -3169,6 +3214,8 @@ test("Today widget preferences normalize safely and retain an intentional custom
     compact: false,
     opacity: 100,
     height: 340,
+    autoHeight: true,
+    frameAnchor: { x: "right", y: "bottom" },
     customBounds: null,
     clickThrough: false,
     quickCaptureDraft: "",
@@ -3190,6 +3237,8 @@ test("Today widget preferences normalize safely and retain an intentional custom
     compact: true,
     opacity: 85,
     height: 348,
+    autoHeight: true,
+    frameAnchor: { x: "right", y: "bottom" },
     customBounds: { x: 322, y: 48 },
     clickThrough: false,
     quickCaptureDraft: "",
@@ -3202,6 +3251,11 @@ test("Today widget preferences normalize safely and retain an intentional custom
   assert.equal(normalizeTodayWidgetPreferences({ height: 900 }).height, 720);
   assert.equal(normalizeTodayWidgetPreferences({ clickThrough: true }).clickThrough, true);
   assert.equal(normalizeTodayWidgetPreferences({ clickThrough: "true" }).clickThrough, false);
+  // The panel auto-sizes to its content until the user frames it by hand.
+  assert.equal(normalizeTodayWidgetPreferences({ autoHeight: false }).autoHeight, false);
+  assert.equal(normalizeTodayWidgetPreferences({ autoHeight: "yes" }).autoHeight, true);
+  assert.deepEqual(normalizeTodayWidgetPreferences({ frameAnchor: { x: "left", y: "top" } }).frameAnchor, { x: "left", y: "top" });
+  assert.deepEqual(normalizeTodayWidgetPreferences({ frameAnchor: { x: "bogus", y: "bogus" } }).frameAnchor, { x: "right", y: "bottom" });
 });
 
 test("Today widget corner placement respects each display work area", () => {
@@ -3226,6 +3280,7 @@ test("Today widget appearance normalizes theme, fonts, and base font size", () =
     enFont: "georgia",
     fontSize: 18,
     fontScale: 1,
+    sans: "",
   });
   assert.deepEqual(normalizeTodayWidgetAppearance({
     theme: "unknown",
@@ -3238,6 +3293,7 @@ test("Today widget appearance normalizes theme, fonts, and base font size", () =
     enFont: "inter",
     fontSize: 24,
     fontScale: 1,
+    sans: "",
   });
   assert.deepEqual(normalizeSnapshot({}).appearance, normalizeTodayWidgetAppearance());
   // The widget layers use --font-scale, so the multiplier has to survive the
@@ -3246,6 +3302,14 @@ test("Today widget appearance normalizes theme, fonts, and base font size", () =
   assert.equal(normalizeTodayWidgetAppearance({ fontScale: "9" }).fontScale, 1.6);
   assert.equal(normalizeTodayWidgetAppearance({ fontScale: "0.1" }).fontScale, 0.8);
   assert.equal(normalizeTodayWidgetAppearance({ fontScale: "abc" }).fontScale, 1);
+  // The widget window must resolve the same font families as the main window,
+  // so the composed --sans stack travels with the snapshot (and nothing else).
+  assert.equal(
+    normalizeTodayWidgetAppearance({ sans: '"TaskTrack English Inter","TaskTrack Chinese System",-apple-system,BlinkMacSystemFont,sans-serif' }).sans,
+    '"TaskTrack English Inter","TaskTrack Chinese System",-apple-system,BlinkMacSystemFont,sans-serif',
+  );
+  assert.equal(normalizeTodayWidgetAppearance({ sans: "x; background: url(http://evil)" }).sans, "");
+  assert.equal(normalizeTodayWidgetAppearance({ sans: "a".repeat(401) }).sans, "");
 });
 
 test("Today widget topmost policy joins macOS fullscreen Spaces without hiding the host app from the Dock", () => {
@@ -3350,6 +3414,15 @@ test("Today widget restores topmost after app deactivation releases temporary ed
   controller.registerIpc();
   await ipcHandlers.get("today-widget:show")({ sender: mainWindowStub.webContents });
   assert.equal(widgetWindowOptions.type, process.platform === "darwin" ? "panel" : undefined);
+  assert.equal(widgetWindow.visible, false, "the window waits for the renderer's first measurement");
+
+  // The renderer reports the panel box; the window is that box plus the ring
+  // that carries the Demo's shadow, and only then is it shown.
+  const fitResult = await ipcHandlers.get("today-widget:fit")({ sender: widgetWindow.webContents }, { width: 360, height: 366 });
+  assert.deepEqual(fitResult.content, { width: 360, height: 366 });
+  assert.equal(widgetWindow.visible, true);
+  assert.deepEqual(widgetWindow.bounds.width, 360 + 22 * 2);
+  assert.deepEqual(widgetWindow.bounds.height, 366 + 22 + 36);
 
   await ipcHandlers.get("today-widget:set-editing")({ sender: widgetWindow.webContents }, true);
   assert.deepEqual(topmostCalls.at(-1), ["always-on-top", false, "normal", 0]);
@@ -3424,67 +3497,141 @@ test("every Today widget IPC channel inspects its sender and the duplicated bind
 });
 
 test("production Today widget uses its dedicated frontend and a sandboxed Electron window", async () => {
-  const [demo, runtime, widgetMain, appMain, preload, packageJson] = await Promise.all([
+  const [demo, runtime, surfaceRuntime, surfaceCss, widgetMain, appMain, preload, packageJson] = await Promise.all([
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "today-widget.html"), "utf8"),
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "today-widget-runtime.js"), "utf8"),
+    fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "widget-surface-runtime.js"), "utf8"),
+    fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "widget-surface.css"), "utf8"),
     fs.readFile(path.join(__dirname, "..", "app", "main", "today-widget.cjs"), "utf8"),
     fs.readFile(path.join(__dirname, "..", "app", "main", "main.cjs"), "utf8"),
     fs.readFile(path.join(__dirname, "..", "app", "main", "preload.cjs"), "utf8"),
     fs.readFile(path.join(__dirname, "..", "package.json"), "utf8").then(JSON.parse),
   ]);
 
-  assert.match(demo, /class="today-widget widget12 widget13" id="widget" data-widget-lane="task"/);
+  // The two windows are hosts; every Demo class lives in the renderers so the
+  // rendered DOM can be compared with loop-widget-phase13.js line by line.
+  assert.match(demo, /id="widget-host"/);
   assert.doesNotMatch(demo, /按优先级与阻塞状态排序|项待办|刚刚同步|在主窗口查看全部|corner-anchor/);
-  assert.match(demo, /data-place="top-left"/);
-  assert.match(demo, /id="always-on-top"/);
-  assert.doesNotMatch(demo, /id="always-on-top-toggle"/);
-  assert.match(demo, /id="launch-with-app"/);
-  assert.match(demo, /id="hide-widget"/);
-  assert.match(demo, /id="widget-opacity"[^>]*min="70"[^>]*max="100"/);
-  assert.match(demo, /id="widget-opacity-value"/);
-  // the Demo swaps the glyph instead of stacking two paths
-  assert.match(runtime, /state\.compact \? "M12 5v14M5 12h14" : "M5 12h14"/);
-  assert.match(demo, /data-action="compact-widget" aria-label="收起浮窗"/);
-  assert.match(demo, /widget12\.css\?v=0\.1\.200/);
-  assert.match(demo, /widget13\.css\?v=0\.1\.200/);
-  assert.match(demo, /shell-refinement\.css\?v=0\.1\.200/);
-  assert.match(demo, /widget-bridge\.css\?v=0\.1\.200/);
+  assert.match(demo, /widget12\.css\?v=0\.1\.202/);
+  assert.match(demo, /widget13\.css\?v=0\.1\.202/);
+  assert.match(demo, /shell-refinement\.css\?v=0\.1\.202/);
+  assert.match(demo, /widget-bridge\.css\?v=0\.1\.202/);
+
+  // Chrome, tabs, rows and the composer: the Demo's markup, icon for icon.
+  assert.match(runtime, /class="today-widget widget12 widget13 '/);
+  assert.match(runtime, /class="widget-logo" src="\.\/assets\/loop-icon\.png"/);
+  assert.match(runtime, /<strong>今日<\/strong>/);
+  assert.match(runtime, /class="widget-date"/);
+  assert.match(runtime, /class="widget-count"/);
+  assert.match(runtime, /icon\(prefs\.compact \? "plus" : "minus"\)/);
+  assert.match(runtime, /class="widget-tabs"/);
+  assert.match(runtime, /\["task", "今日任务", counts\[0\]\]/);
+  assert.doesNotMatch(runtime, /currentLane|function applyLane/);
+  assert.match(runtime, /class="widget-rows"/);
+  assert.match(runtime, /class="widget-empty"/);
+  assert.match(runtime, /class="widget13-grip"/);
+  assert.doesNotMatch(runtime, /LONG_PRESS_DELAY/);
+  assert.match(runtime, /data-widget-drag=/);
+  assert.match(runtime, /data-complete-task=/);
+  assert.match(runtime, /data-widget-open=/);
+  assert.match(runtime, /data-widget12="row-menu"/);
+  assert.match(runtime, /class="widget-title"/);
+  assert.match(runtime, /class="widget-title-input"/);
+  assert.match(runtime, /aria-label="修改记录标题"/);
+  assert.match(runtime, /id="widget-capture"/);
+  assert.match(runtime, /data-widget12="submit"/);
+  assert.match(runtime, /id="widget-feedback"/);
+  assert.match(runtime, /class="widget-shortcut"/);
+  assert.match(runtime, /data-widget-resize="' \+ edge/);
+  assert.doesNotMatch(runtime, /quick-capture-add-today/);
+  assert.doesNotMatch(runtime, /widget-menu|quick-capture-group-menu|today-context-menu/);
+
+  // Data + side effects come from the app bridge, not from page state.
   assert.match(runtime, /bridge\.completeTask/);
   assert.match(runtime, /bridge\.createTask/);
   assert.match(runtime, /bridge\.updateTaskTitle/);
-  assert.match(runtime, /row\.classList\.contains\("quick-capture-item"\) \? 120 : 220/);
-  assert.match(runtime, /aria-label", row\.classList\.contains\("quick-capture-item"\) \? "编辑速记"/);
-  assert.doesNotMatch(runtime, /alwaysOnTopToggle/);
+  assert.match(runtime, /bridge\.promoteQuickCapture/);
   assert.match(runtime, /bridge\.deleteQuickCapture/);
   assert.match(runtime, /bridge\.moveItem/);
-  assert.match(runtime, /data-lane="\$\{lane\}"/);
-  assert.match(runtime, /LONG_PRESS_DELAY = 380/);
-  assert.match(runtime, /function openContextMenu/);
-  assert.match(runtime, /FLOW_INCOMPLETE/);
-  assert.match(runtime, /bridge\.setEditing/);
-  assert.match(runtime, /function isTextEditingTarget/);
-  assert.match(runtime, /if \(isTextEditingTarget\(document\.activeElement\)\) return;/);
-  assert.match(runtime, /compositionstart/);
-  assert.match(runtime, /dblclick/);
-  assert.match(demo, /id="widget-capture"/);
-  assert.doesNotMatch(demo, /quick-capture-add-today/);
-  assert.match(demo, /id="quick-capture-list"/);
-  assert.match(demo, /id="quick-capture-section"/);
-  assert.match(runtime, /quick-capture-item/);
-  assert.match(demo, /id="today-context-menu"/);
-  assert.match(demo, /placeholder="记一条速记…"/);
-  assert.doesNotMatch(demo, /quick-capture-promote/);
-  assert.match(runtime, /bridge\.setPreferences\(\{ clickThrough: enabled \}\)/);
+  assert.match(runtime, /bridge\.reorderItem/);
   assert.match(runtime, /bridge\.openMain/);
-  assert.doesNotMatch(runtime, /ResizeObserver/);
-  assert.doesNotMatch(runtime, /\+ 60/);
-  assert.match(runtime, /currentSnapshot\.items\) \? currentSnapshot\.items : \[\]/);
+  assert.match(runtime, /bridge\.setEditing/);
+  assert.match(runtime, /bridge\.openSurface/);
+  assert.match(runtime, /bridge\.closeSurface/);
+  assert.match(runtime, /bridge\.fit/);
+  assert.match(runtime, /bridge\.nudge/);
+  assert.match(runtime, /FLOW_INCOMPLETE/);
+  assert.match(runtime, /CONCLUSION_REQUIRED/);
+  assert.match(runtime, /bridge\.onSnapshot/);
+  assert.match(runtime, /bridge\.onState/);
+  assert.match(runtime, /bridge\.onBeginRename/);
+  assert.match(runtime, /aria-keyshortcuts="Alt\+ArrowUp Alt\+ArrowDown"/);
+  assert.match(runtime, /event\.altKey && \["ArrowUp", "ArrowDown"\]/);
+  assert.match(runtime, /"ContextMenu"/);
+  assert.match(runtime, /isComposing/);
+  assert.match(runtime, /compositionstart|event\.isComposing/);
+  assert.match(runtime, /widget13-drop-before/);
+  assert.match(runtime, /widget13-tab-drop/);
+  assert.match(runtime, /function dropTarget/);
+  assert.match(runtime, /window\.requestAnimationFrame\(autoScroll\)/);
   assert.match(runtime, /bridge\.resize\(\{ height: pendingResizeHeight, edge \}\)/);
-  assert.match(runtime, /startHeight: window\.innerHeight/);
-  assert.match(runtime, /COMPACT_MENU_WINDOW_HEIGHT = 340/);
-  assert.match(runtime, /bridge\.resize\(\{ height: COMPACT_MENU_WINDOW_HEIGHT, transient: true \}\)/);
-  assert.match(runtime, /bridge\.resize\(\{ height: 49, transient: true \}\)/);
-  assert.match(widgetMain, /setIgnoreMouseEvents\(preferences\.clickThrough === true, \{ forward: true \}\)/);
+  assert.match(runtime, /start: \{ left: rect\.left, top: rect\.top, height: rect\.height \}/);
+  assert.doesNotMatch(runtime, /ResizeObserver/);
+  assert.match(runtime, /bridge\.fit\?\.\(\{ height: Math\.round\(panel\.offsetHeight\) \}\)/);
+  assert.match(runtime, /appearance\.sans/);
+  assert.match(runtime, /--widget-opacity/);
+  assert.match(runtime, /const root = document\.documentElement/);
+  assert.match(runtime, /root\.dataset\.zhFont/);
+
+  // Popover surfaces: the Demo's markup, in their own window.
+  assert.match(surfaceRuntime, /surface-popover widget12-settings/);
+  assert.match(surfaceRuntime, /class="dialog-head"/);
+  assert.match(surfaceRuntime, /data-widget12="place"/);
+  assert.match(surfaceRuntime, /data-widget12-preference="' \+ key/);
+  assert.match(surfaceRuntime, /<output id="widget12-opacity-value"/);
+  assert.match(surfaceRuntime, /class="widget12-opacity" type="range"/);
+  assert.match(surfaceRuntime, /min="70" max="100"/);
+  assert.match(surfaceRuntime, /text-button widget13-reset/);
+  assert.match(surfaceRuntime, /text-button widget12-hide/);
+  assert.match(surfaceRuntime, /surface-popover widget13-menu/);
+  assert.match(surfaceRuntime, /widget13-menu-rule/);
+  assert.match(surfaceRuntime, /"Alt ↑"/);
+  assert.match(surfaceRuntime, /surface-popover widget13-promote/);
+  assert.match(surfaceRuntime, /class="dialog" role="dialog"/);
+  assert.match(surfaceRuntime, /danger-action/);
+  assert.match(surfaceRuntime, /bridge\.close\("|bridge\.close\(\{/);
+  assert.match(surfaceCss, /--surface-pad: 20px/);
+  assert.match(surfaceCss, /position: static !important/);
+  assert.match(surfaceCss, /\.surface-popover,\n\.widget12-settings,\n\.dialog \{\n  max-height: none !important;\n\}/);
+
+  // Main process: content-driven window sizing, Demo placement maths, and the
+  // surface window that lets a panel extend past the widget window.
+  assert.match(widgetMain, /const WIDGET_PAD_X = 22/);
+  assert.match(widgetMain, /const WIDGET_PAD_TOP = 22/);
+  assert.match(widgetMain, /const WIDGET_PAD_BOTTOM = 36/);
+  assert.match(widgetMain, /const SURFACE_WIDTHS = \{ settings: 286, "row-menu": 224, promote: 244, delete: 440 \}/);
+  assert.match(widgetMain, /function windowSizeForContent\(content\)/);
+  assert.match(widgetMain, /function applyContentSize\(content, options = \{\}\)/);
+  assert.match(widgetMain, /function widgetPanelScreenRect\(\)/);
+  assert.match(widgetMain, /function surfaceBounds\(kind, size\)/);
+  assert.match(widgetMain, /function frameAnchorForPosition\(position, area, bounds\)/);
+  assert.match(widgetMain, /today-widget:fit/);
+  assert.match(widgetMain, /today-widget:nudge/);
+  assert.match(widgetMain, /today-widget:open-surface/);
+  assert.match(widgetMain, /today-widget:close-surface/);
+  assert.match(widgetMain, /widget-surface:get/);
+  assert.match(widgetMain, /widget-surface:act/);
+  assert.match(widgetMain, /isSurfaceSender/);
+  assert.match(widgetMain, /surfaceWindow\.on\("blur"/);
+  assert.match(widgetMain, /function revealWidgetWindow\(\)/);
+  assert.match(widgetMain, /bridge\.|today-widget:begin-rename/);
+  // Mouse events must be ignored both for the explicit click-through mode and
+  // while the pointer is on the transparent shadow ring.
+  assert.match(widgetMain, /setIgnoreMouseEvents\(preferences\.clickThrough === true \|\| widgetRingOutside === true, \{ forward: true \}\)/);
+  assert.match(widgetMain, /function applyRingRegion\(target, inside\)/);
+  assert.match(widgetMain, /today-widget:ring/);
+  assert.match(runtime, /bridge\.setRingRegion\?\.\(\{ inside \}\)/);
+  assert.match(surfaceRuntime, /bridge\.setRingRegion\?\.\(\{ inside \}\)/);
   assert.match(widgetMain, /today-widget:create-task/);
   assert.match(widgetMain, /today-widget:update-task-title/);
   assert.match(widgetMain, /today-widget:delete-quick-capture/);
@@ -3494,16 +3641,6 @@ test("production Today widget uses its dedicated frontend and a sandboxed Electr
   assert.match(widgetMain, /today-widget:set-editing/);
   assert.match(widgetMain, /pendingMutations/);
   assert.match(widgetMain, /CommandOrControl\+Shift\+T/);
-  assert.match(demo, /data-widget-resize="top"/);
-  assert.match(demo, /data-widget-resize="bottom"/);
-  assert.match(runtime, /function applyAppearance/);
-  assert.match(runtime, /document\.documentElement\.dataset\.zhFont/);
-  assert.match(runtime, /--widget-font-scale/);
-  assert.match(runtime, /function applyOpacity/);
-  assert.match(runtime, /setPreferences\(\{ opacity \}\)/);
-  assert.match(runtime, /document\.addEventListener\("pointerdown",[\s\S]*closeMenu\(\)/);
-  assert.match(runtime, /window\.addEventListener\("blur", \(\) => \{[\s\S]*closeMenu\(\);[\s\S]*closeGroupMenu\(\);/);
-  assert.match(runtime, /window\.addEventListener\("focus", \(\) => \{[\s\S]*isTextEditingTarget\(document\.activeElement\)[\s\S]*bridge\.setEditing/);
   assert.match(widgetMain, /frame: false/);
   assert.match(widgetMain, /acceptFirstMouse: true/);
   assert.match(widgetMain, /transparent: true/);
@@ -3518,9 +3655,10 @@ test("production Today widget uses its dedicated frontend and a sandboxed Electr
   assert.match(widgetMain, /setAlwaysOnTop\(topmost, level, topmost && platform === "darwin" \? 1 : 0\)/);
   assert.match(widgetMain, /moveTop\(\)/);
   assert.match(widgetMain, /getDisplayMatching/);
-  assert.match(widgetMain, /if \(preferences\.compact\)[\s\S]*size\?\.transient !== true[\s\S]*height:\s*Math\.max\(49, Math\.min\(420/);
-  assert.match(widgetMain, /position:\s*"custom"[\s\S]*height,[\s\S]*customBounds:/);
+  assert.match(widgetMain, /if \(preferences\.compact\)[\s\S]*size\?\.transient !== true[\s\S]*Math\.max\(254, Math\.min\(480/);
+  assert.match(widgetMain, /autoHeight: false[\s\S]*height: currentContent\.height[\s\S]*customBounds:/);
   assert.match(widgetMain, /function stop\(\)[\s\S]*widgetWindow\.destroy\(\)/);
+  assert.match(widgetMain, /function stop\(\)[\s\S]*surfaceWindow\.destroy\(\)/);
   assert.match(appMain, /if \(!isQuitting && !updateInstallPrepared\) app\.quit\(\)/);
   assert.match(appMain, /did-resign-active[\s\S]*restoreAlwaysOnTopAfterAppDeactivation/);
   assert.doesNotMatch(appMain, /!isMac && !isQuitting/);
@@ -3533,9 +3671,13 @@ test("production Today widget uses its dedicated frontend and a sandboxed Electr
   assert.match(preload, /promoteQuickCapture: \(payload\)/);
   assert.match(preload, /reorderItem: \(payload\)/);
   assert.match(preload, /setEditing: \(enabled\)/);
+  assert.match(preload, /widgetSurface: \{/);
+  assert.match(preload, /fit: \(size\) => ipcRenderer\.invoke\("today-widget:fit", size\)/);
+  assert.match(preload, /act: \(payload\) => ipcRenderer\.invoke\("widget-surface:act", payload\)/);
   assert.match(preload, /app:confirm-destructive/);
   assert.match(appMain, /dialog\.showMessageBox/);
   assert.ok(packageJson.build.files.includes("app/renderer/today-widget.html"));
+  assert.ok(packageJson.build.files.includes("app/renderer/widget-surface.html"));
 });
 
 test("bundled cross-platform fonts and four global size presets are available", async () => {

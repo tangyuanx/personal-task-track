@@ -10,6 +10,25 @@ const WIDGET_POSITIONS = new Set(["top-left", "top-right", "bottom-left", "botto
 const WIDGET_ZH_FONTS = new Set(["system", "noto", "yahei", "pingfang", "songti", "simsun", "fangsong", "heiti", "kaiti"]);
 const WIDGET_EN_FONTS = new Set(["inter", "system", "segoe", "arial", "helvetica", "verdana", "trebuchet", "tahoma", "times", "georgia", "courier", "mono"]);
 const CLICK_THROUGH_ACCELERATOR = "CommandOrControl+Shift+T";
+// The Demo lays its panel out inside a page; the product hosts it in a frameless
+// window whose content box is the panel plus the ring that carries the Demo's
+// own drop shadow (`0 12px 40px #0003`). Same for the popover surfaces
+// (`0 10px 36px #0003` / `0 16px 55px #0003`).
+const WIDGET_PAD_X = 22;
+const WIDGET_PAD_TOP = 22;
+const WIDGET_PAD_BOTTOM = 36;
+const SURFACE_PAD = 20;
+const SURFACE_PAD_BOTTOM = 26;
+// mountSurface()/showWidgetPreferences() widths from loop-widget-phase13.js.
+// mountSurface() widths plus the Demo's own `.dialog{width:440px}`.
+const SURFACE_WIDTHS = { settings: 286, "row-menu": 224, promote: 244, delete: 440 };
+const SURFACE_KINDS = new Set(["settings", "row-menu", "promote", "delete"]);
+// The Demo's panel widths (widget12.css `.widget12{width:360px}` and
+// `.widget12.compact{width:254px}`). The renderer measures the panel height from
+// its content; the width is a function of the mode, so deriving it from a panel
+// that the window itself constrains would feed the window its own width back.
+const WIDGET_WIDTHS = { expanded: 360, compact: 254 };
+const SURFACE_FALLBACK_HEIGHTS = { settings: 430, "row-menu": 200, promote: 190, delete: 200 };
 const DEFAULT_PREFERENCES = Object.freeze({
   position: "top-right",
   alwaysOnTop: true,
@@ -20,6 +39,11 @@ const DEFAULT_PREFERENCES = Object.freeze({
   // The phase-12/13 widget design needs room for the header (48) + tabs (35)
   // + three rows (49 each) + the quick-capture composer.
   height: 340,
+  // The Demo sizes the panel from its own content (the list body is capped at
+  // 296px and the window follows). A manual resize switches to `height`.
+  autoHeight: true,
+  // Which edge stays put when the content grows or shrinks.
+  frameAnchor: { x: "right", y: "bottom" },
   customBounds: null,
   clickThrough: false,
   quickCaptureDraft: "",
@@ -39,6 +63,8 @@ function normalizeTodayWidgetPreferences(value) {
     compact: raw.compact === true,
     opacity: normalizeOpacity(raw.opacity),
     height: normalizeHeight(raw.height),
+    autoHeight: raw.autoHeight !== false,
+    frameAnchor: normalizeFrameAnchor(raw.frameAnchor),
     customBounds,
     clickThrough: raw.clickThrough === true,
     quickCaptureDraft: normalizeQuickCaptureDraft(raw.quickCaptureDraft),
@@ -54,6 +80,14 @@ function normalizeOpacity(value) {
   return Number.isFinite(opacity) ? Math.max(70, Math.min(100, Math.round(opacity))) : DEFAULT_PREFERENCES.opacity;
 }
 
+function normalizeFrameAnchor(value) {
+  const raw = value && typeof value === "object" ? value : {};
+  return {
+    x: raw.x === "left" ? "left" : "right",
+    y: raw.y === "top" ? "top" : "bottom",
+  };
+}
+
 function normalizeHeight(value) {
   const height = value == null || value === "" ? Number.NaN : Number(value);
   return Number.isFinite(height)
@@ -67,6 +101,13 @@ function normalizeCustomBounds(value) {
   const y = Number(value.y);
   if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
   return { x: Math.round(x), y: Math.round(y) };
+}
+
+function windowSizeForContent(content) {
+  const raw = content && typeof content === "object" ? content : {};
+  const width = Math.max(1, Math.round(Number(raw.width) || 360));
+  const height = Math.max(1, Math.round(Number(raw.height) || DEFAULT_PREFERENCES.height));
+  return { width: width + WIDGET_PAD_X * 2, height: height + WIDGET_PAD_TOP + WIDGET_PAD_BOTTOM };
 }
 
 function cornerWindowBounds(workArea, size, position, gap = WIDGET_GAP) {
@@ -150,8 +191,23 @@ async function writeTodayWidgetPreferences(userDataPath, value) {
 function createTodayWidgetController({ app, BrowserWindow, globalShortcut, ipcMain, screen, getMainWindow, ensureMainWindow }) {
   let preferences = { ...DEFAULT_PREFERENCES };
   let widgetWindow = null;
+  let surfaceWindow = null;
+  let surfacePayload = null;
+  let surfaceAnchor = null;
+  let surfaceContent = { width: 286, height: 425 };
+  let surfacePanel = null;
+  let surfaceOpenedAt = 0;
+  // True while the pointer sits in the transparent shadow ring rather than on
+  // the panel; the window then forwards mouse events to whatever is behind it.
+  let widgetRingOutside = false;
+  let surfaceRingOutside = false;
   let snapshot = { date: "", items: [] };
-  let currentSize = { width: 360, height: DEFAULT_PREFERENCES.height };
+  // The window is the rendered panel plus the ring that carries the Demo's own
+  // drop shadow; `currentContent` is the panel box the renderer measured.
+  let currentContent = { width: 360, height: DEFAULT_PREFERENCES.height };
+  let currentSize = windowSizeForContent(currentContent);
+  let firstFitPending = true;
+  let showFallbackTimer = null;
   let moveSaveTimer = null;
   let resizeSaveTimer = null;
   let suppressMoveUntil = 0;
@@ -162,6 +218,9 @@ function createTodayWidgetController({ app, BrowserWindow, globalShortcut, ipcMa
   function widgetState() {
     return {
       ...preferences,
+      // The Demo offers "恢复默认尺寸与位置" once the panel has been framed by
+      // the user; a corner-placed auto-height panel is still the default frame.
+      customFrame: preferences.autoHeight === false || preferences.position === "custom",
       visible: Boolean(preferences.visible && widgetWindow && !widgetWindow.isDestroyed()),
     };
   }
@@ -185,6 +244,51 @@ function createTodayWidgetController({ app, BrowserWindow, globalShortcut, ipcMa
   function activeDisplay() {
     if (widgetWindow && !widgetWindow.isDestroyed()) return screen.getDisplayMatching(widgetWindow.getBounds());
     return screen.getPrimaryDisplay();
+  }
+
+  function frameAnchorForPosition(position, area, bounds) {
+    if (position === "custom" && bounds) {
+      const areaCenterX = area.x + area.width / 2;
+      const areaCenterY = area.y + area.height / 2;
+      return {
+        x: bounds.x + bounds.width / 2 > areaCenterX ? "right" : "left",
+        y: bounds.y + bounds.height / 2 > areaCenterY ? "bottom" : "top",
+      };
+    }
+    return {
+      x: String(position || "").endsWith("right") ? "right" : "left",
+      y: String(position || "").startsWith("bottom") ? "bottom" : "top",
+    };
+  }
+
+  // Applies a renderer-measured content box: the window follows the panel, and
+  // the edge the panel is docked to stays put (the Demo's resize behaves the
+  // same way, growing away from the anchored edge).
+  function applyContentSize(content, options = {}) {
+    if (!widgetWindow || widgetWindow.isDestroyed()) return;
+    const height = Math.max(40, Math.min(900, Math.round(Number(content?.height) || currentContent.height)));
+    // Width follows the mode, never the measurement: the panel is `width:100%`
+    // of the window, so echoing its measured width back would freeze the window
+    // at whatever width it currently has.
+    const width = preferences.compact ? WIDGET_WIDTHS.compact : WIDGET_WIDTHS.expanded;
+    if (width === currentContent.width && height === currentContent.height && !options.force) return;
+    currentContent = { width, height };
+    currentSize = windowSizeForContent(currentContent);
+    const bounds = widgetWindow.getBounds();
+    const area = screen.getDisplayMatching(bounds).workArea;
+    const anchor = preferences.position === "custom" ? normalizeFrameAnchor(preferences.frameAnchor) : frameAnchorForPosition(preferences.position, area, null);
+    let x = bounds.x;
+    let y = bounds.y;
+    if (anchor.x === "right") x = bounds.x + bounds.width - currentSize.width;
+    if (anchor.y === "bottom") y = bounds.y + bounds.height - currentSize.height;
+    x = Math.max(area.x, Math.min(area.x + area.width - currentSize.width, x));
+    y = Math.max(area.y, Math.min(area.y + area.height - currentSize.height, y));
+    suppressMoveUntil = Date.now() + 350;
+    widgetWindow.setBounds({ x, y, ...currentSize }, false);
+    if (options.persist !== false && preferences.position === "custom") {
+      preferences = { ...preferences, customBounds: { x, y } };
+      void persistPreferences();
+    }
   }
 
   function positionWidget() {
@@ -222,7 +326,30 @@ function createTodayWidgetController({ app, BrowserWindow, globalShortcut, ipcMa
 
   function applyClickThrough() {
     if (!widgetWindow || widgetWindow.isDestroyed() || typeof widgetWindow.setIgnoreMouseEvents !== "function") return;
-    widgetWindow.setIgnoreMouseEvents(preferences.clickThrough === true, { forward: true });
+    widgetWindow.setIgnoreMouseEvents(preferences.clickThrough === true || widgetRingOutside === true, { forward: true });
+  }
+
+  function applySurfacePassthrough() {
+    if (!surfaceWindow || surfaceWindow.isDestroyed() || typeof surfaceWindow.setIgnoreMouseEvents !== "function") return;
+    surfaceWindow.setIgnoreMouseEvents(surfaceRingOutside === true, { forward: true });
+  }
+
+  // `inside === false` means the pointer is on the transparent ring (the 22/36px
+  // frame that exists so the Demo's shadow is never clipped). Ignoring mouse
+  // events there - with forwarding, so the pointer position keeps arriving -
+  // lets hover and clicks reach the widget or the app behind it.
+  function applyRingRegion(target, inside) {
+    const outside = inside !== true;
+    if (target === "surface") {
+      if (surfaceRingOutside === outside) return { success: true };
+      surfaceRingOutside = outside;
+      applySurfacePassthrough();
+      return { success: true, outside };
+    }
+    if (widgetRingOutside === outside) return { success: true };
+    widgetRingOutside = outside;
+    applyClickThrough();
+    return { success: true, outside };
   }
 
   async function toggleClickThrough() {
@@ -234,8 +361,8 @@ function createTodayWidgetController({ app, BrowserWindow, globalShortcut, ipcMa
     widgetWindow = new BrowserWindow({
       width: currentSize.width,
       height: currentSize.height,
-      minWidth: 296,
-      minHeight: 49,
+      minWidth: WIDGET_PAD_X * 2 + 160,
+      minHeight: WIDGET_PAD_TOP + WIDGET_PAD_BOTTOM + 40,
       frame: false,
       acceptFirstMouse: true,
       transparent: true,
@@ -261,7 +388,13 @@ function createTodayWidgetController({ app, BrowserWindow, globalShortcut, ipcMa
     positionWidget();
     widgetWindow.loadFile(path.join(__dirname, "..", "renderer", "today-widget.html"));
     widgetWindow.once("ready-to-show", () => {
-      if (preferences.visible) widgetWindow.showInactive();
+      // The window is sized from the rendered panel, so the first paint waits
+      // for the renderer's first measurement instead of showing a 340px guess.
+      if (preferences.visible) {
+        firstFitPending = true;
+        clearTimeout(showFallbackTimer);
+        showFallbackTimer = setTimeout(revealWidgetWindow, 600);
+      }
       applyAlwaysOnTop();
       widgetWindow.webContents.send("today-widget:snapshot", snapshot);
       widgetWindow.webContents.send("today-widget:state", widgetState());
@@ -277,7 +410,13 @@ function createTodayWidgetController({ app, BrowserWindow, globalShortcut, ipcMa
     widgetWindow.on("move", () => {
       if (Date.now() < suppressMoveUntil || !widgetWindow || widgetWindow.isDestroyed()) return;
       const { x, y } = widgetWindow.getBounds();
-      preferences = { ...preferences, position: "custom", customBounds: { x, y } };
+      const area = screen.getDisplayMatching(widgetWindow.getBounds()).workArea;
+      preferences = {
+        ...preferences,
+        position: "custom",
+        customBounds: { x, y },
+        frameAnchor: frameAnchorForPosition("custom", area, { x, y, width: currentSize.width, height: currentSize.height }),
+      };
       clearTimeout(moveSaveTimer);
       moveSaveTimer = setTimeout(() => {
         void persistPreferences();
@@ -290,6 +429,16 @@ function createTodayWidgetController({ app, BrowserWindow, globalShortcut, ipcMa
       broadcastState();
     });
     return widgetWindow;
+  }
+
+  function revealWidgetWindow() {
+    clearTimeout(showFallbackTimer);
+    showFallbackTimer = null;
+    firstFitPending = false;
+    widgetRingOutside = false;
+    if (!widgetWindow || widgetWindow.isDestroyed() || !preferences.visible) return;
+    widgetWindow.showInactive();
+    applyAlwaysOnTop();
   }
 
   async function waitForMainWindow() {
@@ -311,8 +460,14 @@ function createTodayWidgetController({ app, BrowserWindow, globalShortcut, ipcMa
   async function showWidget() {
     preferences = { ...preferences, visible: true };
     const window = createWidgetWindow();
+    widgetRingOutside = false;
     positionWidget();
-    window.showInactive();
+    if (firstFitPending) {
+      clearTimeout(showFallbackTimer);
+      showFallbackTimer = setTimeout(revealWidgetWindow, 600);
+    } else {
+      window.showInactive();
+    }
     applyAlwaysOnTop();
     applyClickThrough();
     await persistPreferences();
@@ -322,6 +477,7 @@ function createTodayWidgetController({ app, BrowserWindow, globalShortcut, ipcMa
 
   async function hideWidget() {
     preferences = { ...preferences, visible: false };
+    widgetRingOutside = false;
     editingText = false;
     widgetWindow?.hide();
     await persistPreferences();
@@ -331,16 +487,19 @@ function createTodayWidgetController({ app, BrowserWindow, globalShortcut, ipcMa
 
   async function updatePreferences(patch) {
     const raw = patch && typeof patch === "object" ? patch : {};
+    const resetFrame = raw.resetFrame === true;
     preferences = normalizeTodayWidgetPreferences({ ...preferences, ...raw });
+    if (resetFrame) preferences = { ...preferences, autoHeight: true, customBounds: null, height: DEFAULT_PREFERENCES.height };
     if (raw.position && raw.position !== "custom") preferences.customBounds = null;
     applyAlwaysOnTop();
     applyClickThrough();
     if (Object.hasOwn(raw, "compact")) {
-      currentSize = preferences.compact
-        ? { width: 296, height: 49 }
-        : { width: 360, height: preferences.height };
+      currentContent = preferences.compact
+        ? { width: WIDGET_WIDTHS.compact, height: 48 }
+        : { width: WIDGET_WIDTHS.expanded, height: currentContent.height };
+      currentSize = windowSizeForContent(currentContent);
     }
-    if (raw.position || Object.hasOwn(raw, "compact")) positionWidget();
+    if (raw.position || Object.hasOwn(raw, "compact") || resetFrame) positionWidget();
     await persistPreferences();
     broadcastState();
     return widgetState();
@@ -348,26 +507,44 @@ function createTodayWidgetController({ app, BrowserWindow, globalShortcut, ipcMa
 
   async function resizeWidget(size) {
     if (!widgetWindow || widgetWindow.isDestroyed()) return widgetState();
+    if (size?.reset === true) {
+      // "恢复默认尺寸与位置": the renderer re-measures the panel and the window
+      // follows the content again.
+      preferences = { ...preferences, autoHeight: true, customBounds: null };
+      broadcastState();
+      await persistPreferences();
+      return widgetState();
+    }
     if (preferences.compact) {
       if (size?.transient !== true) return widgetState();
-      currentSize = {
-        width: Math.max(296, Math.min(480, Math.round(Number(size?.width) || 296))),
-        height: Math.max(49, Math.min(420, Math.round(Number(size?.height) || 49))),
+      currentContent = {
+        width: Math.max(254, Math.min(480, Math.round(Number(size?.width) || 254))),
+        height: Math.max(48, Math.min(420, Math.round(Number(size?.height) || 48))),
       };
+      currentSize = windowSizeForContent(currentContent);
       positionWidget();
       return widgetState();
     }
     const bounds = widgetWindow.getBounds();
     const workArea = screen.getDisplayMatching(bounds).workArea;
     const edge = size?.edge === "top" ? "top" : "bottom";
+    const anchor = preferences.position === "custom"
+      ? normalizeFrameAnchor(preferences.frameAnchor)
+      : frameAnchorForPosition(preferences.position, workArea, null);
     const nextBounds = resizedWidgetBounds(bounds, workArea, size?.height, edge);
     currentSize = { width: nextBounds.width, height: nextBounds.height };
+    currentContent = {
+      width: currentSize.width - WIDGET_PAD_X * 2,
+      height: currentSize.height - WIDGET_PAD_TOP - WIDGET_PAD_BOTTOM,
+    };
     preferences = normalizeTodayWidgetPreferences({
       ...preferences,
       position: "custom",
-      height: nextBounds.height,
+      autoHeight: false,
+      height: currentContent.height,
       customBounds: { x: nextBounds.x, y: nextBounds.y },
     });
+    preferences = { ...preferences, frameAnchor: { x: anchor.x, y: edge === "top" ? "bottom" : "top" } };
     suppressMoveUntil = Date.now() + 350;
     widgetWindow.setBounds(nextBounds, false);
     clearTimeout(resizeSaveTimer);
@@ -448,6 +625,11 @@ function createTodayWidgetController({ app, BrowserWindow, globalShortcut, ipcMa
     return Boolean(sender) && Boolean(widgetWindow) && !widgetWindow.isDestroyed() && sender === widgetWindow.webContents;
   }
 
+  function isSurfaceSender(event) {
+    const sender = event?.sender;
+    return Boolean(sender) && Boolean(surfaceWindow) && !surfaceWindow.isDestroyed() && sender === surfaceWindow.webContents;
+  }
+
   function isMainWindowSender(event) {
     const sender = event?.sender;
     const main = getMainWindow();
@@ -456,6 +638,345 @@ function createTodayWidgetController({ app, BrowserWindow, globalShortcut, ipcMa
 
   function rejectUnknownSender(channel) {
     return { success: false, code: "UNKNOWN_SENDER", channel };
+  }
+
+  function widgetPanelScreenRect() {
+    const bounds = widgetWindow && !widgetWindow.isDestroyed() ? widgetWindow.getBounds() : { x: 0, y: 0, width: currentSize.width, height: currentSize.height };
+    return {
+      x: bounds.x + WIDGET_PAD_X,
+      y: bounds.y + WIDGET_PAD_TOP,
+      width: Math.max(1, bounds.width - WIDGET_PAD_X * 2),
+      height: Math.max(1, bounds.height - WIDGET_PAD_TOP - WIDGET_PAD_BOTTOM),
+    };
+  }
+
+  // The Demo places its popovers in viewport coordinates
+  // (mountSurface() and loop-shell-refinement.js placePreferences()). This is
+  // the same maths in screen coordinates, clamped to the display work area.
+  function surfaceBounds(kind, size) {
+    const area = activeDisplay().workArea;
+    const panel = widgetPanelScreenRect();
+    const declared = SURFACE_WIDTHS[kind];
+    const innerWidth = Math.max(120, Math.round(Number(size?.width) || declared || 286));
+    const requestedHeight = Math.max(60, Math.round(Number(size?.height) || SURFACE_FALLBACK_HEIGHTS[kind] || 200));
+    const innerHeight = Math.min(requestedHeight, Math.max(80, area.height - 24 - SURFACE_PAD - SURFACE_PAD_BOTTOM));
+    const minLeft = area.x + 12;
+    const maxLeft = area.x + area.width - 12 - innerWidth;
+    const minTop = area.y + 12;
+    const maxTop = area.y + area.height - 12 - innerHeight;
+    const anchor = surfaceAnchor || { x: panel.x + panel.width, y: panel.y, w: 0, h: 0 };
+    let left;
+    let top;
+    if (kind === "settings") {
+      const gap = 10;
+      const rect = surfacePanel || { x: panel.x, y: panel.y, w: panel.width, h: panel.height };
+      left = rect.x + rect.w - innerWidth;
+      top = rect.y - innerHeight - gap;
+      if (top < minTop) {
+        if (rect.y + rect.h + gap + innerHeight <= area.y + area.height - 12) {
+          top = rect.y + rect.h + gap;
+        } else {
+          left = rect.x - innerWidth - gap >= minLeft
+            ? rect.x - innerWidth - gap
+            : rect.x + rect.w + gap + innerWidth <= area.x + area.width - 12 ? rect.x + rect.w + gap : rect.x + rect.w - innerWidth;
+          top = rect.y;
+        }
+      }
+    } else if (kind === "delete") {
+      left = area.x + (area.width - innerWidth) / 2;
+      top = area.y + (area.height - innerHeight) / 2;
+    } else {
+      const gap = kind === "row-menu" ? 5 : 7;
+      left = kind === "row-menu" ? anchor.x + anchor.w - innerWidth : anchor.x;
+      top = anchor.y + anchor.h + gap;
+    }
+    left = Math.max(minLeft, Math.min(left, maxLeft));
+    top = Math.max(minTop, Math.min(top, maxTop));
+    return {
+      x: Math.round(left - SURFACE_PAD),
+      y: Math.round(top - SURFACE_PAD),
+      width: Math.round(innerWidth + SURFACE_PAD * 2),
+      height: Math.round(innerHeight + SURFACE_PAD + SURFACE_PAD_BOTTOM),
+    };
+  }
+
+  function seedSurfaceContent(kind) {
+    surfaceContent = {
+      width: SURFACE_WIDTHS[kind] || surfaceContent.width,
+      height: SURFACE_FALLBACK_HEIGHTS[kind] || surfaceContent.height,
+    };
+    return surfaceContent;
+  }
+
+  function surfacePayloadFor(kind, taskId) {
+    const appearance = normalizeTodayWidgetAppearance(snapshot.appearance);
+    if (kind === "settings") {
+      return {
+        kind,
+        appearance,
+        settings: {
+          position: preferences.position,
+          opacity: preferences.opacity,
+          alwaysOnTop: preferences.alwaysOnTop,
+          clickThrough: preferences.clickThrough,
+          launchWithApp: preferences.launchWithApp,
+          customFrame: preferences.autoHeight === false || preferences.position === "custom",
+        },
+      };
+    }
+    const quick = snapshot.quickCaptures.find((item) => item.taskId === taskId) || null;
+    const list = quick ? snapshot.quickCaptures : snapshot.items;
+    const index = list.findIndex((item) => item.taskId === taskId);
+    const entry = list[index] || null;
+    return {
+      kind,
+      appearance,
+      task: {
+        id: String(taskId || ""),
+        title: String(entry?.title || ""),
+        isQuick: Boolean(quick),
+        index,
+        count: list.length,
+      },
+      groups: kind === "promote" ? snapshot.groups : [],
+    };
+  }
+
+  function surfaceReturnFocusSelector(kind, taskId) {
+    if (kind === "settings") return '[data-action="widget-preferences"]';
+    const id = String(taskId || "");
+    return id ? '[data-widget12="row-menu"][data-widget-id="' + id + '"]' : "";
+  }
+
+  function widgetToast(message) {
+    if (!widgetWindow || widgetWindow.isDestroyed() || !message) return;
+    widgetWindow.webContents.send("today-widget:toast", { message: String(message) });
+  }
+
+  function notifyWidgetSurface(kind, extra) {
+    if (!widgetWindow || widgetWindow.isDestroyed()) return;
+    widgetWindow.webContents.send("today-widget:surface", { open: Boolean(kind), kind: kind || "", ...extra });
+  }
+
+  function createSurfaceWindow() {
+    if (surfaceWindow && !surfaceWindow.isDestroyed()) return surfaceWindow;
+    surfaceWindow = new BrowserWindow({
+      width: 320,
+      height: 240,
+      frame: false,
+      acceptFirstMouse: true,
+      transparent: true,
+      hasShadow: false,
+      backgroundColor: "#00000000",
+      show: false,
+      resizable: false,
+      minimizable: false,
+      maximizable: false,
+      fullscreenable: false,
+      skipTaskbar: true,
+      // A panel shows over the app without activating it, so opening the widget
+      // settings never raises the main window.
+      type: process.platform === "darwin" ? "panel" : undefined,
+      alwaysOnTop: preferences.alwaysOnTop,
+      title: "浮窗面板",
+      webPreferences: {
+        preload: path.join(__dirname, "preload.cjs"),
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true,
+        backgroundThrottling: false,
+      },
+    });
+    surfaceWindow.loadFile(path.join(__dirname, "..", "renderer", "widget-surface.html"));
+    surfaceWindow.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+    surfaceWindow.on("show", () => {
+      surfaceRingOutside = false;
+      applySurfacePassthrough();
+    });
+    surfaceWindow.on("blur", () => {
+      // Opening the window itself fires blur on some platforms; only a real
+      // outside click should dismiss the surface.
+      if (Date.now() - surfaceOpenedAt < 260) return;
+      closeSurface("blur");
+    });
+    surfaceWindow.on("closed", () => {
+      surfaceWindow = null;
+      surfacePayload = null;
+      surfaceRingOutside = false;
+      notifyWidgetSurface("");
+    });
+    return surfaceWindow;
+  }
+
+  function sendSurfacePayload() {
+    if (!surfaceWindow || surfaceWindow.isDestroyed() || !surfacePayload) return;
+    surfaceWindow.webContents.send("widget-surface:payload", surfacePayload);
+  }
+
+  function openSurface(kind, taskId, anchor, panel) {
+    if (!SURFACE_KINDS.has(kind)) return { success: false, code: "INVALID_SURFACE" };
+    if (!widgetWindow || widgetWindow.isDestroyed()) return { success: false, code: "NO_WIDGET" };
+    if (anchor && typeof anchor === "object") {
+      const bounds = widgetWindow.getBounds();
+      surfaceAnchor = {
+        x: bounds.x + Number(anchor.x || 0),
+        y: bounds.y + Number(anchor.y || 0),
+        w: Number(anchor.w || 0),
+        h: Number(anchor.h || 0),
+      };
+    }
+    if (panel && typeof panel === "object") {
+      const bounds = widgetWindow.getBounds();
+      surfacePanel = {
+        x: bounds.x + Number(panel.x || 0),
+        y: bounds.y + Number(panel.y || 0),
+        w: Number(panel.w || 0),
+        h: Number(panel.h || 0),
+      };
+    }
+    surfacePayload = surfacePayloadFor(kind, taskId);
+    seedSurfaceContent(kind);
+    const window = createSurfaceWindow();
+    const bounds = surfaceBounds(kind, surfaceContent);
+    surfaceOpenedAt = Date.now();
+    window.setBounds(bounds, false);
+    applyTodayWidgetTopmost(window, preferences.alwaysOnTop, process.platform);
+    const before = window.webContents.isLoadingMainFrame() || !window.webContents.getURL();
+    if (before) {
+      window.webContents.once("did-finish-load", () => {
+        sendSurfacePayload();
+        window.setBounds(surfaceBounds(kind, surfaceContent), false);
+        window.show();
+        window.focus();
+      });
+    } else {
+      sendSurfacePayload();
+      window.show();
+      window.focus();
+    }
+    notifyWidgetSurface(kind, { taskId: String(taskId || "") });
+    return { success: true };
+  }
+
+  function closeSurface(reason = "") {
+    const payload = surfacePayload;
+    if (!surfaceWindow || surfaceWindow.isDestroyed()) {
+      surfacePayload = null;
+      notifyWidgetSurface("", payload ? { returnFocus: surfaceReturnFocusSelector(payload.kind, payload.task?.id) } : undefined);
+      return { success: true };
+    }
+    const returnFocus = payload ? surfaceReturnFocusSelector(payload.kind, payload.task?.id) : "";
+    surfacePayload = null;
+    surfaceWindow.hide();
+    // Hiding the panel hands activation back to the widget window; the focus
+    // target is only meaningful once that window is key again.
+    if (widgetWindow && !widgetWindow.isDestroyed() && preferences.visible) {
+      widgetWindow.focus();
+      setTimeout(() => notifyWidgetSurface("", { returnFocus, reason }), 30);
+    } else {
+      notifyWidgetSurface("", { returnFocus, reason });
+    }
+    return { success: true };
+  }
+
+  async function handleSurfaceAction(payload) {
+    const action = String(payload?.action || "");
+    const taskId = normalizeTaskId(payload?.taskId);
+    if (action === "preference") {
+      const key = payload?.key;
+      if (key === "widgetPinned") await updatePreferences({ alwaysOnTop: payload.value === true });
+      else if (key === "widgetThrough") await updatePreferences({ clickThrough: payload.value === true });
+      else if (key === "widgetLaunch") await updatePreferences({ launchWithApp: payload.value === true });
+      if (surfacePayload) surfacePayload = surfacePayloadFor(surfacePayload.kind, surfacePayload.task?.id);
+      sendSurfacePayload();
+      return { success: true };
+    }
+    if (action === "place") {
+      await updatePreferences({ position: WIDGET_POSITIONS.has(payload?.value) ? payload.value : "top-right" });
+      if (surfacePayload) surfacePayload = surfacePayloadFor("settings", "");
+      sendSurfacePayload();
+      if (surfaceWindow && !surfaceWindow.isDestroyed()) surfaceWindow.setBounds(surfaceBounds("settings", surfaceContent), false);
+      return { success: true };
+    }
+    if (action === "opacity") {
+      await updatePreferences({ opacity: payload?.value });
+      return { success: true };
+    }
+    if (action === "reset-frame") {
+      await updatePreferences({ resetFrame: true });
+      if (surfacePayload) surfacePayload = surfacePayloadFor("settings", "");
+      sendSurfacePayload();
+      return { success: true };
+    }
+    if (action === "hide") {
+      closeSurface("hide");
+      await hideWidget();
+      return { success: true };
+    }
+    if (action === "promote" || action === "delete-quick") {
+      const target = action === "promote" ? "promote" : "delete";
+      const kind = surfacePayload?.task?.isQuick ? target : target;
+      const nextId = taskId || surfacePayload?.task?.id || "";
+      // Chained surfaces keep the Demo's trigger rect (mountSurface reuses the
+      // same trigger for the promote panel and the confirm dialog).
+      surfacePayload = surfacePayloadFor(kind, nextId);
+      seedSurfaceContent(kind);
+      if (surfaceWindow && !surfaceWindow.isDestroyed()) {
+        surfaceWindow.setBounds(surfaceBounds(kind, surfaceContent), false);
+      }
+      sendSurfacePayload();
+      notifyWidgetSurface(kind, { taskId: nextId });
+      return { success: true };
+    }
+    const lane = surfacePayload?.task?.isQuick ? "quick" : "task";
+    if (action === "open-record") {
+      closeSurface("action");
+      await showMainWindow(taskId);
+      return { success: true };
+    }
+    if (action === "rename-record") {
+      closeSurface("action");
+      if (widgetWindow && !widgetWindow.isDestroyed() && taskId) widgetWindow.webContents.send("today-widget:begin-rename", { taskId });
+      return { success: true };
+    }
+    if (action === "move-up" || action === "move-down") {
+      const result = await requestMainMutation("today-widget:reorder-item", { taskId, lane, direction: action === "move-up" ? -1 : 1 });
+      if (result?.success) { closeSurface("action"); widgetToast("顺序已同步"); }
+      else if (result?.code === "BOUNDARY") widgetToast(action === "move-up" ? "已经是第一项" : "已经是最后一项");
+      return result;
+    }
+    if (action === "to-today" || action === "to-quick") {
+      const result = await requestMainMutation("today-widget:move-item", {
+        taskId,
+        sourceLane: lane,
+        targetLane: action === "to-today" ? "task" : "quick",
+        targetTaskId: "",
+        position: "after",
+      });
+      if (result?.success) {
+        closeSurface("action");
+        widgetToast(action === "to-today" ? "已加入今日任务，原内容保留" : "已移到速记，原内容保留");
+      }
+      return result;
+    }
+    if (action === "promote-group") {
+      const group = snapshot.groups.find((entry) => entry.id === normalizeTaskId(payload?.groupId));
+      const result = await requestMainMutation("today-widget:promote-quick-capture", { taskId, groupId: normalizeTaskId(payload?.groupId) });
+      if (result?.success) {
+        closeSurface("action");
+        widgetToast(group ? `已升级为任务并移入「${group.title}」` : "已升级为任务");
+      }
+      return result;
+    }
+    if (action === "confirm-delete") {
+      const result = await requestMainMutation("today-widget:delete-quick-capture", { taskId });
+      if (result?.code !== "DELETE_CANCELLED") {
+        closeSurface("action");
+        if (result?.success) widgetToast("速记已删除");
+      }
+      return result;
+    }
+    return { success: false, code: "UNKNOWN_ACTION" };
   }
 
   function registerIpc() {
@@ -555,6 +1076,66 @@ function createTodayWidgetController({ app, BrowserWindow, globalShortcut, ipcMa
       if (direction !== -1 && direction !== 1) return { success: false, code: "INVALID_DIRECTION" };
       return requestMainMutation("today-widget:reorder-item", { taskId, lane, direction });
     });
+    ipcMain.handle("today-widget:fit", (event, size) => {
+      if (!isWidgetSender(event)) return rejectUnknownSender("today-widget:fit");
+      applyContentSize(size);
+      if (firstFitPending) revealWidgetWindow();
+      return { success: true, content: currentContent };
+    });
+    ipcMain.handle("today-widget:nudge", (event, delta) => {
+      if (!isWidgetSender(event)) return rejectUnknownSender("today-widget:nudge");
+      if (!widgetWindow || widgetWindow.isDestroyed()) return { success: false };
+      const dx = Math.max(-80, Math.min(80, Math.round(Number(delta?.dx) || 0)));
+      const dy = Math.max(-80, Math.min(80, Math.round(Number(delta?.dy) || 0)));
+      const bounds = widgetWindow.getBounds();
+      const area = screen.getDisplayMatching(bounds).workArea;
+      const x = Math.max(area.x, Math.min(area.x + area.width - bounds.width, bounds.x + dx));
+      const y = Math.max(area.y, Math.min(area.y + area.height - bounds.height, bounds.y + dy));
+      preferences = normalizeTodayWidgetPreferences({ ...preferences, position: "custom", customBounds: { x, y } });
+      preferences = { ...preferences, frameAnchor: frameAnchorForPosition("custom", area, { x, y, width: bounds.width, height: bounds.height }) };
+      suppressMoveUntil = Date.now() + 350;
+      widgetWindow.setBounds({ ...bounds, x, y }, false);
+      clearTimeout(moveSaveTimer);
+      moveSaveTimer = setTimeout(() => {
+        void persistPreferences();
+        broadcastState();
+      }, 180);
+      return { success: true, bounds: { x, y } };
+    });
+    ipcMain.handle("today-widget:ring", (event, payload) => {
+      const inside = payload?.inside === true;
+      if (isWidgetSender(event)) return applyRingRegion("widget", inside);
+      if (isSurfaceSender(event)) return applyRingRegion("surface", inside);
+      return rejectUnknownSender("today-widget:ring");
+    });
+    ipcMain.handle("today-widget:open-surface", (event, payload) => {
+      if (!isWidgetSender(event)) return rejectUnknownSender("today-widget:open-surface");
+      const raw = payload && typeof payload === "object" ? payload : {};
+      return openSurface(String(raw.kind || ""), normalizeTaskId(raw.taskId), raw.anchor, raw.panel);
+    });
+    ipcMain.handle("today-widget:close-surface", (event, payload) => {
+      if (!isWidgetSender(event)) return rejectUnknownSender("today-widget:close-surface");
+      return closeSurface(String(payload?.reason || ""));
+    });
+    ipcMain.handle("widget-surface:get", (event) => (isSurfaceSender(event) ? surfacePayload : rejectUnknownSender("widget-surface:get")));
+    ipcMain.handle("widget-surface:fit", (event, size) => {
+      if (!isSurfaceSender(event)) return rejectUnknownSender("widget-surface:fit");
+      if (!surfaceWindow || surfaceWindow.isDestroyed() || !surfacePayload) return { success: false };
+      surfaceContent = {
+        width: Math.max(120, Math.round(Number(size?.width) || surfaceContent.width)),
+        height: Math.max(60, Math.round(Number(size?.height) || surfaceContent.height)),
+      };
+      surfaceWindow.setBounds(surfaceBounds(surfacePayload.kind, surfaceContent), false);
+      return { success: true };
+    });
+    ipcMain.handle("widget-surface:act", (event, payload) => {
+      if (!isSurfaceSender(event)) return rejectUnknownSender("widget-surface:act");
+      return handleSurfaceAction(payload);
+    });
+    ipcMain.handle("widget-surface:close", (event, payload) => {
+      if (!isSurfaceSender(event)) return rejectUnknownSender("widget-surface:close");
+      return closeSurface(String(payload?.reason || ""));
+    });
     ipcMain.on("today-widget:publish", (event, value) => {
       if (isMainWindowSender(event)) publishSnapshot(value);
     });
@@ -564,9 +1145,10 @@ function createTodayWidgetController({ app, BrowserWindow, globalShortcut, ipcMa
 
   async function start() {
     preferences = await readTodayWidgetPreferences(app.getPath("userData"));
-    currentSize = preferences.compact
-      ? { width: 296, height: 49 }
-      : { width: 360, height: preferences.height };
+    currentContent = preferences.compact
+      ? { width: WIDGET_WIDTHS.compact, height: 48 }
+      : { width: WIDGET_WIDTHS.expanded, height: preferences.autoHeight ? DEFAULT_PREFERENCES.height : preferences.height };
+    currentSize = windowSizeForContent(currentContent);
     if (preferences.launchWithApp && preferences.visible) createWidgetWindow();
     if (globalShortcut?.register) {
       const registered = globalShortcut.register(CLICK_THROUGH_ACCELERATOR, () => {
@@ -597,6 +1179,10 @@ function createTodayWidgetController({ app, BrowserWindow, globalShortcut, ipcMa
       resolve({ success: false, code: "APP_QUITTING" });
     });
     pendingMutations.clear();
+    clearTimeout(showFallbackTimer);
+    if (surfaceWindow && !surfaceWindow.isDestroyed()) surfaceWindow.destroy();
+    surfaceWindow = null;
+    surfacePayload = null;
     if (widgetWindow && !widgetWindow.isDestroyed()) widgetWindow.destroy();
     widgetWindow = null;
   }
@@ -619,7 +1205,9 @@ function normalizeSnapshot(value) {
     items: (Array.isArray(raw.items) ? raw.items : []).map((item) => ({
       taskId: normalizeTaskId(item?.taskId),
       title: String(item?.title || "未命名任务").slice(0, 240),
-      nextText: String(item?.nextText || "补充任务背景或新增第一个节点").slice(0, 500),
+      // An empty next step is meaningful: the Demo renders the line only when the
+      // record actually has one, which is what decides the row height.
+      nextText: String(item?.nextText || "").slice(0, 500),
       kind: ["normal", "high", "blocked"].includes(item?.kind) ? item.kind : "normal",
     })).filter((item) => item.taskId),
     quickCaptures: (Array.isArray(raw.quickCaptures) ? raw.quickCaptures : []).map((item) => ({
@@ -652,7 +1240,18 @@ function normalizeTodayWidgetAppearance(value) {
     enFont: WIDGET_EN_FONTS.has(raw.enFont) ? raw.enFont : "inter",
     fontSize: Number.isFinite(fontSize) ? Math.max(12, Math.min(24, fontSize)) : 16.5,
     fontScale: Number.isFinite(fontScale) ? Math.max(0.8, Math.min(1.6, fontScale)) : 1,
+    // The main window composes the `--sans` stack from the font preferences
+    // (shell.js applyShellAppearance). The widget window must resolve the same
+    // families, so it receives the composed stack instead of duplicating the
+    // family tables. Only CSS-safe characters survive this whitelist.
+    sans: normalizeFontStack(raw.sans),
   };
+}
+
+function normalizeFontStack(value) {
+  const text = String(value || "").trim();
+  if (!text || text.length > 400) return "";
+  return /^[A-Za-z0-9\s,"'\-_.()]+$/.test(text) ? text : "";
 }
 
 module.exports = {
@@ -663,7 +1262,9 @@ module.exports = {
   resizedWidgetBounds,
   normalizeTodayWidgetPreferences,
   normalizeTodayWidgetAppearance,
+  normalizeFrameAnchor,
   normalizeSnapshot,
+  windowSizeForContent,
   readTodayWidgetPreferences,
   writeTodayWidgetPreferences,
 };

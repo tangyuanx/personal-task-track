@@ -4,101 +4,20 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'" />
-  <title>今日任务置顶窗口 Demo</title>
-  <link rel="stylesheet" href="./src/shell.css?v=0.1.200" />
-  <link rel="stylesheet" href="./src/typography.css?v=0.1.200" />
-  <link rel="stylesheet" href="./src/widget12.css?v=0.1.200" />
-  <link rel="stylesheet" href="./src/widget13.css?v=0.1.200" />
-  <link rel="stylesheet" href="./src/shell-refinement.css?v=0.1.200" />
-  <link rel="stylesheet" href="./src/widget-bridge.css?v=0.1.200" />
+  <title>今日</title>
+  <link rel="stylesheet" href="./src/fonts.css?v=0.1.202" />
+  <link rel="stylesheet" href="./src/shell.css?v=0.1.202" />
+  <link rel="stylesheet" href="./src/typography.css?v=0.1.202" />
+  <link rel="stylesheet" href="./src/widget12.css?v=0.1.202" />
+  <link rel="stylesheet" href="./src/widget13.css?v=0.1.202" />
+  <link rel="stylesheet" href="./src/shell-refinement.css?v=0.1.202" />
+  <link rel="stylesheet" href="./src/widget-bridge.css?v=0.1.202" />
 </head>
 <body>
-  <aside class="today-widget widget12 widget13" id="widget" data-widget-lane="task" data-position="bottom-right" aria-label="今日任务浮窗">
-    <header class="widget-header" id="drag-region" tabindex="0" aria-label="移动浮窗" aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight" title="拖动移动 · 聚焦后方向键微调">
-      <img class="widget-logo" src="./assets/loop-icon.png" alt="Loop" draggable="false" />
-      <strong>今日</strong>
-      <span class="widget-date" id="widget-date"></span>
-      <span class="widget-count" id="widget-count" hidden></span>
-      <button class="icon-button" id="compact-toggle" type="button" data-action="compact-widget" aria-label="收起浮窗">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"></path></svg>
-      </button>
-      <button class="icon-button" id="menu-toggle" type="button" data-action="widget-preferences" aria-label="浮窗设置" aria-haspopup="dialog" aria-expanded="false">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0"></path></svg>
-      </button>
-      <button class="icon-button" id="close-widget" type="button" data-action="toggle-widget" aria-label="关闭今日浮窗">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"></path></svg>
-      </button>
-    </header>
-
-    <nav class="widget-tabs" id="widget-tabs" aria-label="浮窗记录类型">
-      <button type="button" data-widget-type="task" class="active" aria-pressed="true">今日任务<small id="widget-tab-task-count">0</small></button>
-      <button type="button" data-widget-type="quick" aria-pressed="false">速记<small id="widget-tab-quick-count">0</small></button>
-    </nav>
-
-    <div class="widget-body" id="widget-body">
-      <ol class="widget-rows" id="task-list" data-lane="task"></ol>
-      <ol class="widget-rows" id="quick-capture-list" data-lane="quick" hidden></ol>
-      <p class="widget-empty" id="empty-state" hidden></p>
-    </div>
-
-    <section class="widget-compose" id="quick-capture-section" aria-label="添加速记" hidden>
-      <div class="widget-capture">
-        <textarea id="widget-capture" rows="1" maxlength="4000" aria-label="快速记录内容" placeholder="记一条速记…" title="Enter 保存速记；Shift+Enter 换行；Command / Ctrl+Enter 加入今日"></textarea>
-        <button type="button" id="capture-submit" data-widget12="submit" aria-label="保存速记" title="保存速记" disabled>
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"></path></svg>
-        </button>
-      </div>
-      <div class="widget-compose-foot">
-        <span id="widget-feedback" class="widget-input-status" role="status" aria-live="polite">Enter 保存 · Shift+Enter 换行</span>
-        <span class="widget-shortcut" title="Command / Ctrl+Enter 保存并加入今日">⌘ ↵ 今日</span>
-      </div>
-    </section>
-
-    <p class="quick-capture-overflow" id="quick-capture-overflow" hidden></p>
-    <span id="today-task-count" hidden>0</span>
-    <span id="quick-capture-count" hidden>0</span>
-    <span class="today-task-section" hidden></span>
-
-    <div class="widget13-resize top" data-widget-resize="top" role="separator" tabindex="0" aria-orientation="horizontal" aria-valuemin="180" aria-valuemax="720" aria-label="从顶部调整浮窗高度" title="拖动调整高度 · ↑ / ↓ 微调"></div>
-    <div class="widget13-resize bottom" data-widget-resize="bottom" role="separator" tabindex="0" aria-orientation="horizontal" aria-valuemin="180" aria-valuemax="720" aria-label="从底部调整浮窗高度" title="拖动调整高度 · ↑ / ↓ 微调"></div>
-  </aside>
-
-  <section class="surface-popover widget12-settings" id="widget-menu" role="dialog" aria-label="浮窗设置">
-    <header class="widget12-settings-head"><h2>浮窗设置</h2></header>
-    <div class="widget12-settings-body">
-      <div class="widget12-setting-row">
-        <span class="widget12-settings-label">位置</span>
-        <div class="widget12-positions">
-          <button type="button" data-place="top-left" aria-label="左上角"></button>
-          <button type="button" data-place="top-right" aria-label="右上角"></button>
-          <button type="button" data-place="bottom-left" aria-label="左下角"></button>
-          <button type="button" data-place="bottom-right" aria-label="右下角"></button>
-        </div>
-      </div>
-      <div class="widget12-setting-row">
-        <span class="widget12-settings-label">不透明度</span>
-        <div class="widget12-opacity">
-          <input type="range" id="widget-opacity" min="70" max="100" step="1" aria-label="浮窗不透明度" />
-          <span id="widget-opacity-value">100%</span>
-        </div>
-      </div>
-      <label class="widget12-setting-row"><span class="widget12-settings-label">始终置顶</span><input type="checkbox" id="always-on-top" /></label>
-      <label class="widget12-setting-row"><span class="widget12-settings-label">鼠标穿透</span><input type="checkbox" id="click-through" /></label>
-      <label class="widget12-setting-row"><span class="widget12-settings-label">随应用启动</span><input type="checkbox" id="launch-with-app" /></label>
-      <p class="widget12-settings-hint" id="click-through-hint" hidden>点击会穿透浮窗，操作后面的窗口。</p>
-      <p class="widget12-settings-hint">快捷键 <kbd>⌘ / Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>T</kbd> 可切换鼠标穿透。</p>
-    </div>
-    <footer class="widget12-settings-foot">
-      <button class="text-button" type="button" id="open-main">打开主窗口</button>
-      <button class="button" type="button" id="hide-widget">隐藏浮窗</button>
-    </footer>
-  </section>
-  <div id="quick-capture-group-menu" hidden></div>
-  <aside class="today-context-menu" id="today-context-menu" data-no-drag hidden></aside>
-  <button id="delete-quick-capture" hidden></button>
-  <div id="toast" hidden></div>
-
-  <!-- 浏览器预览回退已移除：浮窗只在 Electron 中运行，且回退块引用的是旧设计 DOM -->
+  <!-- The widget body is rendered from the frozen Demo's own template so the DOM
+       stays byte-comparable with prototypes/demos/loop-widget-phase13.js. -->
+  <div id="widget-host"></div>
+  <div id="toast" role="status" aria-live="polite"></div>
   <script src="./src/today-widget-runtime.js"></script>
 </body>
 </html>

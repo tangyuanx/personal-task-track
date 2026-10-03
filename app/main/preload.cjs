@@ -102,6 +102,29 @@ contextBridge.exposeInMainWorld("personalTaskTrack", {
     onMoveItemRequest: (callback) => subscribe("today-widget:move-item", callback),
     onReorderRequest: (callback) => subscribe("today-widget:reorder-item", callback),
     respondMutation: (result) => ipcRenderer.send("today-widget:mutation-result", result),
+    // The window is sized from the rendered panel plus the ring that carries the
+    // Demo's own drop shadow, so the renderer reports its content box.
+    fit: (size) => ipcRenderer.invoke("today-widget:fit", size),
+    nudge: (delta) => ipcRenderer.invoke("today-widget:nudge", delta),
+    openSurface: (payload) => ipcRenderer.invoke("today-widget:open-surface", payload),
+    closeSurface: (payload) => ipcRenderer.invoke("today-widget:close-surface", payload),
+    // The transparent ring that carries the panel's shadow must not swallow
+    // input aimed at whatever is behind it.
+    setRingRegion: (payload) => ipcRenderer.invoke("today-widget:ring", payload),
+    onSurface: (callback) => subscribe("today-widget:surface", callback),
+    onBeginRename: (callback) => subscribe("today-widget:begin-rename", callback),
+    onToast: (callback) => subscribe("today-widget:toast", callback),
+  },
+  // Popover surfaces (settings / row menu / promote / delete) live in their own
+  // frameless window so they can extend past the widget window, exactly where
+  // the Demo places them relative to the panel.
+  widgetSurface: {
+    getPayload: () => ipcRenderer.invoke("widget-surface:get"),
+    fit: (size) => ipcRenderer.invoke("widget-surface:fit", size),
+    act: (payload) => ipcRenderer.invoke("widget-surface:act", payload),
+    close: (payload) => ipcRenderer.invoke("widget-surface:close", payload),
+    setRingRegion: (payload) => ipcRenderer.invoke("today-widget:ring", payload),
+    onPayload: (callback) => subscribe("widget-surface:payload", callback),
   },
 });
 

@@ -1,0 +1,153 @@
+name: Publish v0.1.202
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/publish-v0.1.202.yml
+
+concurrency:
+  group: publish-v0.1.202
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify v0.1.202 Today widget port
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Verify version, renderer syntax and the frozen Demo layers
+        shell: bash
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          test "$version" = "0.1.202"
+          for f in app/renderer/src/*.js; do node --check "$f"; done
+          # The widget layers must stay byte-identical to the frozen baseline.
+          diff app/renderer/src/widget12.css prototypes/baseline/loop-plane-phase17-frozen/loop-widget-phase12-refinement.css
+          diff app/renderer/src/widget13.css prototypes/baseline/loop-plane-phase17-frozen/loop-widget-phase13.css
+          diff app/renderer/src/shell-refinement.css prototypes/baseline/loop-plane-phase17-frozen/loop-shell-refinement.css
+          node --test tests/desktop.test.cjs tests/work-rhythm-ui.test.cjs tests/work-navigation-model.test.cjs
+
+  build:
+    name: Build v0.1.202 ${{ matrix.platform }}
+    needs: verify
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macOS
+            os: macos-latest
+            script: npm run dist:mac -- --x64 --arm64 --publish never
+            artifact: v0.1.202-macos
+          - platform: Windows
+            os: windows-latest
+            script: npm run dist:win -- --x64 --publish never
+            artifact: v0.1.202-windows
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Check JavaScript and tests
+        run: npm run check
+      - name: Build app
+        run: ${{ matrix.script }}
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+      - name: Test Windows installer upgrade matrix
+        if: matrix.platform == 'Windows'
+        shell: pwsh
+        run: |
+          $candidate = Get-ChildItem release -Filter "Loop-*-x64-setup.exe" | Select-Object -First 1
+          if (-not $candidate) { throw "Windows installer was not produced." }
+          ./tests/windows-upgrade-installer.test.ps1 -CandidateInstaller $candidate.FullName
+      - name: Verify update metadata
+        run: node tools/verify-update-artifacts.cjs release
+      - name: Stage v0.1.202 release assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            release/*.dmg
+            release/*.zip
+            release/*.exe
+            release/*.blockmap
+            release/latest.yml
+            release/latest-mac.yml
+          if-no-files-found: error
+          retention-days: 2
+
+  publish:
+    name: Publish v0.1.202 release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Refuse to replace an existing tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          if gh api "repos/${{ github.repository }}/git/ref/tags/v0.1.202" >/dev/null 2>&1; then
+            echo "v0.1.202 already exists; refusing to replace it."
+            exit 1
+          fi
+      - name: Collect v0.1.202 release assets
+        uses: actions/download-artifact@v4
+        with:
+          pattern: v0.1.202-*
+          path: release
+          merge-multiple: true
+      - name: Verify complete cross-platform update feed
+        run: node tools/verify-update-artifacts.cjs release --require-all-platforms
+      - name: Publish v0.1.202
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v0.1.202
+          target_commitish: ${{ github.sha }}
+          name: v0.1.202
+          body: |
+            ## 今日浮窗按冻结 Demo 完整移植
+
+            以 `prototypes/demos/loop-plane-phase1.html` 实际加载的今日浮窗资源为唯一基准，把浮窗完整移植进正式应用，
+            数据与操作全部走项目原有 API，未新增业务规则。
+
+            - DOM、类名、图标路径、字号与间距、行高、截断、悬停与键盘聚焦态、当前记录、拖动柄、更多菜单、
+              速记录入区、空态、滚动区、面板、深浅主题均与冻结基准逐元素一致（22 个状态几何/文本/结构/SVG 零差异）。
+            - 窗口按渲染结果自适应：展开 360、收起 254，内容盒额外保留承载 Demo 自身投影的透明环，投影不再被窗口边界裁切；
+              该环对鼠标事件穿透，不会吞掉浮窗或其后应用的悬停与点击。
+            - 设置、记录菜单、升级与删除确认改由独立透明面板窗口承载，沿用 Demo 的定位数学，
+              因此面板不再被浮窗窗口边界压缩；点击外部或 Esc 关闭，关闭后焦点回到触发控件。
+            - 修复此前实际失效的行为：完成按钮未接线、不透明度从未生效、提示条无样式不可见、
+              「加入今日任务」仍留在速记、速记删除出现二次原生确认；并修好已失效的浮窗草稿 UI 测试。
+            - 保留结论与处理流完成校验、循环任务、提醒、原生拖动/置顶/穿透快捷键、位置尺寸偏好与草稿持久化。
+
+            验证：`node --test` 全绿（168 项），浮窗行为检查 62/62，`npm run test:ui:widget-draft` 通过；
+            与冻结基准逐状态截图对比，可控差异已全部消除。
+          make_latest: true
+          files: |
+            release/*.dmg
+            release/*.zip
+            release/*.exe
+            release/*.blockmap
+            release/latest.yml
+            release/latest-mac.yml

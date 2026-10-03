@@ -1,87 +1,74 @@
+// ============================================================
+// Loop -- Today widget renderer.
+//
+// The markup, class names, icons, geometry and interaction states below are
+// ported from the frozen Demo baseline
+// (prototypes/demos/loop-widget-phase13.js + loop-shell-refinement.js);
+// only the data source and the side effects are wired to the desktop app
+// (window.personalTaskTrack.todayWidget). Keep the two in step: this file may
+// not invent markup the Demo does not have.
+// ============================================================
 (() => {
   const bridge = window.personalTaskTrack?.todayWidget;
-  // The value this window last published; the main process echoes it back on
-  // every state broadcast, and that echo can be older than what is on screen.
-  let lastPublishedDraft = "";
   if (!bridge) return;
-
-  const COMPACT_MENU_WINDOW_HEIGHT = 340;
 
   document.body.classList.add("widget-runtime");
 
-  const widget = document.querySelector("#widget");
-  const widgetDate = document.querySelector("#widget-date");
-  const widgetCount = document.querySelector("#widget-count");
-  const widgetTabs = document.querySelector("#widget-tabs");
-  const tabTaskCount = document.querySelector("#widget-tab-task-count");
-  const tabQuickCount = document.querySelector("#widget-tab-quick-count");
-  const menu = document.querySelector("#widget-menu");
-  const menuToggle = document.querySelector("#menu-toggle");
-  const compactToggle = document.querySelector("#compact-toggle");
-  const quickCaptureInput = document.querySelector("#widget-capture");
-  const quickCaptureSection = document.querySelector("#quick-capture-section");
-  const quickCaptureCount = document.querySelector("#quick-capture-count");
-  const quickCaptureList = document.querySelector("#quick-capture-list");
-  const quickCaptureOverflow = document.querySelector("#quick-capture-overflow");
-  const todayTaskCount = document.querySelector("#today-task-count");
-  const todayTaskSection = document.querySelector(".today-task-section");
-  const quickCaptureGroupMenu = document.querySelector("#quick-capture-group-menu");
-  const todayContextMenu = document.querySelector("#today-context-menu");
-  const deleteQuickCaptureButton = document.querySelector("#delete-quick-capture");
-  const taskList = document.querySelector("#task-list");
-  const emptyState = document.querySelector("#empty-state");
-  const toast = document.querySelector("#toast");
-  const alwaysOnTop = document.querySelector("#always-on-top");
-  const clickThrough = document.querySelector("#click-through");
-  const clickThroughHint = document.querySelector("#click-through-hint");
-  const launchWithApp = document.querySelector("#launch-with-app");
-  const opacityControl = document.querySelector("#widget-opacity");
-  const opacityValue = document.querySelector("#widget-opacity-value");
-  let currentLane = "task";
-  let currentSnapshot = { date: "", items: [], quickCaptures: [], quickCaptureTotal: 0, groups: [] };
+  // ---------- icons: `paths` copied verbatim from the frozen Demo ----------
+  const paths = {
+    circle: "M20 12a8 8 0 1 1-16 0 8 8 0 0 1 16 0",
+    blocked: "M20 12a8 8 0 1 1-16 0 8 8 0 0 1 16 0M8 12h8",
+    arrow: "M5 12h14m-6-6 6 6-6 6",
+    more: "M5 12h.01M12 12h.01M19 12h.01",
+    close: "m6 6 12 12M6 18 18 6",
+    note: "M5 3h14v18H5zM8 8h8M8 12h8M8 16h5",
+    minus: "M5 12h14",
+    plus: "M12 5v14M5 12h14",
+    down: "m5 9 7 7 7-7",
+    up: "m5 15 7-7 7 7",
+    edit: "m15 4 5 5M4 20l4-1L21 6l-4-4L4 15z",
+    folder: "M3 7h7l2 2h9v11H3zM3 7V4h7l2 3",
+    chevron: "m9 5 7 7-7 7",
+    today: "m3 10 9-7 9 7M5 9v12h14V9M9 21v-8h6v8",
+    settings: "M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0",
+  };
+  const icon = (name) => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${paths[name] || paths.circle}"/></svg>`;
+  const gripIcon = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M5 3h.01M5 8h.01M5 13h.01M10 3h.01M10 8h.01M10 13h.01" stroke-linecap="round"/></svg>';
+
+  const host = document.querySelector("#widget-host");
+  const toastHost = document.querySelector("#toast");
+  const root = document.documentElement;
+
+  let prefs = {
+    position: "top-right", compact: false, opacity: 100, alwaysOnTop: true,
+    clickThrough: false, launchWithApp: true, autoHeight: true, height: 0, customBounds: null,
+  };
+  let snapshot = { date: "", activeTaskId: "", appearance: {}, items: [], quickCaptures: [], groups: [] };
+  let lane = "task";
+  let editId = "";
+  let editDraft = "";
+  let feedback = "";
+  let feedbackType = "";
+  let gesture = null;
+  let suppressClickUntil = 0;
+  let scrollFrame = 0;
+  const scrollByType = { task: 0, quick: 0 };
+  let surfaceKind = "";
   let queuedSnapshot = null;
   let completingTaskId = "";
   let toastTimer = 0;
-  let resizeGesture = null;
-  let resizeFrame = 0;
-  let pendingResizeHeight = 0;
-  let compactMenuExpanded = false;
-  let editingTaskId = "";
-  let editingInput = null;
+  let fitFrame = 0;
   let draftSaveTimer = 0;
-  let captureSubmitting = false;
-  let promotingTaskId = "";
-  let contextTaskId = "";
-  let rowDragState = null;
-  let suppressRowClickUntil = 0;
+  let lastPublishedDraft = "";
   let editingReleaseTimer = 0;
+  let pointerHeld = false;
+  let pendingBlurRender = false;
+  let recentTitleClick = null;
+  let editTimer = 0;
+  let switchingToEdit = false;
 
-  const LONG_PRESS_DELAY = 380;
-  const DRAG_START_DISTANCE = 6;
-
-  function isTextEditingTarget(element) {
-    return element === quickCaptureInput || element?.classList?.contains("task-inline-input");
-  }
-
-  function setTextEditing(enabled) {
-    window.clearTimeout(editingReleaseTimer);
-    editingReleaseTimer = 0;
-    if (enabled) {
-      void bridge.setEditing?.(true);
-      return;
-    }
-    // Native IME candidate panels can transiently affect window focus while
-    // the DOM input remains active. Only restore topmost after focus has truly
-    // left every text-editing target.
-    editingReleaseTimer = window.setTimeout(() => {
-      editingReleaseTimer = 0;
-      if (isTextEditingTarget(document.activeElement)) return;
-      void bridge.setEditing?.(false);
-    }, 320);
-  }
-
-  function escapeHtml(value) {
-    return String(value || "")
+  function esc(value) {
+    return String(value == null ? "" : value)
       .replaceAll("&", "&amp;")
       .replaceAll("<", "&lt;")
       .replaceAll(">", "&gt;")
@@ -91,385 +78,442 @@
 
   function showToast(message) {
     window.clearTimeout(toastTimer);
-    toast.textContent = message;
-    toast.classList.add("is-visible");
-    toastTimer = window.setTimeout(() => toast.classList.remove("is-visible"), 1800);
+    toastHost.innerHTML = `<div class="toast">${esc(message)}</div>`;
+    toastTimer = window.setTimeout(() => { toastHost.innerHTML = ""; }, 2800);
   }
 
-  /** Demo phase 12/13 chrome: lane tabs, close button, row menu trigger. */
-  function bindWidgetChrome() {
-    widgetTabs?.querySelectorAll("[data-widget-type]").forEach((button) => {
-      button.addEventListener("click", () => {
-        const next = button.dataset.widgetType === "quick" ? "quick" : "task";
-        if (next === currentLane) return;
-        currentLane = next;
-        applyLane();
-      });
-    });
-    document.querySelector("#close-widget")?.addEventListener("click", () => { void bridge.hide?.(); });
-    document.addEventListener("click", (event) => {
-      const more = event.target.closest("[data-widget12='row-menu']");
-      if (!more) return;
-      event.preventDefault();
-      event.stopPropagation();
-      openRowMenu(more.dataset.widgetId || "", more);
-    }, true);
+  // ---------- data projections (the Demo's listItems/state) ----------
+  function isQuickLane() { return lane === "quick"; }
+  function laneTaskItems() { return snapshot.items; }
+  function laneQuickItems() { return snapshot.quickCaptures.filter((item) => item.status !== "done"); }
+  function listItems() { return isQuickLane() ? laneQuickItems() : laneTaskItems(); }
+  function laneCounts() { return [laneTaskItems().length, laneQuickItems().length]; }
+  function findItem(id) {
+    return snapshot.items.find((item) => String(item.taskId) === String(id))
+      || snapshot.quickCaptures.find((item) => String(item.taskId) === String(id))
+      || null;
+  }
+  function findQuickItem(id) {
+    return snapshot.quickCaptures.find((item) => String(item.taskId) === String(id)) || null;
+  }
+  function formatDate(key) {
+    const parts = String(key || "").split("-");
+    if (parts.length !== 3) return "";
+    const month = Number(parts[1]);
+    const day = Number(parts[2]);
+    if (!Number.isFinite(month) || !Number.isFinite(day)) return "";
+    return `${month} 月 ${day} 日`;
   }
 
-  function openRowMenu(taskId, trigger) {
-    const row = document.querySelector(`.widget-row[data-task-id="${CSS.escape(String(taskId))}"]`);
-    if (!row) return;
-    contextTaskId = taskId;
-    const rect = trigger?.getBoundingClientRect?.();
-    if (row.dataset.lane === "quick") {
-      // quick captures reuse the project's existing context menu (promote / delete)
-      openContextMenu({ preventDefault() {}, clientX: rect?.left ?? 0, clientY: rect?.bottom ?? 0 }, row);
-      return;
-    }
-    // tasks have one meaningful action here: open them in the main window
-    void bridge.openMain(taskId);
+  // ---------- markup (ported 1:1 from loop-widget-phase13.js) ----------
+  function titleButton(t) {
+    return '<button class="widget-title" data-widget12="edit" data-widget-id="' + esc(t.taskId) + '" title="单击改名 · 双击打开主窗口" aria-label="编辑' + (isQuickLane() ? "速记" : "任务") + "：" + esc(t.title) + '"><strong>' + esc(t.title) + "</strong></button>";
   }
 
-  function closeMenu() {
-    menu.classList.remove("is-open");
-    menuToggle.setAttribute("aria-expanded", "false");
-    syncCompactMenuWindow(false);
+  // One lane is rendered at a time, so the lane decides whether a record is a
+  // quick note (the Demo asks the task itself; the snapshot is already split).
+  function row(t) {
+    const quick = isQuickLane();
+    const next = quick ? t.description : t.nextText;
+    // snapshot.items[].kind is "blocked" | "high" | "normal" (app.js todayFocusItems)
+    const blocked = !quick && t.kind === "blocked";
+    return '<li class="widget-row ' + (String(t.taskId) === String(snapshot.activeTaskId) ? "current" : "") + '" data-widget-row="' + esc(t.taskId) + '">'
+      + '<button class="widget13-grip" data-widget-drag="' + esc(t.taskId) + '" aria-label="调整顺序：' + esc(t.title) + '" aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown" title="拖动排序 · Alt+↑ / ↓">' + gripIcon + "</button>"
+      + '<button class="widget-check ' + (quick ? "quick-check" : "") + '" data-complete-task="' + esc(t.taskId) + '" aria-label="完成' + (quick ? "速记" : "任务") + "：" + esc(t.title) + '" title="完成' + (quick ? "速记" : "任务") + '">'
+      + (quick ? '<span class="note-icon">' + icon("note") + '</span><span class="completion-icon">' + icon("circle") + "</span>" : icon("circle"))
+      + "</button>"
+      + '<div class="widget-row-copy">'
+      + (String(editId) === String(t.taskId)
+        ? '<input class="widget-title-input" id="widget-title-input" data-widget-id="' + esc(t.taskId) + '" aria-label="修改记录标题" maxlength="240" value="' + esc(editDraft) + '">'
+        : titleButton(t))
+      + (next ? "<small>" + (blocked ? icon("blocked") : "") + "<span>" + esc(next) + "</span></small>" : "")
+      + "</div>"
+      + '<button class="widget-open" data-widget-open="' + esc(t.taskId) + '" aria-label="在主窗口打开：' + esc(t.title) + '" title="在主窗口打开">' + icon("arrow") + "</button>"
+      + '<button class="widget13-more" data-widget12="row-menu" data-widget-id="' + esc(t.taskId) + '" aria-haspopup="menu" aria-label="记录操作：' + esc(t.title) + '" title="更多操作">' + icon("more") + "</button>"
+      + "</li>";
   }
 
-  function closeGroupMenu() {
-    promotingTaskId = "";
-    quickCaptureGroupMenu.hidden = true;
-    quickCaptureGroupMenu.innerHTML = "";
+  function renderTodayWidget() {
+    if (!bridge) return "";
+    const items = listItems();
+    const counts = laneCounts();
+    const header = '<header class="widget-header" tabindex="0" aria-label="移动浮窗" aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight" title="拖动移动 · 聚焦后方向键微调">'
+      + '<img class="widget-logo" src="./assets/loop-icon.png" alt="Loop" draggable="false"><strong>今日</strong>'
+      + (prefs.compact
+        ? '<span class="widget-count">' + counts[0] + " 项</span>"
+        : '<span class="widget-date">' + esc(formatDate(snapshot.date)) + "</span>")
+      + '<button class="icon-button" data-action="compact-widget" aria-label="' + (prefs.compact ? "展开浮窗" : "收起浮窗") + '">' + icon(prefs.compact ? "plus" : "minus") + "</button>"
+      + '<button class="icon-button" data-action="widget-preferences" aria-label="浮窗设置" aria-haspopup="dialog" aria-expanded="' + String(surfaceKind === "settings") + '">' + icon("settings") + "</button>"
+      + '<button class="icon-button" data-action="toggle-widget" aria-label="关闭今日浮窗">' + icon("close") + "</button></header>";
+    const tabs = '<nav class="widget-tabs" aria-label="浮窗记录类型">'
+      + [["task", "今日任务", counts[0]], ["quick", "速记", counts[1]]].map(([value, label, count]) =>
+        '<button data-widget-type="' + value + '" class="' + (lane === value ? "active" : "") + '" aria-pressed="' + (lane === value) + '">' + label + "<small>" + count + "</small></button>").join("")
+      + "</nav>";
+    const body = '<div class="widget-body"><ol class="widget-rows">' + items.map(row).join("") + "</ol>"
+      + (!items.length ? '<p class="widget-empty">暂无' + (lane === "task" ? "今日任务" : "速记") + "</p>" : "")
+      + "</div>";
+    const capture = '<section class="widget-compose" aria-label="添加速记"><div class="widget-capture">'
+      + '<textarea id="widget-capture" rows="1" maxlength="4000" aria-label="快速记录内容" title="Enter 保存速记；Shift+Enter 换行；Command / Ctrl+Enter 加入今日" placeholder="记一条速记…">' + esc(captureDraft()) + "</textarea>"
+      + '<button data-widget12="submit" aria-label="保存速记" title="保存速记" ' + (captureDraft().trim() ? "" : "disabled") + ">" + icon("arrow") + "</button>"
+      + '</div><div class="widget-compose-foot">'
+      + '<span id="widget-feedback" class="widget-input-status ' + feedbackType + '" role="status" aria-live="polite">' + esc(feedback || "Enter 保存 · Shift+Enter 换行") + "</span>"
+      + '<span class="widget-shortcut" title="Command / Ctrl+Enter 保存并加入今日">' + (/Mac/.test(navigator.platform) ? "⌘" : "Ctrl") + " ↵ 今日</span>"
+      + "</div></section>";
+    const resize = (edge) => '<div class="widget13-resize ' + edge + '" data-widget-resize="' + edge + '" role="separator" tabindex="0" aria-orientation="horizontal" aria-valuemin="180" aria-valuemax="720" aria-label="从' + (edge === "top" ? "顶部" : "底部") + '调整浮窗高度" title="拖动调整高度 · ↑ / ↓ 微调"></div>';
+    return '<aside class="today-widget widget12 widget13 ' + (prefs.compact ? "compact" : "") + '" data-widget-lane="' + lane + '" data-position="' + esc(prefs.position) + '" aria-label="今日任务浮窗">'
+      + header
+      + (prefs.compact ? "" : tabs + body + (lane === "quick" ? capture : "") + resize("top") + resize("bottom"))
+      + "</aside>"
+      + (surfaceKind === "delete" ? '<div class="dialog-backdrop" data-surface-barrier></div>' : "");
   }
 
-  function openGroupMenu(button, taskId) {
-    const groups = Array.isArray(currentSnapshot.groups) ? currentSnapshot.groups : [];
-    if (!groups.length) {
-      showToast("请先在主窗口创建一个任务分组");
-      return;
-    }
-    promotingTaskId = taskId;
-    quickCaptureGroupMenu.innerHTML = `<span>升级为任务并移入</span>${groups.map((group) => `<button type="button" data-promote-group="${escapeHtml(group.id)}">${escapeHtml(group.title)}</button>`).join("")}`;
-    quickCaptureGroupMenu.hidden = false;
-    const buttonRect = button.getBoundingClientRect();
-    const desiredTop = buttonRect.bottom + 5;
-    const maxTop = Math.max(48, window.innerHeight - Math.min(230, quickCaptureGroupMenu.scrollHeight) - 8);
-    quickCaptureGroupMenu.style.top = `${Math.max(48, Math.min(maxTop, desiredTop))}px`;
-  }
-
-  function syncCompactMenuWindow(open) {
-    const wasExpanded = compactMenuExpanded;
-    compactMenuExpanded = open && widget.classList.contains("is-compact");
-    if (compactMenuExpanded) {
-      void bridge.resize({ height: COMPACT_MENU_WINDOW_HEIGHT, transient: true });
-    } else if (wasExpanded && widget.classList.contains("is-compact")) {
-      void bridge.resize({ height: 49, transient: true });
-    }
-  }
-
-  // Icon paths copied verbatim from the frozen Demo's widget rows.
-  const GRIP_SVG = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M5 3h.01M5 8h.01M5 13h.01M10 3h.01M10 8h.01M10 13h.01" stroke-linecap="round"></path></svg>';
-  const CIRCLE_SVG = '<path d="M20 12a8 8 0 1 1-16 0 8 8 0 0 1 16 0"></path>';
-  const CHECK_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true">${CIRCLE_SVG}</svg>`;
-  const NEXT_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true">${CIRCLE_SVG}<path d="M8 12h8"></path></svg>`;
-  const OPEN_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"></path></svg>';
-  const MORE_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h.01M12 12h.01M19 12h.01"></path></svg>';
-  const NOTE_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h14v18H5zM8 8h8M8 12h8M8 16h5"></path></svg>';
-
-  /** The Demo marks the row that is open in the main window as .current. */
-  function isCurrentItem(item) {
-    return Boolean(currentSnapshot.activeTaskId) && String(item.taskId) === String(currentSnapshot.activeTaskId);
-  }
-
-  /** One row of the Demo's .widget-rows list (phase 13 contract). */
-  function rowHtml({ id, lane, title, subtitle, icon, current, completeLabel, completeTitle, editLabel }) {
-    return `
-      <li class="widget-row today-task ${lane === "quick" ? "quick-capture-item" : ""} ${current ? "current" : ""}" data-widget-row="${id}" data-task-id="${id}" data-lane="${lane}" data-title="${title}">
-        <button class="widget13-grip" type="button" data-widget-drag="${id}" aria-label="调整顺序：${title}" aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown" title="拖动排序 · Alt+↑ / ↓">${GRIP_SVG}</button>
-        <button class="widget-check ${lane === "quick" ? "quick-check" : ""}" type="button" data-complete-task="${id}" aria-label="${completeLabel}" title="${completeTitle}">${icon}</button>
-        <div class="widget-row-copy task-copy">
-          <button class="widget-title" type="button" data-widget12="edit" data-widget-id="${id}" title="单击改名 · 双击打开主窗口" aria-label="${editLabel}"><strong>${title}</strong></button>
-          ${subtitle ? `<small>${subtitle}</small>` : ""}
-        </div>
-        <button class="widget-open" type="button" data-widget-open="${id}" aria-label="在主窗口打开：${title}" title="在主窗口打开">${OPEN_SVG}</button>
-        <button class="widget13-more" type="button" data-widget12="row-menu" data-widget-id="${id}" aria-haspopup="menu" aria-label="记录操作：${title}" title="更多操作">${MORE_SVG}</button>
-      </li>`;
-  }
-
-  function taskHtml(item) {
-    const id = escapeHtml(item.taskId);
-    const title = escapeHtml(item.title || "未命名任务");
-    const nextText = escapeHtml(item.nextText || "补充任务背景或新增第一个节点");
-    return rowHtml({
-      id,
-      lane: "task",
-      title,
-      subtitle: `${NEXT_SVG}<span>${nextText}</span>`,
-      icon: CHECK_SVG,
-      current: isCurrentItem(item),
-      completeLabel: `完成任务：${title}`,
-      completeTitle: "完成任务",
-      editLabel: `编辑任务：${title}`,
-    });
-  }
-
-  function quickCaptureHtml(item) {
-    const id = escapeHtml(item.taskId);
-    const title = escapeHtml(item.title || "未命名速记");
-    // the Demo shows the capture's own text, never a generated timestamp
-    const body = escapeHtml(item.description || item.nextText || "");
-    return rowHtml({
-      id,
-      lane: "quick",
-      title,
-      subtitle: body ? `<span>${body}</span>` : "",
-      icon: `<span class="note-icon">${NOTE_SVG}</span><span class="completion-icon">${CHECK_SVG}</span>`,
-      current: isCurrentItem(item),
-      completeLabel: `完成速记：${title}`,
-      completeTitle: "完成速记",
-      editLabel: `编辑速记：${title}`,
-    });
-  }
-
-  function updateCount(count = currentSnapshot.items.length) {
-    const tasks = Math.max(0, count);
-    const total = Math.max(currentSnapshot.quickCaptures.length, Number(currentSnapshot.quickCaptureTotal) || 0);
-    todayTaskCount.textContent = String(tasks);
-    tabTaskCount.textContent = String(tasks);
-    tabQuickCount.textContent = String(total);
-    applyLane();
-  }
-
-  /** The Demo shows one lane at a time behind .widget-tabs. */
-  function applyLane() {
-    const lane = currentLane === "quick" ? "quick" : "task";
-    widget.dataset.widgetLane = lane;
-    widgetTabs.querySelectorAll("[data-widget-type]").forEach((button) => {
-      const active = button.dataset.widgetType === lane;
-      button.classList.toggle("active", active);
-      button.setAttribute("aria-pressed", String(active));
-    });
-    const taskEmpty = currentSnapshot.items.length === 0;
-    const quickEmpty = currentSnapshot.quickCaptures.length === 0;
-    taskList.hidden = lane !== "task" || taskEmpty;
-    quickCaptureList.hidden = lane !== "quick" || quickEmpty;
-    quickCaptureSection.hidden = lane !== "quick";
-    emptyState.hidden = lane === "task" ? !taskEmpty : !quickEmpty;
-    emptyState.textContent = lane === "quick" ? "暂无速记" : "暂无今日任务";
-  }
-
-  function applyAppearance(value) {
-    const appearance = value && typeof value === "object" ? value : {};
-    const fontSize = Number(appearance.fontSize);
-    document.documentElement.dataset.theme = appearance.theme === "dark" ? "dark" : "light";
-    document.documentElement.dataset.zhFont = appearance.zhFont || "system";
-    document.documentElement.dataset.enFont = appearance.enFont || "inter";
-    document.documentElement.style.setProperty(
-      "--widget-font-scale",
-      String(Number.isFinite(fontSize) ? Math.max(12, Math.min(24, fontSize)) / 16.5 : 1),
-    );
-    // the Demo's widget layers are written against --font-scale (the same
-    // variable as the main window); mirror it so the two render identically.
-    document.documentElement.style.setProperty("--font-scale", String(appearance.fontScale || "1"));
-  }
-
-  function renderSnapshot(value) {
-    currentSnapshot = value && typeof value === "object" ? value : { date: "", items: [], quickCaptures: [], quickCaptureTotal: 0, groups: [] };
-    const items = Array.isArray(currentSnapshot.items) ? currentSnapshot.items : [];
-    const captures = Array.isArray(currentSnapshot.quickCaptures) ? currentSnapshot.quickCaptures : [];
-    currentSnapshot.items = items;
-    currentSnapshot.quickCaptures = captures;
-    currentSnapshot.groups = Array.isArray(currentSnapshot.groups) ? currentSnapshot.groups : [];
-    applyAppearance(currentSnapshot.appearance);
-    taskList.innerHTML = items.map(taskHtml).join("");
-    quickCaptureList.innerHTML = captures.map(quickCaptureHtml).join("");
-    const total = Math.max(captures.length, Number(currentSnapshot.quickCaptureTotal) || 0);
-    quickCaptureCount.textContent = String(total);
-    if (widgetDate) widgetDate.textContent = currentSnapshot.date || "";
-    if (widgetCount) widgetCount.textContent = `${items.length} 项`;
-    const overflow = Math.max(0, total - captures.length);
-    quickCaptureOverflow.hidden = overflow === 0;
-    quickCaptureOverflow.textContent = overflow ? `还有 ${overflow} 条在任务仓库` : "";
-    bindTaskRows();
-    updateCount(items.length);
-  }
-
-  function applyOpacity(value) {
-    const opacity = Number(value);
-    const percentage = Number.isFinite(opacity) ? Math.max(70, Math.min(100, Math.round(opacity))) : 100;
-    widget.style.setProperty("--widget-opacity", String(percentage / 100));
-    opacityControl.value = String(percentage);
-    opacityValue.textContent = `${percentage}%`;
-  }
-
-  function syncAlwaysOnTopControl(enabled) {
-    const pinned = enabled !== false;
-    alwaysOnTop.checked = pinned;
-  }
-
-  function applyWindowState(value) {
-    const state = value && typeof value === "object" ? value : {};
-    const position = ["top-left", "top-right", "bottom-left", "bottom-right", "custom"].includes(state.position)
-      ? state.position
-      : "top-right";
-    widget.dataset.position = position;
-    widget.classList.toggle("compact", state.compact === true);
-    widget.classList.toggle("is-compact", state.compact === true);
-    if (widgetDate) widgetDate.hidden = state.compact === true;
-    if (widgetCount) widgetCount.hidden = state.compact !== true;
-    syncAlwaysOnTopControl(state.alwaysOnTop);
-    widget.classList.toggle("is-click-through", state.clickThrough === true);
-    clickThrough.checked = state.clickThrough === true;
-    clickThroughHint.hidden = state.clickThrough !== true;
-    applyCaptureDraft(state.quickCaptureDraft);
-    launchWithApp.checked = state.launchWithApp !== false;
-    applyOpacity(state.opacity);
-    // the Demo swaps the glyph: minus when expanded, plus when compact
-    compactToggle.title = state.compact ? "展开" : "收起";
-    compactToggle.setAttribute("aria-label", state.compact ? "展开浮窗" : "收起浮窗");
-    const glyph = compactToggle.querySelector("path");
-    if (glyph) glyph.setAttribute("d", state.compact ? "M12 5v14M5 12h14" : "M5 12h14");
-    document.querySelectorAll("[data-place]").forEach((button) => {
-      button.classList.toggle("is-active", button.dataset.place === position);
-    });
-  }
-
-  function autosizeCaptureInput() {
-    quickCaptureInput.style.height = "0px";
-    quickCaptureInput.style.height = `${Math.min(72, Math.max(24, quickCaptureInput.scrollHeight))}px`;
-  }
-
+  // ---------- draft ----------
+  function captureDraft() { return snapshot.captureDraft || ""; }
   function applyCaptureDraft(value) {
     const next = String(value || "");
-    const current = quickCaptureInput.value;
-    if (next === current) return;
+    const input = host.querySelector("#widget-capture");
+    if (!input) { snapshot.captureDraft = next; return; }
+    const current = input.value;
+    if (next === current) { snapshot.captureDraft = next; return; }
     // The main process echoes the last published draft on every state broadcast
     // (dragging, resizing, opacity ...). Those echoes must never replace newer
     // text the user is still typing.
-    if (next === lastPublishedDraft) return;
-    if (current !== lastPublishedDraft && isTextEditingTarget(document.activeElement)) return;
-    quickCaptureInput.value = next;
-    autosizeCaptureInput();
+    if (next === lastPublishedDraft) { snapshot.captureDraft = next; return; }
+    if (current !== lastPublishedDraft && document.activeElement === input) { snapshot.captureDraft = current; return; }
+    input.value = next;
+    snapshot.captureDraft = next;
+    resizeCapture();
   }
-
   function publishCaptureDraft(value) {
     lastPublishedDraft = String(value || "");
     void bridge.setPreferences({ quickCaptureDraft: lastPublishedDraft });
   }
-
   function persistCaptureDraft() {
     window.clearTimeout(draftSaveTimer);
     draftSaveTimer = window.setTimeout(flushCaptureDraft, 260);
   }
-
   function flushCaptureDraft() {
     window.clearTimeout(draftSaveTimer);
     draftSaveTimer = 0;
-    publishCaptureDraft(quickCaptureInput.value.slice(0, 4000));
+    const input = host.querySelector("#widget-capture");
+    publishCaptureDraft((input ? input.value : snapshot.captureDraft).slice(0, 4000));
   }
 
-  function parseCaptureDraft() {
-    const lines = quickCaptureInput.value.replaceAll("\r", "").split("\n");
-    return { title: String(lines.shift() || "").trim(), description: lines.join("\n").trim() };
+  // The window's content box is the panel plus the ring that carries its shadow.
+  // Report region changes so the ring stays click-through: hovering the widget's
+  // edge must not be swallowed by this window.
+  let ringInside = true;
+  function trackRing(event) {
+    if (gesture || pointerHeld) return;
+    const panel = host.querySelector(".today-widget");
+    if (!panel) return;
+    const rect = panel.getBoundingClientRect();
+    const inside = event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom;
+    if (inside === ringInside) return;
+    ringInside = inside;
+    void bridge.setRingRegion?.({ inside });
   }
 
-  async function submitQuickCapture(addToToday = false) {
-    if (captureSubmitting) return;
-    const draft = parseCaptureDraft();
-    if (!draft.title) return;
-    captureSubmitting = true;
-    const result = await bridge.createTask({ ...draft, addToToday });
-    captureSubmitting = false;
-    if (!result?.success) {
-      showToast(result?.code === "INVALID_TITLE" ? "请输入速记标题" : "速记保存失败，请稍后重试");
-      return;
-    }
-    quickCaptureInput.value = "";
-    autosizeCaptureInput();
-    publishCaptureDraft("");
-    showToast(addToToday ? "已保存并加入今日任务" : "已保存到速记");
+  function setTextEditing(enabled) {
+    window.clearTimeout(editingReleaseTimer);
+    editingReleaseTimer = 0;
+    if (enabled) { void bridge.setEditing?.(true); return; }
+    // Native IME candidate panels can transiently affect window focus while the
+    // DOM input remains active; only restore topmost after focus really left.
+    editingReleaseTimer = window.setTimeout(() => {
+      editingReleaseTimer = 0;
+      const active = document.activeElement;
+      if (active && (active.id === "widget-capture" || active.id === "widget-title-input")) return;
+      void bridge.setEditing?.(false);
+    }, 320);
   }
 
-  function cancelInlineEdit() {
-    if (!editingInput) return;
-    const row = editingInput.closest(".today-task");
-    const title = row?.dataset.title || "未命名任务";
-    const strong = document.createElement("strong");
-    strong.textContent = title;
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "widget-title";
-    button.dataset.widget12 = "edit";
-    button.dataset.widgetId = row?.dataset.taskId || "";
-    button.title = "单击改名 · 双击打开主窗口";
-    button.append(strong);
-    editingInput.replaceWith(button);
-    row?.classList.remove("is-editing");
-    editingInput = null;
-    editingTaskId = "";
-    setTextEditing(false);
+  function resizeCapture() {
+    const input = host.querySelector("#widget-capture");
+    if (!input) return;
+    input.style.height = "42px";
+    input.style.height = Math.min(82, Math.max(42, input.scrollHeight)) + "px";
   }
 
-  async function saveInlineEdit() {
-    if (!editingInput) return;
-    const input = editingInput;
-    const row = input.closest(".today-task");
-    const taskId = row?.dataset.taskId || "";
-    const title = input.value.trim();
-    if (!taskId || !title) {
-      cancelInlineEdit();
-      return;
-    }
-    const result = await bridge.updateTaskTitle({ taskId, title });
-    if (!result?.success) {
-      showToast(result?.code === "INVALID_TITLE" ? "标题不能为空" : "标题保存失败");
-      return;
-    }
-    row.classList.remove("is-editing");
-    editingInput = null;
-    editingTaskId = "";
-    setTextEditing(false);
-    if (queuedSnapshot) {
-      const nextSnapshot = queuedSnapshot;
-      queuedSnapshot = null;
-      renderSnapshot(nextSnapshot);
-    }
-    showToast("已同步修改");
+  // ---------- appearance + window framing ----------
+  function applyAppearance() {
+    const appearance = snapshot.appearance && typeof snapshot.appearance === "object" ? snapshot.appearance : {};
+    root.dataset.theme = appearance.theme === "dark" ? "dark" : "light";
+    root.dataset.zhFont = appearance.zhFont || "system";
+    root.dataset.enFont = appearance.enFont || "inter";
+    if (appearance.sans) root.style.setProperty("--sans", appearance.sans);
+    root.style.setProperty("--font-scale", String(appearance.fontScale || "1"));
+    root.style.setProperty("--widget-opacity", String(Math.max(70, Math.min(100, Number(prefs.opacity) || 100)) / 100));
   }
 
-  function beginInlineEdit(row) {
-    if (editingInput || !row) return;
-    const strong = row.querySelector(".task-copy strong");
-    if (!strong) return;
-    const input = document.createElement("input");
-    input.className = "task-inline-input";
-    input.value = strong.textContent || "";
-    input.maxLength = 240;
-    input.setAttribute("aria-label", row.classList.contains("quick-capture-item") ? "编辑速记" : "编辑任务标题");
-    // the Demo wraps the title in .widget-title; swap the whole button so the
-    // input never ends up nested inside a <button>.
-    (strong.closest(".widget-title") || strong).replaceWith(input);
-    row.classList.add("is-editing");
-    editingTaskId = row.dataset.taskId || "";
-    editingInput = input;
-    setTextEditing(true);
-    let composing = false;
-    input.addEventListener("compositionstart", () => { composing = true; });
-    input.addEventListener("compositionend", () => { composing = false; });
-    input.addEventListener("keydown", (event) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        cancelInlineEdit();
-      } else if (event.key === "Enter" && !composing && !event.isComposing && event.keyCode !== 229) {
-        event.preventDefault();
-        void saveInlineEdit();
-      }
+  // The window is sized to the panel plus the ring that carries the Demo's
+  // shadow, so the renderer is the single source of truth for the content box.
+  function fit() {
+    if (fitFrame) return;
+    fitFrame = window.requestAnimationFrame(() => {
+      fitFrame = 0;
+      const panel = host.querySelector(".today-widget");
+      if (!panel) return;
+      // The window width follows the mode (expanded 360 / compact 254); only the
+      // content height is measured, because the panel is width:100% of the window.
+      void bridge.fit?.({ height: Math.round(panel.offsetHeight) });
     });
-    input.addEventListener("blur", () => void saveInlineEdit());
-    input.focus();
-    input.select();
   }
 
+  function applyWindowState(value) {
+    const next = value && typeof value === "object" ? value : {};
+    const position = ["top-left", "top-right", "bottom-left", "bottom-right", "custom"].includes(next.position) ? next.position : "top-right";
+    prefs = {
+      position,
+      compact: next.compact === true,
+      opacity: Number.isFinite(Number(next.opacity)) ? Number(next.opacity) : 100,
+      alwaysOnTop: next.alwaysOnTop !== false,
+      clickThrough: next.clickThrough === true,
+      launchWithApp: next.launchWithApp !== false,
+      autoHeight: next.autoHeight !== false,
+      height: Number.isFinite(Number(next.height)) ? Number(next.height) : 0,
+      customBounds: next.customBounds || null,
+    };
+    if (Object.prototype.hasOwnProperty.call(next, "quickCaptureDraft")) snapshot.captureDraft = String(next.quickCaptureDraft || "");
+  }
+
+  // ---------- render ----------
+  function render() {
+    const active = document.activeElement;
+    const action = active?.dataset?.widget12;
+    const inputId = active?.id;
+    const selection = inputId === "widget-capture" || inputId === "widget-title-input" ? [active.selectionStart, active.selectionEnd] : null;
+    const oldWidget = host.querySelector(".widget13");
+    if (oldWidget) scrollByType[oldWidget.dataset.widgetLane === "quick" ? "quick" : "task"] = oldWidget.querySelector(".widget-body")?.scrollTop || 0;
+    if (inputId === "widget-capture") {
+      // Keep the in-memory draft in step with what is on screen. Persistence is
+      // owned by the composer's own debounced handler: publishing here would
+      // make every state echo rebuild the composer (and break an IME session).
+      snapshot.captureDraft = active.value;
+    }
+    if (editId && host.querySelector("#widget-title-input")) editDraft = host.querySelector("#widget-title-input").value;
+    if (editId && !findItem(editId)) editId = "";
+    pendingBlurRender = false;
+    host.innerHTML = renderTodayWidget();
+    applyAppearance();
+    resizeCapture();
+    fit();
+    const focus = inputId === "widget-capture" || inputId === "widget-title-input"
+      ? host.querySelector("#" + inputId)
+      : action ? host.querySelector('[data-widget12="' + action + '"]') : null;
+    if (focus && !focus.disabled) {
+      focus.focus({ preventScroll: true });
+      if (selection && focus.setSelectionRange) focus.setSelectionRange(selection[0], selection[1]);
+    }
+    const body = host.querySelector(".widget-body");
+    if (body) body.scrollTop = scrollByType[lane === "quick" ? "quick" : "task"];
+  }
+
+  // ---------- inline rename ----------
+  function finishRename(save = true, draw = true) {
+    const input = host.querySelector("#widget-title-input");
+    if (!editId) return;
+    const id = editId;
+    const item = findItem(id);
+    const title = String((input ? input.value : editDraft) || "").trim();
+    editId = "";
+    if (save && item && title && title !== item.title) {
+      void bridge.updateTaskTitle({ taskId: String(id), title }).then((result) => {
+        if (result?.success) { feedback = "标题已同步"; feedbackType = "saved"; showToast("已同步修改"); }
+        else if (result?.code === "INVALID_TITLE") showToast("标题不能为空");
+        else showToast("标题保存失败");
+      });
+    }
+    if (draw) {
+      render();
+      host.querySelector('[data-widget12="edit"][data-widget-id="' + CSS.escape(String(id)) + '"]')?.focus({ preventScroll: true });
+    }
+  }
+
+  function edit(item) {
+    if (!item) return;
+    switchingToEdit = true;
+    try {
+      finishRename(true, false);
+      editId = item.taskId;
+      editDraft = item.title;
+      render();
+      const input = host.querySelector("#widget-title-input");
+      input?.focus({ preventScroll: true });
+      input?.select();
+    } finally {
+      switchingToEdit = false;
+    }
+  }
+
+  function openRecord(id) {
+    finishRename(true, false);
+    void bridge.openMain(String(id));
+  }
+
+  async function submit(forceToday = false) {
+    if (!bridge || prefs.compact || !isQuickLane()) return;
+    const input = host.querySelector("#widget-capture");
+    const text = input ? input.value : captureDraft();
+    const lines = String(text).replaceAll("\r", "").split("\n");
+    const title = String(lines.shift() || "").trim();
+    if (!title || title.length > 240) {
+      feedback = !title ? "请输入第一行标题" : "标题最多 240 字，可将详情放在下一行";
+      feedbackType = "error";
+      render();
+      host.querySelector("#widget-capture")?.focus({ preventScroll: true });
+      return;
+    }
+    const description = lines.join("\n").trim();
+    finishRename(true, false);
+    const result = await bridge.createTask({ title, description, addToToday: forceToday === true });
+    if (!result?.success) {
+      feedback = result?.code === "INVALID_TITLE" ? "请输入第一行标题" : "速记保存失败，请稍后重试";
+      feedbackType = "error";
+      render();
+      return;
+    }
+    snapshot.captureDraft = "";
+    publishCaptureDraft("");
+    const cleared = host.querySelector("#widget-capture");
+    if (cleared) cleared.value = "";
+    feedback = forceToday ? "已加入今日任务" : "已保存到速记";
+    feedbackType = "saved";
+    render();
+    host.querySelector("#widget-capture")?.focus({ preventScroll: true });
+  }
+
+  // ---------- ordering / transfer ----------
+  async function moveItem(id, targetLane, anchor = null, position = "after") {
+    const item = findItem(id);
+    if (!item) return false;
+    const sourceLane = isQuickLane() ? lane : (laneQuickItems().some((entry) => String(entry.taskId) === String(id)) ? "quick" : "task");
+    const result = await bridge.moveItem({
+      taskId: String(id),
+      sourceLane,
+      targetLane,
+      targetTaskId: anchor ? String(anchor) : "",
+      position,
+    });
+    if (!result?.success && result?.code !== "BOUNDARY") {
+      showToast("顺序调整失败，请稍后重试");
+      return false;
+    }
+    return true;
+  }
+
+  async function stepItem(id, delta) {
+    const items = listItems();
+    const index = items.findIndex((item) => String(item.taskId) === String(id));
+    if (index < 0) return;
+    if (!items[index + delta]) { showToast(delta < 0 ? "已经是第一项" : "已经是最后一项"); return; }
+    const result = await bridge.reorderItem({ taskId: String(id), lane: isQuickLane() ? "quick" : "task", direction: delta });
+    if (!result?.success) { showToast("顺序调整失败，请稍后重试"); return; }
+    render();
+    host.querySelector('[data-widget-drag="' + CSS.escape(String(id)) + '"]')?.focus({ preventScroll: true });
+    showToast("顺序已同步");
+  }
+
+  async function transfer(id, targetLane) {
+    finishRename(true, false);
+    if (!await moveItem(id, targetLane)) return;
+    suppressClickUntil = 0;
+    render();
+    showToast(targetLane === "task" ? "已加入今日任务，原内容保留" : "已移到速记，原内容保留");
+  }
+
+  // ---------- surfaces (settings / row menu / promote / delete) ----------
+  function anchorOf(element) {
+    if (!element) return null;
+    const rect = element.getBoundingClientRect();
+    return { x: rect.left, y: rect.top, w: rect.width, h: rect.height };
+  }
+  function panelRect() {
+    const panel = host.querySelector(".today-widget");
+    if (!panel) return null;
+    const rect = panel.getBoundingClientRect();
+    return { x: rect.left, y: rect.top, w: rect.width, h: rect.height };
+  }
+  function openSurface(kind, taskId, trigger) {
+    void bridge.openSurface({
+      kind,
+      taskId: taskId ? String(taskId) : "",
+      anchor: anchorOf(trigger),
+      panel: panelRect(),
+    });
+  }
+
+  // ---------- gestures (ported from loop-widget-phase13.js) ----------
+  function frameLimits() { return { left: 8, top: 8, right: window.innerWidth - 8, bottom: window.innerHeight - 8 }; }
+
+  function clearDrop() {
+    host.querySelectorAll(".widget13-drop-before,.widget13-drop-after,.widget13-tab-drop").forEach((el) => el.classList.remove("widget13-drop-before", "widget13-drop-after", "widget13-tab-drop"));
+  }
+
+  function dropTarget(x, y) {
+    const hit = document.elementFromPoint(x, y);
+    const tab = hit?.closest("[data-widget-type]");
+    if (tab) return { lane: tab.dataset.widgetType, id: null, position: "after", el: tab };
+    const rowEl = hit?.closest("[data-widget-row]");
+    if (rowEl) {
+      if (String(rowEl.dataset.widgetRow) === String(gesture.id)) return null;
+      const rect = rowEl.getBoundingClientRect();
+      return { lane: gesture.lane, id: rowEl.dataset.widgetRow, position: y < rect.top + rect.height / 2 ? "before" : "after", el: rowEl };
+    }
+    const body = hit?.closest(".widget-body");
+    return body ? { lane: gesture.lane, id: null, position: "after", el: null } : null;
+  }
+
+  function updateDrop() {
+    clearDrop();
+    gesture.drop = dropTarget(gesture.x, gesture.y);
+    const drop = gesture.drop;
+    if (drop?.el) drop.el.classList.add(drop.el.hasAttribute("data-widget-type") ? "widget13-tab-drop" : drop.position === "before" ? "widget13-drop-before" : "widget13-drop-after");
+  }
+
+  function autoScroll() {
+    if (!gesture || gesture.kind !== "row" || !gesture.moved) return;
+    const body = host.querySelector(".widget-body");
+    if (!body) return;
+    const rect = body.getBoundingClientRect();
+    const inside = gesture.x >= rect.left && gesture.x <= rect.right && gesture.y >= rect.top - 20 && gesture.y <= rect.bottom + 20;
+    if (inside) {
+      const direction = gesture.y < rect.top + 24 ? -1 : gesture.y > rect.bottom - 24 ? 1 : 0;
+      if (direction) { body.scrollTop += direction * 7; updateDrop(); }
+    }
+    scrollFrame = window.requestAnimationFrame(autoScroll);
+  }
+
+  function endGesture(cancel = false) {
+    if (!gesture) return;
+    const g = gesture;
+    gesture = null;
+    window.cancelAnimationFrame(scrollFrame);
+    clearDrop();
+    host.querySelector(".widget13")?.classList.remove("widget13-moving", "widget13-resizing", "widget13-sorting");
+    host.querySelector('[data-widget-row="' + CSS.escape(String(g.id)) + '"]')?.classList.remove("widget13-drag-source");
+    document.body.classList.remove("widget13-gesture");
+    if (g.el?.hasPointerCapture?.(g.pointerId)) g.el.releasePointerCapture(g.pointerId);
+    if (g.moved) suppressClickUntil = performance.now() + 400;
+    if (!cancel && g.kind === "row" && g.moved && g.drop) {
+      void moveItem(g.id, g.drop.lane, g.drop.id, g.drop.position).then((ok) => {
+        if (!ok) return;
+        render();
+        showToast(g.drop.lane === g.lane ? "顺序已同步" : g.drop.lane === "task" ? "已加入今日任务，原内容保留" : "已移到速记，原内容保留");
+      });
+    }
+  }
+
+  function updateResize(edge, delta, start) {
+    const limits = frameLimits();
+    const bottom = start.top + start.height;
+    const maxHeight = Math.min(720, edge === "top" ? bottom - limits.top : limits.bottom - start.top);
+    const height = Math.max(180, Math.min(maxHeight, start.height + (edge === "top" ? -delta : delta)));
+    sendResize(height, edge);
+  }
+
+  let resizeFrame = 0;
+  let pendingResizeHeight = 0;
   function sendResize(height, edge) {
     pendingResizeHeight = height;
     if (resizeFrame) return;
@@ -479,401 +523,423 @@
     });
   }
 
-  function beginResize(event) {
-    if (widget.classList.contains("is-compact") || event.button !== 0) return;
-    const handle = event.currentTarget;
-    resizeGesture = {
-      edge: handle.dataset.widgetResize,
-      pointerId: event.pointerId,
-      startY: event.screenY,
-      startHeight: window.innerHeight,
-    };
-    handle.setPointerCapture(event.pointerId);
-    widget.classList.add("is-resizing");
-    document.body.classList.add("is-resizing-widget");
-    event.preventDefault();
+  // ---------- capture submit button state ----------
+  function syncSubmitState() {
+    const input = host.querySelector("#widget-capture");
+    const button = host.querySelector('[data-widget12="submit"]');
+    if (button && input) button.disabled = !input.value.trim();
   }
 
-  function continueResize(event) {
-    if (!resizeGesture || event.pointerId !== resizeGesture.pointerId) return;
-    const delta = event.screenY - resizeGesture.startY;
-    const height = resizeGesture.edge === "top"
-      ? resizeGesture.startHeight - delta
-      : resizeGesture.startHeight + delta;
-    sendResize(height, resizeGesture.edge);
-  }
-
-  function finishResize(event) {
-    if (!resizeGesture || event.pointerId !== resizeGesture.pointerId) return;
-    const handle = event.currentTarget;
-    const delta = event.screenY - resizeGesture.startY;
-    const height = event.type === "pointercancel"
-      ? pendingResizeHeight || resizeGesture.startHeight
-      : resizeGesture.edge === "top"
-        ? resizeGesture.startHeight - delta
-        : resizeGesture.startHeight + delta;
-    sendResize(height, resizeGesture.edge);
-    if (handle.hasPointerCapture(event.pointerId)) handle.releasePointerCapture(event.pointerId);
-    resizeGesture = null;
-    widget.classList.remove("is-resizing");
-    document.body.classList.remove("is-resizing-widget");
-  }
-
-  function closeContextMenu() {
-    contextTaskId = "";
-    todayContextMenu.hidden = true;
-  }
-
-  function openContextMenu(event, row) {
-    if (!row.classList.contains("quick-capture-item")) return;
-    event.preventDefault();
-    closeMenu();
-    closeGroupMenu();
-    contextTaskId = row.dataset.taskId || "";
-    todayContextMenu.hidden = false;
-    const menuRect = todayContextMenu.getBoundingClientRect();
-    const left = Math.max(8, Math.min(event.clientX, window.innerWidth - menuRect.width - 8));
-    const top = Math.max(8, Math.min(event.clientY, window.innerHeight - menuRect.height - 8));
-    todayContextMenu.style.left = `${left}px`;
-    todayContextMenu.style.top = `${top}px`;
-  }
-
-  function clearDropIndicators() {
-    document.querySelectorAll(".today-task.drag-over-before, .today-task.drag-over-after").forEach((row) => {
-      row.classList.remove("drag-over-before", "drag-over-after");
-    });
-    document.querySelectorAll(".widget-section.is-drop-target").forEach((section) => {
-      section.classList.remove("is-drop-target");
-    });
-  }
-
-  function cleanupRowDrag() {
-    if (!rowDragState) return;
-    window.clearTimeout(rowDragState.timer);
-    rowDragState.row.classList.remove("is-dragging");
-    widget.classList.remove("is-item-dragging");
-    clearDropIndicators();
-    if (currentSnapshot.quickCaptures.length === 0) quickCaptureSection.hidden = true;
-    rowDragState = null;
-  }
-
-  function rowLane(row) {
-    return row?.dataset?.lane === "quick" ? "quick" : "task";
-  }
-
-  function findDropTarget(clientX, clientY, sourceRow) {
-    const element = document.elementFromPoint(clientX, clientY);
-    const targetRow = element?.closest?.(".today-task");
-    if (targetRow && targetRow !== sourceRow) {
-      const bounds = targetRow.getBoundingClientRect();
-      return {
-        targetTaskId: targetRow.dataset.taskId || "",
-        targetLane: rowLane(targetRow),
-        position: clientY < bounds.top + bounds.height / 2 ? "before" : "after",
-        targetRow,
-      };
+  // ---------- events ----------
+  window.addEventListener("pointerdown", (event) => {
+    pointerHeld = true;
+    if (event.button !== 0) return;
+    // A surface lives in its own window: the first click anywhere in the widget
+    // dismisses it and is swallowed, exactly like loop-popup-dismiss.js.
+    if (surfaceKind) {
+      const barrier = event.target.closest("[data-surface-barrier]");
+      if (!barrier) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      }
+      void bridge.closeSurface({ reason: "outside" });
+      return;
     }
-    const section = element?.closest?.(".widget-section");
-    if (section === quickCaptureSection) return { targetTaskId: "", targetLane: "quick", position: "after", targetRow: null };
-    if (section === todayTaskSection) return { targetTaskId: "", targetLane: "task", position: "after", targetRow: null };
-    return null;
-  }
-
-  function updateDropTarget(target) {
-    clearDropIndicators();
-    if (!target) return;
-    const section = target.targetLane === "quick" ? quickCaptureSection : todayTaskSection;
-    section.classList.add("is-drop-target");
-    target.targetRow?.classList.add(target.position === "before" ? "drag-over-before" : "drag-over-after");
-    if (target.targetRow) section.classList.remove("is-drop-target");
-  }
-
-  function startRowDrag() {
-    if (!rowDragState || rowDragState.dragging) return;
-    rowDragState.dragging = true;
-    rowDragState.row.classList.add("is-dragging");
-    widget.classList.add("is-item-dragging");
-    suppressRowClickUntil = Date.now() + 900;
-    if (currentSnapshot.quickCaptures.length === 0) quickCaptureSection.hidden = false;
-    rowDragState.dropTarget = null;
-  }
-
-  function handleRowPointerDown(event) {
-    if (event.button !== 0 || editingInput || event.target.closest("button, input, textarea")) return;
-    const row = event.currentTarget;
-    window.clearTimeout(rowDragState?.timer);
-    rowDragState = {
-      row,
+    const handle = event.target.closest("[data-widget-drag]");
+    const resize = event.target.closest("[data-widget-resize]");
+    const header = event.target.closest(".widget-header");
+    if (!handle && !resize && (!header || event.target.closest("button,input,textarea"))) return;
+    finishRename(true, false);
+    const widget = host.querySelector(".widget13");
+    if (!widget) return;
+    const rect = widget.getBoundingClientRect();
+    const el = handle || resize || header;
+    gesture = {
+      kind: handle ? "row" : resize ? "resize" : "move",
+      id: handle ? handle.dataset.widgetDrag : null,
+      lane: isQuickLane() ? "quick" : "task",
+      edge: resize?.dataset.widgetResize,
+      el,
       pointerId: event.pointerId,
       startX: event.clientX,
       startY: event.clientY,
-      dragging: false,
-      dropTarget: null,
-      timer: window.setTimeout(startRowDrag, LONG_PRESS_DELAY),
+      x: event.clientX,
+      y: event.clientY,
+      start: { left: rect.left, top: rect.top, height: rect.height },
+      moved: false,
+      drop: null,
     };
-    row.setPointerCapture?.(event.pointerId);
-  }
+    el.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  }, true);
 
-  function handleRowPointerMove(event) {
-    if (!rowDragState || event.pointerId !== rowDragState.pointerId) return;
-    const distance = Math.hypot(event.clientX - rowDragState.startX, event.clientY - rowDragState.startY);
-    if (!rowDragState.dragging) {
-      if (distance > DRAG_START_DISTANCE) {
-        window.clearTimeout(rowDragState.timer);
-        rowDragState = null;
+  window.addEventListener("mousemove", trackRing, true);
+  // Failsafe: a focused window must always be interactive, even if the pointer
+  // is still reported as being on the shadow ring.
+  window.addEventListener("focus", () => {
+    if (ringInside) return;
+    ringInside = true;
+    void bridge.setRingRegion?.({ inside: true });
+  });
+
+  window.addEventListener("pointermove", (event) => {
+    if (!gesture || event.pointerId !== gesture.pointerId) return;
+    const g = gesture;
+    const dx = event.clientX - g.startX;
+    const dy = event.clientY - g.startY;
+    if (!g.moved && Math.hypot(dx, dy) < 6) return;
+    if (g.kind === "move") return; // native window drag owns this gesture
+    event.preventDefault();
+    g.x = event.clientX;
+    g.y = event.clientY;
+    if (!g.moved) {
+      g.moved = true;
+      document.body.classList.add("widget13-gesture");
+      const widget = host.querySelector(".widget13");
+      widget?.classList.add(g.kind === "row" ? "widget13-sorting" : "widget13-resizing");
+      if (g.kind === "row") {
+        host.querySelector('[data-widget-row="' + CSS.escape(String(g.id)) + '"]')?.classList.add("widget13-drag-source");
+        autoScroll();
+      }
+    }
+    if (g.kind === "row") updateDrop();
+    else updateResize(g.edge, dy, g.start);
+  }, true);
+
+  window.addEventListener("pointerup", (event) => {
+    pointerHeld = false;
+    if (pendingBlurRender) window.setTimeout(() => { if (pendingBlurRender) render(); }, 0);
+    if (gesture?.pointerId === event.pointerId) endGesture();
+  }, true);
+
+  window.addEventListener("pointercancel", () => { pointerHeld = false; endGesture(true); });
+  window.addEventListener("blur", () => { endGesture(true); finishRename(true, false); });
+  window.addEventListener("resize", () => { endGesture(true); applyAppearance(); fit(); });
+
+  window.addEventListener("contextmenu", (event) => {
+    const rowEl = event.target.closest(".widget13 [data-widget-row]");
+    if (!rowEl || event.target.closest("input,textarea")) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    endGesture(true);
+    const trigger = rowEl.querySelector('[data-widget12="row-menu"]');
+    openSurface("row-menu", rowEl.dataset.widgetRow, trigger || rowEl);
+  }, true);
+
+  function cancelPendingEdit() { window.clearTimeout(editTimer); recentTitleClick = null; }
+
+  window.addEventListener("click", (event) => {
+    if (performance.now() < suppressClickUntil && event.target.closest(".widget13")) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      return;
+    }
+    const titleTarget = event.target.closest('[data-widget12="edit"],#widget-title-input');
+    if (event.detail > 0 && titleTarget && recentTitleClick?.id === String(titleTarget.dataset.widgetId) && performance.now() - recentTitleClick.time <= 500) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const id = recentTitleClick.id;
+      cancelPendingEdit();
+      openRecord(id);
+      return;
+    }
+    const button = event.target.closest("button");
+    if (!button || button.disabled) return;
+    if (button.dataset.widgetOpen) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      openRecord(button.dataset.widgetOpen);
+      return;
+    }
+    // The lane tabs carry data-widget-type only (no action), so they are handled
+    // before the action lookup, exactly like the Demo's click handler.
+    if (button.dataset.widgetType) {
+      cancelPendingEdit();
+      finishRename(true, false);
+      const next = button.dataset.widgetType === "quick" ? "quick" : "task";
+      if (next !== lane) { lane = next; render(); }
+      return;
+    }
+    const action = button.dataset.action || button.dataset.widget12;
+    if (!action) return;
+    if (button.dataset.action === "compact-widget" || button.dataset.action === "toggle-widget") {
+      cancelPendingEdit();
+      finishRename(true, false);
+    }
+    if (button.dataset.action === "compact-widget") {
+      void bridge.setPreferences({ compact: !prefs.compact });
+      return;
+    }
+    if (button.dataset.action === "toggle-widget") { void bridge.hide(); return; }
+    if (button.dataset.action === "widget-preferences") {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      openSurface("settings", "", button);
+      return;
+    }
+    if (action === "row-menu") {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      openSurface("row-menu", button.dataset.widgetId, button);
+      return;
+    }
+    if (action === "submit") { event.preventDefault(); event.stopImmediatePropagation(); void submit(false); return; }
+    if (action === "edit") {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      cancelPendingEdit();
+      const id = button.dataset.widgetId;
+      if (event.detail === 0) edit(findItem(id));
+      else {
+        recentTitleClick = { id: String(id), time: performance.now() };
+        editTimer = window.setTimeout(() => {
+          if (recentTitleClick?.id === String(id) && host.querySelector('[data-widget12="edit"][data-widget-id="' + CSS.escape(String(id)) + '"]')) edit(findItem(id));
+        }, 230);
       }
       return;
     }
-    event.preventDefault();
-    rowDragState.dropTarget = findDropTarget(event.clientX, event.clientY, rowDragState.row);
-    updateDropTarget(rowDragState.dropTarget);
-  }
-
-  async function handleRowPointerUp(event) {
-    if (!rowDragState || event.pointerId !== rowDragState.pointerId) return;
-    const state = rowDragState;
-    window.clearTimeout(state.timer);
-    if (!state.dragging) {
-      rowDragState = null;
+    if (action === "complete") { event.preventDefault(); event.stopImmediatePropagation(); void completeTask(button.dataset.completeTask); return; }
+    if (action === "open-record") { event.preventDefault(); event.stopImmediatePropagation(); openRecord(button.dataset.widgetId); return; }
+    if (action === "rename-record") { event.preventDefault(); event.stopImmediatePropagation(); edit(findItem(button.dataset.widgetId)); return; }
+    if (action === "move-up" || action === "move-down") { event.preventDefault(); event.stopImmediatePropagation(); void stepItem(button.dataset.widgetId, action === "move-up" ? -1 : 1); return; }
+    if (action === "to-today" || action === "to-quick") { event.preventDefault(); event.stopImmediatePropagation(); void transfer(button.dataset.widgetId, action === "to-today" ? "task" : "quick"); return; }
+    if (action === "promote") { event.preventDefault(); event.stopImmediatePropagation(); openSurface("promote", button.dataset.widgetId, button); return; }
+    if (action === "delete-quick") { event.preventDefault(); event.stopImmediatePropagation(); openSurface("delete", button.dataset.widgetId, button); return; }
+    if (action === "promote-group") {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const item = findQuickItem(button.dataset.widgetId);
+      if (!item) return;
+      void bridge.promoteQuickCapture({ taskId: String(button.dataset.widgetId), groupId: String(button.dataset.groupValue || "") }).then((result) => {
+        if (result?.success) { void bridge.closeSurface({ reason: "action" }); showToast("已升级为任务"); }
+        else showToast("升级失败，请稍后重试");
+      });
       return;
     }
+    if (action === "confirm-delete") {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      void bridge.deleteQuickCapture({ taskId: String(button.dataset.widgetId) }).then((result) => {
+        if (result?.code === "DELETE_CANCELLED") return;
+        if (result?.success) { void bridge.closeSurface({ reason: "action" }); showToast("速记已删除"); }
+        else showToast("速记删除失败，请稍后重试");
+      });
+      return;
+    }
+    if (action === "place") {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      void bridge.setPreferences({ position: button.dataset.value });
+      return;
+    }
+    if (action === "hide") { event.preventDefault(); event.stopImmediatePropagation(); void bridge.hide(); return; }
+    if (action === "reset-frame") { event.preventDefault(); event.stopImmediatePropagation(); void bridge.setPreferences({ position: "bottom-right", resetFrame: true }); return; }
+  }, true);
+
+  window.addEventListener("dblclick", (event) => {
+    const button = event.target.closest('[data-widget12="edit"]');
+    if (!button) return;
     event.preventDefault();
-    const target = state.dropTarget || findDropTarget(event.clientX, event.clientY, state.row);
-    const taskId = state.row.dataset.taskId || "";
-    const sourceLane = rowLane(state.row);
-    const validTarget = target && !(target.targetRow === state.row);
-    cleanupRowDrag();
-    if (!validTarget || !taskId || (target.targetLane === sourceLane && target.targetTaskId === taskId)) return;
-    const result = await bridge.moveItem?.({
-      taskId,
-      sourceLane,
-      targetLane: target.targetLane,
-      targetTaskId: target.targetTaskId,
-      position: target.position,
-    });
-    if (!result?.success && result?.code !== "BOUNDARY") showToast("顺序调整失败，请稍后重试");
-  }
+    event.stopImmediatePropagation();
+    cancelPendingEdit();
+    openRecord(button.dataset.widgetId);
+  }, true);
 
-  function handleRowPointerCancel(event) {
-    if (!rowDragState || event.pointerId !== rowDragState.pointerId) return;
-    cleanupRowDrag();
-  }
+  window.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && gesture) { event.preventDefault(); event.stopImmediatePropagation(); endGesture(true); return; }
+    if (event.key === "Escape" && surfaceKind) { void bridge.closeSurface({ reason: "escape" }); return; }
+    const handle = event.target.closest("[data-widget-drag]");
+    const resize = event.target.closest("[data-widget-resize]");
+    if (handle && event.altKey && ["ArrowUp", "ArrowDown"].includes(event.key)) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      void stepItem(handle.dataset.widgetDrag, event.key === "ArrowUp" ? -1 : 1);
+      return;
+    }
+    if ((event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) && event.target.closest(".widget13 [data-widget-row]")) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const rowEl = event.target.closest("[data-widget-row]");
+      openSurface("row-menu", rowEl.dataset.widgetRow, rowEl.querySelector('[data-widget12="row-menu"]') || rowEl);
+      return;
+    }
+    if (resize && ["ArrowUp", "ArrowDown", "Home"].includes(event.key)) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const edge = resize.dataset.widgetResize;
+      const widget = host.querySelector(".widget13");
+      const rect = widget.getBoundingClientRect();
+      if (event.key === "Home") void bridge.resize({ height: 0, edge, reset: true });
+      else updateResize(edge, (event.key === "ArrowUp" ? -1 : 1) * (event.shiftKey ? 40 : 10), { top: rect.top, height: rect.height });
+      host.querySelector('[data-widget-resize="' + edge + '"]')?.focus({ preventScroll: true });
+      return;
+    }
+    if (event.target.matches(".widget13 .widget-header") && ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const step = event.shiftKey ? 40 : 10;
+      void bridge.nudge({
+        dx: event.key === "ArrowLeft" ? -step : event.key === "ArrowRight" ? step : 0,
+        dy: event.key === "ArrowUp" ? -step : event.key === "ArrowDown" ? step : 0,
+      });
+      return;
+    }
+    if (event.target.id === "widget-capture") {
+      if (event.isComposing || event.keyCode === 229) return;
+      if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        void submit(event.metaKey || event.ctrlKey);
+      }
+    } else if (event.target.id === "widget-title-input") {
+      if (event.isComposing || event.keyCode === 229) return;
+      if (event.key === "Enter" || event.key === "Escape") {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        finishRename(event.key === "Enter");
+      }
+    }
+  }, true);
 
-  function bindTaskRows() {
-    document.querySelectorAll(".widget-row").forEach((row) => {
-      row.querySelector("[data-widget-open]")?.addEventListener("click", (event) => {
-        event.stopPropagation();
-        void bridge.openMain?.(row.dataset.taskId || "");
-      });
-      row.addEventListener("contextmenu", (event) => {
-        event.preventDefault();
-        openRowMenu(row.dataset.taskId || "", row.querySelector("[data-widget12='row-menu']"));
-      });
-    });
-    document.querySelectorAll(".today-task").forEach((row) => {
-      let clickTimer = 0;
-      row.addEventListener("click", (event) => {
-        if (Date.now() < suppressRowClickUntil || event.target.closest(".task-check, .task-inline-input")) return;
-        window.clearTimeout(clickTimer);
-        // Keep quick captures explicitly single-click editable. They share
-        // the task row shell, but are a capture/edit surface rather than a
-        // navigation-only item.
-        const editDelay = row.classList.contains("quick-capture-item") ? 120 : 220;
-        clickTimer = window.setTimeout(() => beginInlineEdit(row), editDelay);
-      });
-      row.addEventListener("dblclick", (event) => {
-        if (Date.now() < suppressRowClickUntil || event.target.closest(".task-check, .task-inline-input")) return;
-        event.preventDefault();
-        window.clearTimeout(clickTimer);
-        void bridge.openMain(row.dataset.taskId);
-      });
-      row.addEventListener("contextmenu", (event) => openContextMenu(event, row));
-      row.addEventListener("pointerdown", handleRowPointerDown);
-      row.addEventListener("pointermove", handleRowPointerMove);
-      row.addEventListener("pointerup", handleRowPointerUp);
-      row.addEventListener("pointercancel", handleRowPointerCancel);
-      row.addEventListener("keydown", (event) => {
-        if (event.key !== "Enter" && event.key !== " ") return;
-        event.preventDefault();
-        if (event.key === "Enter") beginInlineEdit(row);
-      });
-      row.querySelector(".task-check")?.addEventListener("click", async (event) => {
-        event.stopPropagation();
-        if (completingTaskId) return;
-        completingTaskId = row.dataset.taskId;
-        row.classList.add("is-completing");
-        const quickCapture = row.classList.contains("quick-capture-item");
-        if (!quickCapture) updateCount(Math.max(0, currentSnapshot.items.length - 1));
-        const result = await bridge.completeTask(completingTaskId);
-        if (result?.success) {
-          showToast(`已完成「${row.dataset.title}」· 将同步到主窗口`);
-          window.setTimeout(() => {
-            completingTaskId = "";
-            renderSnapshot(queuedSnapshot || currentSnapshot);
-            queuedSnapshot = null;
-          }, 190);
-          return;
-        }
-        completingTaskId = "";
-        row.classList.remove("is-completing");
-        if (!quickCapture) updateCount();
-        if (result?.code === "CONCLUSION_REQUIRED") {
-          showToast("请先补充结论，已在主窗口打开该任务");
-        } else if (result?.code === "FLOW_INCOMPLETE") {
-          showToast("请先完成全部处理流节点，已在主窗口打开该任务");
-        } else {
-          showToast("任务状态未更新，请稍后重试");
-        }
-        if (queuedSnapshot) {
-          renderSnapshot(queuedSnapshot);
-          queuedSnapshot = null;
-        }
-      });
-    });
-  }
-
-  quickCaptureInput.addEventListener("input", () => {
-    autosizeCaptureInput();
-    persistCaptureDraft();
+  document.addEventListener("input", (event) => {
+    if (event.target.id === "widget-capture") {
+      snapshot.captureDraft = event.target.value;
+      feedback = "";
+      feedbackType = "";
+      resizeCapture();
+      persistCaptureDraft();
+      syncSubmitState();
+      const status = host.querySelector("#widget-feedback");
+      if (status) { status.textContent = "Enter 保存 · Shift+Enter 换行"; status.className = "widget-input-status"; }
+      fit();
+    }
+    if (event.target.id === "widget-title-input") editDraft = event.target.value;
   });
-  quickCaptureInput.addEventListener("focus", () => setTextEditing(true));
-  quickCaptureInput.addEventListener("blur", () => {
-    setTextEditing(false);
-    // Store the draft the moment the field loses focus instead of waiting for
-    // the debounce, so no other broadcast can race the newer text.
-    flushCaptureDraft();
+
+  document.addEventListener("focusout", (event) => {
+    if (event.target.id !== "widget-title-input" || !editId) return;
+    finishRename(true, false);
+    if (pointerHeld) pendingBlurRender = true;
+    else render();
   });
-  quickCaptureInput.addEventListener("compositionstart", () => { quickCaptureInput.dataset.composing = "true"; });
-  quickCaptureInput.addEventListener("compositionend", () => { quickCaptureInput.dataset.composing = "false"; });
-  quickCaptureInput.addEventListener("keydown", (event) => {
-    if (event.key !== "Enter" || event.shiftKey || quickCaptureInput.dataset.composing === "true" || event.isComposing || event.keyCode === 229) return;
+
+  window.addEventListener("focusin", (event) => {
+    if (!switchingToEdit && !event.target.closest('[data-widget12="edit"],#widget-title-input')) cancelPendingEdit();
+  });
+
+  window.addEventListener("pointerdown", (event) => {
+    if (!event.target.closest('[data-widget12="edit"],#widget-title-input')) cancelPendingEdit();
+  }, true);
+
+  host.addEventListener("focusin", () => setTextEditing(document.activeElement?.id === "widget-capture" || document.activeElement?.id === "widget-title-input"));
+
+  async function completeTask(taskId) {
+    if (completingTaskId) return;
+    const item = findItem(taskId);
+    if (!item) return;
+    completingTaskId = String(taskId);
+    const rowEl = host.querySelector('[data-widget-row="' + CSS.escape(String(taskId)) + '"]');
+    rowEl?.classList.add("is-completing");
+    const result = await bridge.completeTask(String(taskId));
+    completingTaskId = "";
+    if (result?.success) {
+      showToast(`已完成「${item.title}」· 将同步到主窗口`);
+      return;
+    }
+    rowEl?.classList.remove("is-completing");
+    if (result?.code === "CONCLUSION_REQUIRED") showToast("请先补充结论，已在主窗口打开该任务");
+    else if (result?.code === "FLOW_INCOMPLETE") showToast("请先完成全部处理流节点，已在主窗口打开该任务");
+    else showToast("任务状态未更新，请稍后重试");
+    if (queuedSnapshot) { snapshot = queuedSnapshot; queuedSnapshot = null; }
+    render();
+  }
+
+  document.addEventListener("click", (event) => {
+    const check = event.target.closest("[data-complete-task]");
+    if (!check) return;
     event.preventDefault();
-    void submitQuickCapture(event.ctrlKey || event.metaKey);
-  });
-  menuToggle.addEventListener("click", (event) => {
-    event.stopPropagation();
-    const open = !menu.classList.contains("is-open");
-    menu.classList.toggle("is-open", open);
-    menuToggle.setAttribute("aria-expanded", String(open));
-    syncCompactMenuWindow(open);
+    event.stopImmediatePropagation();
+    void completeTask(check.dataset.completeTask);
+  }, true);
+
+  // ---------- bridge wiring ----------
+  function applySnapshot(value) {
+    const next = value && typeof value === "object" ? value : {};
+    const draft = Object.prototype.hasOwnProperty.call(next, "captureDraft") ? next.captureDraft : snapshot.captureDraft;
+    snapshot = {
+      date: String(next.date || ""),
+      activeTaskId: String(next.activeTaskId || ""),
+      appearance: next.appearance && typeof next.appearance === "object" ? next.appearance : {},
+      items: Array.isArray(next.items) ? next.items : [],
+      quickCaptures: Array.isArray(next.quickCaptures) ? next.quickCaptures : [],
+      groups: Array.isArray(next.groups) ? next.groups : [],
+      captureDraft: String(draft == null ? "" : draft),
+    };
+    applyAppearance();
+    applyCaptureDraft(snapshot.captureDraft);
+    render();
+  }
+
+  bridge.onSnapshot?.((value) => {
+    if (completingTaskId || editId) { queuedSnapshot = value; return; }
+    applySnapshot(value);
   });
 
-  document.addEventListener("pointerdown", (event) => {
-    if (!event.target.closest("#widget-menu, #menu-toggle")) closeMenu();
-    if (!event.target.closest("#quick-capture-group-menu, .quick-capture-promote")) closeGroupMenu();
-    if (!event.target.closest("#today-context-menu, .quick-capture-item")) closeContextMenu();
+  function visualSignature() {
+    const appearance = snapshot.appearance || {};
+    return [prefs.compact, prefs.position, prefs.opacity, appearance.theme, appearance.fontScale, appearance.sans, appearance.zhFont, appearance.enFont].join("|");
+  }
+
+  bridge.onState?.((value) => {
+    const before = visualSignature();
+    applyWindowState(value);
+    if (value && Object.prototype.hasOwnProperty.call(value, "quickCaptureDraft")) {
+      snapshot.captureDraft = String(value.quickCaptureDraft || "");
+      applyCaptureDraft(snapshot.captureDraft);
+    }
+    // A state broadcast also carries echoes of what this window just published
+    // (draft, size, position). Only a real appearance change may rebuild the
+    // DOM: rebuilding while the user types would drop the caret and break IME.
+    if (before !== visualSignature() || !host.querySelector(".today-widget")) render();
+    else applyAppearance();
   });
 
-  window.addEventListener("blur", () => {
-    closeMenu();
-    closeGroupMenu();
-    closeContextMenu();
-    cleanupRowDrag();
-  });
-
-  window.addEventListener("focus", () => {
-    // Switching applications does not clear the DOM activeElement on macOS.
-    // If the user returns directly to an editor, restore the IME-safe level.
-    if (isTextEditingTarget(document.activeElement)) void bridge.setEditing?.(true);
-  });
-
-  quickCaptureGroupMenu.addEventListener("click", async (event) => {
-    const button = event.target.closest("[data-promote-group]");
-    if (!button || !promotingTaskId) return;
-    const group = currentSnapshot.groups.find((item) => item.id === button.dataset.promoteGroup);
-    if (!group) return;
-    button.disabled = true;
-    const result = await bridge.promoteQuickCapture?.({ taskId: promotingTaskId, groupId: group.id });
-    closeGroupMenu();
-    showToast(result?.success ? `已升级为任务并移入「${group.title}」` : "升级失败，请稍后重试");
-  });
-
-  document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") {
-      closeGroupMenu();
-      closeContextMenu();
-      cleanupRowDrag();
+  bridge.onSurface?.((value) => {
+    const kind = value && value.open === true ? String(value.kind || "") : "";
+    if (kind === surfaceKind) return;
+    surfaceKind = kind;
+    render();
+    if (!kind && value?.returnFocus) {
+      const selector = String(value.returnFocus || "");
+      const target = selector ? host.querySelector(selector) : null;
+      target?.focus({ preventScroll: true });
     }
   });
 
-  deleteQuickCaptureButton.addEventListener("click", async () => {
-    const taskId = contextTaskId;
-    closeContextMenu();
+  bridge.onToast?.((value) => {
+    const message = value && typeof value.message === "string" ? value.message : "";
+    if (message) showToast(message);
+  });
+
+  bridge.onBeginRename?.((value) => {
+    const taskId = value?.taskId;
     if (!taskId) return;
-    const result = await bridge.deleteQuickCapture?.({ taskId });
-    if (result?.code === "DELETE_CANCELLED") return;
-    showToast(result?.success ? "速记已删除" : "速记删除失败，请稍后重试");
+    const item = findItem(taskId);
+    if (item) edit(item);
   });
 
-  document.querySelectorAll("[data-place]").forEach((button) => {
-    button.addEventListener("click", async () => {
-      widget.dataset.position = button.dataset.place;
-      document.querySelectorAll("[data-place]").forEach((item) => item.classList.toggle("is-active", item === button));
-      closeMenu();
-      await bridge.setPreferences({ position: button.dataset.place });
-    });
+  bridge.onFocusReturn?.((value) => {
+    const selector = String(value?.selector || "");
+    const target = selector ? host.querySelector(selector) : null;
+    (target || host.querySelector(".widget13"))?.focus?.({ preventScroll: true });
   });
 
-  compactToggle.addEventListener("click", async () => {
-    const compact = !widget.classList.contains("is-compact");
-    widget.classList.toggle("is-compact", compact);
-    widget.classList.remove("is-capture-open");
-    compactToggle.title = compact ? "展开" : "收起";
-    compactToggle.setAttribute("aria-label", compact ? "展开今日窗口" : "收起今日窗口");
-    closeMenu();
-    await bridge.setPreferences({ compact });
-  });
-
-  alwaysOnTop.addEventListener("change", async (event) => {
-    const pinned = event.target.checked === true;
-    syncAlwaysOnTopControl(pinned);
-    showToast(pinned ? "已开启始终置顶" : "已关闭始终置顶");
-    await bridge.setPreferences({ alwaysOnTop: pinned });
-  });
-
-  clickThrough.addEventListener("change", async (event) => {
-    const enabled = event.target.checked === true;
-    showToast(enabled ? "已开启鼠标穿透 · ⌘/Ctrl + Shift + T 可恢复" : "已恢复浮窗操作");
-    await bridge.setPreferences({ clickThrough: enabled });
-  });
-
-  launchWithApp.addEventListener("change", async (event) => {
-    showToast(event.target.checked ? "将随应用启动" : "已取消随应用启动");
-    await bridge.setPreferences({ launchWithApp: event.target.checked });
-  });
-
-  opacityControl.addEventListener("input", (event) => applyOpacity(event.target.value));
-  opacityControl.addEventListener("change", async (event) => {
-    const opacity = Number(event.target.value);
-    showToast(`窗口透明度 ${opacity}%`);
-    await bridge.setPreferences({ opacity });
-  });
-
-  document.querySelector("#hide-widget").addEventListener("click", () => {
-    closeMenu();
-    void bridge.hide();
-  });
-
-  document.querySelectorAll("#open-main").forEach((button) => {
-    button.addEventListener("click", () => void bridge.openMain(""));
-  });
-  bindWidgetChrome();
-
-  document.querySelectorAll("[data-widget-resize]").forEach((handle) => {
-    handle.addEventListener("pointerdown", beginResize);
-    handle.addEventListener("pointermove", continueResize);
-    handle.addEventListener("pointerup", finishResize);
-    handle.addEventListener("pointercancel", finishResize);
-  });
-
-  bridge.onSnapshot((value) => {
-    if (completingTaskId || editingTaskId) queuedSnapshot = value;
-    else renderSnapshot(value);
-  });
-  bridge.onState(applyWindowState);
-
+  // ---------- boot ----------
   void bridge.getState().then((state) => {
     applyWindowState(state);
-    renderSnapshot(state.snapshot);
+    if (state && Object.prototype.hasOwnProperty.call(state, "quickCaptureDraft")) snapshot.captureDraft = String(state.quickCaptureDraft || "");
+    const initial = state?.snapshot && typeof state.snapshot === "object" ? state.snapshot : {};
+    lane = state?.snapshot?.lane === "quick" ? "quick" : "task";
+    applySnapshot(initial);
   });
 })();

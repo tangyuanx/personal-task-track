@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'" />
+  <title>浮窗面板</title>
+  <link rel="stylesheet" href="./src/fonts.css?v=0.1.200" />
+  <link rel="stylesheet" href="./src/shell.css?v=0.1.200" />
+  <link rel="stylesheet" href="./src/typography.css?v=0.1.200" />
+  <link rel="stylesheet" href="./src/widget12.css?v=0.1.200" />
+  <link rel="stylesheet" href="./src/widget13.css?v=0.1.200" />
+  <link rel="stylesheet" href="./src/shell-refinement.css?v=0.1.200" />
+  <link rel="stylesheet" href="./src/widget-surface.css?v=0.1.200" />
+</head>
+<body>
+  <!-- The Demo mounts these surfaces into the page overlay with mountSurface()
+       and positions them from a trigger rect. In the product each surface gets
+       its own frameless window so it can extend past the widget window, and the
+       main process reproduces the Demo's placement maths in screen space. The
+       markup below is the Demo's, unchanged. -->
+  <div id="surface-host"></div>
+  <script src="./src/widget-surface-runtime.js"></script>
+</body>
+</html>

@@ -1,37 +1,59 @@
 /* ============================================================
    Loop -- today-widget bridge layer
-   The Demo renders the widget as a fixed-position panel inside the
-   main page; the product renders it in its own frameless transparent
-   BrowserWindow. This file is the only allowed deviation.
-   Everything above it (shell.css tokens + base rules, widget12.css,
-   widget13.css) must stay byte-identical to the frozen baseline.
+   The Demo renders the widget as a fixed-position panel inside the main
+   page; the product renders it in its own frameless transparent window.
+   This file is the only allowed deviation: it hosts the frozen Demo panel
+   inside a window whose content box is the panel plus the ring that carries
+   the Demo's own drop shadow, and it hands the header to the OS as a native
+   drag region. Everything above it (shell.css tokens + base rules,
+   widget12.css, widget13.css, shell-refinement.css) stays byte-identical to
+   the frozen baseline in prototypes/demos.
    ============================================================ */
 
-/* shell.css carries the main window's minimum size; the widget window is
-   only 296x49 in its compact state, so those minimums must go. */
-html, body {
-  min-width: 0;
-  min-height: 0;
-  background: transparent;
+:root {
+  /* The Demo's panel shadow is `0 12px 40px #0003`: it reaches ~20px to the
+     left/right/top of the box and ~32px below it. The window is that much
+     larger than the panel so the shadow is never clipped by the window edge;
+     the ring is transparent and forwards mouse events (see the renderer). */
+  --widget-pad-x: 22px;
+  --widget-pad-top: 22px;
+  --widget-pad-bottom: 36px;
 }
 
+html, body {
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  background: transparent;
+  overflow: hidden;
+}
+
+/* The ring is a fixed layer, not body padding: a scrolling document would shift
+   the panel (and every measurement taken from it) by the scroll offset. */
+#widget-host {
+  position: fixed;
+  inset: 0;
+  padding: var(--widget-pad-top) var(--widget-pad-x) var(--widget-pad-bottom);
+  overflow: hidden;
+}
+
+/* shell.css carries the main window's minimum size and its own 100dvh clamps;
+   inside the widget window the panel is laid out by content instead. */
+/* .widget13-resize handles are absolutely positioned against the panel, so the
+   panel has to stay a containing block (the Demo's panel is position:fixed). */
 .today-widget {
-  position: static;
+  position: relative;
   right: auto;
   bottom: auto;
   width: 100%;
-  height: 100%;
+  height: auto;
   z-index: auto;
-  /* the window itself is frameless and transparent, so the Demo's outer
-     shadow would be clipped; keep the radius and drop the shadow. */
-  box-shadow: none;
 }
 
-/* .widget12 sets max-height:calc(100dvh - 126px) for the in-page preview;
-   in a 49px compact window that clamps to zero. The window is the container
-   now, so the widget fills it instead. */
-/* .widget12 also clamps its own width for the in-page preview
-   (max-width:calc(100vw - 32px)); inside a 360px window that would be 328px. */
+/* .widget12 sets width/max-height for the in-page preview (360px panel inside a
+   1440px page). The window is the container now, so the panel fills it. */
 .today-widget.widget12,
 .today-widget.widget13 {
   width: 100%;
@@ -39,46 +61,61 @@ html, body {
   max-height: none;
 }
 
+/* widget12.css gives every corner an in-page offset
+   (`.widget12[data-position="bottom-right"]{right:22px;bottom:58px}`), which on
+   a relatively positioned panel would shift it out of the window. The window is
+   the position now, so those offsets are neutralised at equal-or-higher
+   specificity. */
+.today-widget.widget12[data-position],
+.today-widget.widget13[data-position] {
+  left: auto;
+  right: auto;
+  top: auto;
+  bottom: auto;
+}
+
+/* The Demo fades the whole panel (shadow included) with
+   `widget.style.opacity = state.widgetOpacity / 100`. The window itself stays
+   fully opaque: opacity is applied exactly once, here. */
+.today-widget {
+  opacity: var(--widget-opacity, 1);
+}
+
 /* The Demo moves its in-page panel with pointer handlers. The product's widget
    is a real frameless window, so the header is the native drag region and every
-   control inside it opts out. (The old design had this rule in its inline
-   stylesheet; removing that sheet silently removed window dragging.) */
+   control inside it opts out (the old design had this rule in its inline
+   stylesheet; removing that sheet silently removed window dragging). */
 .widget-header {
   user-select: none;
   -webkit-app-region: drag;
 }
+
 .widget-header button,
 .widget-header input,
 .widget-header textarea,
 .widget-header a,
 .widget13-resize,
-.widget12-settings,
-.widget-compose { -webkit-app-region: no-drag; }
-
-/* The baseline renders the settings panel into the page overlay and positions
-   it from the trigger. In the widget window the panel lives inside the widget,
-   so it is anchored under the header and toggled by the runtime's .is-open. */
-#widget-menu {
-  display: none;
-  position: absolute;
-  /* shell-refinement.css pins .widget12-settings with these two variables; the
-     in-page version computes them from the trigger, the window anchors them. */
-  --widget-prefs-x: 8px;
-  --widget-prefs-y: 46px;
-  right: 8px;
-  inset: 46px 8px auto 8px;
-  width: auto;
-  max-height: calc(100% - 56px);
-  overflow: auto;
-  padding: 12px 14px;
-  z-index: 30;
+.widget-compose,
+.widget-body,
+.widget-tabs {
+  -webkit-app-region: no-drag;
 }
-#widget-menu.is-open { display: block; }
-#widget-menu .widget12-settings-label { white-space: nowrap; flex-shrink: 0; }
-#widget-menu .widget12-settings-head h2 { font-size: calc(13px * var(--font-scale, 1)); font-weight: 600; margin: 0 0 4px; }
-#widget-menu .widget12-settings-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
-#widget-menu .widget12-positions { display: flex; gap: 6px; }
-#widget-menu .widget12-positions button { width: 22px; height: 22px; border: 1px solid var(--line); border-radius: 4px; background: var(--canvas); }
-#widget-menu .widget12-positions button.is-active { border-color: var(--green); background: var(--green-soft); }
-#widget-menu .widget12-opacity { display: flex; align-items: center; gap: 8px; width: 100%; }
-#widget-menu .widget12-opacity input { flex: 1; min-width: 0; accent-color: var(--green); }
+
+/* The Demo anchors its toast 4px below the panel's bottom edge, centred on the
+   page. In the window the same place is the 4px strip inside the shadow ring. */
+#toast {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--widget-pad-bottom) - 4px);
+  transform: translateX(-50%);
+  z-index: 20;
+  pointer-events: none;
+}
+
+#toast .toast {
+  position: static;
+  left: auto;
+  bottom: auto;
+  transform: none;
+  max-width: 300px;
+}
