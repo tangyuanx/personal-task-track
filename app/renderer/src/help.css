@@ -1,0 +1,27 @@
+.help14-intro{display:flex;align-items:center;justify-content:space-between;gap:24px;padding:22px 0;border-bottom:1px solid var(--line)}
+.help14-intro p{margin:6px 0 0;color:var(--secondary);font-size:calc(12px * var(--font-scale));line-height:1.7}
+.help14-topics{margin:16px 0 28px;padding:0;list-style:none}
+.help14-topics li{border-bottom:1px solid var(--line)}
+.help14-topics button{width:100%;padding:14px 0;display:flex;align-items:center;justify-content:space-between;text-align:left;font-size:calc(12px * var(--font-scale))}
+.help14-topics p{padding:0 0 16px;margin:0;color:var(--secondary);font-size:calc(12px * var(--font-scale));line-height:1.9;max-width:68ch}
+.help14-form.dialog{width:min(620px,calc(100vw - 48px));max-height:calc(100vh - 110px);overflow:auto}
+.help14-form .dialog-head{margin-bottom:6px}
+.help14-form .help14-caption{margin:0 0 20px;color:var(--secondary);font-size:calc(12px * var(--font-scale));line-height:1.7}
+.help14-field{margin-top:15px}
+.help14-field label{display:flex;align-items:center;justify-content:space-between;margin-bottom:7px;font-size:calc(12px * var(--font-scale))}
+.help14-field label small{font-size:calc(11px * var(--font-scale));color:var(--secondary);font-weight:400}
+.help14-field input,.help14-field select,.help14-field textarea{width:100%;background:var(--canvas);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:9px 11px;font:inherit;font-size:calc(12px * var(--font-scale));caret-color:var(--green)}
+.help14-field textarea{resize:vertical;line-height:1.8;min-height:100px}
+.help14-field [aria-invalid=true]{border-color:var(--orange)}
+.help14-error{color:var(--orange);font-size:calc(11px * var(--font-scale));margin:6px 0 0;line-height:1.6}
+.help14-privacy{margin-top:20px;border-top:1px solid var(--line);padding-top:14px}
+.help14-privacy label{display:flex;align-items:flex-start;gap:8px;font-size:calc(11px * var(--font-scale));line-height:1.7;margin:10px 0}
+.help14-privacy input{flex:0 0 auto;margin-top:4px;accent-color:var(--green);width:14px;height:14px}
+.help14-privacy p{color:var(--secondary);font-size:calc(11px * var(--font-scale));line-height:1.7;margin:5px 0 10px 22px}
+.help14-form footer{margin-top:20px;display:flex;align-items:center;gap:10px}
+.help14-form footer small{margin-right:auto;color:var(--secondary);font-size:calc(10px * var(--font-scale))}
+.help14-result{padding:24px 0 12px;text-align:center}
+.help14-result svg{width:28px;height:28px;color:var(--green);margin-bottom:12px}
+.help14-result h3{margin:0 0 8px;font-size:calc(16px * var(--font-scale))}
+.help14-result p{color:var(--secondary);font-size:calc(12px * var(--font-scale));line-height:1.8}
+.help14-form :focus-visible{outline:2px solid var(--green);outline-offset:3px}

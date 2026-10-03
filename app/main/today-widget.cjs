@@ -17,7 +17,9 @@ const DEFAULT_PREFERENCES = Object.freeze({
   visible: true,
   compact: false,
   opacity: 100,
-  height: 260,
+  // The phase-12/13 widget design needs room for the header (48) + tabs (35)
+  // + three rows (49 each) + the quick-capture composer.
+  height: 340,
   customBounds: null,
   clickThrough: false,
   quickCaptureDraft: "",
@@ -84,7 +86,7 @@ function cornerWindowBounds(workArea, size, position, gap = WIDGET_GAP) {
 }
 
 function resizedWidgetBounds(bounds, workArea, requestedHeight, edge = "bottom") {
-  const safeBounds = bounds && typeof bounds === "object" ? bounds : { x: 0, y: 0, width: 360, height: 260 };
+  const safeBounds = bounds && typeof bounds === "object" ? bounds : { x: 0, y: 0, width: 360, height: 340 };
   const safeArea = workArea && typeof workArea === "object" ? workArea : { x: 0, y: 0, width: 1280, height: 800 };
   const x = Math.round(Number(safeBounds.x) || 0);
   const y = Math.round(Number(safeBounds.y) || 0);
@@ -611,6 +613,8 @@ function normalizeSnapshot(value) {
   const raw = value && typeof value === "object" ? value : {};
   return {
     date: String(raw.date || "").slice(0, 32),
+    // the Demo marks the row open in the main window with .current
+    activeTaskId: normalizeTaskId(raw.activeTaskId),
     appearance: normalizeTodayWidgetAppearance(raw.appearance),
     items: (Array.isArray(raw.items) ? raw.items : []).map((item) => ({
       taskId: normalizeTaskId(item?.taskId),
@@ -621,6 +625,7 @@ function normalizeSnapshot(value) {
     quickCaptures: (Array.isArray(raw.quickCaptures) ? raw.quickCaptures : []).map((item) => ({
       taskId: normalizeTaskId(item?.taskId),
       title: String(item?.title || "未命名速记").slice(0, 240),
+      description: String(item?.description || "").slice(0, 500),
       createdAt: String(item?.createdAt || "").slice(0, 40),
       updatedAt: String(item?.updatedAt || "").slice(0, 40),
       resolvedAt: String(item?.resolvedAt || "").slice(0, 40),
@@ -637,11 +642,16 @@ function normalizeSnapshot(value) {
 function normalizeTodayWidgetAppearance(value) {
   const raw = value && typeof value === "object" ? value : {};
   const fontSize = Number(raw.fontSize);
+  // The phase-12/13 widget layers size themselves with --font-scale, the same
+  // variable the main window uses; the renderer sends it and it must survive
+  // this whitelist or the widget would render at 1.0 while the app renders at 1.08.
+  const fontScale = Number(raw.fontScale);
   return {
     theme: raw.theme === "dark" ? "dark" : "light",
     zhFont: WIDGET_ZH_FONTS.has(raw.zhFont) ? raw.zhFont : "system",
     enFont: WIDGET_EN_FONTS.has(raw.enFont) ? raw.enFont : "inter",
     fontSize: Number.isFinite(fontSize) ? Math.max(12, Math.min(24, fontSize)) : 16.5,
+    fontScale: Number.isFinite(fontScale) ? Math.max(0.8, Math.min(1.6, fontScale)) : 1,
   };
 }
 

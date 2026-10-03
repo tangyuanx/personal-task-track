@@ -1,0 +1,480 @@
+// ============================================================
+// Loop -- knowledge note pane
+//
+// Presentation ported from the frozen Demo's ninth stage
+// (loop-knowledge-phase9-refinement.js + loop-knowledge-phase8.css, loaded as
+// src/knowledge.css). The editor instance, file binding, conflict handling and
+// crash recovery all remain the project's own implementations: this module
+// only rebuilds the markup around them.
+//
+// demo state names map 1:1 onto task.knowledgeNote.documentState:
+//   DRAFT / SAVED / DIRTY / EXTERNAL_CHANGED / FILE_MISSING / READ_ONLY
+// ============================================================
+
+Object.assign(SHELL_ICON_PATHS, {
+  knowledgeTable: "M3 3h18v18H3zM3 9h18M9 3v18",
+  knowledgeCode: "m8 7-5 5 5 5m8-10 5 5-5 5m-2-14-4 18",
+  knowledgeImage: "M3 3h18v18H3zM3 16l5-5 4 4 4-6 5 7M7 7h.01",
+  knowledgeDiagram: "M3 9h5v6H3zM16 9h5v6h-5zM8 12h8m-3-3 3 3-3 3",
+  noteBold: "M6 4h7a4 4 0 0 1 0 8H6zm0 8h8a4 4 0 0 1 0 8H6z",
+  noteItalic: "M10 4h8M6 20h8M14 4l-4 16",
+  noteStrike: "M17 6c-1-2-8-3-10 1-2 4 3 5 5 5m5 3c2 5-7 8-10 3M3 12h18",
+  noteInline: "m8 7-5 5 5 5m8-10 5 5-5 5",
+  noteBullet: "M9 6h12M9 12h12M9 18h12M3 6h1M3 12h1M3 18h1",
+  noteOrdered: "M10 6h11M10 12h11M10 18h11M3 4h2v5M3 11h3l-3 5h3M3 18h3v3H3",
+  noteTask: "M3 4h6v6H3zM13 7h8M3 14h6v6H3zM13 17h8m-9-1 2 2 4-4",
+  noteQuote: "M4 5h6v7H4zm10 0h6v7h-6zM10 12c0 4-2 6-5 7m15-7c0 4-2 6-5 7",
+  noteLink: "m10 14 4-4M8 16l-2 2a4 4 0 0 1-6-6l4-4a4 4 0 0 1 6 0m2 0 2-2a4 4 0 0 1 6 6l-4 4a4 4 0 0 1-6 0",
+  noteRule: "M3 12h18",
+  noteUndo: "m8 4-5 5 5 5M3 9h10a7 7 0 0 1 7 7",
+  noteRedo: "m16 4 5 5-5 5M21 9H11a7 7 0 0 0-7 7",
+  noteWidth: "M3 4h18v16H3zM8 8v8M16 8v8M10 12h4",
+});
+
+const SHELL_NOTE_WIDTH_NAMES = { default: "默认", wide: "较宽", full: "全宽" };
+const SHELL_NOTE_WIDTH_DESCRIPTIONS = {
+  default: "适合阅读与日常记录",
+  wide: "适合代码与多列表格",
+  full: "使用工作台的可用空间",
+};
+const SHELL_KNOWLEDGE_STATE_LABELS = {
+  DRAFT: "草稿",
+  SAVED: "已保存",
+  DIRTY: "已修改",
+  EXTERNAL_CHANGED: "文件有外部修改",
+  FILE_MISSING: "文件已丢失",
+  READ_ONLY: "文件不可写",
+};
+const SHELL_KNOWLEDGE_ATTENTION = ["EXTERNAL_CHANGED", "FILE_MISSING", "READ_ONLY"];
+
+function shellKnowledgeState(task) {
+  const note = task?.knowledgeNote || {};
+  const unavailable = state.knowledgeFileIssues?.[note.noteId];
+  const key = unavailable ? "UNAVAILABLE" : String(note.documentState || "DRAFT");
+  return {
+    note,
+    key,
+    unavailable,
+    label: unavailable ? "文件暂时不可用" : SHELL_KNOWLEDGE_STATE_LABELS[key] || "草稿",
+    attention: unavailable ? true : SHELL_KNOWLEDGE_ATTENTION.includes(key),
+  };
+}
+
+function shellKnowledgeMode() {
+  return ["edit", "source", "preview"].includes(state.markdownMode) ? state.markdownMode : "edit";
+}
+
+function shellNoteWidth() {
+  return Object.hasOwn(SHELL_NOTE_WIDTH_NAMES, state.knowledgeWidth) ? state.knowledgeWidth : "default";
+}
+
+function shellKnowledgeFileName(note) {
+  if (!note?.filePath) return { text: "尚未关联文件", title: "尚未关联本地文件" };
+  return { text: String(note.filePath).split(/[\\/]/).pop(), title: note.filePath };
+}
+
+function shellKnowledgeRecoveryText(task) {
+  const pending = knowledgeRecoveryTimers?.has?.(task?.knowledgeNote?.noteId);
+  const connected = typeof desktopKnowledgeRecovery !== "undefined" && Boolean(desktopKnowledgeRecovery);
+  return pending ? "本页草稿已保留" : connected ? "自动保存草稿到本机" : "文件状态仅在桌面应用中可用";
+}
+
+// ------------------------------------------------------------
+// Pane
+// ------------------------------------------------------------
+
+function renderShellKnowledge(task) {
+  const noteState = shellKnowledgeState(task);
+  const mode = shellKnowledgeMode();
+  const width = shellNoteWidth();
+  const stats = markdownStats(task.notes);
+  const file = shellKnowledgeFileName(noteState.note);
+  return `
+    <section class="knowledge-pane task-knowledge-pane" data-task-id="${escAttr(task.id)}" aria-label="知识笔记">
+      <header class="knowledge-header">
+        <div class="knowledge-file-meta">
+          <span data-note-state data-knowledge-state="${escAttr(noteState.key)}" class="knowledge-state ${noteState.attention ? "attention" : ""}">${esc(noteState.label)}</span>
+          <span class="knowledge-file-name" title="${escAttr(file.title)}">${esc(file.text)}</span>
+          ${noteState.note.filePath ? '<span class="example-file">本地文件</span>' : ""}
+        </div>
+        <div class="knowledge-header-actions">
+          ${renderShellKnowledgeViewbar(mode)}
+          <button class="icon-button" type="button" data-action="knowledge-file-menu" data-knowledge-action="file-menu" aria-label="笔记文件操作" aria-haspopup="menu">${shellIcon("more")}</button>
+        </div>
+      </header>
+      ${renderShellKnowledgeNotice(task, noteState)}
+      ${renderShellKnowledgeTools(mode)}
+      <div class="knowledge-body" data-knowledge-scroll data-knowledge-view="${escAttr(knowledgeViewKey(task))}">
+        <div class="knowledge-page width-${width} ${mode === "source" ? "source-page" : ""}">
+          ${mode === "edit"
+            ? `<div id="knowledge-rich-host" class="knowledge-rich-host milkdown-editor-host" data-editor-kind="task" data-task-id="${escAttr(task.id)}" aria-label="笔记编辑器"><p class="knowledge-loading">正在打开笔记…</p></div>`
+            : mode === "source"
+              ? `<textarea id="knowledge-source" data-task-id="${escAttr(task.id)}" aria-label="Markdown 内容" spellcheck="false">${esc(task.notes)}</textarea>`
+              : `<article class="knowledge-preview" aria-label="笔记预览">${renderMarkdown(task.notes)}</article>`}
+        </div>
+      </div>
+      <footer class="knowledge-footer">
+        <div class="knowledge-footer-meta">
+          <span data-note-stats>${stats.characters} 字 · ${stats.lines} 行</span>
+          <span data-note-recovery>${esc(shellKnowledgeRecoveryText(task))}</span>
+        </div>
+        <button class="button primary" type="button" data-note-save data-action="save-knowledge" data-task-id="${escAttr(task.id)}">${shellIcon("check")}保存</button>
+      </footer>
+    </section>`;
+}
+
+function renderShellKnowledgeViewbar(mode) {
+  const modes = [["edit", "编辑"], ["source", "Markdown"], ["preview", "预览"]]
+    .map(([value, label]) => `<button type="button" data-action="knowledge-mode" data-mode="${value}" aria-pressed="${value === mode}" class="${value === mode ? "active" : ""}">${label}</button>`)
+    .join("");
+  return `<div class="knowledge-viewbar">
+    <button class="note-width-button" type="button" data-action="knowledge-width-menu" aria-label="笔记页宽：${escAttr(SHELL_NOTE_WIDTH_NAMES[shellNoteWidth()])}" title="调整笔记页宽" aria-haspopup="menu">${shellIcon("noteWidth")}<span>${esc(SHELL_NOTE_WIDTH_NAMES[shellNoteWidth()])}</span>${shellIcon("chevron")}</button>
+    <div class="knowledge-modes" role="group" aria-label="笔记视图">${modes}</div>
+  </div>`;
+}
+
+function renderShellKnowledgeNotice(task, noteState) {
+  const button = (action, label, extra = "") => `<button class="text-button" type="button" data-action="${action}" data-task-id="${escAttr(task.id)}" ${extra}>${label}</button>`;
+  let text = "";
+  let actions = "";
+  let tone = "attention";
+  if (noteState.key === "EXTERNAL_CHANGED") {
+    text = "文件已在其他应用中修改，当前内容与草稿仍保留。";
+    actions = button("knowledge-conflict", "处理冲突") + button("save-knowledge-as", "另存为");
+  } else if (noteState.key === "FILE_MISSING") {
+    text = "找不到关联文件，当前笔记内容仍保留。";
+    actions = button("relocate-knowledge", "重新定位") + button("save-knowledge-as", "另存为");
+  } else if (noteState.key === "READ_ONLY") {
+    text = "当前文件不可写，可重试或另存为。";
+    actions = button("retry-knowledge", "重试") + button("save-knowledge-as", "另存为");
+  } else if (noteState.unavailable) {
+    text = noteState.unavailable.message || "文件暂时不可用。";
+    actions = button("retry-knowledge", "重试") + button("save-knowledge-as", "另存为");
+  }
+  if (!text) return "";
+  return `<div class="knowledge-notice ${tone}" role="status"><span>${shellIcon("blocked")}${esc(text)}</span><div>${actions}</div></div>`;
+}
+
+function renderShellKnowledgeTools(mode) {
+  if (mode === "preview") return "";
+  const format = (action, image, label) => `<button class="knowledge-tool" type="button" data-action="note-format" data-format="${action}" title="${escAttr(label)}" aria-label="${escAttr(label)}"${["bold", "italic", "strike", "inline"].includes(action) ? ' aria-pressed="false"' : ""}>${shellIcon(image)}</button>`;
+  const group = (name, html) => `<div class="note-tool-group" role="group" aria-label="${escAttr(name)}">${html}</div>`;
+  const heading = `<select class="note-heading-select" aria-label="段落格式"><option value="0">正文</option><option value="1">标题 1</option><option value="2">标题 2</option><option value="3">标题 3</option></select>`;
+  const tools = group("文字格式", heading
+      + format("bold", "noteBold", "粗体")
+      + format("italic", "noteItalic", "斜体")
+      + format("strike", "noteStrike", "删除线")
+      + format("inline", "noteInline", "行内代码"))
+    + group("段落与列表", format("bullet", "noteBullet", "无序列表")
+      + format("ordered", "noteOrdered", "有序列表")
+      + format("task", "noteTask", "任务列表")
+      + format("quote", "noteQuote", "引用"))
+    + group("插入内容", format("code", "knowledgeCode", "代码块")
+      + format("table", "knowledgeTable", "表格")
+      + format("link", "noteLink", "链接")
+      + `<button class="knowledge-tool" type="button" data-action="insert-editor-snippet" data-kind="image" title="图片" aria-label="图片">${shellIcon("knowledgeImage")}</button>`
+      + format("rule", "noteRule", "分隔线"))
+    + (mode === "edit" ? group("编辑历史", format("undo", "noteUndo", "撤销") + format("redo", "noteRedo", "重做")) : "");
+  return `<div class="knowledge-tools"><div class="knowledge-insert-toolbar" role="toolbar" aria-label="笔记格式工具">${tools}</div></div>`;
+}
+
+// ------------------------------------------------------------
+// Overlay surfaces
+// ------------------------------------------------------------
+
+function shellNoteWidthMenu(trigger) {
+  shellMountSurface(
+    `<div class="surface-popover note-width-menu" role="menu" aria-label="选择笔记页宽">${shellSurfaceHeader("笔记页宽")}
+      ${Object.entries(SHELL_NOTE_WIDTH_NAMES).map(([value, label]) => `<button class="note-width-option" type="button" role="menuitemradio" aria-checked="${value === shellNoteWidth()}" data-action="set-note-width" data-width="${value}"><span class="note-width-sample sample-${value}" aria-hidden="true"><i></i><i></i><i></i></span><span class="note-width-copy"><strong>${label}</strong><small>${esc(SHELL_NOTE_WIDTH_DESCRIPTIONS[value])}</small></span><span class="note-width-check">${value === shellNoteWidth() ? shellIcon("check") : ""}</span></button>`).join("")}
+    </div>`,
+    trigger,
+    244,
+  );
+  const menu = document.querySelector(".note-width-menu");
+  if (menu) menu.dataset.returnFocus = '[data-action="knowledge-width-menu"]';
+  menu?.querySelector('[aria-checked="true"]')?.focus({ preventScroll: true });
+  menu?.addEventListener("keydown", (event) => {
+    if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    const items = [...menu.querySelectorAll("[data-width]")];
+    const index = items.indexOf(document.activeElement);
+    items[event.key === "Home" ? 0 : event.key === "End" ? items.length - 1 : (index + (event.key === "ArrowDown" ? 1 : items.length - 1)) % items.length]?.focus();
+  }, true);
+}
+
+function shellKnowledgeFileMenu(trigger) {
+  const task = shellActiveTask();
+  if (!task) return;
+  const bound = Boolean(task.knowledgeNote?.filePath);
+  shellMountSurface(
+    `<div class="surface-popover" role="menu" aria-label="笔记文件操作">${shellSurfaceHeader("笔记文件")}
+      <button class="button" type="button" role="menuitem" data-action="relocate-knowledge" data-task-id="${escAttr(task.id)}">打开 Markdown 文件…</button>
+      <button class="button" type="button" role="menuitem" data-action="save-knowledge-as" data-task-id="${escAttr(task.id)}">另存为…</button>
+      ${bound ? `<button class="button" type="button" role="menuitem" data-action="knowledge-file-info" data-task-id="${escAttr(task.id)}">文件信息</button>
+      <button class="button" type="button" role="menuitem" data-action="remove-knowledge-binding" data-task-id="${escAttr(task.id)}">解除文件关联…</button>` : ""}
+      <div class="menu-divider"></div>
+      <button class="button" type="button" role="menuitem" data-action="share-task" data-task-id="${escAttr(task.id)}">分享／导出任务…</button>
+      <div class="menu-divider"></div>
+      <button class="button" type="button" role="menuitem" data-action="close-knowledge-editor" data-task-id="${escAttr(task.id)}">关闭笔记</button>
+    </div>`,
+    trigger,
+    232,
+  );
+}
+
+function shellKnowledgeDialog(title, body, footer = "", width = 520) {
+  const overlay = shellOverlay();
+  overlay.innerHTML = `<div class="dialog-backdrop" data-return-focus="[data-action='knowledge-file-menu']">
+    <section class="dialog knowledge-dialog" role="dialog" aria-modal="true" aria-labelledby="knowledge-dialog-title" style="width:min(${width}px, calc(100vw - 48px))">
+      <div class="dialog-head"><h2 id="knowledge-dialog-title">${esc(title)}</h2><button class="icon-button" type="button" data-action="close-dialog" aria-label="关闭">${shellIcon("close")}</button></div>
+      ${body}
+      ${footer ? `<footer>${footer}</footer>` : ""}
+    </section>
+  </div>`;
+  const heading = document.querySelector("#knowledge-dialog-title");
+  heading?.setAttribute("tabindex", "-1");
+  heading?.focus();
+}
+
+function shellKnowledgeFileInfo(task) {
+  const note = task.knowledgeNote || {};
+  const rows = [
+    ["文件路径", note.filePath || "尚未关联"],
+    ["文档状态", SHELL_KNOWLEDGE_STATE_LABELS[note.documentState] || "草稿"],
+    ["笔记标识", note.noteId || "—"],
+    ["最近保存", note.updatedAt ? new Date(note.updatedAt).toLocaleString("zh-CN") : "—"],
+    ["内容版本", note.lastSavedHash ? String(note.lastSavedHash).slice(0, 16) : "—"],
+    ["表格列宽", Array.isArray(note.tableColumnWidths) && note.tableColumnWidths.length ? note.tableColumnWidths.join(" · ") : "默认"],
+  ];
+  shellKnowledgeDialog(
+    "文件信息",
+    `<div class="knowledge-file-info">${rows.map(([label, value]) => `<div class="knowledge-file-list"><span>${esc(label)}</span><span title="${escAttr(String(value))}">${esc(String(value))}</span></div>`).join("")}</div><p class="knowledge-dialog-copy">外部绑定的 Markdown 文件由 Loop 原子写入；附件图片保存在同一目录的 attachments 中，需要另行备份。</p>`,
+    '<button class="button" type="button" data-action="close-dialog" autofocus>关闭</button>',
+    520,
+  );
+  document.querySelector("#overlay [autofocus]")?.focus();
+}
+
+function shellKnowledgeConflict(task) {
+  const note = task.knowledgeNote || {};
+  shellKnowledgeDialog(
+    "文件与当前笔记有不同修改",
+    `<p class="knowledge-dialog-copy">当前草稿仍保留。选择作用于整篇笔记。</p>
+     <div class="knowledge-version-grid">
+       <section><h3>当前编辑内容</h3><p>本页草稿</p><pre>${esc(String(task.notes || "").slice(0, 600))}</pre></section>
+       <section><h3>磁盘上的文件</h3><p>${esc(note.filePath || "本地文件")}</p><pre>${esc(String(note.externalPreview || note.savedContent || "文件内容已变化，重新加载后可查看。").slice(0, 600))}</pre></section>
+     </div>`,
+    `<button class="button" type="button" data-action="close-dialog" autofocus>取消</button>
+     <button class="button" type="button" data-action="save-knowledge-as" data-task-id="${escAttr(task.id)}">另存为新文件</button>
+     <button class="button" type="button" data-action="reload-knowledge" data-task-id="${escAttr(task.id)}">重新加载文件</button>
+     <button class="button primary" type="button" data-action="save-knowledge-overwrite" data-task-id="${escAttr(task.id)}">仍然覆盖</button>`,
+    560,
+  );
+  document.querySelector("#overlay [autofocus]")?.focus();
+}
+
+// ------------------------------------------------------------
+// Binding
+// ------------------------------------------------------------
+
+function shellKnowledgeSyncStats(task) {
+  const pane = document.querySelector(".knowledge-pane[data-task-id]");
+  if (!pane || pane.dataset.taskId !== String(task.id)) return;
+  const stats = markdownStats(task.notes);
+  const target = pane.querySelector("[data-note-stats]");
+  if (target) target.textContent = `${stats.characters} 字 · ${stats.lines} 行`;
+  const recovery = pane.querySelector("[data-note-recovery]");
+  if (recovery) recovery.textContent = shellKnowledgeRecoveryText(task);
+}
+
+// ------------------------------------------------------------
+// Formatting
+//
+// Ported from the Demo's formatKnowledge / formatKnowledgeSource /
+// showKnowledgeLink (loop-knowledge-phase9-refinement.js:183-206). Two things
+// matter here and were missing before:
+//   1. the toolbar must not steal focus on mousedown, otherwise the editor
+//      selection is gone before the command runs;
+//   2. a command that cannot apply must say so instead of failing silently.
+// ------------------------------------------------------------
+
+let shellToastTimer = 0;
+
+function shellToast(message) {
+  const host = document.querySelector("#toast");
+  if (!host) return;
+  host.innerHTML = `<div class="toast">${esc(message)}</div>`;
+  window.clearTimeout(shellToastTimer);
+  shellToastTimer = window.setTimeout(() => { host.innerHTML = ""; }, 2800);
+}
+
+function shellKnowledgeEditorEntry() {
+  const entry = typeof milkdownEditors !== "undefined" ? milkdownEditors.get(noteDraftKey(state.activeTaskId, "")) : null;
+  return entry?.instance || null;
+}
+
+function shellApplyNoteFormat(action, value) {
+  if (shellKnowledgeMode() === "source") return shellFormatKnowledgeSource(action, value);
+  const instance = shellKnowledgeEditorEntry();
+  if (!instance?.format) return false;
+  const applied = instance.format(action, value);
+  if (!applied) shellToast("当前光标位置不能应用该格式，请选择正文段落。");
+  shellRefreshNoteFormatState();
+  return applied;
+}
+
+/** Markdown-mode formatter, ported from the Demo's formatKnowledgeSource. */
+function shellFormatKnowledgeSource(action, value) {
+  const input = document.querySelector("#knowledge-source");
+  if (!input) return false;
+  let start = input.selectionStart;
+  let end = input.selectionEnd;
+  const text = input.value.slice(start, end);
+  let replacement = "";
+  let selectFrom = 0;
+  let selectTo = 0;
+  const wraps = { bold: "**", italic: "*", strike: "~~", inline: "`" };
+  if (wraps[action]) {
+    const token = wraps[action];
+    const body = text || "文字";
+    const around = input.value.slice(start - token.length, start) === token
+      && input.value.slice(end, end + token.length) === token
+      && (action !== "italic" || (input.value[start - 2] !== "*" && input.value[end + 1] !== "*"));
+    if (around) {
+      start -= token.length;
+      end += token.length;
+      replacement = body;
+      selectTo = body.length;
+    } else {
+      replacement = token + body + token;
+      selectFrom = token.length;
+      selectTo = selectFrom + body.length;
+    }
+  } else if (action === "link") {
+    const body = text || value;
+    replacement = `[${body}](${value})`;
+    selectFrom = 1;
+    selectTo = 1 + body.length;
+  } else if (["heading", "bullet", "ordered", "task", "quote"].includes(action)) {
+    start = input.value.lastIndexOf("\n", Math.max(0, start - 1)) + 1;
+    const next = input.value.indexOf("\n", end);
+    end = next < 0 ? input.value.length : next;
+    replacement = input.value.slice(start, end).split("\n").map((line, index) => {
+      const clean = line.replace(/^\s*(?:#{1,6}\s+|[-*]\s+(?:\[[ x]\]\s+)?|\d+\.\s+|>\s*)/, "");
+      const prefix = action === "heading"
+        ? "#".repeat(Number(value)) + (Number(value) ? " " : "")
+        : action === "ordered" ? `${index + 1}. `
+          : action === "task" ? "- [ ] "
+            : action === "quote" ? "> " : "- ";
+      return prefix + clean;
+    }).join("\n");
+    selectTo = replacement.length;
+  } else {
+    const blocks = {
+      code: `\`\`\`text\n${text || "代码或命令"}\n\`\`\``,
+      table: "| 项目 | 验证依据 |\n| --- | --- |\n| 待补充 | 待补充 |",
+      rule: "---",
+      image: value,
+    };
+    replacement = `\n\n${blocks[action] || ""}\n\n`;
+    selectTo = replacement.length;
+  }
+  input.setRangeText(replacement, start, end, "end");
+  input.focus();
+  input.setSelectionRange(start + selectFrom, start + selectTo);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  return true;
+}
+
+/** Link insertion asks for the URL first, like the Demo, and restores the selection. */
+function shellKnowledgeLink(trigger) {
+  const instance = shellKnowledgeEditorEntry();
+  const source = document.querySelector("#knowledge-source");
+  const selection = instance?.getSelection ? instance.getSelection() : null;
+  const range = source ? { start: source.selectionStart, end: source.selectionEnd } : null;
+  const surface = shellMountSurface(
+    `<div class="surface-popover note-link-popover">${shellSurfaceHeader("添加链接")}
+      <label for="note-link-url">链接地址</label>
+      <input id="note-link-url" type="url" placeholder="https://" />
+      <p class="knowledge-inline-error" id="note-link-error" role="alert"></p>
+      <button class="button primary" type="button" id="note-link-apply">插入链接</button>
+    </div>`,
+    trigger,
+    280,
+  );
+  const input = surface?.querySelector("#note-link-url");
+  const error = surface?.querySelector("#note-link-error");
+  input?.focus();
+  const apply = () => {
+    const url = input.value.trim();
+    if (!/^(https?:\/\/|mailto:)/i.test(url) || /[\s<>[\]]/.test(url)) {
+      error.textContent = "请输入有效的 https、http 或邮箱链接。";
+      return;
+    }
+    shellCloseOverlay({ restoreFocus: false });
+    if (selection && instance?.restoreSelection) instance.restoreSelection(selection);
+    if (range && source) source.setSelectionRange(range.start, range.end);
+    shellApplyNoteFormat("link", url);
+  };
+  surface?.querySelector("#note-link-apply")?.addEventListener("click", apply);
+  input?.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    apply();
+  });
+}
+
+function shellRefreshNoteFormatState() {
+  const instance = shellKnowledgeEditorEntry();
+  if (!instance?.getFormatState) return;
+  const active = instance.getFormatState();
+  document.querySelectorAll("[data-format]").forEach((button) => {
+    const name = button.dataset.format;
+    if (button.hasAttribute("aria-pressed")) button.setAttribute("aria-pressed", String(Boolean(active[name])));
+    if (name === "undo" || name === "redo") button.disabled = !active[name];
+  });
+  const select = document.querySelector(".note-heading-select");
+  if (select) select.value = active.heading || "0";
+}
+
+function shellBindKnowledge() {
+  if (typeof document.addEventListener === "function" && !window.__loopKnowledgeKeysBound) {
+    window.__loopKnowledgeKeysBound = true;
+    // Without this the toolbar button steals focus and the editor selection is
+    // already gone when the command runs (port of the Demo's line 226).
+    document.addEventListener("mousedown", (event) => {
+      if (event.target.closest?.(".knowledge-tool")) event.preventDefault();
+    });
+    document.addEventListener("keydown", (event) => {
+      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "s") return;
+      if (state.taskPane !== "notes") return;
+      if (shellOverlayIsOpen()) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      void saveKnowledgeTask(state.activeTaskId, { saveAs: false });
+    }, true);
+  }
+  const source = document.querySelector("#knowledge-source");
+  if (source) {
+    const task = state.tasks.find((item) => item.id === source.dataset.taskId);
+    if (task) {
+      source.addEventListener("input", () => {
+        updateNodeNoteDraft(task.id, "", source.value);
+        task.notes = source.value;
+        task.updatedAt = now();
+        shellKnowledgeSyncStats(task);
+      });
+      source.addEventListener("keydown", (event) => {
+        if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "s") return;
+        event.preventDefault();
+        void saveKnowledgeTask(task.id, { saveAs: false });
+      });
+    }
+  }
+  const select = document.querySelector(".note-heading-select");
+  select?.addEventListener("change", () => {
+    shellApplyNoteFormat("heading", Number(select.value) || 0);
+  });
+  shellRefreshNoteFormatState();
+}

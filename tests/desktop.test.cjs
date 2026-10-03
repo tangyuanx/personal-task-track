@@ -203,8 +203,15 @@ function rendererHarness(personalTaskTrack = undefined) {
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "knowledge-document.js"), "utf8"),
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "knowledge-recovery.js"), "utf8"),
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "work-navigation-model.js"), "utf8"),
+    fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "shell.js"), "utf8"),
+    fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "workspace.js"), "utf8"),
+    fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "actions.js"), "utf8"),
+    fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "bulk.js"), "utf8"),
+    fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "knowledge.js"), "utf8"),
+    fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "pages.js"), "utf8"),
+    fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "settings.js"), "utf8"),
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "app.js"), "utf8"),
-  ]).then(([documentSource, recoverySource, navigationSource, source]) => {
+  ]).then(([documentSource, recoverySource, navigationSource, shellSource, workspaceSource, actionsSource, bulkSource, knowledgeSource, pagesSource, settingsSource, source]) => {
       vm.runInContext(documentSource, context, {
         filename: "app/renderer/src/knowledge-document.js",
       });
@@ -213,6 +220,28 @@ function rendererHarness(personalTaskTrack = undefined) {
       });
       vm.runInContext(navigationSource, context, {
         filename: "app/renderer/src/work-navigation-model.js",
+      });
+      // The three-column shell modules load before app.js, exactly as index.html does.
+      vm.runInContext(shellSource, context, {
+        filename: "app/renderer/src/shell.js",
+      });
+      vm.runInContext(workspaceSource, context, {
+        filename: "app/renderer/src/workspace.js",
+      });
+      vm.runInContext(actionsSource, context, {
+        filename: "app/renderer/src/actions.js",
+      });
+      vm.runInContext(bulkSource, context, {
+        filename: "app/renderer/src/bulk.js",
+      });
+      vm.runInContext(knowledgeSource, context, {
+        filename: "app/renderer/src/knowledge.js",
+      });
+      vm.runInContext(pagesSource, context, {
+        filename: "app/renderer/src/pages.js",
+      });
+      vm.runInContext(settingsSource, context, {
+        filename: "app/renderer/src/settings.js",
       });
       vm.runInContext(source.replace(/\nbootstrap\(\);\s*$/, "\n"), context, {
         filename: "app/renderer/src/app.js",
@@ -2199,39 +2228,50 @@ test("renderer stages app-managed images and preserves explicit external image p
 
 test("knowledge UI exposes every document state and the required recovery actions", async () => {
   const harness = await rendererHarness();
-  const cases = [
-    ["DRAFT", "草稿", "尚未保存到本地文件"],
-    ["SAVED", "已保存", "/tmp/knowledge-ui.md"],
-    ["DIRTY", "已修改", "/tmp/knowledge-ui.md"],
-    ["EXTERNAL_CHANGED", "文件已被外部修改", "/tmp/knowledge-ui.md", "save-knowledge-overwrite"],
-    ["FILE_MISSING", "本地文件不存在", "/tmp/knowledge-ui.md", "save-knowledge-as"],
-    ["READ_ONLY", "当前文件不可写", "/tmp/knowledge-ui.md", "save-knowledge-as"],
-  ];
-  for (const [documentState, label, detail, extraAction] of cases) {
-    const html = harness.evaluate(`renderTaskKnowledge(normalizeTasks([{
-      id: "ui_${documentState}",
-      title: "状态测试",
-      notes: "正文",
-      nodes: [],
-      knowledgeNote: {
+  const note = (documentState) => `knowledgeNote: {
         noteId: "ui_${documentState}",
         taskId: "ui_${documentState}",
         filePath: ${JSON.stringify(documentState === "DRAFT" ? null : "/tmp/knowledge-ui.md")},
         documentState: ${JSON.stringify(documentState)},
         dirty: ${JSON.stringify(documentState !== "SAVED" && documentState !== "DRAFT")}
-      }
+      }`;
+  const render = (documentState) => harness.evaluate(`renderTaskKnowledge(normalizeTasks([{
+      id: "ui_${documentState}",
+      title: "状态测试",
+      notes: "正文",
+      nodes: [],
+      ${note(documentState)}
     }])[0])`);
+
+  // The Demo's pane vocabulary: state label in the header, file name in the meta
+  // row, and the recovery action reachable from the notice.
+  const cases = [
+    ["DRAFT", "草稿", "尚未关联文件"],
+    ["SAVED", "已保存", "knowledge-ui.md"],
+    ["DIRTY", "已修改", "knowledge-ui.md"],
+    ["EXTERNAL_CHANGED", "文件有外部修改", "knowledge-ui.md", "knowledge-conflict", "save-knowledge-as"],
+    ["FILE_MISSING", "文件已丢失", "knowledge-ui.md", "data-action=\"relocate-knowledge\"", "save-knowledge-as"],
+    ["READ_ONLY", "文件不可写", "knowledge-ui.md", "data-action=\"retry-knowledge\"", "save-knowledge-as"],
+  ];
+  for (const [documentState, label, fileName, ...actions] of cases) {
+    const html = await render(documentState);
     assert.match(html, new RegExp(`data-knowledge-state="${documentState}"`));
     assert.match(html, new RegExp(label));
-    assert.match(html, new RegExp(detail.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
-    if (extraAction === "save-knowledge-overwrite") assert.match(html, /data-action="reload-knowledge"/);
-    if (extraAction === "save-knowledge-as") assert.match(html, /data-action="save-knowledge-as"/);
+    assert.match(html, new RegExp(fileName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    for (const action of actions) assert.match(html, new RegExp(action));
   }
+
+  // The conflict resolutions still exist, now behind the Demo's 处理冲突 dialog.
+  const knowledge = await fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "knowledge.js"), "utf8");
+  assert.match(knowledge, /data-action="reload-knowledge"/);
+  assert.match(knowledge, /data-action="save-knowledge-overwrite"/);
+  assert.match(knowledge, /data-action="save-knowledge-as"/);
 
   const app = await fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "app.js"), "utf8");
   assert.match(app, /event\.metaKey \|\| event\.ctrlKey/);
   assert.match(app, /saveKnowledgeTask\(task\.id,\s*\{\s*saveAs: event\.shiftKey,?\s*\}\)/);
 });
+
 
 test("draft removal prompts safely and file binding removal never deletes disk files", async () => {
   const unwatchCalls = [];
@@ -2612,7 +2652,8 @@ test("disk normalization repairs malformed records and legacy preferences", () =
   assert.equal(normalized.activeGroupId, "group_inbox");
   assert.deepEqual(Object.keys(normalized.attachments.images), ["keep"]);
   assert.deepEqual(normalized.flowWidths, { title: 720, note: 180 });
-  assert.equal(normalized.sidebarWidth, 560);
+  // Upper bound follows the task-list column limits in storage.cjs / app.js.
+  assert.equal(normalized.sidebarWidth, 460);
   assert.equal(normalized.detailHeight, 50);
   assert.equal(normalized.zhFont, "yahei");
   assert.equal(normalized.enFont, "mono");
@@ -2651,7 +2692,7 @@ test("disk normalization preserves every supported typography choice", () => {
     assert.equal(normalizeTaskData({ fontScale }).fontScale, fontScale);
   }
 
-  assert.equal(normalizeTaskData({ fontScale: "unknown" }).fontScale, "large");
+  assert.equal(normalizeTaskData({ fontScale: "unknown" }).fontScale, "larger");
 
 });
 
@@ -2688,22 +2729,51 @@ test("Chinese and English font settings stay isolated in the application font ch
   assert.doesNotMatch(app, /横向滚动\s*·\s*双击重命名/);
 });
 
-test("Today widget uses the main Today focus surface treatment", async () => {
-  const [styles, widget] = await Promise.all([
-    fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "styles.css"), "utf8"),
-    fs.readFile(path.join(__dirname, "..", "app", "renderer", "today-widget.html"), "utf8"),
+test("Today widget is rebuilt from the frozen phase 12/13 widget layers", async () => {
+  const rendererDir = path.join(__dirname, "..", "app", "renderer");
+  const frozenDir = path.join(__dirname, "..", "prototypes", "baseline", "loop-plane-phase17-frozen");
+  const [widget, bridge, widget12, widget13, base12, base13, runtime] = await Promise.all([
+    fs.readFile(path.join(rendererDir, "today-widget.html"), "utf8"),
+    fs.readFile(path.join(rendererDir, "src", "widget-bridge.css"), "utf8"),
+    fs.readFile(path.join(rendererDir, "src", "widget12.css"), "utf8"),
+    fs.readFile(path.join(rendererDir, "src", "widget13.css"), "utf8"),
+    fs.readFile(path.join(frozenDir, "loop-widget-phase12-refinement.css"), "utf8"),
+    fs.readFile(path.join(frozenDir, "loop-widget-phase13.css"), "utf8"),
+    fs.readFile(path.join(rendererDir, "src", "today-widget-runtime.js"), "utf8"),
   ]);
 
-  assert.match(styles, /\.today-panel\.today-focus\s*\{[\s\S]*linear-gradient\(145deg, var\(--handoff-focus-800\), var\(--handoff-focus-950\)\)/);
-  assert.match(widget, /--widget-focus:\s*#2e5d49;/);
-  assert.match(widget, /--widget-focus-deep:\s*#17392d;/);
-  assert.match(widget, /--widget-bg:[\s\S]*linear-gradient\(145deg, var\(--widget-focus\), var\(--widget-focus-deep\)\)/);
-  assert.match(widget, /--widget-task-bg:\s*rgba\(255, 255, 255, 0\.075\)/);
-  assert.match(widget, /\.today-widget\s*\{[\s\S]*background:\s*var\(--widget-bg\)/);
-  assert.match(widget, /\.today-task\s*\{[\s\S]*background:\s*var\(--widget-task-bg\)/);
-  assert.match(widget, /--widget-font:\s*var\(--en-font\),\s*var\(--zh-font\),\s*sans-serif;/);
-  assert.match(widget, /:root\[data-zh-font="simsun"\],[\s\S]*-webkit-font-smoothing:\s*auto;/);
-  assert.match(widget, /NotoSansCJKsc-Bold\.otf/);
+  // The two widget stylesheets must stay byte-identical to the frozen Demo.
+  assert.equal(widget12, base12, "src/widget12.css must stay byte-identical to the frozen phase 12 refinement");
+  assert.equal(widget13, base13, "src/widget13.css must stay byte-identical to the frozen phase 13 sheet");
+
+  // The 1095-line dark mock design is gone; the Demo's contract is in place.
+  assert.doesNotMatch(widget, /--widget-focus:/);
+  assert.doesNotMatch(widget, /mock-sidebar|mock-app|mock-repository/);
+  assert.match(widget, /class="today-widget widget12 widget13"/);
+  assert.match(widget, /class="widget-logo"/);
+  assert.match(widget, /class="widget-tabs"/);
+  assert.match(widget, /class="widget-compose"/);
+  assert.match(widget, /class="widget13-resize top"/);
+  assert.match(widget, /class="widget13-resize bottom"/);
+  assert.match(widget, /class="surface-popover widget12-settings"/);
+  assert.match(widget, /shell\.css\?v=0\.1\.200/);
+  assert.match(widget, /widget12\.css\?v=0\.1\.200/);
+  assert.match(widget, /widget13\.css\?v=0\.1\.200/);
+  assert.match(widget, /widget-bridge\.css\?v=0\.1\.200/);
+
+  // The bridge layer is the only deviation: the Demo's page-fixed panel becomes a window.
+  assert.match(bridge, /\.today-widget\s*\{[\s\S]*position:\s*static;/);
+  assert.match(bridge, /max-height:\s*none;/);
+
+  // Rows follow the Demo's phase-13 row contract.
+  assert.match(runtime, /class="widget-row today-task/);
+  assert.match(runtime, /widget13-grip/);
+  assert.match(runtime, /data-widget-drag=/);
+  assert.match(runtime, /data-widget-open=/);
+  assert.match(runtime, /widget13-more/);
+  assert.match(runtime, /dataset\.widgetLane/);
+  assert.match(runtime, /function applyLane\(\)/);
+  assert.match(runtime, /widget-tabs/);
 });
 
 test("settings use the selected categorized modal, grouped rows, mixed controls, and spring motion", async () => {
@@ -3095,7 +3165,7 @@ test("Today widget preferences normalize safely and retain an intentional custom
     visible: true,
     compact: false,
     opacity: 100,
-    height: 260,
+    height: 340,
     customBounds: null,
     clickThrough: false,
     quickCaptureDraft: "",
@@ -3152,6 +3222,7 @@ test("Today widget appearance normalizes theme, fonts, and base font size", () =
     zhFont: "songti",
     enFont: "georgia",
     fontSize: 18,
+    fontScale: 1,
   });
   assert.deepEqual(normalizeTodayWidgetAppearance({
     theme: "unknown",
@@ -3163,8 +3234,15 @@ test("Today widget appearance normalizes theme, fonts, and base font size", () =
     zhFont: "system",
     enFont: "inter",
     fontSize: 24,
+    fontScale: 1,
   });
   assert.deepEqual(normalizeSnapshot({}).appearance, normalizeTodayWidgetAppearance());
+  // The widget layers use --font-scale, so the multiplier has to survive the
+  // main-process whitelist and stay inside a sane range.
+  assert.equal(normalizeTodayWidgetAppearance({ fontScale: "1.16" }).fontScale, 1.16);
+  assert.equal(normalizeTodayWidgetAppearance({ fontScale: "9" }).fontScale, 1.6);
+  assert.equal(normalizeTodayWidgetAppearance({ fontScale: "0.1" }).fontScale, 0.8);
+  assert.equal(normalizeTodayWidgetAppearance({ fontScale: "abc" }).fontScale, 1);
 });
 
 test("Today widget topmost policy joins macOS fullscreen Spaces without hiding the host app from the Dock", () => {
@@ -3352,21 +3430,22 @@ test("production Today widget uses its dedicated frontend and a sandboxed Electr
     fs.readFile(path.join(__dirname, "..", "package.json"), "utf8").then(JSON.parse),
   ]);
 
-  assert.match(demo, /class="today-widget" id="widget" data-position="top-right"/);
+  assert.match(demo, /class="today-widget widget12 widget13" id="widget" data-widget-lane="task"/);
   assert.doesNotMatch(demo, /按优先级与阻塞状态排序|项待办|刚刚同步|在主窗口查看全部|corner-anchor/);
   assert.match(demo, /data-place="top-left"/);
-  assert.match(demo, /<span>始终显示在最上层<\/span>/);
   assert.match(demo, /id="always-on-top"/);
   assert.doesNotMatch(demo, /id="always-on-top-toggle"/);
-  assert.match(demo, /<span>随应用启动<\/span>/);
-  assert.match(demo, /<span>窗口透明度<\/span>/);
-  assert.match(demo, /<span>鼠标穿透显示<\/span>/);
-  assert.match(demo, /id="widget-opacity" type="range" min="70" max="100"/);
-  assert.match(demo, /隐藏今日窗口/);
-  assert.match(demo, /body\.widget-runtime \.today-widget/);
-  assert.match(demo, /class="compact-expand-icon"/);
-  assert.match(demo, /\.today-widget\.is-compact \.compact-expand-icon\s*\{\s*display:\s*block;/);
-  assert.doesNotMatch(demo, /\.today-widget\.is-compact \.widget-menu[^}]*display:\s*none;/);
+  assert.match(demo, /id="launch-with-app"/);
+  assert.match(demo, /id="hide-widget"/);
+  assert.match(demo, /id="widget-opacity"[^>]*min="70"[^>]*max="100"/);
+  assert.match(demo, /id="widget-opacity-value"/);
+  // the Demo swaps the glyph instead of stacking two paths
+  assert.match(runtime, /state\.compact \? "M12 5v14M5 12h14" : "M5 12h14"/);
+  assert.match(demo, /data-action="compact-widget" aria-label="收起浮窗"/);
+  assert.match(demo, /widget12\.css\?v=0\.1\.200/);
+  assert.match(demo, /widget13\.css\?v=0\.1\.200/);
+  assert.match(demo, /shell-refinement\.css\?v=0\.1\.200/);
+  assert.match(demo, /widget-bridge\.css\?v=0\.1\.200/);
   assert.match(runtime, /bridge\.completeTask/);
   assert.match(runtime, /bridge\.createTask/);
   assert.match(runtime, /bridge\.updateTaskTitle/);
@@ -3375,7 +3454,7 @@ test("production Today widget uses its dedicated frontend and a sandboxed Electr
   assert.doesNotMatch(runtime, /alwaysOnTopToggle/);
   assert.match(runtime, /bridge\.deleteQuickCapture/);
   assert.match(runtime, /bridge\.moveItem/);
-  assert.match(runtime, /data-lane="task"/);
+  assert.match(runtime, /data-lane="\$\{lane\}"/);
   assert.match(runtime, /LONG_PRESS_DELAY = 380/);
   assert.match(runtime, /function openContextMenu/);
   assert.match(runtime, /FLOW_INCOMPLETE/);
@@ -3384,18 +3463,14 @@ test("production Today widget uses its dedicated frontend and a sandboxed Electr
   assert.match(runtime, /if \(isTextEditingTarget\(document\.activeElement\)\) return;/);
   assert.match(runtime, /compositionstart/);
   assert.match(runtime, /dblclick/);
-  assert.match(demo, /id="quick-capture-input"/);
+  assert.match(demo, /id="widget-capture"/);
   assert.doesNotMatch(demo, /quick-capture-add-today/);
-  assert.match(demo, /\.quick-capture-input-row\s*\{[\s\S]*grid-template-columns:\s*auto minmax\(0, 1fr\);/);
   assert.match(demo, /id="quick-capture-list"/);
-  assert.match(demo, /quick-capture-item/);
-  assert.match(demo, /quick-capture-section/);
+  assert.match(demo, /id="quick-capture-section"/);
+  assert.match(runtime, /quick-capture-item/);
   assert.match(demo, /id="today-context-menu"/);
-  assert.match(demo, /placeholder="快速记录"/);
+  assert.match(demo, /placeholder="记一条速记…"/);
   assert.doesNotMatch(demo, /quick-capture-promote/);
-  assert.doesNotMatch(demo, /\.task-order-button/);
-  assert.match(demo, /\.today-task\.quick-capture-item\s*\{[\s\S]*border-style:\s*dashed;[\s\S]*background:\s*rgba\(255, 255, 255, 0\.025\);/);
-  assert.match(demo, /\.today-task\.quick-capture-item:hover\s*\{[\s\S]*border-style:\s*dashed;/);
   assert.match(runtime, /bridge\.setPreferences\(\{ clickThrough: enabled \}\)/);
   assert.match(runtime, /bridge\.openMain/);
   assert.doesNotMatch(runtime, /ResizeObserver/);
@@ -3418,9 +3493,6 @@ test("production Today widget uses its dedicated frontend and a sandboxed Electr
   assert.match(widgetMain, /CommandOrControl\+Shift\+T/);
   assert.match(demo, /data-widget-resize="top"/);
   assert.match(demo, /data-widget-resize="bottom"/);
-  assert.match(demo, /body\.widget-runtime \.widget-content\s*\{[\s\S]*overflow-y:\s*auto;/);
-  assert.match(demo, /body\.widget-runtime \.widget-content::\-webkit-scrollbar\s*\{[\s\S]*display:\s*none;/);
-  assert.match(demo, /body\.widget-runtime \.task-list\s*\{[\s\S]*overflow:\s*visible;/);
   assert.match(runtime, /function applyAppearance/);
   assert.match(runtime, /document\.documentElement\.dataset\.zhFont/);
   assert.match(runtime, /--widget-font-scale/);
@@ -3480,13 +3552,17 @@ test("bundled cross-platform fonts and four global size presets are available", 
 
   assert.equal(normalized.zhFont, "noto");
   assert.match(app, /const FONT_SCALE_KEY = "task-track-font-scale"/);
-  assert.match(app, /current: "当前（最小）"/);
-  assert.match(app, /large: "大（推荐）"/);
+  // Display text now follows the Demo's ladder; the numeric steps live in shell.js.
+  assert.match(app, /current: "紧凑"/);
+  assert.match(app, /larger: "标准（推荐）"/);
+  assert.match(app, /large: "较大"/);
   assert.match(app, /document\.documentElement\.dataset\.fontScale = state\.fontScale/);
   assert.match(app, /selectRow\("界面字号", "font-scale", state\.fontScale, fontScaleLabels\)/);
   assert.match(styles, /url\("\.\/assets\/fonts\/InterVariable\.woff2"\)/);
   assert.match(styles, /url\("\.\/assets\/fonts\/NotoSansCJKsc-Regular\.otf"\)/);
   assert.match(styles, /url\("\.\/assets\/fonts\/NotoSansCJKsc-Bold\.otf"\)/);
+  const shellSource = await fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "shell.js"), "utf8");
+  assert.match(shellSource, /SHELL_FONT_SCALE_VALUES = \{ current: "1", larger: "1\.08", large: "1\.16", largest: "1\.24" \}/);
   assert.match(styles, /:root\[data-font-scale="current"\]\s*\{[\s\S]*--font-unit:\s*1px/);
   assert.match(styles, /:root\[data-font-scale="larger"\]\s*\{[\s\S]*--font-unit:\s*1\.06px/);
   assert.match(styles, /:root\[data-font-scale="large"\]\s*\{[\s\S]*--font-unit:\s*1\.12px/);
@@ -4015,36 +4091,62 @@ test("task repository merges its sequence and completion control", async () => {
   assert.match(repositoryRefinement, /task-item:hover \.repository-complete,[\s\S]*opacity:\s*1;[\s\S]*pointer-events:\s*auto;/);
 });
 
-test("approved 4174 shell is the final stylesheet authority", async () => {
-  const [index, approved] = await Promise.all([
-    fs.readFile(path.join(__dirname, "..", "app", "renderer", "index.html"), "utf8"),
-    fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "approved-4174.css"), "utf8"),
+test("navigation group buttons leave the today scope and select the group", async () => {
+  const [shell, actions] = await Promise.all([
+    fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "shell.js"), "utf8"),
+    fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "actions.js"), "utf8"),
   ]);
+  // The Demo's group buttons navigate to 任务仓库 with that group; the today
+  // filter scopes across every group and would otherwise ignore the selection.
+  assert.match(shell, /data-action="select-nav-group" data-group-id=/);
+  assert.match(actions, /case "select-nav-group"/);
+  assert.match(actions, /if \(state\.taskFilter === "today"\) state\.taskFilter = "all";/);
+});
 
-  assert.ok(index.indexOf("approved-4174.css") > index.indexOf("milkdown-editor.css"));
-  assert.match(approved, /\.ops-app\.app\s*\{[\s\S]*grid-template-columns:\s*var\(--approved-rail-width\) minmax\(0, 1fr\);/);
-  assert.match(approved, /\.ops-app\.app\s*\{[\s\S]*padding:\s*0 8px 4px;/);
-  assert.match(approved, /\.app-command-bar\s*\{[\s\S]*margin:\s*0 -8px;/);
-  assert.match(approved, /\.app-command-bar\s*\{[\s\S]*grid-template-columns:\s*max-content minmax\(280px, 1fr\) max-content;/);
-  assert.match(approved, /\.rail\.sidebar\.sidebar-today-mode\.focus-rail\s*\{[\s\S]*width:\s*100%;[\s\S]*height:\s*100%;[\s\S]*align-self:\s*stretch;[\s\S]*justify-self:\s*stretch;[\s\S]*padding:\s*18px 14px 18px;[\s\S]*border:\s*0;[\s\S]*background:\s*#315f51;/);
-  assert.doesNotMatch(approved, /\.rail\.sidebar\.sidebar-today-mode\.focus-rail\s*\{[^}]*margin-(?:left|bottom):\s*-/);
-  assert.match(approved, /\.focus-rail \.focus-list\s*\{[\s\S]*gap:\s*4px;/);
-  assert.match(approved, /\.focus-rail \.focus-row\s*\{[\s\S]*min-height:\s*44px;[\s\S]*grid-template-columns:\s*28px minmax\(0, 1fr\) 22px;[\s\S]*border-radius:\s*9px;[\s\S]*background:\s*rgba\(255, 255, 255, \.025\);[\s\S]*box-shadow:\s*none;/);
-  assert.match(approved, /\.focus-rail \.focus-row:hover,[\s\S]*background:\s*rgba\(255, 255, 255, \.065\);/);
-  assert.match(approved, /\.focus-rail \.focus-row\.selected\s*\{[\s\S]*background:\s*rgba\(255, 255, 255, \.11\);[\s\S]*box-shadow:\s*none;/);
-  assert.match(approved, /\.focus-rail\s*\{[\s\S]*padding:\s*18px 14px 18px;/);
-  assert.match(approved, /\.app-command-utilities\s*\{[\s\S]*display:\s*flex;[\s\S]*align-items:\s*center;/);
-  assert.match(approved, /\.app-command-utilities \.app-command-utility\s*\{[\s\S]*width:\s*36px;[\s\S]*height:\s*36px;/);
-  assert.match(approved, /\.app-topbar-search\s*\{[\s\S]*width:\s*min\(540px, 100%\);[\s\S]*justify-self:\s*end;/);
-  assert.match(approved, /\.rail\.sidebar \.task-row\.task-item \.task-sequence-action\s*\{[\s\S]*grid-column:\s*1;/);
-  assert.match(approved, /\.rail\.sidebar \.task-row\.task-item \.task-title-wrap\s*\{[\s\S]*grid-column:\s*2;/);
-  assert.match(approved, /\.app-topbar-search \.gooey-search-field,[\s\S]*border:\s*0;[\s\S]*box-shadow:\s*none;/);
-  assert.match(approved, /\.app-command-status\s*\{[\s\S]*justify-content:\s*flex-end;/);
-  assert.match(approved, /\.settings-panel \.settings-row select\s*\{[\s\S]*width:\s*auto;[\s\S]*field-sizing:\s*content;[\s\S]*text-align:\s*left;/);
-  assert.match(approved, /\.settings-panel \.work-rhythm-settings-unlock button\.primary\s*\{[\s\S]*min-width:\s*max-content;[\s\S]*background:\s*var\(--approved-green\);/);
-  const repositoryRefinement = approved.slice(approved.lastIndexOf("Task repository refinement"));
-  assert.match(repositoryRefinement, /\.rail\.sidebar \.repository-filter-trigger,[\s\S]*\.rail\.sidebar \.add-task-floating\s*\{[\s\S]*width:\s*34px;[\s\S]*height:\s*34px;[\s\S]*border-radius:\s*10px;[\s\S]*background:\s*var\(--approved-muted\);/);
-  assert.match(repositoryRefinement, /\.rail\.sidebar \.repository-heading-row\s*\{[\s\S]*align-items:\s*flex-start;[\s\S]*padding:\s*0 10px;/);
+test("the frozen Demo baseline is the renderer stylesheet authority", async () => {
+  const rendererDir = path.join(__dirname, "..", "app", "renderer");
+  const index = await fs.readFile(path.join(rendererDir, "index.html"), "utf8");
+  const frozenDir = path.join(__dirname, "..", "prototypes", "baseline", "loop-plane-phase17-frozen");
+  const previousFrozenDir = path.join(__dirname, "..", "prototypes", "baseline", "loop-plane-phase1-frozen");
+
+  // The Demo baseline must be present verbatim and must not be edited to fit
+  // the product implementation.
+  const frozenEntry = await fs.readFile(path.join(frozenDir, "loop-plane-phase1.html"), "utf8");
+  const inline = frozenEntry.match(/<style>([\s\S]*?)<\/style>/)[1];
+  const shell = await fs.readFile(path.join(rendererDir, "src", "shell.css"), "utf8");
+  assert.equal(shell, inline, "src/shell.css must stay byte-identical to the frozen Demo inline stylesheet");
+
+  const copied = [
+    ["knowledge.css", "loop-knowledge-phase8.css"],
+    ["fonts.css", "loop-settings-fonts.css"],
+    ["settings.css", "loop-settings-phase9.css"],
+    ["typography.css", "loop-typography.css"],
+    ["refinement.css", "loop-refinement.css"],
+    ["selection.css", "loop-bulk-phase10.css"],
+    ["flow.css", "loop-flow-phase11.css"],
+    ["shell-refinement.css", "loop-shell-refinement.css"],
+    ["help.css", "loop-help-phase14.css"],
+    ["work.css", "loop-work-phase15.css"],
+    ["task-entry.css", "loop-task-phase16.css"],
+    ["journey.css", "loop-journey-phase17.css"],
+  ];
+  for (const [target, source] of copied) {
+    const [a, b] = await Promise.all([
+      fs.readFile(path.join(rendererDir, "src", target), "utf8"),
+      fs.readFile(path.join(frozenDir, source), "utf8"),
+    ]);
+    assert.equal(a, b, `src/${target} must stay byte-identical to the frozen ${source}`);
+  }
+
+  // Load order mirrors the Demo entry, and bridge.css is the only override layer.
+  const linked = [...index.matchAll(/<link[^>]+href="\.\/src\/([^"?]+)/g)].map((match) => match[1]);
+  const order = ["shell.css", "vendor/milkdown-editor.css", "knowledge.css", "fonts.css", "settings.css", "typography.css", "refinement.css", "selection.css", "flow.css", "shell-refinement.css", "help.css", "work.css", "task-entry.css", "journey.css", "bridge.css"];
+  assert.deepEqual(linked, order, "stylesheets must load in the frozen Demo order, with bridge.css last");
+  assert.ok(!index.includes("approved-4174.css"), "the superseded approved-4174 shell must no longer be loaded");
+  assert.ok(!index.includes("styles.css"), "the superseded styles.css must no longer be loaded");
+  assert.match(index, /<div id="overlay"><\/div>/);
+  assert.match(shell, /:root\{--canvas:#fff/);
+  assert.match(shell, /:root\[data-theme=dark\]\{--canvas:#17191d/);
 });
 
 test("repository and flow cleanup leave no inherited separators or duplicate headings", async () => {
@@ -5041,68 +5143,29 @@ test("deadline ranges compose with status and order only deadline-scoped results
   assert.deepEqual(result.exact, ["tomorrow-early", "tomorrow-late"]);
 });
 
-test("calendar owns one global navigation entry, fills the workspace, and uses the ReUI-style deadline date and time picker", async () => {
-  {
-    const [app, styles] = await Promise.all([
-      fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "app.js"), "utf8"),
-      fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "styles.css"), "utf8"),
-    ]);
-    const approvedShell = styles.slice(styles.lastIndexOf("2026-09-19 — restore the approved 4174 product shell"));
-
-    assert.match(app, /function renderAppTopbar\(\)[\s\S]*data-action="toggle-calendar"[^>]*>[\s\S]*日历[\s\S]*data-action="toggle-review"/);
-    assert.equal((app.match(/data-action="toggle-calendar"/g) || []).length, 1);
-    assert.equal((app.match(/data-action="toggle-review"/g) || []).length, 1);
-    assert.match(app, /function renderSidebarFooter\(\)\s*\{\s*return "";\s*\}/);
-    assert.match(app, /function renderAppTopbar\(\)[\s\S]*class="app-command-utilities"[\s\S]*data-action="toggle-settings"[\s\S]*data-action="toggle-theme"/);
-    assert.match(app, /\$\{state\.calendarOpen \? "" : renderSidebar\(\)\}/);
-    assert.match(app, /class="workspace \$\{state\.calendarOpen \? "workspace-calendar" : ""\}"/);
-    assert.match(app, /state\.calendarOpen \? renderCalendarPanel\(\) : task \? renderTaskPage\(task\)/);
-    assert.match(app, /class="calendar-page"[^>]*aria-labelledby="calendar-title"/);
-    assert.match(app, /data-action="calendar-today">回到今天/);
-    assert.match(app, /data-action="toggle-deadline-picker"/);
-    assert.match(app, /data-action="select-deadline-date"/);
-    assert.match(app, /data-action="apply-deadline-time"/);
-    assert.match(approvedShell, /\.workspace\.workspace-calendar\s*\{[\s\S]*grid-column:\s*1 \/ -1;/);
-    assert.match(styles, /\.calendar-page \.calendar-grid\s*\{[\s\S]*grid-template-rows:\s*repeat\(6, minmax\(68px, 1fr\)\);/);
-    return;
-  }
-  const [app, styles] = await Promise.all([
-    fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "app.js"), "utf8"),
-    fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "styles.css"), "utf8"),
+test("calendar owns one global navigation entry, fills the workspace, and keeps the deadline date and time picker", async () => {
+  const rendererDir = path.join(__dirname, "..", "app", "renderer", "src");
+  const [shell, app, shellCss] = await Promise.all([
+    fs.readFile(path.join(rendererDir, "shell.js"), "utf8"),
+    fs.readFile(path.join(rendererDir, "app.js"), "utf8"),
+    fs.readFile(path.join(rendererDir, "shell.css"), "utf8"),
   ]);
 
-  assert.match(app, /function renderAppRail\(\)[\s\S]*data-action="toggle-calendar"[^>]*>[\s\S]*日历[\s\S]*data-action="toggle-review"/);
-  assert.equal((app.match(/data-action="toggle-calendar"/g) || []).length, 1);
-  assert.equal((app.match(/data-action="toggle-review"/g) || []).length, 1);
-  assert.match(app, /function renderAppRail\(\)[\s\S]*data-action="toggle-settings"/);
-  assert.doesNotMatch(app.match(/function renderSidebar\(\)[\s\S]*?function renderRepositorySegmentedFilter/)?.[0] || "", /data-action="toggle-settings"/);
-  assert.doesNotMatch(app, /class="sidebar-foot[\s\S]*data-action="toggle-calendar"/);
-  assert.match(app, /function renderCalendarPanel\(\)/);
-  assert.match(app, /\$\{state\.calendarOpen \? "" : renderSidebar\(\)\}/);
-  assert.match(app, /class="workspace \$\{state\.calendarOpen \? "workspace-calendar" : ""\}"/);
-  assert.match(app, /state\.calendarOpen \? renderCalendarPanel\(\) : task \? renderTaskPage\(task\)/);
-  assert.match(app, /class="calendar-page"[^>]*aria-labelledby="calendar-title"/);
-  assert.match(app, /class="calendar-page-head"[\s\S]*id="calendar-title">日历<[\s\S]*data-action="calendar-today">回到今天/);
-  assert.match(app, /class="calendar-task-count[^>]*>\$\{tasks\.length\} 项任务/);
-  assert.doesNotMatch(app, /class="calendar-overlay"/);
-  assert.match(app, /function renderTaskDeadlinePopover\(task\)/);
+  // Exactly one global navigation entry each, emitted from the shared helper.
+  assert.equal((shell.match(/toggle-calendar/g) || []).length, 1);
+  assert.equal((shell.match(/toggle-review/g) || []).length, 1);
+  assert.match(shell, /\["today", "日历", "calendar"\]|shellNavButton\("calendar", "日历", "calendar"\)/);
+  assert.match(shell, /shellNavButton\("review", "回顾", "history"\)/);
+
+  // Wide routes hide the task-list column and let the workspace take the row.
+  assert.match(app, /\$\{shellWide \? "" : renderShellTaskList\(filteredTasks\(\)\)\}/);
+  assert.match(app, /const shellWide = shellIsWide\(\);/);
+  assert.match(shellCss, /\.app-wide\{grid-template-columns:var\(--nav-width\) minmax\(0,1fr\)\}/);
+
+  // The deadline picker wiring survives the redesign.
   assert.match(app, /data-action="toggle-deadline-picker"/);
   assert.match(app, /data-action="select-deadline-date"/);
   assert.match(app, /data-action="apply-deadline-time"/);
-  assert.match(app, /data-action="clear-task-deadline"/);
-  assert.match(app, /data-deadline-reminder/);
-  assert.match(app, /提前 1 周/);
-  assert.doesNotMatch(app, /data-deadline-field|type="datetime-local"/);
-  assert.match(app, /高优任务建议设置截止时间/);
-  assert.match(styles, /\.calendar-grid/);
-  const calendarWorkspace = styles.slice(styles.lastIndexOf("2026-09-19 surface continuity"));
-  assert.match(calendarWorkspace, /\.workspace\.workspace-calendar\s*\{[^}]*grid-column:\s*2 \/ 4;/);
-  assert.match(calendarWorkspace, /\.calendar-page \.calendar-grid\s*\{[^}]*grid-template-rows:\s*repeat\(6, minmax\(68px, 1fr\)\);/);
-  assert.match(calendarWorkspace, /\.calendar-page \.calendar-agenda\s*\{[^}]*grid-template-columns:\s*166px minmax\(0, 1fr\);/);
-  assert.match(styles, /\.task-deadline-popover/);
-  assert.match(styles, /\.task-deadline-calendar-pane/);
-  assert.match(styles, /\.task-deadline-time-list/);
-  assert.match(styles, /\.task-deadline-reminder-control/);
 });
 
 test("deadline picker follows the documented date-first and time-save flow", async () => {

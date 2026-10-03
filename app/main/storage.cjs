@@ -155,14 +155,16 @@ function normalizeTaskData(data) {
       ? safeData.activeGroupId
       : taskGroups[0]?.id || UNGROUPED_TASKS_GROUP_ID,
     flowWidths: normalizeFlowWidths(safeData.flowWidths),
-    sidebarWidth: clampNumber(safeData.sidebarWidth, 390, 370, 560),
+    // Mirrors app.js defaultSidebarWidth / sidebarWidthLimits: the preference now
+    // drives the Demo's task-list column, whose baseline is 270px.
+    sidebarWidth: clampNumber(safeData.sidebarWidth, 270, 230, 460),
     detailHeight: clampNumber(safeData.detailHeight, 58, 50, 82),
     attachments: normalizeAttachments(safeData.attachments),
     theme: safeData.theme === "dark" ? "dark" : "light",
     font: ["songti", "heiti", "system", "mono"].includes(safeData.font) ? safeData.font : "system",
     zhFont: ZH_FONTS.has(safeData.zhFont) ? safeData.zhFont : legacyFonts.zhFont,
     enFont: EN_FONTS.has(safeData.enFont) ? safeData.enFont : legacyFonts.enFont,
-    fontScale: FONT_SCALES.has(safeData.fontScale) ? safeData.fontScale : "large",
+    fontScale: FONT_SCALES.has(safeData.fontScale) ? safeData.fontScale : "larger",
     taskFilter: TASK_FILTERS.has(safeData.taskFilter) ? safeData.taskFilter : "all",
     priorityFilter: PRIORITY_FILTERS.has(safeData.priorityFilter) ? safeData.priorityFilter : "all",
     captureSourceFilter: CAPTURE_SOURCE_FILTERS.has(safeData.captureSourceFilter) ? safeData.captureSourceFilter : "all",

@@ -5,7 +5,10 @@ import { codeBlockConfig } from "@milkdown/kit/component/code-block";
 import { commandsCtx, editorViewCtx } from "@milkdown/kit/core";
 import { markRule } from "@milkdown/kit/prose";
 import { TextSelection } from "@milkdown/kit/prose/state";
-import { inlineCodeSchema, insertImageCommand } from "@milkdown/kit/preset/commonmark";
+import { wrapIn } from "@milkdown/kit/prose/commands";
+import { undo, redo } from "@milkdown/kit/prose/history";
+import { inlineCodeSchema, insertImageCommand, toggleStrongCommand, toggleEmphasisCommand, toggleInlineCodeCommand, wrapInHeadingCommand, wrapInBulletListCommand, wrapInOrderedListCommand, wrapInBlockquoteCommand, createCodeBlockCommand, insertHrCommand, liftListItemCommand } from "@milkdown/kit/preset/commonmark";
+import { toggleStrikethroughCommand, insertTableCommand } from "@milkdown/kit/preset/gfm";
 import { $inputRule } from "@milkdown/kit/utils";
 import "@milkdown/crepe/theme/frame.css";
 import "@milkdown/crepe/theme/common/code-mirror.css";
@@ -294,6 +297,7 @@ class MilkdownTaskEditor {
     enableTableResizing = false,
     tableColumnWidths = [],
     onTableColumnWidthsChange,
+    onSelectionChange,
   }) {
     if (!root) throw new Error("Milkdown root element is required.");
     const current = instances.get(root);
@@ -309,6 +313,9 @@ class MilkdownTaskEditor {
         [Crepe.Feature.Toolbar]: false,
       },
       featureConfigs: {
+        // Use the native caret. The virtual caret measured from the wrong
+        // positioned ancestor in the prototype and painted a second cursor.
+        [Crepe.Feature.Cursor]: { virtual: false },
         [Crepe.Feature.Placeholder]: {
           text: placeholder,
         },
@@ -346,6 +353,9 @@ class MilkdownTaskEditor {
     crepe.on((listener) => {
       listener.updated(scheduleMarkdown);
       listener.updated(() => tableColumnResizer?.scheduleRefresh());
+      // Listener callbacks run before EditorView has committed its new state.
+      listener.updated(() => queueMicrotask(() => onSelectionChange?.()));
+      listener.selectionUpdated(() => queueMicrotask(() => onSelectionChange?.()));
       listener.blur(emitMarkdown);
       listener.destroy(() => cancelScheduledIdle(markdownTimer, emitMarkdown));
     });
@@ -355,6 +365,52 @@ class MilkdownTaskEditor {
       tableColumnResizer = new MilkdownTableColumnResizer(root, tableColumnWidths, onTableColumnWidthsChange);
     }
     const instance = {
+      format: (action, value) => crepe.editor.action((ctx) => {
+        const view = ctx.get(editorViewCtx);
+        const commands = { bold: toggleStrongCommand, italic: toggleEmphasisCommand, strike: toggleStrikethroughCommand, inline: toggleInlineCodeCommand, heading: wrapInHeadingCommand, bullet: wrapInBulletListCommand, ordered: wrapInOrderedListCommand, quote: wrapInBlockquoteCommand, code: createCodeBlockCommand, rule: insertHrCommand, table: insertTableCommand };
+        let result = false;
+        if (action === 'undo' || action === 'redo') result = (action === 'undo' ? undo : redo)(view.state, view.dispatch);
+        else if (action === 'link') {
+          const mark = view.state.schema.marks.link;
+          if (!view.state.selection.empty) {
+            const { from, to } = view.state.selection;
+            view.dispatch(view.state.tr.addMark(from, to, mark.create({href:value}))); result = true;
+          } else {
+            const text = view.state.schema.text(value, [mark.create({href:value})]);
+            view.dispatch(view.state.tr.replaceSelectionWith(text, false)); result = true;
+          }
+        } else if (action === 'bullet' || action === 'ordered') {
+          const { $from } = view.state.selection;
+          const current = Array.from({length:$from.depth}, (_, i) => i+1).reverse().find(d => ['bullet_list','ordered_list'].includes($from.node(d).type.name));
+          if(current && $from.node(current).type.name === (action === 'bullet' ? 'bullet_list' : 'ordered_list')) result = ctx.get(commandsCtx).call(liftListItemCommand.key);
+          else if(current) {const type=view.state.schema.nodes[action==='bullet'?'bullet_list':'ordered_list'];view.dispatch(view.state.tr.setNodeMarkup($from.before(current),type));result=true;}
+          else result=ctx.get(commandsCtx).call(commands[action].key);
+        } else if (action === 'task') {
+          const type = view.state.schema.nodes.bullet_list;
+          const before=view.state.selection.$from;
+          const existing=Array.from({length:before.depth}, (_, i) => i+1).find(d=>before.node(d).type.name==='list_item');
+          if(existing){const node=before.node(existing);view.dispatch(view.state.tr.setNodeMarkup(before.before(existing),undefined,{...node.attrs,checked:node.attrs.checked==null?false:null}));result=true;}
+          else if (wrapIn(type)(view.state, view.dispatch)) {
+            const tr = view.state.tr;
+            const { $from, $to } = view.state.selection;
+            const depth = Array.from({length:$from.depth}, (_, i) => i + 1).reverse().find(d => $from.node(d).type === type);
+            if (depth) tr.doc.nodesBetween($from.before(depth), $to.after(depth), (node, pos) => { if(node.type.name === 'list_item') tr.setNodeMarkup(pos, undefined, {...node.attrs, checked:false}); });
+            view.dispatch(tr); result = true;
+          }
+        } else if (commands[action]) result = ctx.get(commandsCtx).call(commands[action].key, value);
+        view.focus(); onSelectionChange?.(); return result;
+      }),
+      getFormatState: () => crepe.editor.action((ctx) => {
+        const view = ctx.get(editorViewCtx), { selection, schema, storedMarks } = view.state;
+        const marks = storedMarks || selection.$from.marks();
+        const active = {};
+        for (const [name, type] of Object.entries({bold:'strong', italic:'emphasis', strike:'strike_through', inline:'inlineCode'})) {
+          const mark = schema.marks[type]; active[name] = !!mark && (selection.empty ? marks.some(m => m.type === mark) : view.state.doc.rangeHasMark(selection.from, selection.to, mark));
+        }
+        active.heading = selection.$from.parent.type.name === 'heading' ? String(selection.$from.parent.attrs.level) : '0';
+        active.undo = undo(view.state); active.redo = redo(view.state);
+        return active;
+      }),
       getMarkdown: () => {
         cancelScheduledIdle(markdownTimer, emitMarkdown);
         markdownTimer = 0;

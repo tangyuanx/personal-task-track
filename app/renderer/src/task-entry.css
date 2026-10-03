@@ -1,0 +1,75 @@
+/* Task entry uses the accepted shell tokens; geometry stays local to these surfaces. */
+.entry16-dialog.dialog{width:min(600px,calc(100vw - 48px));padding:0;max-height:calc(100dvh - 110px);display:flex;flex-direction:column;overflow:hidden;border-radius:12px}
+.entry16-dialog .dialog-head{padding:20px 24px 12px;margin:0;gap:16px}
+.entry16-dialog .dialog-head h2{font-size:calc(16px * var(--font-scale));font-weight:600}
+.entry16-dialog .dialog-head .icon-button{margin-left:auto}
+.entry16-body{padding:0 24px 20px;overflow:auto;min-height:0}
+.entry16-types{display:inline-flex;gap:2px;padding:3px;background:var(--list);border-radius:6px;margin:0 0 20px}
+.entry16-types button{padding:5px 18px;color:var(--secondary);font-size:calc(12px * var(--font-scale))}
+.entry16-types button.active{background:var(--canvas);color:var(--text);box-shadow:0 1px 3px #00000012}
+.entry16-dialog label,.entry16-panel label{font-size:calc(11px * var(--font-scale));color:var(--secondary);display:block;margin:0 0 7px}
+.entry16-dialog input:not([type=checkbox]),.entry16-dialog select,.entry16-dialog textarea,.entry16-panel input,.entry16-panel select{background:var(--canvas);border:1px solid var(--line);border-radius:6px;font-size:calc(12px * var(--font-scale));padding:8px 10px;width:100%;min-width:0;box-sizing:border-box}
+.entry16-dialog #create-title{font-size:calc(16px * var(--font-scale));font-weight:500;height:44px}
+.entry16-dialog textarea{resize:vertical;min-height:84px;line-height:1.7}
+.entry16-writing{display:grid;gap:16px}
+.entry16-writing label small{font:inherit;margin-left:6px}
+.entry16-meta{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.12fr);gap:18px;margin-top:20px}
+.entry16-priorities{display:flex;gap:4px;min-height:36px;align-items:stretch}
+.entry16-priorities button{flex:1;padding:0 8px;font-size:calc(12px * var(--font-scale));color:var(--secondary);border:1px solid var(--line);border-radius:6px}
+.entry16-priorities button.active{border-color:var(--green);color:var(--green);background:var(--green-soft)}
+.entry16-priorities svg{width:13px;height:13px}
+.entry16-dialog .entry16-today{display:flex;align-items:center;gap:9px;color:var(--text);margin:18px 0 0;font-size:calc(12px * var(--font-scale))}
+.entry16-today input{margin:0;accent-color:var(--green);width:14px;height:14px}
+.entry16-options{margin-top:20px;border-top:1px solid var(--line)}
+.entry16-disclosure{display:flex;align-items:center;width:100%;padding:12px 0;text-align:left;justify-content:flex-start;font-size:calc(12px * var(--font-scale));border-radius:0;gap:8px}
+.entry16-disclosure:hover{background:transparent;color:var(--green)}
+.entry16-disclosure>svg{color:var(--secondary);width:14px;height:14px}
+.entry16-disclosure>span{flex:1}.entry16-disclosure small{color:var(--secondary);font-size:calc(11px * var(--font-scale));max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.entry16-disclosure[aria-expanded=true]>.entry16-chevron{transform:rotate(90deg)}
+.entry16-setting{padding:0 0 16px}.entry16-setting+.entry16-disclosure{border-top:1px solid var(--line)}
+.entry16-date-grid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(90px,.6fr) minmax(0,1.2fr);gap:12px}
+.entry16-shortcuts{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
+.entry16-shortcuts button{padding:4px 9px;font-size:calc(11px * var(--font-scale));color:var(--secondary);background:var(--list)}
+.entry16-shortcuts button:hover{color:var(--green);background:var(--green-soft)}
+.entry16-dialog .recurrence-modes{margin:0 0 14px;display:flex;gap:4px;background:var(--list);padding:3px;border-radius:6px}
+.entry16-dialog .recurrence-modes button{flex:1;margin:0;padding:6px 8px;color:var(--secondary);font-size:calc(12px * var(--font-scale));border:0}
+.entry16-dialog .recurrence-modes button.active{background:var(--canvas);color:var(--text)}
+.entry16-cycle-fields{display:grid;grid-template-columns:120px minmax(0,1fr);align-items:end;gap:16px}
+.entry16-dialog .recurrence-weekdays{margin:0;display:flex;gap:5px}
+.entry16-dialog .recurrence-weekdays button{height:34px;flex:1;min-width:0;border:1px solid var(--line);color:var(--secondary);padding:0}
+.entry16-dialog .recurrence-weekdays button.active{border-color:var(--green);background:var(--green-soft);color:var(--green)}
+.entry16-dialog .schedule-hint{font-size:calc(11px * var(--font-scale));margin:10px 0 0;line-height:1.6}
+.entry16-dialog footer{padding:14px 24px;margin:0;border-top:1px solid var(--line);display:flex;align-items:center;gap:8px;flex-shrink:0;background:var(--list)}
+.entry16-status{margin-right:auto;color:var(--secondary);font-size:calc(11px * var(--font-scale))}
+.entry16-dialog footer .button{min-height:34px}
+.entry16-dialog .error{font-size:calc(11px * var(--font-scale));color:var(--orange);margin-top:6px;line-height:1.5}
+.entry16-dialog .error:empty{display:none}
+.entry16-dialog [aria-invalid=true]{border-color:var(--orange)!important}
+.entry16-dialog input:disabled,.entry16-dialog select:disabled{background:var(--list);opacity:.65}
+.entry16-panel.surface-popover{padding:18px;border-radius:12px}
+.entry16-panel .dialog-head{margin-bottom:16px}
+.entry16-panel .dialog-head h2{font-size:calc(14px * var(--font-scale));font-weight:600}
+.entry16-panel footer{display:flex;align-items:center;gap:8px;margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}
+.entry16-panel footer .entry16-spacer{flex:1}
+.entry16-panel .schedule-month{background:var(--list);margin-top:14px;padding:7px 8px;border-radius:6px}
+.entry16-panel .schedule-weekdays{margin-top:10px}
+.entry16-panel .schedule-day{height:32px;border-radius:5px}
+.entry16-panel .schedule-fields{margin-top:16px;gap:12px}
+.entry16-panel .schedule-hint{font-size:calc(11px * var(--font-scale));line-height:1.7;margin-top:12px}
+.entry16-time-presets{display:flex;gap:5px;margin-top:9px}
+.entry16-time-presets button{flex:1;min-height:26px;background:var(--list);font-size:calc(11px * var(--font-scale));font-variant-numeric:tabular-nums}
+.entry16-time-presets button:hover{color:var(--green);background:var(--green-soft)}
+.entry16-panel .recurrence-modes{background:var(--list);padding:3px;gap:3px;border-radius:6px}
+.entry16-panel .recurrence-modes button{flex:1;padding:6px 8px;border:0;color:var(--secondary)}
+.entry16-panel .recurrence-modes button.active{background:var(--canvas);color:var(--text)}
+.entry16-panel .recurrence-weekdays{gap:5px}
+.entry16-panel .recurrence-weekdays button{flex:1;min-width:0;height:32px;padding:0}
+.entry16-panel .recurrence-preview{background:var(--list);border-radius:6px;padding:12px;margin-top:16px}
+.entry16-panel .recurrence-preview h3{font-size:calc(11px * var(--font-scale));font-weight:500;margin-bottom:6px}
+.entry16-panel .recurrence-preview>div{font-size:calc(11px * var(--font-scale))}
+.entry16-panel .error{font-size:calc(11px * var(--font-scale));color:var(--orange)}
+.entry16-panel .error:empty{display:none}
+.entry16-panel [aria-invalid=true]{border-color:var(--orange)!important}
+:root[data-theme=dark] .entry16-dialog input,:root[data-theme=dark] .entry16-panel input{color-scheme:dark}
+
+.entry16-dialog .recurrence-weekdays button.active{box-shadow:none}

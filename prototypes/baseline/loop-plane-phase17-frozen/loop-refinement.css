@@ -1,0 +1,48 @@
+.task-item { min-height:44px; padding-block:3px; }
+.task-select { padding-block:5px; }
+
+.group-nav-row { position:relative; }
+.group-nav-row .nav-button { padding-right:10px; }
+.nav-groups .count { width:22px; flex-shrink:0; text-align:right; }
+.group-nav-row .group-menu-button { position:absolute; right:34px; margin-bottom:3px; background:var(--nav); }
+.group-nav-row .nav-button.active + .group-menu-button { background:var(--selected); }
+.group-nav-row:hover .nav-button>span:first-of-type,
+.group-nav-row:focus-within .nav-button>span:first-of-type { padding-right:24px; }
+
+.brand { gap:6px; padding-inline:4px; }
+.brand-mark { flex-shrink:0; }
+.brand .nav-toggle { margin-left:auto; }
+.brand .brand-update { margin-left:0; width:28px; height:28px; padding:0; position:relative; }
+.brand-update::after { content:''; position:absolute; top:4px; right:4px; width:4px; height:4px; border-radius:50%; background:currentColor; }
+.brand-update[aria-busy="true"]::after { display:none; }
+.brand-update svg { width:14px; height:14px; }
+.knowledge-header { min-height:52px; padding-block:9px; gap:14px; }
+.knowledge-file-meta { flex:1; gap:8px; }
+.knowledge-state { flex-shrink:0; }
+.knowledge-file-name { min-width:0; }
+.knowledge-header .knowledge-viewbar { padding:0; gap:12px; flex-shrink:0; }
+.knowledge-header-actions { gap:10px; flex-shrink:0; }
+.knowledge-header-actions>[data-knowledge-action="file-menu"] { width:26px; }
+.knowledge-tools { padding-top:8px; }
+
+.app.nav-collapsed { --nav-width:64px; }
+.nav-collapsed .navigation { padding-inline:7px; }
+.nav-collapsed .brand { flex-direction:column; height:114px; padding:12px 0 8px; gap:5px; }
+.nav-collapsed .brand strong,.nav-collapsed .nav-button>span,.nav-collapsed .local-status { display:none; }
+.nav-collapsed .brand .icon-button { display:inline-flex; margin-left:0; }
+.nav-collapsed .nav-button { justify-content:center; padding-inline:0; }
+.nav-collapsed .nav-groups { border-top:1px solid var(--line); margin-top:14px; padding-top:14px; }
+
+@media(max-width:1100px) {
+  .brand { padding-inline:0; gap:4px; }
+  .knowledge-header { gap:10px; }
+  .knowledge-header-actions { gap:4px; }
+  .knowledge-header .knowledge-viewbar { gap:7px; }
+  .knowledge-modes button { padding-inline:8px; }
+  .knowledge-file-meta { gap:6px; }
+}
+@media(max-width:930px) {
+  .brand { flex-direction:column; height:114px; padding:12px 0 8px; gap:5px; }
+  .brand .icon-button { display:inline-flex; margin-left:0; }
+  .group-menu-button { display:none; }
+}

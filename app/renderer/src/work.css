@@ -1,0 +1,76 @@
+.work15-pill{margin-left:auto;margin-right:16px;display:flex;align-items:center;gap:7px;font-size:calc(11px * var(--font-scale));color:var(--secondary);height:28px;padding:0 9px;border-radius:5px;background:var(--list)}
+.work15-pill i{width:5px;height:5px;border-radius:50%;background:var(--green)}
+.work15-pill strong{font-weight:500;color:var(--text)}
+.work15-gate{margin-top:20px;max-width:440px;padding:18px;background:var(--list);border-radius:6px}
+.work15-gate label{display:block;margin-bottom:8px;font-size:calc(12px * var(--font-scale))}
+.work15-gate input{height:34px;border:1px solid var(--line);background:var(--canvas);color:var(--text);border-radius:5px;padding:0 10px;font:inherit;max-width:210px}
+.work15-gate .button{margin-left:8px}
+.work15-form fieldset{border:0;border-top:1px solid var(--line);padding:20px 0 0;margin:24px 0 0;min-width:0}
+.work15-form legend{font-weight:600;font-size:calc(12px * var(--font-scale));padding-right:14px}
+.work15-form p{font-size:calc(11px * var(--font-scale));line-height:1.8;color:var(--secondary);margin:10px 0}
+.work15-weekdays{display:flex;gap:8px}
+.work15-weekdays label{position:relative}
+.work15-weekdays input{position:absolute;opacity:0;width:100%;height:100%;margin:0;cursor:pointer}
+.work15-weekdays span{display:grid;place-items:center;width:34px;height:32px;background:var(--list);border:1px solid var(--line);border-radius:5px;font-size:calc(12px * var(--font-scale))}
+.work15-weekdays input:checked+span{background:var(--green-soft);color:var(--green);border-color:var(--green)}
+.work15-weekdays input:focus-visible+span{outline:2px solid var(--green);outline-offset:3px}
+.work15-time-grid{display:grid;grid-template-columns:repeat(4,minmax(115px,1fr));gap:18px 16px}
+.work15-time-grid label,.work15-source{display:flex;flex-direction:column;gap:7px;font-size:calc(11px * var(--font-scale));color:var(--secondary)}
+.work15-form input[type=time],.work15-form input[type=number],.work15-form select{border:1px solid var(--line);background:var(--canvas);color:var(--text);border-radius:5px;padding:7px 10px;font:inherit;font-size:calc(12px * var(--font-scale));font-variant-numeric:tabular-nums;min-width:0}
+.work15-range{display:flex;align-items:center;gap:12px;font-size:calc(12px * var(--font-scale))}
+.work15-source{max-width:320px}
+.work15-checkbox{display:flex;align-items:center;gap:8px;font-size:calc(12px * var(--font-scale));margin-bottom:12px}
+.work15-checkbox input{accent-color:var(--green)}
+.work15-form footer{border-top:1px solid var(--line);margin-top:24px;padding-top:16px;display:flex;justify-content:space-between;gap:12px}
+.work15-dialog.dialog{width:min(700px,calc(100vw - 48px));padding:0;overflow:hidden;max-height:calc(100vh - 110px);display:flex;flex-direction:column}
+.work15-dialog .dialog-head{padding:18px 24px;margin:0}
+.work15-dialog .dialog-head h2{font-size:calc(16px * var(--font-scale))}
+.work15-dialog .dialog-head .icon-button{margin-left:auto}
+.work15-tabbar{display:flex;align-items:center;gap:20px;border-bottom:1px solid var(--line);padding:0 24px}
+.work15-tabbar button{padding:10px 0;font-size:calc(12px * var(--font-scale));border-radius:0;color:var(--secondary);border-bottom:2px solid transparent}
+.work15-tabbar button.active{color:var(--green);border-bottom-color:var(--green)}
+.work15-tabbar .text-button{margin-left:auto;border:0;font-size:calc(11px * var(--font-scale))}
+.work15-body{padding:24px;overflow:auto;min-height:0}
+.work15-note{color:var(--secondary);font-size:calc(11px * var(--font-scale));line-height:1.8;margin:0 0 16px}
+.work15-current-top{display:flex;align-items:center;justify-content:space-between;color:var(--secondary);font-size:calc(11px * var(--font-scale));font-variant-numeric:tabular-nums}
+.work15-current h3{font-size:calc(22px * var(--font-scale));font-weight:600;line-height:1.5;margin:22px 0 9px}
+.work15-current p{margin:0 0 24px;line-height:1.9;font-size:calc(12px * var(--font-scale));color:var(--secondary);max-width:64ch}
+.work15-current .button{margin:0 0 14px}
+.work15-dialog>footer{display:flex;align-items:center;justify-content:flex-end;gap:8px;padding:14px 24px;border-top:1px solid var(--line);margin:0}
+.work15-dialog>footer small{margin-right:auto;color:var(--secondary);font-size:calc(10px * var(--font-scale))}
+.work15-timeline{height:6px;display:flex;gap:2px;border-radius:4px;overflow:hidden;margin:0 0 22px}
+.work15-timeline i{background:var(--green);opacity:.7}
+.work15-timeline i.break{background:var(--secondary);opacity:.25}
+.work15-timeline i.meeting{background:var(--orange)}
+.work15-phase{display:flex;align-items:center;gap:20px;width:100%;padding:12px 10px;border-bottom:1px solid var(--line);border-radius:0;font-size:calc(12px * var(--font-scale));text-align:left}
+.work15-phase time{color:var(--secondary);width:108px;font-variant-numeric:tabular-nums}
+.work15-phase small{margin-left:auto;color:var(--secondary);font-size:calc(11px * var(--font-scale))}
+.work15-phase.active{background:var(--green-soft);color:var(--green)}
+.work15-phase[disabled]{opacity:1;color:var(--secondary);cursor:default}
+.work15-queue-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:16px}
+.work15-queue-actions{display:flex;gap:6px}
+.work15-queue-actions .button{font-size:calc(11px * var(--font-scale));padding:0 8px}
+.work15-task{display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--line);padding:13px 0}
+.work15-rank{color:var(--secondary);font-size:calc(11px * var(--font-scale));font-variant-numeric:tabular-nums;width:20px;flex-shrink:0;text-align:center}
+.work15-task-copy{flex:1;min-width:0}
+.work15-task-copy button{display:block;max-width:100%;text-align:left;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;font-size:calc(12px * var(--font-scale))}
+.work15-task-copy p{margin:5px 0 0;color:var(--secondary);font-size:calc(11px * var(--font-scale));white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.work15-task .text-button{font-size:calc(11px * var(--font-scale));flex-shrink:0}
+.work15-task .work15-duration{width:80px;font-size:calc(11px * var(--font-scale));background:var(--canvas);border:1px solid var(--line);border-radius:4px;padding:5px;color:var(--secondary)}
+.work15-import textarea{width:100%;height:220px;border:1px solid var(--line);background:var(--canvas);color:var(--text);border-radius:6px;padding:12px;font:inherit;font-size:calc(12px * var(--font-scale));line-height:1.9;resize:vertical;caret-color:var(--green)}
+.work15-import-fields{display:flex;gap:20px;align-items:end;margin-bottom:16px}
+.work15-import-fields label{font-size:calc(11px * var(--font-scale));color:var(--secondary);display:flex;flex-direction:column;gap:7px;flex:1}
+.work15-import-fields select{border:1px solid var(--line);background:var(--canvas);color:var(--text);padding:8px 10px;border-radius:5px;font:inherit}
+.work15-file{display:flex;align-items:center;justify-content:space-between;font-size:calc(11px * var(--font-scale));margin-bottom:8px}
+.work15-file input{max-width:235px;font-size:calc(11px * var(--font-scale))}
+.work15-preview{padding:0;margin:0;list-style:none}
+.work15-preview li{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line);font-size:calc(12px * var(--font-scale))}
+.work15-dialog .work15-preview input[type=checkbox]{accent-color:var(--green);width:14px;height:14px;flex:0 0 14px;margin:0}
+.work15-dialog .work15-preview label{flex:1;min-width:0;overflow-wrap:anywhere;display:block;margin:0;font-weight:400}
+.work15-preview small{color:var(--secondary);font-size:calc(10px * var(--font-scale));margin-left:8px}
+.work15-dialog .work15-preview input[type=number]{width:72px;flex:0 0 72px;border:1px solid var(--line);background:var(--canvas);color:var(--text);border-radius:4px;padding:6px;font:inherit;font-size:calc(11px * var(--font-scale))}
+.work15-preview-summary{display:flex;justify-content:space-between;margin:16px 0 0;font-size:calc(11px * var(--font-scale));color:var(--secondary)}
+.work15-error{color:var(--orange)!important;font-size:calc(11px * var(--font-scale));line-height:1.7}
+.work15-empty{margin:24px 0;color:var(--secondary);font-size:calc(12px * var(--font-scale))}
+.work15-dialog :focus-visible{outline:2px solid var(--green);outline-offset:3px}
+@media(max-width:1100px){.work15-time-grid{grid-template-columns:repeat(2,minmax(115px,1fr))}.work15-pill{margin-right:8px}.work15-pill span{display:none}}

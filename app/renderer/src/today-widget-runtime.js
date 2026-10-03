@@ -10,10 +10,15 @@
   document.body.classList.add("widget-runtime");
 
   const widget = document.querySelector("#widget");
+  const widgetDate = document.querySelector("#widget-date");
+  const widgetCount = document.querySelector("#widget-count");
+  const widgetTabs = document.querySelector("#widget-tabs");
+  const tabTaskCount = document.querySelector("#widget-tab-task-count");
+  const tabQuickCount = document.querySelector("#widget-tab-quick-count");
   const menu = document.querySelector("#widget-menu");
   const menuToggle = document.querySelector("#menu-toggle");
   const compactToggle = document.querySelector("#compact-toggle");
-  const quickCaptureInput = document.querySelector("#quick-capture-input");
+  const quickCaptureInput = document.querySelector("#widget-capture");
   const quickCaptureSection = document.querySelector("#quick-capture-section");
   const quickCaptureCount = document.querySelector("#quick-capture-count");
   const quickCaptureList = document.querySelector("#quick-capture-list");
@@ -32,6 +37,7 @@
   const launchWithApp = document.querySelector("#launch-with-app");
   const opacityControl = document.querySelector("#widget-opacity");
   const opacityValue = document.querySelector("#widget-opacity-value");
+  let currentLane = "task";
   let currentSnapshot = { date: "", items: [], quickCaptures: [], quickCaptureTotal: 0, groups: [] };
   let queuedSnapshot = null;
   let completingTaskId = "";
@@ -90,6 +96,40 @@
     toastTimer = window.setTimeout(() => toast.classList.remove("is-visible"), 1800);
   }
 
+  /** Demo phase 12/13 chrome: lane tabs, close button, row menu trigger. */
+  function bindWidgetChrome() {
+    widgetTabs?.querySelectorAll("[data-widget-type]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const next = button.dataset.widgetType === "quick" ? "quick" : "task";
+        if (next === currentLane) return;
+        currentLane = next;
+        applyLane();
+      });
+    });
+    document.querySelector("#close-widget")?.addEventListener("click", () => { void bridge.hide?.(); });
+    document.addEventListener("click", (event) => {
+      const more = event.target.closest("[data-widget12='row-menu']");
+      if (!more) return;
+      event.preventDefault();
+      event.stopPropagation();
+      openRowMenu(more.dataset.widgetId || "", more);
+    }, true);
+  }
+
+  function openRowMenu(taskId, trigger) {
+    const row = document.querySelector(`.widget-row[data-task-id="${CSS.escape(String(taskId))}"]`);
+    if (!row) return;
+    contextTaskId = taskId;
+    const rect = trigger?.getBoundingClientRect?.();
+    if (row.dataset.lane === "quick") {
+      // quick captures reuse the project's existing context menu (promote / delete)
+      openContextMenu({ preventDefault() {}, clientX: rect?.left ?? 0, clientY: rect?.bottom ?? 0 }, row);
+      return;
+    }
+    // tasks have one meaningful action here: open them in the main window
+    void bridge.openMain(taskId);
+  }
+
   function closeMenu() {
     menu.classList.remove("is-open");
     menuToggle.setAttribute("aria-expanded", "false");
@@ -127,38 +167,95 @@
     }
   }
 
-  function taskHtml(item, index, items) {
-    const taskId = escapeHtml(item.taskId);
-    const title = escapeHtml(item.title || "未命名任务");
-    const nextText = escapeHtml(item.nextText || "补充任务背景或新增第一个节点");
-    const kind = ["normal", "high", "blocked"].includes(item.kind) ? item.kind : "normal";
-    const stateTitle = kind === "blocked" ? "被阻塞" : kind === "high" ? "高优先级" : "普通";
-    return `
-      <article class="today-task ${kind}" data-task-id="${taskId}" data-lane="task" data-title="${title}" tabindex="0" role="button">
-        <button class="task-check" type="button" aria-label="完成：${title}"></button>
-        <span class="task-copy"><strong>${title}</strong><span>下一步：${nextText}</span></span>
-        <i class="task-state" title="${stateTitle}"></i>
-      </article>
-    `;
+  // Icon paths copied verbatim from the frozen Demo's widget rows.
+  const GRIP_SVG = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M5 3h.01M5 8h.01M5 13h.01M10 3h.01M10 8h.01M10 13h.01" stroke-linecap="round"></path></svg>';
+  const CIRCLE_SVG = '<path d="M20 12a8 8 0 1 1-16 0 8 8 0 0 1 16 0"></path>';
+  const CHECK_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true">${CIRCLE_SVG}</svg>`;
+  const NEXT_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true">${CIRCLE_SVG}<path d="M8 12h8"></path></svg>`;
+  const OPEN_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"></path></svg>';
+  const MORE_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h.01M12 12h.01M19 12h.01"></path></svg>';
+  const NOTE_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h14v18H5zM8 8h8M8 12h8M8 16h5"></path></svg>';
+
+  /** The Demo marks the row that is open in the main window as .current. */
+  function isCurrentItem(item) {
+    return Boolean(currentSnapshot.activeTaskId) && String(item.taskId) === String(currentSnapshot.activeTaskId);
   }
 
-  function quickCaptureHtml(item, index, items) {
-    const taskId = escapeHtml(item.taskId);
-    const title = escapeHtml(item.title || "未命名速记");
-    const stamp = item.updatedAt || item.createdAt;
-    const time = stamp ? new Intl.DateTimeFormat("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(stamp)) : "刚刚";
+  /** One row of the Demo's .widget-rows list (phase 13 contract). */
+  function rowHtml({ id, lane, title, subtitle, icon, current, completeLabel, completeTitle, editLabel }) {
     return `
-      <article class="today-task quick-capture-item" data-task-id="${taskId}" data-lane="quick" data-title="${title}" tabindex="0" role="button">
-        <span class="quick-capture-note-icon" aria-hidden="true"><svg viewBox="0 0 16 20"><rect x="2" y="1.5" width="12" height="17" rx="2"></rect><path d="M5 7h6M5 11h6"></path></svg></span>
-        <span class="task-copy"><strong>${title}</strong><span>速记 · ${escapeHtml(time)}</span></span>
-      </article>
-    `;
+      <li class="widget-row today-task ${lane === "quick" ? "quick-capture-item" : ""} ${current ? "current" : ""}" data-widget-row="${id}" data-task-id="${id}" data-lane="${lane}" data-title="${title}">
+        <button class="widget13-grip" type="button" data-widget-drag="${id}" aria-label="调整顺序：${title}" aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown" title="拖动排序 · Alt+↑ / ↓">${GRIP_SVG}</button>
+        <button class="widget-check ${lane === "quick" ? "quick-check" : ""}" type="button" data-complete-task="${id}" aria-label="${completeLabel}" title="${completeTitle}">${icon}</button>
+        <div class="widget-row-copy task-copy">
+          <button class="widget-title" type="button" data-widget12="edit" data-widget-id="${id}" title="单击改名 · 双击打开主窗口" aria-label="${editLabel}"><strong>${title}</strong></button>
+          ${subtitle ? `<small>${subtitle}</small>` : ""}
+        </div>
+        <button class="widget-open" type="button" data-widget-open="${id}" aria-label="在主窗口打开：${title}" title="在主窗口打开">${OPEN_SVG}</button>
+        <button class="widget13-more" type="button" data-widget12="row-menu" data-widget-id="${id}" aria-haspopup="menu" aria-label="记录操作：${title}" title="更多操作">${MORE_SVG}</button>
+      </li>`;
+  }
+
+  function taskHtml(item) {
+    const id = escapeHtml(item.taskId);
+    const title = escapeHtml(item.title || "未命名任务");
+    const nextText = escapeHtml(item.nextText || "补充任务背景或新增第一个节点");
+    return rowHtml({
+      id,
+      lane: "task",
+      title,
+      subtitle: `${NEXT_SVG}<span>${nextText}</span>`,
+      icon: CHECK_SVG,
+      current: isCurrentItem(item),
+      completeLabel: `完成任务：${title}`,
+      completeTitle: "完成任务",
+      editLabel: `编辑任务：${title}`,
+    });
+  }
+
+  function quickCaptureHtml(item) {
+    const id = escapeHtml(item.taskId);
+    const title = escapeHtml(item.title || "未命名速记");
+    // the Demo shows the capture's own text, never a generated timestamp
+    const body = escapeHtml(item.description || item.nextText || "");
+    return rowHtml({
+      id,
+      lane: "quick",
+      title,
+      subtitle: body ? `<span>${body}</span>` : "",
+      icon: `<span class="note-icon">${NOTE_SVG}</span><span class="completion-icon">${CHECK_SVG}</span>`,
+      current: isCurrentItem(item),
+      completeLabel: `完成速记：${title}`,
+      completeTitle: "完成速记",
+      editLabel: `编辑速记：${title}`,
+    });
   }
 
   function updateCount(count = currentSnapshot.items.length) {
-    todayTaskCount.textContent = String(Math.max(0, count));
-    emptyState.classList.toggle("is-visible", count === 0);
-    taskList.hidden = count === 0;
+    const tasks = Math.max(0, count);
+    const total = Math.max(currentSnapshot.quickCaptures.length, Number(currentSnapshot.quickCaptureTotal) || 0);
+    todayTaskCount.textContent = String(tasks);
+    tabTaskCount.textContent = String(tasks);
+    tabQuickCount.textContent = String(total);
+    applyLane();
+  }
+
+  /** The Demo shows one lane at a time behind .widget-tabs. */
+  function applyLane() {
+    const lane = currentLane === "quick" ? "quick" : "task";
+    widget.dataset.widgetLane = lane;
+    widgetTabs.querySelectorAll("[data-widget-type]").forEach((button) => {
+      const active = button.dataset.widgetType === lane;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-pressed", String(active));
+    });
+    const taskEmpty = currentSnapshot.items.length === 0;
+    const quickEmpty = currentSnapshot.quickCaptures.length === 0;
+    taskList.hidden = lane !== "task" || taskEmpty;
+    quickCaptureList.hidden = lane !== "quick" || quickEmpty;
+    quickCaptureSection.hidden = lane !== "quick";
+    emptyState.hidden = lane === "task" ? !taskEmpty : !quickEmpty;
+    emptyState.textContent = lane === "quick" ? "暂无速记" : "暂无今日任务";
   }
 
   function applyAppearance(value) {
@@ -171,6 +268,9 @@
       "--widget-font-scale",
       String(Number.isFinite(fontSize) ? Math.max(12, Math.min(24, fontSize)) / 16.5 : 1),
     );
+    // the Demo's widget layers are written against --font-scale (the same
+    // variable as the main window); mirror it so the two render identically.
+    document.documentElement.style.setProperty("--font-scale", String(appearance.fontScale || "1"));
   }
 
   function renderSnapshot(value) {
@@ -184,8 +284,9 @@
     taskList.innerHTML = items.map(taskHtml).join("");
     quickCaptureList.innerHTML = captures.map(quickCaptureHtml).join("");
     const total = Math.max(captures.length, Number(currentSnapshot.quickCaptureTotal) || 0);
-    quickCaptureSection.hidden = total === 0;
     quickCaptureCount.textContent = String(total);
+    if (widgetDate) widgetDate.textContent = currentSnapshot.date || "";
+    if (widgetCount) widgetCount.textContent = `${items.length} 项`;
     const overflow = Math.max(0, total - captures.length);
     quickCaptureOverflow.hidden = overflow === 0;
     quickCaptureOverflow.textContent = overflow ? `还有 ${overflow} 条在任务仓库` : "";
@@ -212,7 +313,10 @@
       ? state.position
       : "top-right";
     widget.dataset.position = position;
+    widget.classList.toggle("compact", state.compact === true);
     widget.classList.toggle("is-compact", state.compact === true);
+    if (widgetDate) widgetDate.hidden = state.compact === true;
+    if (widgetCount) widgetCount.hidden = state.compact !== true;
     syncAlwaysOnTopControl(state.alwaysOnTop);
     widget.classList.toggle("is-click-through", state.clickThrough === true);
     clickThrough.checked = state.clickThrough === true;
@@ -220,8 +324,11 @@
     applyCaptureDraft(state.quickCaptureDraft);
     launchWithApp.checked = state.launchWithApp !== false;
     applyOpacity(state.opacity);
+    // the Demo swaps the glyph: minus when expanded, plus when compact
     compactToggle.title = state.compact ? "展开" : "收起";
-    compactToggle.setAttribute("aria-label", state.compact ? "展开今日窗口" : "收起今日窗口");
+    compactToggle.setAttribute("aria-label", state.compact ? "展开浮窗" : "收起浮窗");
+    const glyph = compactToggle.querySelector("path");
+    if (glyph) glyph.setAttribute("d", state.compact ? "M12 5v14M5 12h14" : "M5 12h14");
     document.querySelectorAll("[data-place]").forEach((button) => {
       button.classList.toggle("is-active", button.dataset.place === position);
     });
@@ -289,7 +396,14 @@
     const title = row?.dataset.title || "未命名任务";
     const strong = document.createElement("strong");
     strong.textContent = title;
-    editingInput.replaceWith(strong);
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "widget-title";
+    button.dataset.widget12 = "edit";
+    button.dataset.widgetId = row?.dataset.taskId || "";
+    button.title = "单击改名 · 双击打开主窗口";
+    button.append(strong);
+    editingInput.replaceWith(button);
     row?.classList.remove("is-editing");
     editingInput = null;
     editingTaskId = "";
@@ -332,7 +446,9 @@
     input.value = strong.textContent || "";
     input.maxLength = 240;
     input.setAttribute("aria-label", row.classList.contains("quick-capture-item") ? "编辑速记" : "编辑任务标题");
-    strong.replaceWith(input);
+    // the Demo wraps the title in .widget-title; swap the whole button so the
+    // input never ends up nested inside a <button>.
+    (strong.closest(".widget-title") || strong).replaceWith(input);
     row.classList.add("is-editing");
     editingTaskId = row.dataset.taskId || "";
     editingInput = input;
@@ -544,6 +660,16 @@
   }
 
   function bindTaskRows() {
+    document.querySelectorAll(".widget-row").forEach((row) => {
+      row.querySelector("[data-widget-open]")?.addEventListener("click", (event) => {
+        event.stopPropagation();
+        void bridge.openMain?.(row.dataset.taskId || "");
+      });
+      row.addEventListener("contextmenu", (event) => {
+        event.preventDefault();
+        openRowMenu(row.dataset.taskId || "", row.querySelector("[data-widget12='row-menu']"));
+      });
+    });
     document.querySelectorAll(".today-task").forEach((row) => {
       let clickTimer = 0;
       row.addEventListener("click", (event) => {
@@ -731,6 +857,7 @@
   document.querySelectorAll("#open-main").forEach((button) => {
     button.addEventListener("click", () => void bridge.openMain(""));
   });
+  bindWidgetChrome();
 
   document.querySelectorAll("[data-widget-resize]").forEach((handle) => {
     handle.addEventListener("pointerdown", beginResize);

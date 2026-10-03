@@ -1,0 +1,146 @@
+name: Publish v0.1.201
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/publish-v0.1.201.yml
+
+concurrency:
+  group: publish-v0.1.201
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify v0.1.201 frozen-Demo frontend baseline
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Verify processing node status dot color and release alignment
+        shell: bash
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          test "$version" = "0.1.201"
+          for f in app/renderer/src/*.js; do node --check "$f"; done
+          node --test --test-name-pattern='the frozen Demo baseline is the renderer stylesheet authority|today widget is rebuilt|phase model stays the frozen|release version, scripts and cache keys are aligned' tests/desktop.test.cjs tests/work-rhythm-ui.test.cjs
+
+  build:
+    name: Build v0.1.201 ${{ matrix.platform }}
+    needs: verify
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macOS
+            os: macos-latest
+            script: npm run dist:mac -- --x64 --arm64 --publish never
+            artifact: v0.1.201-macos
+          - platform: Windows
+            os: windows-latest
+            script: npm run dist:win -- --x64 --publish never
+            artifact: v0.1.201-windows
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Check JavaScript and tests
+        run: npm run check
+      - name: Build app
+        run: ${{ matrix.script }}
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+      - name: Test Windows installer upgrade matrix
+        if: matrix.platform == 'Windows'
+        shell: pwsh
+        run: |
+          $candidate = Get-ChildItem release -Filter "Loop-*-x64-setup.exe" | Select-Object -First 1
+          if (-not $candidate) { throw "Windows installer was not produced." }
+          ./tests/windows-upgrade-installer.test.ps1 -CandidateInstaller $candidate.FullName
+      - name: Verify update metadata
+        run: node tools/verify-update-artifacts.cjs release
+      - name: Stage v0.1.201 release assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            release/*.dmg
+            release/*.zip
+            release/*.exe
+            release/*.blockmap
+            release/latest.yml
+            release/latest-mac.yml
+          if-no-files-found: error
+          retention-days: 2
+
+  publish:
+    name: Publish v0.1.201 release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Refuse to replace an existing tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          if gh api "repos/${{ github.repository }}/git/ref/tags/v0.1.201" >/dev/null 2>&1; then
+            echo "v0.1.201 already exists; refusing to replace it."
+            exit 1
+          fi
+      - name: Collect v0.1.201 release assets
+        uses: actions/download-artifact@v4
+        with:
+          pattern: v0.1.201-*
+          path: release
+          merge-multiple: true
+      - name: Verify complete cross-platform update feed
+        run: node tools/verify-update-artifacts.cjs release --require-all-platforms
+      - name: Publish v0.1.201
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v0.1.201
+          target_commitish: ${{ github.sha }}
+          name: v0.1.201
+          body: |
+            ## 前端按冻结 Demo 基准整前端重建
+
+            以 `prototypes/baseline/loop-plane-phase17-frozen/` 为唯一视觉与交互基准，重建渲染进程外壳，
+            并接入项目原有的数据、存储、IPC 与业务规则。
+
+            - 外壳、任务列表、处理流、知识笔记、日历、回顾、设置全部按基准逐元素对齐。
+            - 今日浮窗按 phase 12+13 重建（泳道标签、拖动排序、高度调整、设置面板）。
+            - 工作与成长导航按 phase 15 重建（解锁、排程、双队列、批量导入预览）。
+            - 帮助与反馈按 phase 14 重建（说明折叠项 + 反馈弹窗）。
+            - 任务创建与属性按 phase 16 重建（新建对话框、渐进披露的截止/提醒与循环）。
+            - 任务操作链路按 phase 17 重建（完成就绪面板、创建/完成回执与撤销）。
+            - 旧样式（styles.css / approved-4174.css / work-rhythm.*）已不再加载。
+
+            全部 16 个冻结样式层与基准逐字节一致，`npm run check` 全绿。
+          make_latest: true
+          files: |
+            release/*.dmg
+            release/*.zip
+            release/*.exe
+            release/*.blockmap
+            release/latest.yml
+            release/latest-mac.yml

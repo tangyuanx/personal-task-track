@@ -1,0 +1,84 @@
+/* ============================================================
+   Loop -- today-widget bridge layer
+   The Demo renders the widget as a fixed-position panel inside the
+   main page; the product renders it in its own frameless transparent
+   BrowserWindow. This file is the only allowed deviation.
+   Everything above it (shell.css tokens + base rules, widget12.css,
+   widget13.css) must stay byte-identical to the frozen baseline.
+   ============================================================ */
+
+/* shell.css carries the main window's minimum size; the widget window is
+   only 296x49 in its compact state, so those minimums must go. */
+html, body {
+  min-width: 0;
+  min-height: 0;
+  background: transparent;
+}
+
+.today-widget {
+  position: static;
+  right: auto;
+  bottom: auto;
+  width: 100%;
+  height: 100%;
+  z-index: auto;
+  /* the window itself is frameless and transparent, so the Demo's outer
+     shadow would be clipped; keep the radius and drop the shadow. */
+  box-shadow: none;
+}
+
+/* .widget12 sets max-height:calc(100dvh - 126px) for the in-page preview;
+   in a 49px compact window that clamps to zero. The window is the container
+   now, so the widget fills it instead. */
+/* .widget12 also clamps its own width for the in-page preview
+   (max-width:calc(100vw - 32px)); inside a 360px window that would be 328px. */
+.today-widget.widget12,
+.today-widget.widget13 {
+  width: 100%;
+  max-width: none;
+  max-height: none;
+}
+
+/* The Demo moves its in-page panel with pointer handlers. The product's widget
+   is a real frameless window, so the header is the native drag region and every
+   control inside it opts out. (The old design had this rule in its inline
+   stylesheet; removing that sheet silently removed window dragging.) */
+.widget-header {
+  user-select: none;
+  -webkit-app-region: drag;
+}
+.widget-header button,
+.widget-header input,
+.widget-header textarea,
+.widget-header a,
+.widget13-resize,
+.widget12-settings,
+.widget-compose { -webkit-app-region: no-drag; }
+
+/* The baseline renders the settings panel into the page overlay and positions
+   it from the trigger. In the widget window the panel lives inside the widget,
+   so it is anchored under the header and toggled by the runtime's .is-open. */
+#widget-menu {
+  display: none;
+  position: absolute;
+  /* shell-refinement.css pins .widget12-settings with these two variables; the
+     in-page version computes them from the trigger, the window anchors them. */
+  --widget-prefs-x: 8px;
+  --widget-prefs-y: 46px;
+  right: 8px;
+  inset: 46px 8px auto 8px;
+  width: auto;
+  max-height: calc(100% - 56px);
+  overflow: auto;
+  padding: 12px 14px;
+  z-index: 30;
+}
+#widget-menu.is-open { display: block; }
+#widget-menu .widget12-settings-label { white-space: nowrap; flex-shrink: 0; }
+#widget-menu .widget12-settings-head h2 { font-size: calc(13px * var(--font-scale, 1)); font-weight: 600; margin: 0 0 4px; }
+#widget-menu .widget12-settings-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+#widget-menu .widget12-positions { display: flex; gap: 6px; }
+#widget-menu .widget12-positions button { width: 22px; height: 22px; border: 1px solid var(--line); border-radius: 4px; background: var(--canvas); }
+#widget-menu .widget12-positions button.is-active { border-color: var(--green); background: var(--green-soft); }
+#widget-menu .widget12-opacity { display: flex; align-items: center; gap: 8px; width: 100%; }
+#widget-menu .widget12-opacity input { flex: 1; min-width: 0; accent-color: var(--green); }

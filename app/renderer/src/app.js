@@ -136,10 +136,13 @@ const enFontLabels = {
   mono: "Monospace",
 };
 
+// Display text follows the Demo's ladder (紧凑 / 标准（推荐）/ 较大 / 特大).
+// The stored keys stay current/larger/large/largest so existing user data and
+// the desktop schema are untouched; the numeric steps live in shell.js.
 const fontScaleLabels = {
-  current: "当前（最小）",
-  larger: "较大",
-  large: "大（推荐）",
+  current: "紧凑",
+  larger: "标准（推荐）",
+  large: "较大",
   largest: "特大",
 };
 
@@ -156,8 +159,10 @@ const flowWidthLimits = {
 const defaultTaskGroup = { id: "group_inbox", title: "默认", order: 1 };
 const ALL_TASKS_GROUP_ID = "group_all";
 const UNGROUPED_TASKS_GROUP_ID = "group_ungrouped";
-const defaultSidebarWidth = 390;
-const sidebarWidthLimits = [370, 560];
+// The Demo's task-list column is 270px (--list-width). The persisted sidebar
+// width preference now drives that column; existing wider values are kept.
+const defaultSidebarWidth = 270;
+const sidebarWidthLimits = [230, 460];
 const defaultDetailHeight = 58;
 const detailHeightLimits = [50, 82];
 const recurrenceFrequencies = new Set(["none", "daily", "weekly"]);
@@ -290,6 +295,23 @@ let state = {
   knowledgeDraftPrompt: null,
   contextMenu: null,
   nodeDetailPosition: null,
+
+// ============================================================
+// SHELL UI STATE (see src/shell.js)
+// ============================================================
+  navCollapsed: false,
+  shellDrafts: {},
+  taskMenuOpen: false,
+  nodeRecordPreview: false,
+  knowledgeWidth: "default",
+  helpTopicOpen: -1,
+  createDraft: null,
+  createError: "",
+  createResumed: false,
+  journeyReceipt: null,
+  noteSummaryOpen: false,
+  deadlineDraft: null,
+  recurrenceDraft: null,
 };
 
 let dataProtectionMessage = "";
@@ -758,7 +780,8 @@ function normalizeEnFont(value) {
 }
 
 function normalizeFontScale(value) {
-  return Object.hasOwn(fontScaleLabels, value) ? value : "large";
+  // A fresh install matches the Demo default (标准 = 1.08).
+  return Object.hasOwn(fontScaleLabels, value) ? value : "larger";
 }
 
 function migrateLegacyFont(value) {
@@ -1717,6 +1740,7 @@ function restoreScrollViewport(snapshot, selector) {
  * This is called after every state change.
  */
 function render() {
+  if (typeof shellBeforeRender === "function") shellBeforeRender();
   reconcileWorkNavigationRuntime();
   const task = activeTask();
   const previousGroupScrollLeft = document.querySelector("[data-sheet-tabs]");
@@ -1750,23 +1774,25 @@ function render() {
   document.documentElement.dataset.zhFont = state.zhFont;
   document.documentElement.dataset.enFont = state.enFont;
   document.documentElement.dataset.fontScale = state.fontScale;
+  applyLoopAppearance();
   if (task) state.activeTaskId = task.id;
   if (recurrencePopoverTaskId && recurrencePopoverTaskId !== task?.id) recurrencePopoverTaskId = "";
   if (taskGroupSelectTaskId && taskGroupSelectTaskId !== task?.id) taskGroupSelectTaskId = "";
   if (deadlinePopoverTaskId && deadlinePopoverTaskId !== task?.id) deadlinePopoverTaskId = "";
+  const shellWide = shellIsWide();
   document.querySelector("#root").innerHTML = `
-    <main class="ops-app app" style="--sidebar-width:${normalizeSidebarWidth(state.sidebarWidth)}px">
+    <main class="app ${state.navCollapsed ? "nav-collapsed " : ""}${shellWide ? "app-wide" : ""}" style="--list-width:${normalizeSidebarWidth(state.sidebarWidth)}px">
       ${state.searchOpen ? `<div class="global-search-layer" data-global-search-layer aria-hidden="true"></div>` : ""}
-      ${renderAppTopbar()}
-      ${state.calendarOpen ? "" : renderSidebar()}
-      <section class="workspace ${state.calendarOpen ? "workspace-calendar" : ""}">
-        ${state.calendarOpen ? renderCalendarPanel() : task ? renderTaskPage(task) : renderEmptyPage()}
+      ${renderShellNavigation()}
+      ${renderShellTopbar()}
+      ${shellWide ? "" : renderShellTaskList(filteredTasks())}
+      <section class="workspace ${shellWide ? "workspace-wide" : ""}${!shellWide && task && state.taskPane === "notes" && !shellTaskIsNote(task) ? " knowledge-workspace" : ""}" data-task-id="${escAttr(task?.id || "")}" aria-label="${shellWide ? "全屏页面" : "任务工作台"}">
+        ${state.calendarOpen ? renderShellCalendar() : state.reviewOpen ? renderShellReview() : state.settingsOpen ? renderShellSettings() : renderShellWorkspace(task)}
       </section>
       <div id="context-menu-root">${renderContextMenu()}</div>
       ${renderTaskPriorityPopover()}
-      ${state.settingsOpen ? renderSettingsPanel() : ""}
-      ${state.reviewOpen ? renderReviewPanel() : ""}
       ${state.feedbackOpen ? renderBugReportPanel() : ""}
+      <div id="overlay-slot"></div>
     </main>
     ${renderCompletionNotice()}
     ${renderTodayWidgetRestore()}
@@ -1774,6 +1800,21 @@ function render() {
   `;
   restoreCachedKnowledgePane(task);
   bind();
+  if (typeof shellAfterRender === "function") shellAfterRender();
+  if (typeof shellBindFlowKeyboard === "function") shellBindFlowKeyboard();
+  if (typeof shellBindKnowledge === "function") shellBindKnowledge();
+  if (typeof shellBindListResizer === "function") shellBindListResizer();
+  if (typeof shellBindCreateDialog === "function") shellBindCreateDialog();
+  if (typeof shellBindJourneyReceipt === "function") shellBindJourneyReceipt();
+  // the work-navigation pill lives in the topbar and is rebuilt on every render
+  globalThis.LoopWork?.syncPill?.();
+  // Demo phase 17: a finished task's calendar agenda shows its conclusion.
+  if (typeof shellApplyCalendarConclusions === "function") shellApplyCalendarConclusions();
+  // the feedback dialog lives in #overlay, which render() never touches; keep it in sync
+  if (typeof shellHelpFeedbackDialog === "function" && typeof shellOverlayIsOpen === "function" && shellOverlayIsOpen() && document.querySelector("#help14-form")) shellHelpFeedbackDialog();
+  if (typeof shellBulkPrune === "function") shellBulkPrune();
+  if (typeof shellBindOverlay === "function") shellBindOverlay();
+  if (typeof shellBindBulk === "function") shellBindBulk();
   settingsMotion = "none";
   resizeTaskBriefTextareas();
   const restoreGroupScroll = () => {
@@ -2484,6 +2525,9 @@ function renderTaskPaneTabs(task) {
 }
 
 function renderTaskKnowledge(task) {
+  // Presentation lives in src/knowledge.js; the editor, file binding, conflict
+  // and recovery logic below are still the project's own.
+  if (typeof renderShellKnowledge === "function") return renderShellKnowledge(task);
   const stats = markdownStats(task.notes);
   const note = task.knowledgeNote || {};
   const unavailable = state.knowledgeFileIssues[note.noteId];
@@ -5948,8 +5992,10 @@ function applySetting(key, value) {
   if (key === "font-scale") state.fontScale = normalizeFontScale(value);
   if (key === "task-filter") {
     state.taskFilter = normalizeTaskFilter(value);
+    // 今日 / 任务仓库 must leave every full-width route, settings included.
     state.calendarOpen = false;
     state.reviewOpen = false;
+    state.settingsOpen = false;
   }
   if (key === "priority-filter") state.priorityFilter = normalizePriorityFilter(value);
   if (key === "capture-source-filter") state.captureSourceFilter = normalizeCaptureSourceFilter(value);
@@ -6675,8 +6721,9 @@ function bindMilkdownSurfaceEvents(host) {
 
 function updateMarkdownStatsForMarkdown(host, markdown) {
   const stats = markdownStats(markdown);
-  const statsElement = host.closest(".markdown-panel")?.querySelector("[data-markdown-stats]");
-  if (statsElement) statsElement.textContent = `${stats.lines} 行 · ${stats.characters} 字`;
+  const scope = host.closest(".knowledge-pane") || host.closest(".markdown-panel") || host.parentElement;
+  const statsElement = scope?.querySelector("[data-markdown-stats], [data-note-stats]");
+  if (statsElement) statsElement.textContent = `${stats.characters} 字 · ${stats.lines} 行`;
 }
 
 function focusNodeDetailEditor(nodeId) {
@@ -6849,6 +6896,13 @@ async function pickEditorImageFile() {
  * @param {Event|null} event - Original DOM event, used for position calculations
  */
 async function action(data, event = null) {
+  // The three-column shell owns the Demo's action vocabulary; anything it
+  // recognises is executed there and re-rendered, the legacy chain below
+  // keeps handling the remaining project commands.
+  if (typeof shellAction === "function" && await shellAction(data, event)) {
+    if (data.action !== "close-dialog" || true) render();
+    return;
+  }
   state.contextMenu = null;
   syncContextMenuRoot();
   if (taskPriorityMenu && !["toggle-task-priority-menu", "set-task-priority"].includes(data.action)) taskPriorityMenu = null;
@@ -7232,7 +7286,11 @@ async function action(data, event = null) {
     taskPriorityMenu = null;
   }
   if (data.action === "close-task-priority-menu") taskPriorityMenu = null;
-  if (data.action === "add-task") addBlankTask();
+  if (data.action === "add-task") {
+    // Demo phase 16: 新建 opens a dialog instead of dropping a blank task.
+    if (typeof shellOpenCreateDialog === "function") shellOpenCreateDialog();
+    else addBlankTask();
+  }
   if (data.action === "delete-task" && !(await deleteTask(data.taskId))) return;
   if (data.action === "select-node") {
     selectNodeForInspector(data.taskId, data.nodeId);
@@ -7240,9 +7298,15 @@ async function action(data, event = null) {
   if (data.action === "toggle-task-done") {
     activateRepositoryTask(data.taskId);
     const wasDone = state.tasks.find((item) => item.id === data.taskId)?.status === "done";
+    const completedTask = state.tasks.find((item) => item.id === data.taskId);
+    const occurrence = completedTask?.recurrence?.lastCompletedOccurrence || "";
+    const context = typeof shellCaptureJourneyContext === "function" ? shellCaptureJourneyContext() : null;
     toggleTaskDone(data.taskId);
     const isDone = state.tasks.find((item) => item.id === data.taskId)?.status === "done";
-    if (!wasDone && isDone) advanceNavigationAfterCompletion(data.taskId);
+    if (!wasDone && isDone) {
+      advanceNavigationAfterCompletion(data.taskId);
+      if (typeof shellShowJourneyReceipt === "function") shellShowJourneyReceipt({ id: data.taskId, kind: "done", context, occurrence });
+    }
   }
   if (data.action === "toggle-task-tag") toggleTaskTag(data.taskId, data.tag);
   if (data.action === "add-node") addNode(data.taskId, data.parentId || null);
@@ -7924,7 +7988,7 @@ function hasDraggedImage(event) {
 
 function updateMarkdownStats(editor) {
   const stats = markdownStats(editor.value);
-  const statsElement = editor.closest(".markdown-panel")?.querySelector("[data-markdown-stats]");
+  const statsElement = (editor.closest(".knowledge-pane") || editor.closest(".markdown-panel"))?.querySelector("[data-markdown-stats], [data-note-stats]");
   if (statsElement) statsElement.textContent = `${stats.lines} 行 · ${stats.characters} 字`;
 }
 
@@ -8041,7 +8105,10 @@ function toggleTaskDone(taskId) {
   if (task.status !== "done") {
     const blocker = taskCompletionBlocker(task);
     if (blocker) {
+      // keep the inline prompt state (the list still marks the task), then add
+      // the Demo phase 17 readiness panel that links to the exact record.
       showCompletionNotice(taskId, blocker);
+      if (typeof shellCompletionReadiness === "function") shellCompletionReadiness(taskId, document.activeElement);
       return { success: false, code: blocker, taskId };
     }
   }
@@ -8663,6 +8730,8 @@ function todayQuickCaptureItems() {
     .map((task) => ({
       taskId: task.id,
       title: task.title || "未命名速记",
+      // the Demo shows the capture's own text under the title
+      description: String(task.description || "").trim(),
       createdAt: task.createdAt,
       updatedAt: task.updatedAt,
       resolvedAt: task.resolvedAt || "",
@@ -8764,6 +8833,7 @@ function reorderTodayWidgetItem(taskId, lane, direction) {
 
 function todayWidgetSnapshot() {
   const rootFontSize = Number.parseFloat(window.getComputedStyle?.(document.documentElement)?.fontSize);
+  const rootFontScale = window.getComputedStyle?.(document.documentElement)?.getPropertyValue("--font-scale")?.trim();
   return {
     date: localDateKey(new Date()),
     appearance: {
@@ -8771,7 +8841,12 @@ function todayWidgetSnapshot() {
       zhFont: state.zhFont,
       enFont: state.enFont,
       fontSize: Number.isFinite(rootFontSize) ? rootFontSize : 16.5,
+      // the phase-12/13 widget layers size everything with --font-scale, so the
+      // widget window has to receive the same multiplier the main window uses.
+      fontScale: rootFontScale || "1",
     },
+    // the Demo marks the row open in the main window with .current
+    activeTaskId: state.activeTaskId || "",
     items: todayFocusItems().map(({ task, kind, nextText }) => ({
       taskId: task.id,
       title: task.title || "未命名任务",

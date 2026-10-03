@@ -1,0 +1,201 @@
+/* ============================================================
+   Loop -- bridge layer
+   Overrides that reconcile the frozen Demo stylesheets with the
+   production renderer. Loaded last, so it wins on equal specificity.
+   The copied Demo stylesheets (shell.css, refinement.css, flow.css,
+   settings.css, fonts.css, typography.css, knowledge.css, selection.css)
+   must stay byte-identical to prototypes/baseline/; put every deviation
+   here and describe why.
+   ============================================================ */
+
+/* The Demo reserves 38px at the bottom for its prototype review bar.
+   The product has no review bar, so the shell owns the full viewport. */
+.app { height: 100dvh; }
+
+/* --- 知识笔记页宽 ---------------------------------------------------------
+   与 Demo 的偏差 D-02，用户已确认采用方案 B。
+
+   Demo 的三档是绝对值 840 / 1120 / 无限制。产品默认窗口 1280×820 下知识正文
+   只有 826px，低于「默认」档的 840px，三档全部撑满，控件在默认窗口下完全无效
+   （实测 Demo 数值与应用完全相同，是 Demo 自身的设计缺陷）。
+
+   方案 B：把前两档改成相对正文宽度的比例，使任意窗口下三档都可区分。
+   上限仍保留 Demo 的 840px / 1120px，所以正文足够宽时结果与 Demo 相同：
+   正文 1420px（窗口 1920）→ 840 / 1120 / 1420，与 Demo 逐像素一致；
+   正文 ≥1167px 时「默认」回到 840，正文 ≥1273px 时「较宽」回到 1120。
+
+   实测：1024→454/555/631，1280→594/726/826，1440→710/867/986，
+        1920→840/1120/1414（与 Demo 相同）。 */
+.knowledge-page.width-default { max-width: min(840px, 72%); }
+.knowledge-page.width-wide { max-width: min(1120px, 88%); }
+.knowledge-page.width-full { max-width: none; }
+
+/* --- 知识笔记正文行距 ------------------------------------------------------
+   与 Demo 的偏差 D-03，用户在实机检查后确认 Demo 的行距偏松。
+
+   Demo 的 knowledge.css 设定 .knowledge-rich-host .ProseMirror 行高 1.9、
+   段落下间距 16px；实测 Demo 与本应用数值完全相同（字号 15.12px、
+   行高 28.728px、段间隙 91.6px），确认是 Demo 的排版本身，不是移植问题。
+
+   这里收紧为行高 1.7、段落间距 10px，标题间距按比例收紧，
+   编辑模式与预览模式同时生效以保持一致。
+   撤销：删掉本段即可回到 Demo 的排版。 */
+.knowledge-rich-host .ProseMirror,
+.knowledge-preview { line-height: 1.7; }
+.knowledge-rich-host .ProseMirror p,
+.knowledge-preview p { margin: 0 0 10px; }
+.knowledge-rich-host .ProseMirror h1,
+.knowledge-preview h1 { margin: 0 0 12px; }
+.knowledge-rich-host .ProseMirror h2,
+.knowledge-preview h2 { margin: 20px 0 8px; }
+.knowledge-rich-host .ProseMirror h3,
+.knowledge-preview h3 { margin: 16px 0 7px; }
+
+/* --- 新增界面结构的样式收口 ------------------------------------------------
+   以下三块是「Demo 完全没有对应结构、经用户批准新增」的界面：
+   1. 设置·帮助与反馈 的反馈表单（Demo 该页只有禁用占位）
+   2. 设置·高级功能 的「工作与成长导航」（work-rhythm.js 自带实现，原样式在
+      已停用的 styles.css 中）
+   3. 通用表单控件（输入框、下拉、多行文本）在设置文档里的排版
+   视觉沿用 Demo 的令牌与密度：13px 标签、12px 说明、1px --line 边框、6px 圆角。 */
+
+.setting-row.stacked { display: block; }
+.setting-row.stacked > div:first-child { margin-bottom: 10px; }
+.setting-field { display: grid; gap: 8px; max-width: 560px; }
+.setting-field input:not([type="checkbox"]),
+.setting-field select,
+.setting-field textarea {
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 7px 10px;
+  font-size: calc(12px * var(--font-scale, 1));
+  background: var(--canvas);
+  color: var(--text);
+}
+.setting-field textarea { resize: vertical; min-height: 92px; line-height: 1.7; }
+.setting-field input:disabled,
+.setting-field select:disabled,
+.setting-field textarea:disabled { opacity: .55; }
+.settings-check { display: flex; align-items: flex-start; gap: 8px; font-size: calc(12px * var(--font-scale, 1)); color: var(--text); }
+.settings-check input { margin-top: 2px; }
+.settings-field-error { font-size: calc(12px * var(--font-scale, 1)); color: var(--orange); }
+.settings-feedback-result { display: grid; gap: 10px; padding: 18px 0; }
+.settings-feedback-result strong { font-size: calc(14px * var(--font-scale, 1)); }
+.settings-feedback-result p { font-size: calc(12px * var(--font-scale, 1)); color: var(--secondary); }
+.settings-feedback-result footer { display: flex; justify-content: flex-end; }
+
+/* work-rhythm 的高级设置块：沿用设置文档的行结构 */
+.settings-advanced-slot .settings-list { display: block; }
+.settings-advanced-slot .settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 19px 0;
+  border-bottom: 1px solid var(--line);
+}
+.settings-advanced-slot .settings-row-copy strong { font-size: calc(13px * var(--font-scale, 1)); font-weight: 500; }
+.settings-advanced-slot .settings-page-note,
+.settings-advanced-slot .wr-settings-form p {
+  font-size: calc(12px * var(--font-scale, 1));
+  color: var(--secondary);
+  max-width: 60ch;
+  margin-top: 10px;
+}
+.settings-advanced-slot .settings-switch {
+  flex-shrink: 0;
+  width: 38px;
+  height: 22px;
+  border-radius: 11px;
+  border: 1px solid var(--line);
+  background: var(--hover);
+  position: relative;
+  transition: background .15s ease;
+}
+.settings-advanced-slot .settings-switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--canvas);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .18);
+  transition: transform .15s ease;
+}
+.settings-advanced-slot .settings-switch[aria-checked="true"] { background: var(--green); border-color: transparent; }
+.settings-advanced-slot .settings-switch[aria-checked="true"]::after { transform: translateX(16px); }
+.settings-advanced-slot .work-rhythm-settings-unlock { display: grid; gap: 8px; margin-top: 12px; max-width: 360px; }
+.settings-advanced-slot .work-rhythm-settings-unlock[hidden] { display: none; }
+.settings-advanced-slot .work-rhythm-settings-unlock label { display: grid; gap: 6px; font-size: calc(12px * var(--font-scale, 1)); color: var(--secondary); }
+.settings-advanced-slot .work-rhythm-settings-unlock input {
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 7px 10px;
+  background: var(--canvas);
+}
+.settings-advanced-slot .work-rhythm-settings-unlock p { font-size: calc(12px * var(--font-scale, 1)); color: var(--orange); }
+.settings-advanced-slot .wr-settings-form { display: grid; gap: 18px; margin-top: 14px; }
+.settings-advanced-slot .wr-settings-form fieldset { border: 0; padding: 0; margin: 0; display: grid; gap: 10px; }
+.settings-advanced-slot .wr-settings-form legend { font-size: calc(13px * var(--font-scale, 1)); font-weight: 500; padding: 0; }
+.settings-advanced-slot .wr-weekdays,
+.settings-advanced-slot .wr-settings-points { display: flex; flex-wrap: wrap; gap: 10px 16px; }
+.settings-advanced-slot .wr-weekdays label { display: inline-flex; align-items: center; gap: 6px; font-size: calc(12px * var(--font-scale, 1)); }
+.settings-advanced-slot .wr-settings-points label { display: grid; gap: 5px; font-size: calc(12px * var(--font-scale, 1)); color: var(--secondary); }
+.settings-advanced-slot .wr-settings-form input[type="time"],
+.settings-advanced-slot .wr-settings-form select {
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: calc(12px * var(--font-scale, 1));
+  background: var(--canvas);
+  color: var(--text);
+}
+.settings-advanced-slot .wr-settings-range { display: flex; align-items: center; gap: 10px; font-size: calc(12px * var(--font-scale, 1)); color: var(--secondary); }
+.settings-advanced-slot .wr-settings-source { display: grid; gap: 6px; font-size: calc(12px * var(--font-scale, 1)); color: var(--secondary); }
+.settings-advanced-slot .wr-settings-save { display: flex; align-items: center; justify-content: flex-end; gap: 12px; font-size: calc(12px * var(--font-scale, 1)); color: var(--secondary); }
+.settings-advanced-slot .wr-settings-save button,
+.settings-advanced-slot .work-rhythm-settings-unlock button {
+  min-height: 32px;
+  padding: 0 11px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--canvas);
+  font-size: calc(12px * var(--font-scale, 1));
+  font-weight: 500;
+}
+.settings-advanced-slot .wr-settings-save button.primary,
+.settings-advanced-slot .work-rhythm-settings-unlock button.primary { background: var(--green); border-color: transparent; color: #fff; }
+.settings-advanced-slot .wr-setting-error { font-size: calc(12px * var(--font-scale, 1)); color: var(--orange); }
+.settings-advanced-slot .wr-setting-error[hidden] { display: none; }
+
+/* 任务列表列宽拖拽分隔条（经批准新增）。命中区 9px、可见线 1px，与 Demo 的
+   分组分隔线同一视觉语言；宽度写入既有的 sidebarWidth 偏好，不改数据格式。 */
+.list-resizer {
+  position: absolute;
+  top: 0;
+  right: -5px;
+  width: 9px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 3;
+  background: transparent;
+}
+.list-resizer::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 4px;
+  width: 1px;
+  height: 100%;
+  background: transparent;
+}
+.list-resizer:hover::after,
+.list-resizer:focus-visible::after { background: var(--green); opacity: .45; }
+.list-resizer:focus-visible { outline: none; }
+.task-list-pane { position: relative; }

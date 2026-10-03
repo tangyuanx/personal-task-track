@@ -1,0 +1,1676 @@
+// ============================================================
+// Loop -- shell interaction layer
+//
+// Implements the Demo's interactions on top of the production business
+// functions. Everything here is presentation + delegation: no data model,
+// storage or IPC contract is changed.
+//
+// Ported from prototypes/baseline/loop-plane-phase15-frozen/:
+//   loop-plane-phase1.html  (overlay surfaces, status menu, node operations,
+//                            title editor, combined filter, update panel)
+//   loop-flow-phase11.js    (progress locator, path menu, reading mode)
+// ============================================================
+
+const SHELL_STATUS_HINTS = {
+  todo: "等待继续推进",
+  done: "本步骤已完成",
+  blocked: "需要先解决阻碍",
+  later: "留到之后处理",
+};
+
+// ------------------------------------------------------------
+// Overlay plumbing (#overlay lives outside #root, like the Demo)
+// ------------------------------------------------------------
+
+function shellOverlay() {
+  return document.querySelector("#overlay");
+}
+
+/**
+ * Demo phase 16: every property panel shares one compact frame — a 340px
+ * surface with a 取消 action next to 保存 and viewport clamping.
+ */
+function shellPanelFinish(form) {
+  if (!form) return form;
+  form.classList.add("entry16-panel");
+  const footer = form.querySelector("footer");
+  if (footer && !footer.querySelector('[data-action="close-dialog"]')) {
+    footer.insertAdjacentHTML("afterbegin", '<button class="button" type="button" data-action="close-dialog">取消</button>');
+  }
+  const width = 340;
+  form.style.width = `${width}px`;
+  const left = Number.parseFloat(form.style.left);
+  const top = Number.parseFloat(form.style.top);
+  if (Number.isFinite(left)) form.style.left = `${Math.max(12, Math.min(left, innerWidth - width - 12))}px`;
+  if (Number.isFinite(top)) form.style.top = `${Math.max(12, Math.min(top, innerHeight - 50 - form.offsetHeight))}px`;
+  return form;
+}
+
+function shellSurfaceHeader(title) {
+  return `<header class="dialog-head"><h2>${esc(title)}</h2><button type="button" class="icon-button" data-action="close-dialog" aria-label="关闭">${shellIcon("close")}</button></header>`;
+}
+
+function shellMountSurface(markup, trigger, width = 320) {
+  const overlay = shellOverlay();
+  if (!overlay) return null;
+  const rect = trigger?.getBoundingClientRect?.() || { left: 12, right: 340, bottom: 48 };
+  const key = ["data-action", "data-edit-node-title", "data-node-operations", "data-flow-action"].find((name) => trigger?.hasAttribute?.(name));
+  const selector = key ? `[${key}="${CSS.escape(trigger.getAttribute(key))}"]` : null;
+  overlay.innerHTML = markup;
+  const surface = overlay.querySelector(".surface-popover");
+  if (!surface) return null;
+  surface.style.width = `${width}px`;
+  surface.style.left = `${Math.max(12, Math.min(rect.left, window.innerWidth - width - 12))}px`;
+  surface.style.top = `${Math.max(12, Math.min(rect.bottom + 7, window.innerHeight - 50 - surface.offsetHeight))}px`;
+  if (selector) surface.dataset.returnFocus = selector;
+  trigger?.setAttribute?.("aria-expanded", "true");
+  (surface.querySelector("[autofocus]") || surface.querySelector("button, input, select"))?.focus({ preventScroll: true });
+  return surface;
+}
+
+function shellCloseOverlay({ restoreFocus = true } = {}) {
+  // Demo phase 16: dismissing keeps the creation draft for this session.
+  if (document.querySelector("#create-form") && state.createDraft) shellCaptureCreateDraft();
+  const overlay = shellOverlay();
+  if (!overlay) return;
+  const host = overlay.querySelector("[data-return-focus]");
+  const selector = host?.dataset.returnFocus || "";
+  overlay.innerHTML = "";
+  if (!restoreFocus || !selector) return;
+  const trigger = document.querySelector(selector);
+  if (trigger?.hasAttribute("aria-haspopup")) trigger.setAttribute("aria-expanded", "false");
+  trigger?.focus({ preventScroll: true });
+}
+
+/**
+ * Overlay surfaces are created after render(), so their controls cannot be
+ * bound per render. Delegate from #overlay instead: both the shared action
+ * vocabulary and the batch-action vocabulary resolve here.
+ */
+
+// ============================================================
+// 新建任务 / 速记对话框  (Demo phase 16)
+//
+// Structure, copy and interaction are ported from the frozen Demo's
+// loop-task-phase16.js: a single dialog that leads with title/content,
+// keeps group/priority/Today secondary and discloses deadline/reminder and
+// recurrence on demand. The draft survives dismissal and is dropped only on
+// an explicit 取消, matching the Demo's contract.
+//
+// The project has no store of its own for this draft, so it lives on
+// state.createDraft; submission goes through the project's own createTask()
+// and then applies the chosen properties.
+// ============================================================
+
+const SHELL_WEEKDAY_LABELS = { 0: "日", 1: "一", 2: "二", 3: "三", 4: "四", 5: "五", 6: "六" };
+
+function shellCreateDraftFresh() {
+  const route = shellRoute();
+  return {
+    kind: state.taskFilter === "today" || route === "today" ? "task" : "task",
+    title: "",
+    description: "",
+    groupId: state.activeGroupId === ALL_TASKS_GROUP_ID ? "" : state.activeGroupId === UNGROUPED_TASKS_GROUP_ID ? "" : state.activeGroupId,
+    priority: state.newTaskPriority,
+    today: route === "today",
+    deadline: "",
+    deadlineTime: "18:00",
+    reminder: "60",
+    recurrence: { frequency: "none", time: "09:00", weekdays: [1, 2, 3, 4, 5], lastCompletedOccurrence: "" },
+    dateOpen: false,
+    cycleOpen: false,
+  };
+}
+
+function shellCreateDate(offsetDays) {
+  const date = new Date();
+  date.setDate(date.getDate() + offsetDays);
+  return localDateKey(date);
+}
+
+function shellCreateChoice(value, label, attribute, active) {
+  return `<button type="button" ${attribute}="${value}" class="${active ? "active" : ""}" aria-pressed="${active}">${label}</button>`;
+}
+
+function shellRenderCreateDialog(focusSelector) {
+  const overlay = shellOverlay();
+  if (!overlay) return;
+  const draft = state.createDraft;
+  const quick = draft.kind === "quick";
+  const recurrence = draft.recurrence;
+  const error = state.createError || "";
+  const groups = [{ id: "", title: "未分组" }, ...sort(state.taskGroups).map((group) => ({ id: group.id, title: group.title }))];
+  const deadlineLabel = draft.deadline ? `${draft.deadline} · ${draft.deadlineTime}` : "未设置";
+  overlay.innerHTML = `<div class="dialog-backdrop" data-return-focus="[data-action='add-task']">
+    <form class="dialog entry16-dialog" id="create-form" role="dialog" aria-modal="true" aria-labelledby="entry16-title" novalidate>
+      <header class="dialog-head"><h2 id="entry16-title">新建${quick ? "速记" : "任务"}</h2><button type="button" class="icon-button" data-action="close-dialog" aria-label="关闭">${shellIcon("close")}</button></header>
+      <main class="entry16-body">
+        <div class="entry16-types" role="group" aria-label="新建记录类型">${[["task", "任务"], ["quick", "速记"]].map(([value, label]) => shellCreateChoice(value, label, "data-composer-type", draft.kind === value)).join("")}</div>
+        <div class="entry16-writing">
+          <div>
+            <label for="create-title">${quick ? "记录标题" : "任务标题"}</label>
+            <input id="create-title" name="title" maxlength="160" autocomplete="off" value="${escAttr(draft.title)}" placeholder="${quick ? "先记下来，稍后整理" : "需要解决什么问题？"}" aria-required="true" aria-describedby="entry16-error" aria-invalid="${error === "请输入标题后再保存"}" />
+            <p class="error" role="status" id="entry16-error">${error === "请输入标题后再保存" ? esc(error) : ""}</p>
+          </div>
+          <div>
+            <label for="create-description">${quick ? "内容" : "背景"}<small>可选</small></label>
+            <textarea id="create-description" name="description" placeholder="${quick ? "记录想法、线索或稍后要整理的内容" : "补充问题背景或需要达到的结果"}">${esc(draft.description)}</textarea>
+          </div>
+        </div>
+        <div class="entry16-meta" ${quick ? 'style="grid-template-columns:1fr"' : ""}>
+          <div><label for="create-group">分组</label><select id="create-group" name="group">${groups.map((group) => `<option value="${escAttr(group.id)}" ${group.id === draft.groupId ? "selected" : ""}>${esc(group.title)}</option>`).join("")}</select></div>
+          ${quick ? "" : `<div><label id="entry16-priority-label">优先级</label><div class="entry16-priorities" role="group" aria-labelledby="entry16-priority-label">${[["high", "高"], ["medium", "中"], ["low", "低"]].map(([value, label]) => shellCreateChoice(value, shellIcon("flag") + label, "data-entry16-priority", draft.priority === value)).join("")}</div></div>`}
+        </div>
+        ${quick ? "" : `<label class="entry16-today"><input type="checkbox" name="today" ${draft.today ? "checked" : ""} />加入今日任务</label>
+        <section class="entry16-options" aria-label="任务时间设置">
+          <button type="button" class="entry16-disclosure" data-entry16="date" aria-expanded="${Boolean(draft.dateOpen)}" aria-controls="entry16-date">${shellIcon("calendar")}<span>截止与提醒</span><small>${esc(deadlineLabel)}</small>${shellIcon("chevron")}</button>
+          ${draft.dateOpen ? `<div class="entry16-setting" id="entry16-date">
+            <div class="entry16-date-grid">
+              <div><label for="create-deadline">截止日期</label><input type="date" id="create-deadline" name="deadline" value="${escAttr(draft.deadline)}" /></div>
+              <div><label for="create-time">时间</label><input type="time" id="create-time" name="deadlineTime" value="${escAttr(draft.deadlineTime)}" ${draft.deadline ? "" : "disabled"} /></div>
+              <div><label for="create-reminder">系统提醒</label><select id="create-reminder" name="reminder" ${draft.deadline ? "" : "disabled"}>${Object.entries(deadlineReminderLabels).map(([value, label]) => `<option value="${value}" ${value === draft.reminder ? "selected" : ""}>${esc(label)}</option>`).join("")}</select></div>
+            </div>
+            <p class="error" role="status">${error === "请补全有效的日期与时间" ? esc(error) : ""}</p>
+            <div class="entry16-shortcuts">${[["", "今天"], [shellCreateDate(1), "明天"], [shellCreateDate(7), "一周后"], ["", "清除"]].map(([value, label], index) => `<button type="button" data-entry16-date="${index === 3 ? "" : value || shellCreateDate(0)}">${label}</button>`).join("")}</div>
+          </div>` : ""}
+          <button type="button" class="entry16-disclosure" data-entry16="cycle" aria-expanded="${Boolean(draft.cycleOpen)}" aria-controls="entry16-cycle">${shellIcon("repeat")}<span>循环任务</span><small>${esc(shellCreateRecurrenceLabel(recurrence))}</small>${shellIcon("chevron")}</button>
+          ${draft.cycleOpen ? `<div class="entry16-setting" id="entry16-cycle">
+            <div class="recurrence-modes" role="group" aria-label="循环周期">${[["none", "不循环"], ["daily", "每天"], ["weekly", "每周"]].map(([value, label]) => shellCreateChoice(value, label, "data-entry16-frequency", recurrence.frequency === value)).join("")}</div>
+            ${recurrence.frequency === "none" ? "" : `<div class="entry16-cycle-fields">
+              <div><label for="create-cycle-time">进入今日的时间</label><input type="time" id="create-cycle-time" name="cycleTime" value="${escAttr(recurrence.time)}" /></div>
+              ${recurrence.frequency === "weekly" ? `<div><label id="entry16-week-label">重复日期</label><div class="recurrence-weekdays" role="group" aria-labelledby="entry16-week-label">${recurrenceWeekdayOrder.map((day) => shellCreateChoice(day, SHELL_WEEKDAY_LABELS[day], "data-entry16-weekday", recurrence.weekdays.includes(day))).join("")}</div></div>` : ""}
+            </div>
+            <p class="error" role="status">${error === "请为每周循环选择至少一天" ? esc(error) : ""}</p>
+            <p class="schedule-hint">到期后进入今日；完成本次后，下个周期重新出现。</p>`}
+          </div>` : ""}
+        </section>`}
+      </main>
+      <footer>
+        <span class="entry16-status">${state.createResumed ? "已恢复本页草稿" : "Esc 关闭 · ⌘ / Ctrl + Enter 保存"}</span>
+        <button type="button" class="button" data-entry16="cancel">取消</button>
+        <button type="submit" class="button primary">${quick ? "保存速记" : "创建任务"}</button>
+      </footer>
+    </form>
+  </div>`;
+  document.querySelector("#create-form")?.addEventListener("submit", shellSubmitCreateDialog);
+  if (focusSelector) document.querySelector(focusSelector)?.focus({ preventScroll: true });
+}
+
+function shellCreateRecurrenceLabel(recurrence) {
+  if (recurrence.frequency === "daily") return `每天 · ${recurrence.time}`;
+  if (recurrence.frequency === "weekly") {
+    const days = recurrenceWeekdayOrder.filter((day) => recurrence.weekdays.includes(day)).map((day) => SHELL_WEEKDAY_LABELS[day]).join("");
+    return `每周${days} · ${recurrence.time}`;
+  }
+  return "不循环";
+}
+
+/** Read the form back into the draft without closing it. */
+function shellCaptureCreateDraft() {
+  const form = document.querySelector("#create-form");
+  if (!form || !state.createDraft) return;
+  const data = new FormData(form);
+  const draft = state.createDraft;
+  draft.title = String(data.get("title") || "");
+  draft.description = String(data.get("description") || "");
+  draft.groupId = String(data.get("group") || "");
+  if (draft.kind === "task") {
+    draft.today = data.get("today") === "on";
+    if (data.has("deadline")) draft.deadline = String(data.get("deadline") || "");
+    if (data.has("deadlineTime")) draft.deadlineTime = String(data.get("deadlineTime") || "18:00");
+    if (data.has("reminder")) draft.reminder = String(data.get("reminder") || "none");
+    if (data.has("cycleTime")) draft.recurrence.time = String(data.get("cycleTime") || "09:00");
+  }
+}
+
+function shellOpenCreateDialog() {
+  state.createResumed = Boolean(state.createDraft);
+  state.createDraft = state.createDraft || shellCreateDraftFresh();
+  state.createDraft.recurrence = state.createDraft.recurrence || shellCreateDraftFresh().recurrence;
+  state.createError = "";
+  shellRenderCreateDialog("#create-title");
+}
+
+function shellSubmitCreateDialog(event) {
+  event.preventDefault();
+  shellCaptureCreateDraft();
+  const draft = state.createDraft;
+  const quick = draft.kind === "quick";
+  const title = draft.title.trim();
+  if (!title) {
+    state.createError = "请输入标题后再保存";
+    shellRenderCreateDialog("#create-title");
+    return;
+  }
+  if (!quick && draft.recurrence.frequency === "weekly" && !draft.recurrence.weekdays.length) {
+    state.createError = "请为每周循环选择至少一天";
+    draft.cycleOpen = true;
+    shellRenderCreateDialog('[data-entry16-weekday="1"]');
+    return;
+  }
+  const form = document.querySelector("#create-form");
+  if (form && !form.checkValidity()) {
+    state.createError = "请补全有效的日期与时间";
+    shellRenderCreateDialog("#create-deadline");
+    return;
+  }
+  const task = createTask(title, false);
+  task.description = draft.description.trim();
+  task.groupId = state.taskGroups.some((group) => group.id === draft.groupId) ? draft.groupId : "";
+  task.priority = quick ? "low" : draft.priority;
+  task.tags = normalizeTaskTags({ today: !quick && draft.today });
+  task.recurrence = quick
+    ? normalizeTaskRecurrence({})
+    : normalizeTaskRecurrence({ ...draft.recurrence, lastCompletedOccurrence: "" });
+  if (!quick && draft.deadline) {
+    task.deadlineAt = `${draft.deadline}T${draft.deadlineTime || "18:00"}:00`;
+    task.deadlineReminderMinutes = draft.reminder === "none" ? null : Number(draft.reminder);
+  }
+  if (quick) {
+    task.captureSource = "today-widget";
+    task.notes = draft.description.trim() || title;
+    task.groupId = state.taskGroups.some((group) => group.id === draft.groupId) ? draft.groupId : "";
+  }
+  task.updatedAt = now();
+  state.createDraft = null;
+  state.createError = "";
+  state.createResumed = false;
+  shellCloseOverlay({ restoreFocus: false });
+  state.activeTaskId = task.id;
+  state.taskPane = "flow";
+  state.selectedNodeId = "";
+  if (state.taskFilter === "done") state.taskFilter = "active";
+  save();
+  // Demo phase 17: creation shows the same inline receipt as completion.
+  state.journeyReceipt = { id: task.id, kind: "created", context: null, occurrence: "" };
+  render();
+  shellToast(quick ? "速记已保存" : "任务已创建");
+}
+
+
+// ============================================================
+// 任务操作链路  (Demo phase 17)
+//
+// Two pieces, ported from the frozen Demo's loop-journey-phase17.js:
+//   1. .journey17-ready — the completion readiness panel. Completing a task
+//      that still misses a conclusion or has unfinished nodes now offers direct
+//      links to the exact record instead of only a transient notice.
+//   2. .journey17-receipt — an inline create/complete receipt with contextual
+//      actions and undo, rendered at the top of the workspace.
+//
+// All data comes from the project's own model (taskCompletionBlocker,
+// flatten, toggleTaskDone, state.taskPane / selectedNodeId / recordDraft).
+// ============================================================
+
+function shellJourneyReceipt() {
+  return state.journeyReceipt || null;
+}
+
+function shellShowJourneyReceipt(receipt) {
+  state.journeyReceipt = receipt;
+  render();
+}
+
+function shellClearJourneyReceipt() {
+  state.journeyReceipt = null;
+}
+
+/** Capture enough context to come back after a detour through 日历 / 回顾. */
+function shellCaptureJourneyContext() {
+  return {
+    taskFilter: state.taskFilter,
+    activeGroupId: state.activeGroupId,
+    activeTaskId: state.activeTaskId,
+    selectedNodeId: state.selectedNodeId,
+    taskPane: state.taskPane,
+    calendarOpen: state.calendarOpen,
+    calendarSelectedDate: state.calendarSelectedDate,
+    calendarMonth: state.calendarMonth,
+    reviewOpen: state.reviewOpen,
+    reviewPreset: state.reviewPreset,
+    reviewDateField: state.reviewDateField,
+    scroll: [...document.querySelectorAll(".tasks-scroll, .workspace, .flow-scroll, .review-content")]
+      .map((element) => ({ className: element.className, top: element.scrollTop })),
+  };
+}
+
+function shellRestoreJourneyContext(context) {
+  if (!context) return;
+  const { scroll, ...values } = context;
+  Object.assign(state, values);
+  render();
+  for (const entry of scroll) {
+    document.querySelector(`.${entry.className.split(/\s+/).filter(Boolean).join(".")}`)?.scrollTo({ top: entry.top });
+  }
+}
+
+function shellJourneyRevealTask(taskId) {
+  const task = state.tasks.find((item) => item.id === taskId);
+  if (!task) return;
+  state.calendarOpen = false;
+  state.reviewOpen = false;
+  state.settingsOpen = false;
+  state.activeTaskId = task.id;
+  state.selectedNodeId = "";
+  state.taskPane = "flow";
+  render();
+}
+
+/** Demo phase 17: the readiness panel shown before a blocked completion. */
+function shellCompletionReadiness(taskId, trigger) {
+  const task = state.tasks.find((item) => item.id === taskId);
+  if (!task) return;
+  const quick = task.captureSource === "today-widget";
+  const remaining = flatten(task.nodes).filter((node) => node.status !== "done");
+  const hasConclusion = quick || Boolean(task.conclusion.trim());
+  const surface = shellMountSurface(
+    `<section class="surface-popover entry16-panel journey17-ready" role="dialog" aria-modal="true" aria-labelledby="journey17-ready-title">
+      ${shellSurfaceHeader("完成任务前").replace("<h2>", '<h2 id="journey17-ready-title">')}
+      <p class="journey17-task-name">${esc(task.title || "未命名任务")}</p>
+      <ul class="journey17-checks">
+        <li class="${hasConclusion ? "ready" : ""}">${shellIcon(hasConclusion ? "check" : "circle")}
+          <span><strong>处理结论</strong><small>${hasConclusion ? "已记录" : "还未记录结论"}</small></span>
+          ${hasConclusion ? "" : `<button type="button" data-journey17="conclusion" data-record="${escAttr(task.id)}">补充结论${shellIcon("arrow")}</button>`}
+        </li>
+        <li class="${remaining.length ? "" : "ready"}">${shellIcon(remaining.length ? "circle" : "check")}
+          <span><strong>处理流</strong><small>${remaining.length ? `${remaining.length} 个节点未完成` : flatten(task.nodes).length ? "所有节点已完成" : "暂无处理节点"}</small></span>
+          ${remaining.length ? `<button type="button" data-journey17="node" data-record="${escAttr(task.id)}" data-next-node="${escAttr(remaining[0].id)}">定位节点${shellIcon("arrow")}</button>` : ""}
+        </li>
+      </ul>
+      <p class="journey17-ready-hint">补齐后，再点击完成任务。</p>
+    </section>`,
+    trigger,
+    360,
+  );
+  if (trigger?.hasAttribute("data-action")) {
+    surface?.setAttribute("data-return-focus", `[data-action="toggle-task-done"][data-task-id="${task.id}"]`);
+  }
+  surface?.querySelector("[data-journey17]")?.focus({ preventScroll: true });
+}
+
+/** The inline receipt the workspace renders after a create or a completion. */
+function renderShellJourneyReceipt() {
+  const receipt = shellJourneyReceipt();
+  if (!receipt) return "";
+  const task = state.tasks.find((item) => item.id === receipt.id);
+  if (!task) return "";
+  const quick = task.captureSource === "today-widget";
+  const completed = receipt.kind === "done";
+  const actions = completed
+    ? `<button type="button" data-journey17="result">查看结果</button><button type="button" data-journey17="review">查看回顾</button><button type="button" data-journey17="undo">撤销</button>`
+    : `${!quick && isTaskScheduledForToday(task) ? '<button type="button" data-journey17="today">查看今日</button>' : ""}${task.deadlineAt ? '<button type="button" data-journey17="calendar">查看日历</button>' : ""}`;
+  const detail = completed
+    ? task.recurrence?.frequency !== "none"
+      ? "本次已完成 · 下个周期会重新进入今日"
+      : "结论与处理过程已保留"
+    : quick
+      ? "速记已保留"
+      : `${shellGroupTitle(task.groupId)}${task.deadlineAt ? ` · ${shellDisplayDate(localDateKey(task.deadlineAt))} 截止` : ""}`;
+  return `<section class="journey17-receipt" aria-label="${completed ? "任务完成反馈" : "创建反馈"}">
+    <div class="journey17-message" role="status" aria-live="polite">${shellIcon(completed ? "check" : "plus")}
+      <div><strong>${completed ? "已完成" : "已创建"} · ${esc(task.title || "未命名任务")}</strong><small>${esc(detail)}</small></div>
+    </div>
+    <div class="journey17-actions">${actions}<button class="icon-button" type="button" data-journey17="dismiss" aria-label="关闭操作反馈">${shellIcon("close")}</button></div>
+  </section>`;
+}
+
+/** Calendar agendas show a finished task's conclusion instead of its hypothesis. */
+function shellApplyCalendarConclusions() {
+  if (!state.calendarOpen) return;
+  document.querySelectorAll(".agenda-item").forEach((row) => {
+    const task = state.tasks.find((item) => item.id === row.querySelector("[data-action='open-calendar-task']")?.dataset.taskId);
+    const summary = row.querySelector(".summary");
+    if (task?.status === "done" && task.conclusion && summary) summary.textContent = task.conclusion;
+  });
+}
+
+function shellJourneyAction(action, trigger) {
+  const receipt = shellJourneyReceipt();
+  if (action === "dismiss") {
+    shellClearJourneyReceipt();
+    render();
+    return true;
+  }
+  const task = receipt ? state.tasks.find((item) => item.id === receipt.id) : null;
+  if (!task) return true;
+  if (action === "conclusion" || action === "node") {
+    const target = state.tasks.find((item) => item.id === trigger?.dataset.record) || task;
+    shellJourneyRevealTask(target.id);
+    if (action === "conclusion") {
+      state.taskPane = "flow";
+      state.recordDraft = "";
+      render();
+      document.querySelector("[data-action='shell-edit-brief'][data-field='conclusion']")?.click();
+    } else {
+      const nodeId = trigger?.dataset.nextNode;
+      if (nodeId) {
+        state.nodeRecordPreview = "";
+        state.selectedNodeId = nodeId;
+        render();
+        const element = document.querySelector(`[data-node-id="${CSS.escape(nodeId)}"]`);
+        element?.focus({ preventScroll: true });
+        element?.scrollIntoView({ block: "nearest" });
+      }
+    }
+    return true;
+  }
+  if (action === "result") {
+    shellJourneyRevealTask(task.id);
+    document.querySelector("[data-action='shell-edit-brief'][data-field='conclusion']")?.scrollIntoView({ block: "nearest" });
+    return true;
+  }
+  if (action === "today") {
+    state.calendarOpen = false;
+    state.reviewOpen = false;
+    state.settingsOpen = false;
+    state.taskFilter = "today";
+    state.activeTaskId = task.id;
+    shellClearJourneyReceipt();
+    render();
+    return true;
+  }
+  if (action === "calendar") {
+    shellClearJourneyReceipt();
+    state.calendarOpen = true;
+    state.reviewOpen = false;
+    state.settingsOpen = false;
+    state.calendarSelectedDate = localDateKey(task.deadlineAt);
+    state.calendarMonth = `${localDateKey(task.deadlineAt).slice(0, 7)}-01`;
+    render();
+    return true;
+  }
+  if (action === "review") {
+    shellClearJourneyReceipt();
+    state.reviewOpen = true;
+    state.calendarOpen = false;
+    state.settingsOpen = false;
+    state.reviewPreset = "week";
+    state.reviewDateField = "resolved";
+    render();
+    return true;
+  }
+  if (action === "undo") {
+    shellClearJourneyReceipt();
+    if (task.status === "done") {
+      toggleTaskDone(task.id);
+      if (task.recurrence && receipt.occurrence !== undefined) task.recurrence.lastCompletedOccurrence = receipt.occurrence;
+      shellRestoreJourneyContext(receipt.context);
+      shellToast("已撤销完成，处理内容保留");
+    } else {
+      render();
+      shellToast("任务已恢复");
+    }
+    return true;
+  }
+  return true;
+}
+
+function shellBindJourneyReceipt() {
+  if (typeof document.addEventListener !== "function") return;
+  if (document.__loopJourneyBound) return;
+  document.__loopJourneyBound = true;
+  document.addEventListener("click", (event) => {
+    const button = event.target.closest?.("[data-journey17]");
+    if (!button) return;
+    event.preventDefault();
+    event.stopPropagation();
+    shellJourneyAction(button.dataset.journey17, button);
+  }, true);
+}
+
+function shellBindCreateDialog() {
+  // the renderer test harness stubs `document` without event APIs
+  if (typeof document.addEventListener !== "function") return;
+  if (document.__loopCreateBound) return;
+  document.__loopCreateBound = true;
+  const isInside = (element) => Boolean(element?.closest?.("#create-form"));
+  document.addEventListener("click", (event) => {
+    const button = event.target.closest?.("button");
+    if (!button || !isInside(button)) return;
+    const draft = state.createDraft;
+    if (!draft) return;
+    shellCaptureCreateDraft();
+    let focus;
+    if (button.dataset.composerType) { draft.kind = button.dataset.composerType; focus = `[data-composer-type="${draft.kind}"]`; }
+    else if (button.dataset.entry16Priority) { draft.priority = button.dataset.entry16Priority; focus = `[data-entry16-priority="${draft.priority}"]`; }
+    else if (button.dataset.entry16 === "date") { draft.dateOpen = !draft.dateOpen; focus = '[data-entry16="date"]'; }
+    else if (button.dataset.entry16 === "cycle") { draft.cycleOpen = !draft.cycleOpen; focus = '[data-entry16="cycle"]'; }
+    else if (button.dataset.entry16 === "cancel") {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      state.createDraft = null;
+      state.createError = "";
+      state.createResumed = false;
+      shellCloseOverlay({ restoreFocus: false });
+      render();
+      return;
+    }
+    else if (button.hasAttribute("data-entry16-date")) { draft.deadline = button.dataset.entry16Date; focus = '[data-entry16="date"]'; }
+    else if (button.dataset.entry16Time) { draft.deadlineTime = button.dataset.entry16Time; focus = '[data-entry16-time="' + draft.deadlineTime + '"]'; }
+    else if (button.dataset.entry16Frequency) { draft.recurrence.frequency = button.dataset.entry16Frequency; focus = `[data-entry16-frequency="${draft.recurrence.frequency}"]`; }
+    else if (button.hasAttribute("data-entry16-weekday")) {
+      const day = Number(button.dataset.entry16Weekday);
+      const days = draft.recurrence.weekdays;
+      draft.recurrence.weekdays = days.includes(day) ? days.filter((value) => value !== day) : [...days, day];
+      focus = `[data-entry16-weekday="${day}"]`;
+    }
+    else return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    state.createError = "";
+    shellRenderCreateDialog(focus);
+  }, true);
+  document.addEventListener("input", (event) => {
+    if (!isInside(event.target)) return;
+    shellCaptureCreateDraft();
+    if (!state.createError) return;
+    state.createError = "";
+    document.querySelectorAll("#create-form .error").forEach((element) => { element.textContent = ""; });
+    document.querySelector("#create-title")?.setAttribute("aria-invalid", "false");
+  });
+  document.addEventListener("change", (event) => {
+    if (!isInside(event.target)) return;
+    shellCaptureCreateDraft();
+    if (event.target.id === "create-deadline") shellRenderCreateDialog("#create-deadline");
+  });
+  document.addEventListener("keydown", (event) => {
+    const form = document.querySelector("#create-form");
+    if (!form) return;
+    if (event.isComposing || event.keyCode === 229) { event.stopImmediatePropagation(); return; }
+    if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      form.requestSubmit();
+      return;
+    }
+    if (event.key !== "Tab") return;
+    const items = [...form.querySelectorAll("button:not(:disabled),input:not(:disabled),textarea,select:not(:disabled),a[href]")].filter((element) => element.getClientRects().length);
+    const first = items[0];
+    const last = items.at(-1);
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    event.stopImmediatePropagation();
+  }, true);
+}
+
+function shellBindOverlayDelegation() {
+  document.querySelector("#overlay")?.addEventListener("click", (event) => {
+    const preset = event.target.closest?.("[data-entry16-time]");
+    if (!preset) return;
+    event.preventDefault();
+    event.stopPropagation();
+    shellAction({ action: "set-deadline-time", value: preset.dataset.entry16Time }, preset);
+  });
+  const overlay = shellOverlay();
+  if (!overlay || overlay.dataset.shellDelegated === "1") return;
+  overlay.dataset.shellDelegated = "1";
+  const run = async (target, event) => {
+    const bulk = target.closest("[data-bulk-action], [data-bulk-id]");
+    if (bulk && !bulk.disabled) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (bulk.dataset.bulkId) {
+        shellBulkSelect(bulk.dataset.bulkId, event.shiftKey);
+      } else {
+        await shellBulkActionRun(bulk.dataset.bulkAction, bulk, event);
+      }
+      return true;
+    }
+    const action = target.closest("[data-action]");
+    if (action && !action.disabled) {
+      event.preventDefault();
+      event.stopPropagation();
+      void (globalThis.action || action)(action.dataset, event);
+      return true;
+    }
+    return false;
+  };
+  overlay.addEventListener("click", (event) => { void run(event.target, event); });
+  overlay.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    const control = event.target.closest("[role='button'], [role='menuitem'], [role='menuitemradio'], button");
+    if (!control) return;
+    void run(event.target, event);
+  });
+}
+
+// ------------------------------------------------------------
+// Title editor (task and node)
+// ------------------------------------------------------------
+
+function shellTitleEditor(trigger, nodeId) {
+  const task = shellActiveTask();
+  if (!task) return;
+  const node = nodeId ? shellNodeList(task).find((item) => item.id === nodeId) : null;
+  if (nodeId && !node) return;
+  const title = node ? node.title : task.title;
+  const label = node ? "节点标题" : shellTaskIsNote(task) ? "速记标题" : "任务标题";
+  shellMountSurface(
+    `<form class="surface-popover" id="title-form" role="dialog" aria-modal="true" aria-label="修改标题">${shellSurfaceHeader(label)}<label for="editable-title">标题</label><input name="title" id="editable-title" value="${escAttr(title)}" required maxlength="160" autofocus /><footer><button type="submit" class="button primary">保存</button></footer></form>`,
+    trigger,
+    340,
+  );
+  const input = document.querySelector("#editable-title");
+  input?.select();
+  const titleForm = shellPanelFinish(document.querySelector("#title-form"));
+  titleForm?.querySelector("footer")?.insertAdjacentHTML("beforebegin", '<p class="error" id="entry16-title-error" role="status"></p>');
+  input?.setAttribute("aria-describedby", "entry16-title-error");
+  input?.addEventListener("input", () => {
+    const box = document.querySelector("#entry16-title-error");
+    if (box) box.textContent = "";
+    input.setAttribute("aria-invalid", "false");
+  });
+  document.querySelector("#title-form")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const next = input.value.trim();
+    if (!next) {
+      const box = document.querySelector("#entry16-title-error");
+      if (box) box.textContent = "请输入标题后再保存";
+      input.setAttribute("aria-invalid", "true");
+      input.focus();
+      return;
+    }
+    if (node) node.title = next;
+    else task.title = next;
+    task.updatedAt = now();
+    shellCloseOverlay();
+    render();
+  });
+}
+
+// ------------------------------------------------------------
+// Node status menu
+// ------------------------------------------------------------
+
+function shellStatusMenu(trigger, nodeId) {
+  const task = shellActiveTask();
+  const node = shellNodeList(task).find((item) => item.id === nodeId);
+  if (!node) return;
+  const rect = trigger.getBoundingClientRect();
+  const isInspector = trigger.classList.contains("status-trigger");
+  const selector = isInspector ? ".status-trigger" : ".node-status";
+  const left = Math.min(Math.max(8, rect.left), window.innerWidth - 213);
+  const overlay = shellOverlay();
+  overlay.innerHTML = `<div class="status-menu" role="menu" aria-label="选择节点状态" data-return-focus="${selector}[data-node-id='${CSS.escape(nodeId)}']" style="left:${left}px;top:${rect.bottom + 5}px">
+    <p class="status-menu-title">选择状态</p>
+    ${Object.entries(SHELL_NODE_STATUS_LABELS).map(([status, label]) => `<button class="status-option ${status}" type="button" role="menuitemradio" aria-checked="${node.status === status}" data-action="set-node-status" data-node-id="${escAttr(nodeId)}" data-status="${status}">${shellIcon(status === "todo" ? "circle" : status)}<span>${label}<small>${SHELL_STATUS_HINTS[status]}</small></span>${node.status === status ? shellIcon("check", "status-selected") : ""}</button>`).join("")}
+  </div>`;
+  const menu = overlay.querySelector(".status-menu");
+  const height = menu.getBoundingClientRect().height;
+  menu.style.top = `${rect.bottom + 5 + height < window.innerHeight ? rect.bottom + 5 : Math.max(8, rect.top - height - 5)}px`;
+  trigger.setAttribute("aria-expanded", "true");
+  menu.querySelector(".status-option[aria-checked='true']")?.focus({ preventScroll: true });
+}
+
+// ------------------------------------------------------------
+// Node operations and deletion
+// ------------------------------------------------------------
+
+function shellNodeSiblings(task, nodeId) {
+  const path = shellNodePath(task, nodeId);
+  const parent = path.at(-2);
+  const siblings = parent ? parent.children : task.nodes;
+  return { path, parent, siblings, index: siblings.findIndex((item) => item.id === nodeId) };
+}
+
+function shellNodeOperations(trigger, nodeId) {
+  const task = shellActiveTask();
+  const { parent, siblings, index } = shellNodeSiblings(task, nodeId);
+  const moves = [
+    ["up", "上移", index === 0],
+    ["down", "下移", index === siblings.length - 1],
+    ["in", "缩进为子节点", index === 0],
+    ["out", "提升为同级节点", !parent],
+  ];
+  shellMountSurface(
+    `<div class="surface-popover" role="menu" aria-label="节点操作">${shellSurfaceHeader("节点操作")}
+      <button class="button" type="button" role="menuitem" data-action="edit-node-title" data-node-id="${escAttr(nodeId)}">${shellIcon("edit")}修改标题</button>
+      <button class="button" type="button" role="menuitem" data-action="add-sibling-node" data-task-id="${escAttr(task.id)}" data-node-id="${escAttr(nodeId)}">${shellIcon("plus")}添加同级节点</button>
+      <div class="menu-divider"></div>
+      ${moves.map(([value, label, disabled]) => `<button class="button" type="button" role="menuitem" data-action="move-node" data-node-id="${escAttr(nodeId)}" data-direction="${value}" ${disabled ? "disabled" : ""}>${label}</button>`).join("")}
+      <div class="menu-divider"></div>
+      <button class="button danger-action" type="button" role="menuitem" data-action="open-node-delete" data-node-id="${escAttr(nodeId)}">${shellIcon("close")}删除节点…</button>
+    </div>`,
+    trigger,
+    225,
+  );
+}
+
+function shellNodeDelete(trigger, nodeId) {
+  const task = shellActiveTask();
+  const node = shellNodeList(task).find((item) => item.id === nodeId);
+  if (!node) return;
+  const children = flatten(node.children || []).length;
+  shellMountSurface(
+    `<form class="surface-popover" id="delete-node-form" role="dialog" aria-modal="true" aria-label="确认删除">${shellSurfaceHeader("删除节点")}
+      <p>删除「${esc(node.title)}」？</p>
+      <p class="schedule-hint">${children ? `该节点及其 ${children} 个子节点、处理记录将一并删除。` : "该节点及其处理记录将一并删除。"}</p>
+      <footer><button type="button" class="button" data-action="close-dialog">取消</button><button type="submit" class="button danger-action">确认删除</button></footer>
+    </form>`,
+    trigger,
+    320,
+  );
+  document.querySelector("#delete-node-form")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    shellCloseOverlay({ restoreFocus: false });
+    await deleteNode(task.id, nodeId);
+    render();
+  });
+}
+
+function shellPathMenu(trigger, nodeId) {
+  const task = shellActiveTask();
+  const path = shellNodePath(task, nodeId);
+  shellMountSurface(
+    `<section class="surface-popover flow-path-menu" role="menu" aria-label="完整节点路径">${shellSurfaceHeader("节点路径")}
+      ${path.map((node, index) => `<button class="flow-result ${node.id === nodeId ? "current" : ""}" type="button" role="menuitem" data-action="open-node-detail" data-task-id="${escAttr(task.id)}" data-node-id="${escAttr(node.id)}"><small class="result-level">第 ${index + 1} 层</small><strong>${esc(node.title)}</strong></button>`).join("")}
+    </section>`,
+    trigger,
+    340,
+  );
+}
+
+// ------------------------------------------------------------
+// Progress locator
+// ------------------------------------------------------------
+
+let shellLocatorQuery = "";
+
+function shellLocatorResults() {
+  const task = shellActiveTask();
+  const query = shellLocatorQuery.trim().toLowerCase();
+  const list = shellNodeList(task).filter((node) => !query || `${node.title} ${node.note}`.toLowerCase().includes(query));
+  if (!list.length) {
+    return `<div class="flow-locator-empty"><span>没有匹配节点</span><button class="text-button" type="button" data-action="clear-locator">清空</button></div>`;
+  }
+  return list.map((node) => {
+    const path = shellNodePath(task, node.id);
+    const parent = path.at(-2);
+    return `<button class="flow-result ${node.id === state.selectedNodeId ? "current" : ""}" type="button" data-action="open-node-detail" data-task-id="${escAttr(task.id)}" data-node-id="${escAttr(node.id)}"><strong>${esc(node.title)}</strong><small><span class="result-level">第 ${path.length} 层</span>${shellNodeStatusLabel(node.status)}${parent ? ` · ${esc(parent.title)}` : " · 顶层"}</small></button>`;
+  }).join("");
+}
+
+function shellFlowLocator(trigger) {
+  shellLocatorQuery = "";
+  const surface = shellMountSurface(
+    `<section class="surface-popover flow-locator" role="dialog" aria-modal="true" aria-label="定位处理流节点">${shellSurfaceHeader("定位节点")}
+      <label class="sr-only" for="flow-locator-query">搜索当前任务的节点与记录</label>
+      <input id="flow-locator-query" type="search" placeholder="搜索节点标题或处理记录" autocomplete="off" autofocus />
+      <div class="flow-locator-results" aria-live="polite">${shellLocatorResults()}</div>
+    </section>`,
+    trigger,
+    360,
+  );
+  const input = surface?.querySelector("#flow-locator-query");
+  input?.addEventListener("input", () => {
+    shellLocatorQuery = input.value;
+    const host = document.querySelector(".flow-locator-results");
+    if (host) host.innerHTML = shellLocatorResults();
+  });
+}
+
+function shellFocusNextPending() {
+  const task = shellActiveTask();
+  if (!task) return;
+  const list = shellNodeList(task);
+  const start = Math.max(0, list.findIndex((node) => node.id === state.selectedNodeId));
+  const next = list.slice(start + 1).find((node) => node.status === "todo" || node.status === "blocked")
+    || list.find((node) => node.status === "todo" || node.status === "blocked");
+  if (!next) return;
+  selectNodeForInspector(task.id, next.id);
+}
+
+// ------------------------------------------------------------
+// Combined filter / update panel
+// ------------------------------------------------------------
+
+function shellOption(value, label, selected) {
+  return `<option value="${escAttr(value)}" ${String(selected) === String(value) ? "selected" : ""}>${esc(label)}</option>`;
+}
+
+function shellCombinedFilter(trigger) {
+  const kinds = shellRoute() === "today" ? [["task", "任务"], ["quick", "速记"]] : [["all", "全部"], ["task", "任务"], ["quick", "速记"]];
+  const statuses = [["active", "未完成"], ["all", "全部"], ["done", "已完成"], ["blocked", "卡住"], ["later", "稍后"]];
+  shellMountSurface(
+    `<form class="surface-popover" id="combined-filter-form" role="dialog" aria-modal="true" aria-label="筛选记录">${shellSurfaceHeader("筛选")}
+      <div class="filter-fields">
+        <div><label for="record-kind">记录类型</label><select id="record-kind" name="kind">${kinds.map(([value, label]) => shellOption(value, label, state.captureSourceFilter)).join("")}</select></div>
+        <div><label for="record-status">任务状态</label><select id="record-status" name="status">${statuses.map(([value, label]) => shellOption(value, label, state.taskFilter)).join("")}</select></div>
+        <div><label for="record-priority">优先级</label><select id="record-priority" name="priority">${Object.entries(SHELL_PRIORITY_FILTER_LABELS).map(([value, label]) => shellOption(value, label, state.priorityFilter)).join("")}</select></div>
+        <div><label for="record-deadline">截止范围</label><select id="record-deadline" name="deadline">${Object.entries(SHELL_DEADLINE_SCOPE_LABELS).map(([value, label]) => shellOption(value, label, state.taskDeadlineFilter)).join("")}</select></div>
+      </div>
+      <footer><button type="button" class="text-button" data-action="clear-list-filters">清除筛选</button><button type="submit" class="button primary">应用</button></footer>
+    </form>`,
+    trigger,
+    276,
+  );
+  document.querySelector("#combined-filter-form")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const data = new FormData(event.target);
+    state.captureSourceFilter = normalizeCaptureSourceFilter(String(data.get("kind")));
+    state.taskFilter = normalizeTaskFilter(String(data.get("status")));
+    state.priorityFilter = normalizePriorityFilter(String(data.get("priority")));
+    state.taskDeadlineFilter = Object.hasOwn(SHELL_DEADLINE_SCOPE_LABELS, String(data.get("deadline"))) ? String(data.get("deadline")) : "all";
+    state.taskDateFilter = "";
+    if (state.taskDeadlineFilter !== "all") state.activeGroupId = ALL_TASKS_GROUP_ID;
+    shellCloseOverlay();
+    if (!filteredTasks().some((task) => task.id === state.activeTaskId)) state.activeTaskId = "";
+    render();
+  });
+}
+
+function shellUpdatePanel(trigger) {
+  const update = appUpdateState;
+  const titles = {
+    available: "新版本可用",
+    downloading: "正在下载更新",
+    downloaded: "更新已准备好",
+    preparing: "正在准备更新",
+    installing: "正在安装更新",
+    error: "下载未完成",
+    latest: "当前已是最新版本",
+    idle: "当前已是最新版本",
+  };
+  const bodies = {
+    available: "新版本说明会显示在这里。你可以稍后更新。",
+    downloading: `${Math.round(update.percent || 0)}% · 下载期间可继续处理任务。`,
+    downloaded: "安装需要重启 Loop。请先保存正在编辑的内容。",
+    preparing: "正在安全写入任务与知识笔记草稿。",
+    installing: "应用即将自动重启，请稍候。",
+    error: "请检查网络后重试。",
+  };
+  const version = update.version ? ` · 新版本 v${update.version}` : "";
+  const progress = ["downloading", "preparing", "installing"].includes(update.status)
+    ? `<div class="update-progress" role="progressbar" aria-label="更新下载进度" aria-valuenow="${Math.round(update.percent || 0)}" aria-valuemin="0" aria-valuemax="100"><span style="width:${Math.max(4, Math.round(update.percent || 0))}%"></span></div>`
+    : "";
+  shellMountSurface(
+    `<section class="utility-popover" aria-label="软件更新">${shellSurfaceHeader("")}
+      <h2>${esc(titles[update.status] || "软件更新")}</h2>
+      <p>当前 v${esc(update.currentVersion || APP_VERSION || "")}${esc(version)}</p>
+      <p>${esc(bodies[update.status] || "暂无可用更新。")}</p>
+      ${progress}
+      <footer>
+        <button type="button" class="text-button" data-action="close-dialog">稍后</button>
+        ${["available", "error"].includes(update.status) ? `<button type="button" class="button primary" data-action="run-update-download">${update.status === "error" ? "重试下载" : "下载更新"}</button>` : ""}
+        ${update.status === "downloaded" ? '<button type="button" class="button primary" data-action="run-update-install">重启并安装</button>' : ""}
+      </footer>
+    </section>`,
+    trigger,
+    310,
+  );
+}
+
+// ------------------------------------------------------------
+// Task property overlays
+//
+// Ported from the Demo's showChoiceMenu / showDeadline / showRecurrence /
+// showMoveRecord (loop-plane-phase1.html). The project stores the deadline as
+// one ISO timestamp while the Demo keeps a display string plus a date and a
+// time; the panel keeps the Demo's date+time presentation and writes the
+// combined timestamp back through the existing field.
+// ------------------------------------------------------------
+
+function shellChoiceMenu(trigger, title, options, selected, dataKey, iconName = "flag") {
+  const rect = trigger.getBoundingClientRect();
+  const overlay = shellOverlay();
+  overlay.innerHTML = `<div class="priority-popover" role="menu" aria-label="${escAttr(title)}" data-return-focus="[data-action='${escAttr(trigger.dataset.action)}']" style="left:${Math.max(12, Math.min(rect.left, window.innerWidth - 200))}px;top:${rect.bottom + 7}px">
+    <p class="status-menu-title">${esc(title)}</p>
+    ${Object.entries(options).map(([value, label]) => `<button type="button" role="menuitemradio" aria-checked="${selected === value}" data-action="set-task-priority" data-priority="${escAttr(value)}">${shellIcon(iconName)}<span>${esc(label)}</span>${selected === value ? shellIcon("check") : "<span></span>"}</button>`).join("")}
+  </div>`;
+  trigger.setAttribute("aria-expanded", "true");
+  overlay.querySelector('[aria-checked="true"]')?.focus({ preventScroll: true });
+}
+
+function shellDeadlineDraft(task) {
+  const deadline = safeDate(task.deadlineAt);
+  const today = localDateKey(new Date());
+  return {
+    date: deadline ? localDateKey(deadline) : today,
+    month: (deadline ? localDateKey(deadline) : today).slice(0, 7),
+    time: deadline ? shellTimeLabel(deadline) : "18:00",
+    reminder: String(normalizeDeadlineReminderMinutes(task.deadlineReminderMinutes) ?? "none"),
+  };
+}
+
+function shellScheduleDays(draft) {
+  const first = new Date(`${draft.month}-01T12:00:00`);
+  const start = new Date(first);
+  start.setDate(1 - ((first.getDay() + 6) % 7));
+  const daysInMonth = new Date(first.getFullYear(), first.getMonth() + 1, 0).getDate();
+  const weeks = Math.ceil((((first.getDay() + 6) % 7) + daysInMonth) / 7);
+  const today = localDateKey(new Date());
+  return Array.from({ length: weeks * 7 }, (_, index) => {
+    const date = new Date(start);
+    date.setDate(start.getDate() + index);
+    const key = localDateKey(date);
+    const classes = [
+      key.slice(0, 7) !== draft.month ? "outside" : "",
+      key === draft.date ? "selected" : "",
+      key === today ? "today" : "",
+    ].filter(Boolean).join(" ");
+    return `<button type="button" class="schedule-day ${classes}" data-action="shell-schedule-day" data-date="${key}" aria-label="选择 ${key}" aria-pressed="${key === draft.date}">${date.getDate()}</button>`;
+  }).join("");
+}
+
+function shellDeadlinePanel(trigger) {
+  const task = shellActiveTask();
+  if (!task) return;
+  shellDeadlineTrigger = trigger || null;
+  state.deadlineDraft = shellDeadlineDraft(task);
+  shellRenderDeadlinePanel(trigger);
+}
+
+function shellRenderDeadlinePanel(trigger) {
+  const task = shellActiveTask();
+  const draft = state.deadlineDraft;
+  const month = new Date(`${draft.month}-01T12:00:00`);
+  const today = localDateKey(new Date());
+  const tomorrowDate = new Date();
+  tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+  const tomorrow = localDateKey(tomorrowDate);
+  const selected = safeDate(`${draft.date}T${draft.time}`);
+  const surface = shellMountSurface(
+    `<form class="surface-popover" id="deadline-form" role="dialog" aria-modal="true" aria-label="设置截止时间">${shellSurfaceHeader("截止时间")}
+      <div class="schedule-shortcuts">
+        <button type="button" class="button" data-action="shell-schedule-day" data-date="${today}">今天</button>
+        <button type="button" class="button" data-action="shell-schedule-day" data-date="${tomorrow}">明天</button>
+      </div>
+      <div class="schedule-month">
+        <strong>${month.getFullYear()} 年 ${month.getMonth() + 1} 月</strong>
+        <button type="button" class="icon-button" data-action="shell-schedule-month" data-direction="-1" aria-label="上个月"><svg viewBox="0 0 24 24" aria-hidden="true" style="transform:rotate(180deg)"><path d="${SHELL_ICON_PATHS.chevron}"></path></svg></button>
+        <button type="button" class="icon-button" data-action="shell-schedule-month" data-direction="1" aria-label="下个月">${shellIcon("chevron")}</button>
+      </div>
+      <div class="schedule-weekdays" aria-hidden="true">${["一", "二", "三", "四", "五", "六", "日"].map((day) => `<span>${day}</span>`).join("")}</div>
+      <div class="schedule-days">${shellScheduleDays(draft)}</div>
+      <div class="schedule-fields">
+        <div><label for="deadline-time">截止时间</label><input type="time" id="deadline-time" name="time" value="${escAttr(draft.time)}" required /></div>
+        <div><label for="deadline-reminder">系统提醒</label><select id="deadline-reminder" name="reminder">${Object.entries(deadlineReminderLabels).map(([value, label]) => shellOption(value, label, draft.reminder)).join("")}</select></div>
+      </div>
+      <p class="schedule-hint">${esc(shellDisplayDate(draft.date))} ${SHELL_WEEKDAY_NAMES[new Date(`${draft.date}T12:00:00`).getDay()]} · ${draft.date === today ? "会显示在今日任务中" : "截止日期不改变任务的分组"}</p>
+      <footer>
+        ${task.deadlineAt ? '<button class="text-button" type="button" data-action="shell-remove-deadline">清除截止时间</button>' : ""}
+        <button type="submit" class="button primary">应用</button>
+      </footer>
+    </form>`,
+    trigger,
+    320,
+  );
+  shellPanelFinish(document.querySelector("#deadline-form"));
+  document.querySelector("#deadline-form .schedule-fields")?.insertAdjacentHTML(
+    "afterend",
+    `<div class="entry16-time-presets" role="group" aria-label="常用截止时间">${["09:00", "12:00", "17:30", "18:00"].map((value) => `<button type="button" data-entry16-time="${value}">${value}</button>`).join("")}</div>`,
+  );
+  const timeInput = surface?.querySelector("#deadline-time");
+  const reminderSelect = surface?.querySelector("#deadline-reminder");
+  timeInput?.addEventListener("input", () => { state.deadlineDraft.time = timeInput.value; shellRefreshDeadlineHint(); });
+  reminderSelect?.addEventListener("change", () => { state.deadlineDraft.reminder = reminderSelect.value; });
+  surface?.querySelector("#deadline-form")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    shellApplyDeadline(state.deadlineDraft.date, timeInput?.value || state.deadlineDraft.time, reminderSelect?.value ?? state.deadlineDraft.reminder);
+  });
+}
+
+function shellRefreshDeadlineHint() {
+  const hint = document.querySelector("#deadline-form .schedule-hint");
+  const draft = state.deadlineDraft;
+  if (!hint || !draft) return;
+  const today = localDateKey(new Date());
+  hint.textContent = `${shellDisplayDate(draft.date)} ${SHELL_WEEKDAY_NAMES[new Date(`${draft.date}T12:00:00`).getDay()]} · ${draft.date === today ? "会显示在今日任务中" : "截止日期不改变任务的分组"}`;
+}
+
+function shellApplyDeadline(date, time, reminder) {
+  const task = shellActiveTask();
+  if (!task) return;
+  const stamp = safeDate(`${date}T${time || "18:00"}`);
+  task.deadlineAt = stamp ? stamp.toISOString() : "";
+  task.deadlineReminderMinutes = normalizeDeadlineReminderMinutes(reminder);
+  task.updatedAt = now();
+  shellCloseOverlay({ restoreFocus: false });
+  save();
+  render();
+}
+
+// ------------------------------------------------------------
+// Recurrence
+// ------------------------------------------------------------
+
+function shellRecurrencePreview(recurrence) {
+  const value = normalizeTaskRecurrence(recurrence);
+  if (value.frequency === "none") return "";
+  const items = recurrenceUpcomingLabels
+    ? recurrenceUpcomingLabels(value, new Date(), 3)
+    : [];
+  if (!items.length) return "";
+  return `<div class="recurrence-preview"><strong>接下来</strong>${items.map((item) => `<p>${esc(item)}</p>`).join("")}</div>`;
+}
+
+function shellRenderRecurrencePanel(trigger) {
+  const draft = state.recurrenceDraft;
+  const surface = shellMountSurface(
+    `<form class="surface-popover" id="recurrence-form" role="dialog" aria-modal="true" aria-label="设置循环任务">${shellSurfaceHeader("循环任务")}
+      <div class="recurrence-modes" role="group" aria-label="循环周期">${[["none", "不循环"], ["daily", "每天"], ["weekly", "每周"]].map(([value, label]) => `<button type="button" class="${draft.frequency === value ? "active" : ""}" data-action="shell-recurrence-mode" data-mode="${value}" aria-pressed="${draft.frequency === value}">${label}</button>`).join("")}</div>
+      ${draft.frequency !== "none" ? `
+        <label for="recurrence-time">显示在今日的时间</label>
+        <input id="recurrence-time" name="time" type="time" value="${escAttr(draft.time)}" required />
+        ${draft.frequency === "weekly" ? `<div class="recurrence-weekdays" role="group" aria-label="选择循环日期，可多选">${recurrenceWeekdayOrder.map((day) => `<button type="button" class="${draft.weekdays.includes(day) ? "active" : ""}" data-action="shell-recurrence-day" data-day="${day}" aria-label="${escAttr(recurrenceWeekdayLabels[day])}" aria-pressed="${draft.weekdays.includes(day)}">${recurrenceWeekdayLabels[day].slice(1)}</button>`).join("")}</div>` : ""}
+        <div class="recurrence-preview-host">${shellRecurrencePreview(draft)}</div>
+        <p class="schedule-hint">到期后进入今日；完成本次后，下个周期重新出现。</p>`
+      : '<p class="schedule-hint">保留为一次性任务。</p>'}
+      <p class="error" id="recurrence-error" role="status"></p>
+      <footer><button type="submit" class="button primary">保存</button></footer>
+    </form>`,
+    trigger,
+    320,
+  );
+  surface?.querySelector("#recurrence-time")?.addEventListener("input", (event) => {
+    state.recurrenceDraft.time = event.target.value;
+    const host = document.querySelector(".recurrence-preview-host");
+    if (host) host.innerHTML = shellRecurrencePreview(state.recurrenceDraft);
+  });
+    shellPanelFinish(document.querySelector("#recurrence-form"));
+  surface?.querySelector("#recurrence-form")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const task = shellActiveTask();
+    const draft2 = state.recurrenceDraft;
+    if (draft2.frequency === "weekly" && !draft2.weekdays.length) {
+      const error = document.querySelector("#recurrence-error");
+      if (error) error.textContent = "请选择至少一天";
+      return;
+    }
+    if (!task) return;
+    draft2.time = document.querySelector("#recurrence-time")?.value || draft2.time;
+    task.recurrence = normalizeTaskRecurrence({ ...draft2, lastCompletedOccurrence: draft2.lastCompletedOccurrence || "" });
+    task.updatedAt = now();
+    syncRecurringTasks?.(new Date());
+    shellCloseOverlay({ restoreFocus: false });
+    save();
+    render();
+  });
+}
+
+function shellRecurrencePanel(trigger) {
+  const task = shellActiveTask();
+  if (!task) return;
+  shellRecurrenceTrigger = trigger || null;
+  const recurrence = normalizeTaskRecurrence(task.recurrence);
+  state.recurrenceDraft = { ...recurrence, weekdays: [...recurrence.weekdays] };
+  shellRenderRecurrencePanel(trigger);
+}
+
+// ------------------------------------------------------------
+// Group picker
+// ------------------------------------------------------------
+
+let shellDeadlineTrigger = null;
+let shellRecurrenceTrigger = null;
+
+function shellGroupPanel(trigger) {
+  const task = shellActiveTask();
+  if (!task) return;
+  const groups = sort(state.taskGroups);
+  const overlay = shellOverlay();
+  overlay.innerHTML = `<div class="dialog-backdrop" data-return-focus="[data-action='toggle-task-group-select']">
+    <form class="dialog" id="move-group-form" aria-label="移动分组">
+      <div class="dialog-head"><h2>移动分组</h2><button class="icon-button" type="button" data-action="close-dialog" aria-label="关闭">${shellIcon("close")}</button></div>
+      <label for="move-group">分组</label>
+      <select id="move-group" name="group">
+        <option value="" ${task.groupId ? "" : "selected"}>未分组</option>
+        ${groups.map((group) => `<option value="${escAttr(group.id)}" ${task.groupId === group.id ? "selected" : ""}>${esc(group.title)}</option>`).join("")}
+      </select>
+      <footer><button class="button" type="button" data-action="close-dialog">取消</button><button class="button primary" type="submit">移动</button></footer>
+    </form>
+  </div>`;
+  document.querySelector("#move-group")?.focus();
+  document.querySelector("#move-group-form")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    task.groupId = document.querySelector("#move-group")?.value ?? "";
+    task.updatedAt = now();
+    shellCloseOverlay({ restoreFocus: false });
+    save();
+    render();
+  });
+}
+
+// ------------------------------------------------------------
+// Drafts (brief fields)
+// ------------------------------------------------------------
+
+function shellStartBriefDraft(taskId, field) {
+  const task = state.tasks.find((item) => item.id === taskId);
+  if (!task) return;
+  const key = `${taskId}:${field}`;
+  state.shellDrafts[key] = String(task[field] || "");
+  render();
+  document.querySelector(`[data-shell-draft="${CSS.escape(key)}"]`)?.focus({ preventScroll: true });
+}
+
+function shellFinishBriefDraft(key, commit) {
+  const task = state.tasks.find((item) => item.id === key.split(":")[0]);
+  const field = key.split(":")[1];
+  if (!task) {
+    delete state.shellDrafts[key];
+    return;
+  }
+  if (commit) {
+    const value = String(state.shellDrafts[key] ?? "");
+    if (task[field] !== value) {
+      task[field] = value;
+      if (field === "hypothesis") task.hypothesisUpdatedAt = now();
+      task.updatedAt = now();
+      if (field === "conclusion" && value.trim()) clearConclusionNotice?.(task.id);
+    }
+  }
+  delete state.shellDrafts[key];
+  save();
+  render();
+}
+
+function shellStartTaskMenu() {
+  state.taskMenuOpen = true;
+}
+
+// ------------------------------------------------------------
+// Dispatcher
+// ------------------------------------------------------------
+
+async function shellAction(data, event) {
+  const trigger = event?.currentTarget || event?.target;
+  const task = shellActiveTask();
+  switch (data.action) {
+    case "toggle-nav":
+      state.navCollapsed = !state.navCollapsed;
+      return true;
+    case "clear-search":
+      state.query = "";
+      state.searchOpen = false;
+      state.focusSearch = true;
+      return true;
+    case "clear-list-filters":
+      state.query = "";
+      state.priorityFilter = "all";
+      state.captureSourceFilter = "all";
+      state.taskDeadlineFilter = "all";
+      state.taskDateFilter = "";
+      state.activeGroupId = ALL_TASKS_GROUP_ID;
+      state.taskFilter = "all";
+      shellCloseOverlay({ restoreFocus: false });
+      if (!filteredTasks().some((item) => item.id === state.activeTaskId)) state.activeTaskId = "";
+      return true;
+    case "commit-group-edit": {
+      const value = document.querySelector("#group-title")?.value ?? "";
+      const groupId = state.editingGroupId;
+      state.editingGroupId = "";
+      state.focusGroupTitleId = "";
+      if (groupId) renameGroup(groupId, value, true);
+      return true;
+    }
+    case "cancel-group-edit":
+      state.editingGroupId = "";
+      state.focusGroupTitleId = "";
+      return true;
+    case "edit-task-title":
+      shellTitleEditor(trigger, null);
+      return true;
+    case "edit-node-title":
+      shellTitleEditor(trigger, data.nodeId);
+      return true;
+    case "open-node-status":
+      shellStatusMenu(trigger, data.nodeId);
+      return true;
+    case "set-node-status": {
+      if (!task) return true;
+      const node = shellNodeList(task).find((item) => item.id === data.nodeId);
+      if (!node) return true;
+      markNodeStatus(task.id, data.nodeId, data.status);
+      shellCloseOverlay({ restoreFocus: false });
+      return true;
+    }
+    case "open-node-operations":
+      shellNodeOperations(trigger, data.nodeId);
+      return true;
+    case "open-node-delete":
+      shellNodeDelete(trigger, data.nodeId);
+      return true;
+    case "open-node-path":
+      shellPathMenu(trigger, data.nodeId);
+      return true;
+    case "move-node": {
+      if (!task) return true;
+      const { parent, siblings, index } = shellNodeSiblings(task, data.nodeId);
+      const direction = data.direction;
+      if (direction === "up" && index > 0) {
+        siblings.splice(index - 1, 0, siblings.splice(index, 1)[0]);
+        reorder(siblings);
+      } else if (direction === "down" && index < siblings.length - 1) {
+        siblings.splice(index + 1, 0, siblings.splice(index, 1)[0]);
+        reorder(siblings);
+      } else if (direction === "in" && index > 0) {
+        const target = siblings[index - 1];
+        const [moved] = siblings.splice(index, 1);
+        moved.parentId = target.id;
+        target.collapsed = false;
+        target.children = target.children || [];
+        target.children.push(moved);
+        reorder(siblings);
+        reorder(target.children);
+      } else if (direction === "out" && parent) {
+        const grand = shellNodeSiblings(task, parent.id);
+        const [moved] = siblings.splice(index, 1);
+        moved.parentId = grand.parent ? grand.parent.id : null;
+        grand.siblings.splice(grand.index + 1, 0, moved);
+        reorder(grand.siblings);
+      }
+      task.updatedAt = now();
+      shellCloseOverlay({ restoreFocus: false });
+      return true;
+    }
+    case "open-flow-locator":
+      shellFlowLocator(trigger);
+      return true;
+    case "clear-locator":
+      shellLocatorQuery = "";
+      {
+        const host = document.querySelector(".flow-locator-results");
+        if (host) host.innerHTML = shellLocatorResults();
+        document.querySelector("#flow-locator-query")?.focus({ preventScroll: true });
+      }
+      return true;
+    case "focus-next-pending":
+      shellFocusNextPending();
+      return true;
+    case "toggle-node-reading":
+      state.nodeDetailFullscreen = !state.nodeDetailFullscreen;
+      return true;
+    case "toggle-note-preview":
+      state.nodeRecordPreview = !state.nodeRecordPreview;
+      return true;
+    case "open-task-menu":
+      shellStartTaskMenu();
+      return true;
+    case "toggle-task-priority-menu": {
+      if (!task) return true;
+      shellChoiceMenu(trigger, "任务优先级", SHELL_PRIORITY_LABELS, normalizePriority(task.priority), "priority");
+      return true;
+    }
+    case "toggle-deadline-picker":
+      shellDeadlinePanel(trigger);
+      return true;
+    case "open-task-recurrence":
+      shellRecurrencePanel(trigger);
+      return true;
+    case "toggle-task-group-select":
+      shellGroupPanel(trigger);
+      return true;
+    case "shell-schedule-day":
+      state.deadlineDraft.date = data.date;
+      state.deadlineDraft.month = data.date.slice(0, 7);
+      shellRenderDeadlinePanel(shellDeadlineTrigger);
+      return true;
+    case "shell-schedule-month": {
+      const base = new Date(`${state.deadlineDraft.month}-01T12:00:00`);
+      base.setMonth(base.getMonth() + Number(data.direction || 1));
+      state.deadlineDraft.month = `${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, "0")}`;
+      shellRenderDeadlinePanel(shellDeadlineTrigger);
+      return true;
+    }
+    case "shell-remove-deadline": {
+      if (!task) return true;
+      task.deadlineAt = "";
+      task.deadlineReminderMinutes = null;
+      task.updatedAt = now();
+      shellCloseOverlay({ restoreFocus: false });
+      save();
+      render();
+      return true;
+    }
+    case "shell-recurrence-mode":
+      state.recurrenceDraft.frequency = ["none", "daily", "weekly"].includes(data.mode) ? data.mode : "none";
+      if (state.recurrenceDraft.frequency === "weekly" && !state.recurrenceDraft.weekdays.length) state.recurrenceDraft.weekdays = [new Date().getDay()];
+      shellRenderRecurrencePanel(shellRecurrenceTrigger);
+      return true;
+    case "shell-recurrence-day": {
+      const day = Number(data.day);
+      const weekdays = new Set(state.recurrenceDraft.weekdays);
+      if (weekdays.has(day)) weekdays.delete(day);
+      else weekdays.add(day);
+      state.recurrenceDraft.weekdays = recurrenceWeekdayOrder.filter((value) => weekdays.has(value));
+      shellRenderRecurrencePanel(shellRecurrenceTrigger);
+      return true;
+    }
+    case "toggle-note-summary":
+      state.noteSummaryOpen = !state.noteSummaryOpen;
+      return true;
+    case "knowledge-mode":
+      state.markdownMode = ["edit", "source", "preview"].includes(data.mode) ? data.mode : "edit";
+      return true;
+    case "knowledge-width-menu":
+      shellNoteWidthMenu(trigger);
+      return true;
+    case "set-note-width":
+      state.knowledgeWidth = Object.hasOwn(SHELL_NOTE_WIDTH_NAMES, data.width) ? data.width : "default";
+      shellCloseOverlay({ restoreFocus: false });
+      return true;
+    case "knowledge-file-menu":
+      shellKnowledgeFileMenu(trigger);
+      return true;
+    case "knowledge-file-info":
+      shellKnowledgeFileInfo(shellActiveTask());
+      return true;
+    case "knowledge-conflict":
+      shellKnowledgeConflict(shellActiveTask());
+      return true;
+    case "note-format":
+      if (data.format === "link") shellKnowledgeLink(trigger);
+      else shellApplyNoteFormat(data.format);
+      return true;
+    case "note-heading":
+      shellApplyNoteFormat("heading", Number(data.level) || 0);
+      return true;
+    case "set-deadline-time": {
+      // Demo phase 16: half-hour/常用时间 presets above the field.
+      const input = document.querySelector("#deadline-time");
+      if (!input) return true;
+      input.value = data.value;
+      const draft = state.deadlineDraft;
+      if (draft) draft.time = data.value;
+      shellRefreshDeadlineHint();
+      input.focus({ preventScroll: true });
+      return true;
+    }
+    case "journey-action":
+      return shellJourneyAction(data.value, trigger);
+    case "select-nav-group": {
+      // The Demo's group buttons navigate to 任务仓库 with that group. The
+      // "today" filter scopes the list to every group's today tasks and would
+      // otherwise ignore the selection, so leaving it is part of navigating.
+      state.calendarOpen = false;
+      state.reviewOpen = false;
+      state.settingsOpen = false;
+      if (state.taskFilter === "today") state.taskFilter = "all";
+      selectGroup(data.groupId);
+      save();
+      return true;
+    }
+    case "set-settings-page":
+      if (["appearance", "tasks", "data", "updates", "advanced", "help"].includes(data.page)) {
+        activeSettingsPage = data.page;
+        settingsMotion = "page";
+      }
+      return true;
+    case "open-settings-choice":
+      shellSettingsChoiceMenu(trigger, data.key);
+      return true;
+    case "set-settings-choice":
+      applySetting(data.key, data.value);
+      save();
+      shellCloseOverlay({ restoreFocus: false });
+      return true;
+    case "reset-appearance":
+      state.theme = "light";
+      state.fontScale = "large";
+      state.zhFont = "system";
+      state.enFont = "system";
+      save();
+      return true;
+    case "toggle-today-widget-always-on-top": {
+      if (!desktopTodayWidget) return true;
+      const next = todayWidgetWindowState.alwaysOnTop !== true;
+      todayWidgetWindowState = { ...todayWidgetWindowState, alwaysOnTop: next };
+      await desktopTodayWidget.setPreferences({ alwaysOnTop: next });
+      todayWidgetWindowState = await desktopTodayWidget.getState();
+      return true;
+    }
+    case "open-help-feedback":
+      state.feedbackErrors = {};
+      state.feedbackMessage = "";
+      state.feedbackResult = null;
+      shellHelpFeedbackDialog();
+      return true;
+    case "close-help-feedback":
+      shellCloseOverlay({ restoreFocus: false });
+      state.feedbackErrors = {};
+      state.feedbackMessage = "";
+      state.feedbackResult = null;
+      return true;
+    case "toggle-help-topic": {
+      const index = Number(data.topic);
+      state.helpTopicOpen = Number(state.helpTopicOpen) === index ? -1 : index;
+      return true;
+    }
+    case "submit-feedback":
+      await submitBugReport();
+      // submitBugReport() renders the page; refresh the open dialog as well
+      if (shellOverlay()?.firstElementChild) shellHelpFeedbackDialog();
+      return true;
+    case "reset-feedback":
+      state.feedbackResult = null;
+      state.feedbackErrors = {};
+      state.feedbackMessage = "";
+      state.feedbackDraft = createEmptyFeedbackDraft();
+      return true;
+    case "open-combined-filter":
+      shellCombinedFilter(trigger);
+      return true;
+    case "open-update-panel":
+      shellUpdatePanel(trigger);
+      return true;
+    case "run-update-download":
+      shellCloseOverlay();
+      await runUpdateAction("download");
+      return true;
+    case "run-update-install":
+      shellCloseOverlay();
+      await runUpdateAction("install");
+      return true;
+    case "shell-edit-brief":
+      shellStartBriefDraft(data.taskId, data.field);
+      return true;
+    case "shell-save-draft":
+      shellFinishBriefDraft(data.key, true);
+      return true;
+    case "shell-cancel-draft":
+      shellFinishBriefDraft(data.key, false);
+      return true;
+    case "close-dialog":
+      shellCloseOverlay();
+      state.taskMenuOpen = false;
+      state.contextMenu = null;
+      return true;
+    case "close-node":
+    case "close-node-detail":
+      state.selectedNodeId = "";
+      state.recordDraft = "";
+      state.nodeDetailFullscreen = false;
+      state.nodeRecordPreview = false;
+      state.nodeDetailPosition = null;
+      shellCloseOverlay({ restoreFocus: false });
+      return true;
+    default:
+      return false;
+  }
+}
+
+// ------------------------------------------------------------
+// Bindings that are not plain [data-action] clicks
+// ------------------------------------------------------------
+
+function shellBindNodeDraft() {
+  document.querySelectorAll("[data-shell-node-draft]").forEach((input) => {
+    input.addEventListener("input", () => {
+      const task = shellActiveTask();
+      const node = shellNodeList(task).find((item) => item.id === state.focusNodeTitleId);
+      if (node) node.title = input.value;
+    });
+    input.addEventListener("keydown", (event) => {
+      if (event.isComposing || event.keyCode === 229) return;
+      if (event.key === "Enter") {
+        event.preventDefault();
+        shellCommitNodeDraft();
+      } else if (event.key === "Escape") {
+        event.preventDefault();
+        shellCancelNodeDraft();
+      }
+    });
+    input.addEventListener("blur", () => {
+      window.setTimeout(() => {
+        if (document.activeElement === input) return;
+        if (state.focusNodeTitleId && !shellNodeList(shellActiveTask()).find((item) => item.id === state.focusNodeTitleId)?.title) return;
+        shellCommitNodeDraft();
+      }, 0);
+    });
+  });
+}
+
+function shellCommitNodeDraft() {
+  const task = shellActiveTask();
+  const node = shellNodeList(task).find((item) => item.id === state.focusNodeTitleId);
+  if (node) {
+    if (!node.title.trim()) node.title = "新节点";
+    node.updatedAt = now();
+  }
+  task.updatedAt = now();
+  state.focusNodeTitleId = "";
+  save();
+  render();
+}
+
+function shellCancelNodeDraft() {
+  const task = shellActiveTask();
+  const nodeId = state.focusNodeTitleId;
+  state.focusNodeTitleId = "";
+  if (task && nodeId) {
+    const { siblings, index } = shellNodeSiblings(task, nodeId);
+    if (index >= 0) siblings.splice(index, 1);
+  }
+  render();
+}
+
+function shellBindBriefDrafts() {
+  document.querySelectorAll("[data-shell-draft]").forEach((field) => {
+    field.addEventListener("input", () => {
+      state.shellDrafts[field.dataset.shellDraft] = field.value;
+    });
+    field.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        shellFinishBriefDraft(field.dataset.shellDraft, false);
+      } else if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+        event.preventDefault();
+        shellFinishBriefDraft(field.dataset.shellDraft, true);
+      }
+    });
+  });
+}
+
+function shellBindNodeRecord() {
+  const editor = document.querySelector("[data-shell-node-record]");
+  if (!editor) return;
+  editor.addEventListener("input", () => {
+    const task = shellActiveTask();
+    const node = shellNodeList(task).find((item) => item.id === editor.dataset.shellNodeRecord);
+    if (!node) return;
+    node.note = editor.value;
+    node.updatedAt = now();
+    updateNodeNoteDraft(task.id, node.id, editor.value);
+  });
+  editor.addEventListener("blur", () => {
+    flushNodeNoteDrafts?.({ persist: true });
+  });
+}
+
+function shellBindGroupMenus() {
+  document.querySelectorAll("[data-group-context-id]").forEach((element) => {
+    element.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      openRepositoryGroupContextMenu(element.dataset.groupContextId, event);
+    });
+  });
+}
+
+const SHELL_OVERLAY_TRIGGERS = [
+  "[data-action='open-combined-filter']", "[data-action='open-update-panel']",
+  "[data-action='open-flow-locator']", "[data-action='open-node-status']",
+  "[data-action='open-node-operations']", "[data-action='open-node-path']",
+  "[data-action='open-node-delete']", "[data-action='edit-task-title']",
+  "[data-action='edit-node-title']", "[data-action='open-task-menu']",
+  ".status-trigger", ".node-status",
+].join(",");
+
+function shellOverlayIsOpen() {
+  return Boolean(shellOverlay()?.firstElementChild);
+}
+
+/** Escape and outside-click dismiss, mirroring loop-popup-dismiss.js. */
+function shellBindOverlayDismissal() {
+  if (typeof document.addEventListener !== "function") return;
+  if (window.__loopShellDismissBound) return;
+  window.__loopShellDismissBound = true;
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape" || !shellOverlayIsOpen()) return;
+    event.preventDefault();
+    // The overlay owns this Escape: stopImmediatePropagation keeps the
+    // multi-select shortcuts from also reacting to the same key press.
+    event.stopImmediatePropagation();
+    shellCloseOverlay();
+    state.taskMenuOpen = false;
+    state.contextMenu = null;
+    render();
+  }, true);
+  document.addEventListener("pointerdown", (event) => {
+    if (!shellOverlayIsOpen()) return;
+    if (event.target.closest("#overlay")) return;
+    if (event.target.closest(SHELL_OVERLAY_TRIGGERS)) return;
+    shellCloseOverlay({ restoreFocus: false });
+    state.taskMenuOpen = false;
+    state.contextMenu = null;
+    render();
+  }, true);
+}
+
+/**
+ * Drag the task-list column edge (approved new structure).
+ * .app carries the inline --list-width, so the drag writes there; the width is
+ * clamped and persisted through the project's existing sidebarWidth preference.
+ */
+function shellBindListResizer() {
+  const handle = document.querySelector("[data-action='resize-list-column']");
+  if (!handle || handle.dataset.bound === "1") return;
+  handle.dataset.bound = "1";
+  const pane = handle.closest(".task-list-pane");
+  const host = handle.closest(".app");
+  const setWidth = (next) => {
+    state.sidebarWidth = next;
+    host?.style.setProperty("--list-width", `${next}px`);
+    handle.setAttribute("aria-valuenow", String(next));
+  };
+  handle.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    const startX = event.clientX;
+    const startWidth = pane.getBoundingClientRect().width;
+    handle.setPointerCapture?.(event.pointerId);
+    const onMove = (move) => setWidth(normalizeSidebarWidth(Math.round(startWidth + (move.clientX - startX))));
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      save();
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  });
+  handle.addEventListener("keydown", (event) => {
+    if (!["ArrowLeft", "ArrowRight"].includes(event.key)) return;
+    event.preventDefault();
+    setWidth(normalizeSidebarWidth(state.sidebarWidth + (event.key === "ArrowRight" ? 16 : -16)));
+    save();
+  });
+}
+
+function shellBindOverlay() {
+  shellBindOverlayDelegation();
+  shellBindOverlayDismissal();
+  shellBindNodeDraft();
+  shellBindBriefDrafts();
+  shellBindNodeRecord();
+  shellBindGroupMenus();
+}

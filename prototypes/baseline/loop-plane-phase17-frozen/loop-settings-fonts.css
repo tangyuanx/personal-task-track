@@ -1,0 +1,30 @@
+@font-face {
+  font-family: "TaskTrack English Inter";
+  src: url("assets/fonts/InterVariable.woff2") format("woff2"), local("Inter"), local("Avenir Next"), local("SF Pro Display"), local("Segoe UI");
+  font-weight: 100 900;
+  unicode-range: U+0000-024F, U+0370-052F, U+2000-214F;
+}
+
+@font-face { font-family: "TaskTrack English System"; src: local("SF Pro Text"), local("Segoe UI"), local("Arial"); unicode-range: U+0000-024F, U+0370-052F, U+2000-214F; }
+@font-face { font-family: "TaskTrack English Segoe"; src: local("Segoe UI"), local("Avenir Next"), local("Arial"); unicode-range: U+0000-024F, U+0370-052F, U+2000-214F; }
+@font-face { font-family: "TaskTrack English Arial"; src: local("Arial"), local("Helvetica"); unicode-range: U+0000-024F, U+0370-052F, U+2000-214F; }
+@font-face { font-family: "TaskTrack English Helvetica"; src: local("Helvetica"), local("Arial"); unicode-range: U+0000-024F, U+0370-052F, U+2000-214F; }
+@font-face { font-family: "TaskTrack English Verdana"; src: local("Verdana"), local("Geneva"), local("Arial"); unicode-range: U+0000-024F, U+0370-052F, U+2000-214F; }
+@font-face { font-family: "TaskTrack English Trebuchet"; src: local("Trebuchet MS"), local("Segoe UI"), local("Arial"); unicode-range: U+0000-024F, U+0370-052F, U+2000-214F; }
+@font-face { font-family: "TaskTrack English Tahoma"; src: local("Tahoma"), local("Segoe UI"), local("Arial"); unicode-range: U+0000-024F, U+0370-052F, U+2000-214F; }
+@font-face { font-family: "TaskTrack English Times"; src: local("Times New Roman"), local("Times"); unicode-range: U+0000-024F, U+0370-052F, U+2000-214F; }
+@font-face { font-family: "TaskTrack English Georgia"; src: local("Georgia"), local("Times New Roman"); unicode-range: U+0000-024F, U+0370-052F, U+2000-214F; }
+@font-face { font-family: "TaskTrack English Courier"; src: local("Courier New"), local("Courier"), local("Consolas"); unicode-range: U+0000-024F, U+0370-052F, U+2000-214F; }
+@font-face { font-family: "TaskTrack English Mono"; src: local("SFMono-Regular"), local("Cascadia Mono"), local("Consolas"); unicode-range: U+0000-024F, U+0370-052F, U+2000-214F; }
+
+@font-face { font-family: "TaskTrack Chinese System"; src: local("PingFang SC"), local("Microsoft YaHei UI"), local("Microsoft YaHei"), url("assets/fonts/NotoSansCJKsc-Regular.otf") format("opentype"); unicode-range: U+2E80-2EFF, U+3000-303F, U+3040-30FF, U+3100-312F, U+31A0-31BF, U+3200-32FF, U+3400-4DBF, U+4E00-9FFF, U+F900-FAFF, U+FE10-FE1F, U+FE30-FE4F, U+FF00-FFEF; }
+@font-face { font-family: "TaskTrack Chinese System"; src: local("PingFang SC"), local("Microsoft YaHei UI"), local("Microsoft YaHei"), url("assets/fonts/NotoSansCJKsc-Bold.otf") format("opentype"); font-weight: 700 900; unicode-range: U+2E80-2EFF, U+3000-303F, U+3040-30FF, U+3100-312F, U+31A0-31BF, U+3200-32FF, U+3400-4DBF, U+4E00-9FFF, U+F900-FAFF, U+FE10-FE1F, U+FE30-FE4F, U+FF00-FFEF; }
+@font-face { font-family: "TaskTrack Chinese Noto"; src: url("assets/fonts/NotoSansCJKsc-Regular.otf") format("opentype"); unicode-range: U+2E80-2EFF, U+3000-303F, U+3040-30FF, U+3100-312F, U+31A0-31BF, U+3200-32FF, U+3400-4DBF, U+4E00-9FFF, U+F900-FAFF, U+FE10-FE1F, U+FE30-FE4F, U+FF00-FFEF; }
+@font-face { font-family: "TaskTrack Chinese Noto"; src: url("assets/fonts/NotoSansCJKsc-Bold.otf") format("opentype"); font-weight: 700 900; unicode-range: U+2E80-2EFF, U+3000-303F, U+3040-30FF, U+3100-312F, U+31A0-31BF, U+3200-32FF, U+3400-4DBF, U+4E00-9FFF, U+F900-FAFF, U+FE10-FE1F, U+FE30-FE4F, U+FF00-FFEF; }
+@font-face { font-family: "TaskTrack Chinese YaHei"; src: local("Microsoft YaHei UI"), local("Microsoft YaHei"), local("PingFang SC"), local("Noto Sans CJK SC"); unicode-range: U+2E80-2EFF, U+3000-303F, U+3040-30FF, U+3100-312F, U+31A0-31BF, U+3200-32FF, U+3400-4DBF, U+4E00-9FFF, U+F900-FAFF, U+FE10-FE1F, U+FE30-FE4F, U+FF00-FFEF; }
+@font-face { font-family: "TaskTrack Chinese PingFang"; src: local("PingFang SC"), local("Hiragino Sans GB"), local("Microsoft YaHei"); unicode-range: U+2E80-2EFF, U+3000-303F, U+3040-30FF, U+3100-312F, U+31A0-31BF, U+3200-32FF, U+3400-4DBF, U+4E00-9FFF, U+F900-FAFF, U+FE10-FE1F, U+FE30-FE4F, U+FF00-FFEF; }
+@font-face { font-family: "TaskTrack Chinese Songti"; src: local("Songti SC"), local("STSong"), local("SimSun"); unicode-range: U+2E80-2EFF, U+3000-303F, U+3040-30FF, U+3100-312F, U+31A0-31BF, U+3200-32FF, U+3400-4DBF, U+4E00-9FFF, U+F900-FAFF, U+FE10-FE1F, U+FE30-FE4F, U+FF00-FFEF; }
+@font-face { font-family: "TaskTrack Chinese SimSun"; src: local("SimSun"), local("Songti SC"), local("STSong"); unicode-range: U+2E80-2EFF, U+3000-303F, U+3040-30FF, U+3100-312F, U+31A0-31BF, U+3200-32FF, U+3400-4DBF, U+4E00-9FFF, U+F900-FAFF, U+FE10-FE1F, U+FE30-FE4F, U+FF00-FFEF; }
+@font-face { font-family: "TaskTrack Chinese FangSong"; src: local("FangSong"), local("FangSong_GB2312"), local("STFangsong"); unicode-range: U+2E80-2EFF, U+3000-303F, U+3040-30FF, U+3100-312F, U+31A0-31BF, U+3200-32FF, U+3400-4DBF, U+4E00-9FFF, U+F900-FAFF, U+FE10-FE1F, U+FE30-FE4F, U+FF00-FFEF; }
+@font-face { font-family: "TaskTrack Chinese Heiti"; src: local("SimHei"), local("Heiti SC"), local("Microsoft YaHei"); unicode-range: U+2E80-2EFF, U+3000-303F, U+3040-30FF, U+3100-312F, U+31A0-31BF, U+3200-32FF, U+3400-4DBF, U+4E00-9FFF, U+F900-FAFF, U+FE10-FE1F, U+FE30-FE4F, U+FF00-FFEF; }
+@font-face { font-family: "TaskTrack Chinese KaiTi"; src: local("KaiTi"), local("Kaiti SC"), local("STKaiti"); unicode-range: U+2E80-2EFF, U+3000-303F, U+3040-30FF, U+3100-312F, U+31A0-31BF, U+3200-32FF, U+3400-4DBF, U+4E00-9FFF, U+F900-FAFF, U+FE10-FE1F, U+FE30-FE4F, U+FF00-FFEF; }

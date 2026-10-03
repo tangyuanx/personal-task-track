@@ -8,18 +8,45 @@
       content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: file: http: https:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'"
     />
     <title>Loop</title>
-    <link rel="stylesheet" href="./src/styles.css?v=0.1.200" />
-    <link rel="stylesheet" href="./src/work-rhythm.css?v=0.1.200" />
+    <!--
+      Stylesheet baseline is the frozen Demo at
+      prototypes/baseline/loop-plane-phase15-frozen/. Files are byte-identical
+      copies and load in the same order as the Demo entry so the rendered
+      result stays pixel-comparable. Do not hand-edit them: add overrides in
+      bridge.css instead.
+    -->
+    <link rel="stylesheet" href="./src/shell.css?v=0.1.200" />
     <link rel="stylesheet" href="./src/vendor/milkdown-editor.css?v=0.1.117" />
-    <link rel="stylesheet" href="./src/approved-4174.css?v=0.1.200" />
+    <link rel="stylesheet" href="./src/knowledge.css?v=0.1.200" />
+    <link rel="stylesheet" href="./src/fonts.css?v=0.1.200" />
+    <link rel="stylesheet" href="./src/settings.css?v=0.1.200" />
+    <link rel="stylesheet" href="./src/typography.css?v=0.1.200" />
+    <link rel="stylesheet" href="./src/refinement.css?v=0.1.200" />
+    <link rel="stylesheet" href="./src/selection.css?v=0.1.200" />
+    <link rel="stylesheet" href="./src/flow.css?v=0.1.200" />
+    <link rel="stylesheet" href="./src/shell-refinement.css?v=0.1.200" />
+    <link rel="stylesheet" href="./src/help.css?v=0.1.200" />
+    <link rel="stylesheet" href="./src/work.css?v=0.1.200" />
+    <link rel="stylesheet" href="./src/task-entry.css?v=0.1.200" />
+    <link rel="stylesheet" href="./src/journey.css?v=0.1.200" />
+    <link rel="stylesheet" href="./src/bridge.css?v=0.1.200" />
   </head>
   <body>
     <div id="root"></div>
+    <div id="overlay"></div>
+    <div id="toast" role="status" aria-live="polite"></div>
     <script src="./src/vendor/milkdown-editor.js?v=0.1.117"></script>
     <script src="./src/knowledge-document.js?v=0.1.120"></script>
     <script src="./src/knowledge-recovery.js?v=0.1.120"></script>
     <script src="./src/work-navigation-model.js?v=0.1.179"></script>
+    <script src="./src/shell.js?v=0.1.200"></script>
+    <script src="./src/workspace.js?v=0.1.200"></script>
+    <script src="./src/actions.js?v=0.1.200"></script>
+    <script src="./src/bulk.js?v=0.1.200"></script>
+    <script src="./src/knowledge.js?v=0.1.200"></script>
+    <script src="./src/pages.js?v=0.1.200"></script>
+    <script src="./src/settings.js?v=0.1.200"></script>
     <script src="./src/app.js?v=0.1.200"></script>
-    <script src="./src/work-rhythm.js?v=0.1.200"></script>
+    <script src="./src/work.js?v=0.1.200"></script>
   </body>
 </html>
