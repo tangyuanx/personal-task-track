@@ -6,9 +6,11 @@ on:
     branches:
       - main
     paths:
+      # Historical one-shot publish record. It must only fire when its own
+      # workflow file changes: watching the widget sources meant every later
+      # change to them re-ran this job, which then failed its 0.1.195 version
+      # assertion. The active publish workflow owns those paths now.
       - .github/workflows/publish-v0.1.195.yml
-      - app/renderer/today-widget.html
-      - app/renderer/src/today-widget-runtime.js
 
 concurrency:
   group: publish-v0.1.195

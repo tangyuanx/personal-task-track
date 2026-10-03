@@ -2787,10 +2787,11 @@ test("Today widget is rebuilt from the frozen phase 12/13 widget layers", async 
 });
 
 test("settings use the selected categorized modal, grouped rows, mixed controls, and spring motion", async () => {
-  const [app, styles, workRhythm] = await Promise.all([
+  const [app, styles, work, settings] = await Promise.all([
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "app.js"), "utf8"),
     rendererStyles(),
-    fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "work-rhythm.js"), "utf8"),
+    fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "work.js"), "utf8"),
+    fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "settings.js"), "utf8"),
   ]);
 
   assert.match(app, /activeSettingsPage = "appearance"/);
@@ -2802,10 +2803,12 @@ test("settings use the selected categorized modal, grouped rows, mixed controls,
   assert.match(app, /if \(data\.action === "toggle-today-widget-visibility"\)[\s\S]*desktopTodayWidget\.hide\(\)[\s\S]*desktopTodayWidget\.show\(\)[\s\S]*desktopTodayWidget\.getState\(\)/);
   assert.match(app, /data-settings-advanced-slot/);
   assert.doesNotMatch(app, /<h2 id="settings-title">界面与数据<\/h2>/);
-  assert.match(workRhythm, /data-wr-growth-source/);
-  assert.match(workRhythm, /data-settings-advanced-slot/);
-  assert.match(workRhythm, /slot\.querySelector\("\[data-wr-toggle\]"\)\?\.addEventListener\("click"[\s\S]*toggleEnabled\(\)/);
-  assert.doesNotMatch(workRhythm, /event\.target\.closest\("\[data-wr-toggle\]"\)/);
+  // Demo phase 15 replaced the work-rhythm module: settings.js delegates to
+  // work.js, which owns the schedule form, the source group select and the
+  // switch handling through the shared delegation.
+  assert.match(work, /<select name="source">/);
+  assert.match(work, /data-work15="toggle"/);
+  assert.match(settings, /globalThis\.LoopWork\?\.settingsBody/);
 });
 
 test("transient controls close on outside pointer presses without changing protected editor flows", async () => {
