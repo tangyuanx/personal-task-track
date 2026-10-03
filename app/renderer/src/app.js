@@ -265,6 +265,8 @@ let state = {
 // RUNTIME VARIABLES
 // ============================================================
   reviewPreset: "week",
+  // Phase18: the Today route's own view — active list or today's completions.
+  todayFilter: "active",
   reviewDateField: "updated",
   reviewStartDate: "",
   reviewEndDate: "",
@@ -386,7 +388,9 @@ function id(prefix) {
 }
 
 function now() {
-  return new Date().toISOString();
+  // Phase18: persisted stamps follow the perceived clock, so a review time keeps
+  // completion, history and Today membership coherent.
+  return loopNow().toISOString();
 }
 
 async function confirmDestructiveAction(message) {
@@ -2644,7 +2648,7 @@ function renderTaskActiveTagPills(task) {
     .join("");
 }
 
-function renderTaskDeadlineBadge(task, at = new Date()) {
+function renderTaskDeadlineBadge(task, at = loopNow()) {
   const deadline = safeDate(task.deadlineAt);
   if (!deadline) return "";
   const status = taskDeadlineStatus(task, at);
@@ -2657,7 +2661,7 @@ function renderTaskDeadlineBadge(task, at = new Date()) {
 }
 
 function deadlineTriggerLabel(date) {
-  const todayKey = localDateKey(new Date());
+  const todayKey = loopTodayKey();
   const dateKey = localDateKey(date);
   const dateText = dateKey === todayKey
     ? "今天"
@@ -2667,13 +2671,13 @@ function deadlineTriggerLabel(date) {
 
 function initializeDeadlinePicker(task) {
   const deadline = safeDate(task?.deadlineAt);
-  const initial = deadline || new Date();
+  const initial = deadline || loopNow();
   deadlinePickerDate = localDateKey(initial);
   deadlinePickerMonth = `${deadlinePickerDate.slice(0, 7)}-01`;
 }
 
 function deadlinePickerMonthDate() {
-  return parseDateInput(deadlinePickerMonth) || parseDateInput(deadlinePickerDate) || new Date();
+  return parseDateInput(deadlinePickerMonth) || parseDateInput(deadlinePickerDate) || loopNow();
 }
 
 function deadlineTimeValue(value) {
@@ -2698,7 +2702,7 @@ function renderDeadlinePickerDay(date, month) {
   const classes = [
     "task-deadline-day",
     date.getMonth() !== month.getMonth() ? "outside" : "",
-    dateKey === localDateKey(new Date()) ? "today" : "",
+    dateKey === loopTodayKey() ? "today" : "",
     dateKey === deadlinePickerDate ? "selected" : "",
   ].filter(Boolean).join(" ");
   return `<button class="${classes}" type="button" data-action="select-deadline-date" data-task-id="${escAttr(deadlinePopoverTaskId)}" data-date="${dateKey}" aria-label="选择 ${dateKey}" aria-pressed="${dateKey === deadlinePickerDate}">${date.getDate()}</button>`;
@@ -2706,7 +2710,7 @@ function renderDeadlinePickerDay(date, month) {
 
 function renderTaskDeadlinePopover(task) {
   const month = deadlinePickerMonthDate();
-  const selectedDate = parseDateInput(deadlinePickerDate) || new Date();
+  const selectedDate = parseDateInput(deadlinePickerDate) || loopNow();
   const deadline = safeDate(task.deadlineAt);
   const selectedTime = deadline && localDateKey(deadline) === deadlinePickerDate ? deadlineTimeValue(deadline) : "";
   const reminderValue = task.deadlineReminderMinutes === null
@@ -3155,7 +3159,7 @@ function syncContextMenuRoot() {
  * Get tasks matching current filters (search query + task filter + priority filter).
  * @returns {Array} Filtered task list
  */
-function filteredTasks({ includeQuery = true, at = new Date() } = {}) {
+function filteredTasks({ includeQuery = true, at = loopNow() } = {}) {
   const q = state.query.trim().toLowerCase();
   const deadlineScoped = state.taskDeadlineFilter !== "all" || Boolean(state.taskDateFilter);
   const repositoryTypes = repositoryTypeSelection();
@@ -3164,7 +3168,14 @@ function filteredTasks({ includeQuery = true, at = new Date() } = {}) {
       const tags = normalizeTaskTags(task.tags);
       const hasBlocked = flatten(task.nodes).some((node) => node.status === "blocked");
       const hasLater = flatten(task.nodes).some((node) => node.status === "later");
-      if (state.taskFilter === "today" && !isTaskScheduledForToday(task)) return false;
+      if (state.taskFilter === "today") {
+        // The Today route switches between the active list and today's
+        // completions; anything else keeps the phase17 scope.
+        if (state.todayFilter === "done") return shellCompletedToday().includes(task);
+        // The frozen Demo's Today scope is scheduled && !done: a finished task
+        // leaves the active list and moves to today's completions.
+        if (task.status === "done" || !isTaskScheduledForToday(task)) return false;
+      }
       if (state.taskFilter === "active" && task.status === "done") return false;
       if (state.taskFilter === "done" && task.status !== "done") return false;
       if (state.taskFilter === "blocked" && !tags.blocked && !hasBlocked) return false;
@@ -3195,10 +3206,11 @@ function taskListStatsTasks() {
     return state.tasks.filter((task) => matchesTaskDeadlineFilter(task));
   }
   if (state.taskFilter !== "today") return tasksInActiveGroup();
+  if (state.todayFilter === "done") return shellCompletedToday();
   return state.tasks.filter((task) => isTaskScheduledForToday(task));
 }
 
-function taskDeadlineStatus(task, at = new Date()) {
+function taskDeadlineStatus(task, at = loopNow()) {
   const deadline = safeDate(task?.deadlineAt);
   if (!deadline) return "none";
   if (task.status === "done") return "done";
@@ -3207,7 +3219,7 @@ function taskDeadlineStatus(task, at = new Date()) {
   return "upcoming";
 }
 
-function deadlineWeekRange(at = new Date()) {
+function deadlineWeekRange(at = loopNow()) {
   const date = at instanceof Date ? at : new Date(at);
   const day = date.getDay() || 7;
   const start = new Date(date.getFullYear(), date.getMonth(), date.getDate() - day + 1);
@@ -3215,7 +3227,7 @@ function deadlineWeekRange(at = new Date()) {
   return { start, end };
 }
 
-function matchesTaskDeadlineFilter(task, at = new Date()) {
+function matchesTaskDeadlineFilter(task, at = loopNow()) {
   const deadline = safeDate(task?.deadlineAt);
   if (state.taskDateFilter) return Boolean(deadline && localDateKey(deadline) === state.taskDateFilter);
   if (state.taskDeadlineFilter === "all") return true;
@@ -3404,7 +3416,7 @@ function setWorkNavigationRuntime(patch = {}) {
   navigation.runtime = {
     ...navigation.runtime,
     ...patch,
-    dateKey: workNavigationModel.localDateKey(new Date()),
+    dateKey: workNavigationModel.localDateKey(loopNow()),
   };
   state.workNavigation = workNavigationModel.normalizeWorkNavigation(navigation, {
     groupIds: state.taskGroups.map((group) => group.id),
@@ -3677,7 +3689,7 @@ function recurrenceSummaryLabel(value) {
   return "不循环";
 }
 
-function recurrenceUpcomingLabels(value, start = new Date(), count = 3) {
+function recurrenceUpcomingLabels(value, start = loopNow(), count = 3) {
   const recurrence = normalizeTaskRecurrence(value);
   if (recurrence.frequency === "none" || count < 1) return [];
   const [hours, minutes] = recurrence.time.split(":").map(Number);
@@ -3694,7 +3706,7 @@ function recurrenceUpcomingLabels(value, start = new Date(), count = 3) {
   return labels;
 }
 
-function recurringOccurrenceKey(task, at = new Date()) {
+function recurringOccurrenceKey(task, at = loopNow()) {
   const recurrence = normalizeTaskRecurrence(task.recurrence);
   if (recurrence.frequency === "none") return "";
   const date = at instanceof Date ? at : new Date(at);
@@ -3705,23 +3717,37 @@ function recurringOccurrenceKey(task, at = new Date()) {
   return localDateKey(date);
 }
 
-function isRecurringTaskDue(task, at = new Date()) {
+function isRecurringTaskDue(task, at = loopNow()) {
   const occurrence = recurringOccurrenceKey(task, at);
   return Boolean(occurrence && normalizeTaskRecurrence(task.recurrence).lastCompletedOccurrence !== occurrence);
 }
 
-function isTaskScheduledForToday(task, at = new Date()) {
+function isTaskScheduledForToday(task, at = loopNow()) {
   const deadline = safeDate(task.deadlineAt);
   return normalizeTaskTags(task.tags).today || isRecurringTaskDue(task, at) || Boolean(deadline && localDateKey(deadline) === localDateKey(at));
 }
 
-function recurringScheduleSignature(at = new Date()) {
+/**
+ * Phase18 (frozen Demo loop-time-phase18.js completeToday()): finished work that
+ * belongs to the perceived day, either by its completion stamp or by the
+ * occurrence a recurring task completed. It keeps today's completions reachable
+ * after they leave the active Today list.
+ */
+function shellCompletedToday() {
+  const today = loopTodayKey();
+  return state.tasks.filter((task) => task.status === "done"
+    && !shellTaskIsNote(task)
+    && (localDateKey(task.resolvedAt) === today
+      || normalizeTaskRecurrence(task.recurrence).lastCompletedOccurrence === today));
+}
+
+function recurringScheduleSignature(at = loopNow()) {
   return state.tasks
     .map((task) => `${task.id}:${recurringOccurrenceKey(task, at)}:${isRecurringTaskDue(task, at) ? "due" : "idle"}`)
     .join("|");
 }
 
-function syncRecurringTasks(at = new Date()) {
+function syncRecurringTasks(at = loopNow()) {
   let statusChanged = false;
   state.tasks.forEach((task) => {
     const occurrence = recurringOccurrenceKey(task, at);
@@ -3742,7 +3768,7 @@ function syncRecurringTasks(at = new Date()) {
 function startRecurringSchedule() {
   window.clearInterval?.(recurrenceScheduleTimer);
   recurrenceScheduleTimer = window.setInterval?.(() => {
-    if (syncRecurringTasks(new Date())) render();
+    if (syncRecurringTasks(loopNow())) render();
   }, 30000) || 0;
 }
 
@@ -3758,7 +3784,7 @@ function latestTaskTime(task) {
 function isToday(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return false;
-  const today = new Date();
+  const today = loopNow();
   return date.getFullYear() === today.getFullYear() && date.getMonth() === today.getMonth() && date.getDate() === today.getDate();
 }
 
@@ -4551,7 +4577,7 @@ function ensureCalendarState() {
 
 function calendarMonthDate() {
   ensureCalendarState();
-  return parseDateInput(state.calendarMonth) || new Date();
+  return parseDateInput(state.calendarMonth) || loopNow();
 }
 
 function calendarGridDates(month = calendarMonthDate()) {
@@ -4579,7 +4605,7 @@ function calendarAgendaTitle(dateKey) {
   return new Intl.DateTimeFormat("zh-CN", { month: "long", day: "numeric", weekday: "short" }).format(date);
 }
 
-function renderCalendarCell(date, month, at = new Date()) {
+function renderCalendarCell(date, month, at = loopNow()) {
   const dateKey = localDateKey(date);
   const tasks = calendarTasksForDate(dateKey);
   const pending = tasks.filter((task) => task.status !== "done");
@@ -4748,7 +4774,7 @@ function taskReviewDate(task, field) {
 }
 
 function reviewRange() {
-  const nowDate = new Date();
+  const nowDate = loopNow();
   if (state.reviewPreset === "all") return { start: null, end: null, label: "全部任务" };
   if (state.reviewPreset === "custom") return customReviewRange();
   if (state.reviewPreset === "year") {
@@ -4786,7 +4812,7 @@ function ensureReviewCustomDates() {
 }
 
 function reviewWeekRange() {
-  const nowDate = new Date();
+  const nowDate = loopNow();
   const day = nowDate.getDay() || 7;
   const start = new Date(nowDate.getFullYear(), nowDate.getMonth(), nowDate.getDate() - day + 1);
   const end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 7);
@@ -5747,7 +5773,7 @@ function bindTaskRepositoryRows(scope = document) {
     control.addEventListener("click", (event) => event.stopPropagation());
     control.addEventListener("change", (event) => {
       updateTaskRecurrence(event.currentTarget.dataset.taskId, event.currentTarget.dataset.recurrenceField, event.currentTarget.value);
-      syncRecurringTasks(new Date());
+      syncRecurringTasks(loopNow());
       render();
     });
   });
@@ -5756,7 +5782,7 @@ function bindTaskRepositoryRows(scope = document) {
     control.addEventListener("click", (event) => {
       event.stopPropagation();
       updateTaskRecurrence(event.currentTarget.dataset.taskId, "frequency", event.currentTarget.dataset.recurrenceMode);
-      syncRecurringTasks(new Date());
+      syncRecurringTasks(loopNow());
       render();
     });
   });
@@ -5765,7 +5791,7 @@ function bindTaskRepositoryRows(scope = document) {
     control.addEventListener("click", (event) => {
       event.stopPropagation();
       updateTaskRecurrence(event.currentTarget.dataset.taskId, "weekday", event.currentTarget.dataset.recurrenceWeekday);
-      syncRecurringTasks(new Date());
+      syncRecurringTasks(loopNow());
       render();
     });
   });
@@ -6022,6 +6048,7 @@ function applySetting(key, value) {
   if (key === "font-scale") state.fontScale = normalizeFontScale(value);
   if (key === "task-filter") {
     state.taskFilter = normalizeTaskFilter(value);
+    if (state.taskFilter === "today") state.todayFilter = "active";
     // 今日 / 任务仓库 must leave every full-width route, settings included.
     state.calendarOpen = false;
     state.reviewOpen = false;
@@ -7209,7 +7236,7 @@ async function action(data, event = null) {
     state.calendarMonth = localDateKey(new Date(month.getFullYear(), month.getMonth(), 1));
   }
   if (data.action === "calendar-today") {
-    state.calendarSelectedDate = localDateKey(new Date());
+    state.calendarSelectedDate = loopTodayKey();
     state.calendarMonth = `${state.calendarSelectedDate.slice(0, 7)}-01`;
   }
   if (data.action === "open-calendar-task") openTaskFromGlobalList(data.taskId);
@@ -7327,7 +7354,7 @@ async function action(data, event = null) {
     const isDone = state.tasks.find((item) => item.id === data.taskId)?.status === "done";
     if (!wasDone && isDone) {
       advanceNavigationAfterCompletion(data.taskId);
-      if (typeof shellShowJourneyReceipt === "function") shellShowJourneyReceipt({ id: data.taskId, kind: "done", context, occurrence });
+      if (typeof shellShowJourneyReceipt === "function") shellShowJourneyReceipt({ id: data.taskId, kind: "done", context, occurrence, date: loopTodayKey() });
     }
   }
   if (data.action === "toggle-task-tag") toggleTaskTag(data.taskId, data.tag);
@@ -8077,7 +8104,7 @@ function updateTaskRecurrence(taskId, field, value) {
   const next = { ...previous };
   if (field === "frequency") {
     next.frequency = recurrenceFrequencies.has(value) ? value : "none";
-    if (next.frequency === "weekly" && previous.weekdays.length === 0) next.weekdays = [new Date().getDay()];
+    if (next.frequency === "weekly" && previous.weekdays.length === 0) next.weekdays = [loopNow().getDay()];
     if (next.frequency === "none") next.lastCompletedOccurrence = "";
   }
   if (field === "weekday") {
@@ -8141,6 +8168,9 @@ function toggleTaskDone(taskId) {
       // the Demo phase 17 readiness panel that links to the exact record.
       showCompletionNotice(taskId, blocker);
       if (typeof shellCompletionReadiness === "function") shellCompletionReadiness(taskId, document.activeElement);
+      // Phase19: that panel lives in this window, so a minimized window must
+      // come back before the user can read it.
+      void window.personalTaskTrack?.window?.revealMain?.().catch(() => {});
       return { success: false, code: blocker, taskId };
     }
   }
@@ -8875,7 +8905,9 @@ function todayWidgetSnapshot() {
   const rootFontScale = window.getComputedStyle?.(document.documentElement)?.getPropertyValue("--font-scale")?.trim();
   const rootFontSans = window.getComputedStyle?.(document.documentElement)?.getPropertyValue("--sans")?.trim();
   return {
-    date: localDateKey(new Date()),
+    date: loopTodayKey(),
+    // Phase18: "今日任务已完成" instead of "暂无今日任务" once today's work is done.
+    completedToday: shellCompletedToday().length,
     appearance: {
       theme: state.theme,
       zhFont: state.zhFont,
@@ -8936,16 +8968,27 @@ function publishDeadlineReminderSnapshot() {
   });
 }
 
+/** Phase19: capture what the user is editing before a reminder switches view. */
+function shellPreserveDraftsForReturn() {
+  if (typeof captureMountedMilkdownDrafts === "function") captureMountedMilkdownDrafts();
+  if (typeof flushNodeNoteDrafts === "function") flushNodeNoteDrafts({ persist: false });
+  if (typeof captureAppSwitchEditingFocus === "function") captureAppSwitchEditingFocus(document.activeElement);
+}
+
 function initializeDeadlineReminderBridge() {
   if (!desktopDeadlineReminders) return;
+  if (typeof desktopBindReminderState === "function") desktopBindReminderState();
   unsubscribeDeadlineReminderTask?.();
   unsubscribeDeadlineReminderCalendar?.();
   unsubscribeDeadlineReminderTask = desktopDeadlineReminders.onOpenTask?.(({ taskId } = {}) => {
     if (!taskId) return;
+    // Phase19: coming back from a reminder must not lose the open draft.
+    shellPreserveDraftsForReturn();
     openTaskFromGlobalList(taskId);
     render();
   });
   unsubscribeDeadlineReminderCalendar = desktopDeadlineReminders.onOpenCalendar?.(() => {
+    shellPreserveDraftsForReturn();
     ensureCalendarState();
     state.calendarOpen = true;
     state.settingsOpen = false;
@@ -9135,7 +9178,7 @@ async function bootstrap() {
   });
   await restoreKnowledgeRecoveryDrafts();
   state.activeTaskId = tasksInActiveGroup()[0]?.id || "";
-  syncRecurringTasks(new Date());
+  syncRecurringTasks(loopNow());
   render();
   await startKnowledgeFileWatchers();
   startRecurringSchedule();

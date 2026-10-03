@@ -6,12 +6,19 @@ const path = require("node:path");
 const test = require("node:test");
 const {
   createDeadlineReminderController,
+  deadlineReminderGroups,
+  deadlineReminderKey,
   deadlineReminderStage,
+  normalizeReminderTasks,
+  normalizeReminderState,
+  reconcileDeadlineReminderState,
+  reminderCopy,
   reminderStateFilePath,
 } = require("../app/main/deadline-reminders.cjs");
 
 class FakeNotification extends EventEmitter {
   static instances = [];
+  static failNext = false;
   static isSupported() { return true; }
 
   constructor(options) {
@@ -22,6 +29,12 @@ class FakeNotification extends EventEmitter {
   }
 
   show() {
+    if (FakeNotification.failNext) {
+      FakeNotification.failNext = false;
+      const error = new Error("notification unavailable");
+      error.code = "NOTIFICATION_UNAVAILABLE";
+      throw error;
+    }
     this.shown = true;
   }
 }
@@ -146,4 +159,126 @@ test("notification clicks return to one task or the calendar for grouped reminde
   assert.equal(harness.window.focusCalled > 0, true);
   await harness.controller.stop();
   await fs.rm(directory, { recursive: true, force: true });
+});
+
+
+// ------------------------------------------------------------
+// Phase19 · 桌面提醒 (frozen Demo loop-desktop-model19.js contract)
+// ------------------------------------------------------------
+
+/** Local deadline helper so these cases read like the Demo's model tests. */
+function reminderTask(id, minutes, day = "2026-10-02", time = "18:00", patch = {}) {
+  return normalizeReminderTasks([{
+    id,
+    title: `任务${id}`,
+    status: "active",
+    deadlineAt: new Date(`${day}T${time}:00`).toISOString(),
+    deadlineReminderMinutes: minutes,
+    ...patch,
+  }])[0];
+}
+
+function sendAll(tasks, at) {
+  const state = normalizeReminderState({});
+  deadlineReminderGroups(tasks, at, state).forEach((group) => {
+    group.tasks.forEach((task) => {
+      const existing = state.tasks[task.id]?.deadlineAt === task.deadlineAt ? state.tasks[task.id].notifiedMinutes : [];
+      state.tasks[task.id] = { deadlineAt: task.deadlineAt, notifiedMinutes: [...existing, group.reminderMinutes] };
+    });
+  });
+  return state;
+}
+
+test("phase19: reminders group by stage and offset, skipping done and reminder-free tasks", () => {
+  const early = reminderTask(1, 60);
+  const late = reminderTask(2, 30);
+  const finished = reminderTask(3, 30, "2026-10-02", "18:00", { status: "done" });
+  const silent = reminderTask(4, null);
+  const tasks = [early, late, finished, silent];
+  const empty = normalizeReminderState({});
+
+  // 61 minutes before an 18:00 deadline a 60 minute reminder is not due yet
+  assert.equal(deadlineReminderGroups(tasks, new Date("2026-10-02T16:59:00"), empty).length, 0);
+  // at 17:30 the 60 and 30 minute offsets are due, in their own groups
+  const due = deadlineReminderGroups(tasks, new Date("2026-10-02T17:30:00"), empty);
+  assert.deepEqual(due.map((group) => [group.stage, group.reminderMinutes, group.tasks.length]), [["upcoming", 60, 1], ["upcoming", 30, 1]]);
+  // exactly at the deadline the first group flips to overdue
+  assert.equal(deadlineReminderGroups(tasks, new Date("2026-10-02T18:00:00"), empty)[0].stage, "overdue");
+});
+
+test("phase19: a sent upcoming offset is not re-sent once overdue, but a changed deadline is", () => {
+  const task = reminderTask(1, 60);
+  const sent = sendAll([task], new Date("2026-10-02T17:30:00"));
+  assert.equal(deadlineReminderGroups([task], new Date("2026-10-02T18:15:00"), sent).length, 0);
+  const moved = { ...task, deadlineAt: new Date("2026-10-02T18:45:00").toISOString() };
+  assert.equal(deadlineReminderGroups([moved], new Date("2026-10-02T18:15:00"), sent).length, 1);
+});
+
+test("phase19: a failed send leaves the reminder available and the copy routes single vs merged", () => {
+  const task = reminderTask(1, 60);
+  const state = normalizeReminderState({});   // a failure records nothing
+  assert.equal(deadlineReminderKey(task), `${task.id}|${task.deadlineAt}|60`);
+  assert.equal(deadlineReminderGroups([task], new Date("2026-10-02T17:30:00"), state).length, 1);
+  assert.equal(deadlineReminderGroups([task], new Date("2026-10-02T17:30:00"), state).length, 1);
+
+  const single = deadlineReminderGroups([task], new Date("2026-10-02T17:30:00"), state)[0];
+  assert.match(reminderCopy(single.stage, single.tasks, single.reminderMinutes).body, /「任务1」/);
+  const second = reminderTask(2, 60);
+  // a single task is named; several collapse into an "N 项任务" summary
+  const merged = deadlineReminderGroups([task, second], new Date("2026-10-02T17:30:00"), state)[0];
+  assert.match(reminderCopy(merged.stage, merged.tasks, merged.reminderMinutes).body, /2 项任务/);
+  const overdue = deadlineReminderGroups([task], new Date("2026-10-02T18:00:00"), state)[0];
+  assert.equal(reminderCopy(overdue.stage, overdue.tasks, overdue.reminderMinutes).title, "任务已到截止时间");
+});
+
+test("phase19: completion and reminder changes clear sent records before the next check", () => {
+  const task = reminderTask(1, 60);
+  const sent = sendAll([task], new Date("2026-10-02T17:30:00"));
+  assert.equal(Object.keys(sent.tasks).length, 1);
+
+  // completing the task clears the record
+  const done = reconcileDeadlineReminderState([{ ...task, status: "done" }], sent);
+  assert.equal(done.changed, true);
+  assert.equal(Object.keys(done.state.tasks).length, 0);
+
+  // turning the reminder off clears it as well
+  const rearmed = sendAll([task], new Date("2026-10-02T17:30:00"));
+  const silent = reconcileDeadlineReminderState([{ ...task, deadlineReminderMinutes: null }], rearmed);
+  assert.equal(Object.keys(silent.state.tasks).length, 0);
+
+  // restoring the reminder makes it eligible again
+  assert.equal(deadlineReminderGroups([task], new Date("2026-10-02T17:30:00"), silent.state).length, 1);
+});
+
+
+test("phase19: a failed send is reported without marking the offset as notified", async () => {
+  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "loop-reminders-fail-"));
+  const harness = createHarness(userDataPath, new Date("2026-10-02T17:30:00"));
+  await harness.controller.start({ schedule: false });
+  harness.controller.registerIpc();
+
+  FakeNotification.failNext = true;
+  const failed = await harness.handlers.get("deadline-reminders:sync")(null, [{
+    id: "task_fail", title: "发布校验", status: "active",
+    deadlineAt: new Date("2026-10-02T18:00:00").toISOString(), deadlineReminderMinutes: 60,
+  }]);
+  assert.equal(failed.notified, 0);
+  assert.equal(failed.error?.code, "NOTIFICATION_UNAVAILABLE");
+
+  const state = await harness.handlers.get("deadline-reminders:get-state")();
+  assert.equal(state.error?.code, "NOTIFICATION_UNAVAILABLE");
+  assert.equal(state.pending, 1, "the reminder stays pending after a failure");
+  assert.equal(state.delivered.length, 0);
+
+  // the retry succeeds and then the offset is recorded, so it is not re-sent
+  const retried = await harness.handlers.get("deadline-reminders:check")();
+  assert.equal(retried.outcome.notified, 1);
+  assert.equal(retried.state.error, null);
+  assert.equal(retried.outcome.delivered.length, 1);
+  assert.equal(retried.outcome.delivered[0].tasks[0].id, "task_fail");
+  const after = await harness.handlers.get("deadline-reminders:get-state")();
+  assert.equal(after.pending, 0);
+  assert.equal(after.capability, "supported");
+
+  await harness.controller.stop();
 });

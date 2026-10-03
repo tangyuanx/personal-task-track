@@ -49,7 +49,7 @@ function shellTimeLabel(value) {
 function shellTodayReason(task) {
   if (normalizeTaskTags(task.tags).today) return "今日";
   const deadline = safeDate(task.deadlineAt);
-  if (deadline && localDateKey(deadline) === localDateKey(new Date())) return "今日截止";
+  if (deadline && localDateKey(deadline) === loopTodayKey()) return "今日截止";
   if (isRecurringTaskDue(task)) return "今日循环";
   return "加入今日";
 }
@@ -58,6 +58,41 @@ function shellDeadlineLabel(task) {
   const deadline = safeDate(task.deadlineAt);
   if (!deadline) return "设置截止时间";
   return `${shellDisplayDate(deadline)} ${shellTimeLabel(deadline)}`;
+}
+
+/**
+ * Phase18 (frozen Demo loop-time-phase18.js): temporal information stays in the
+ * existing property row — a neutral date, a restrained orange state when the
+ * deadline is within the hour or already past, and never a task-row tag.
+ */
+function shellDeadlineProperty(task) {
+  const deadline = safeDate(task.deadlineAt);
+  if (!deadline) return { classes: "", text: "设置截止时间", title: "设置截止时间" };
+  const done = shellTaskDone(task);
+  const minutes = Math.round((deadline.getTime() - loopNow().getTime()) / 60000);
+  const near = !done && minutes >= 0 && minutes <= 60;
+  const late = !done && minutes < 0;
+  const time = shellTimeLabel(deadline);
+  const sameDay = localDateKey(deadline) === loopTodayKey();
+  let text = `${sameDay ? "今天" : shellDisplayDate(deadline)} ${time}`;
+  if (near) text = `${minutes ? `还剩 ${minutes} 分钟` : "即将截止"} · ${time}`;
+  if (late) {
+    const overdueMinutes = -minutes;
+    const span = overdueMinutes < 60
+      ? `${overdueMinutes} 分钟`
+      : overdueMinutes < 1440
+        ? `${Math.floor(overdueMinutes / 60)} 小时`
+        : `${Math.floor(overdueMinutes / 1440)} 天`;
+    text = `逾期 ${span} · ${sameDay ? time : shellDisplayDate(deadline)}`;
+  }
+  const reminder = task.deadlineReminderMinutes === null || task.deadlineReminderMinutes === undefined
+    ? deadlineReminderLabels.none
+    : deadlineReminderLabels[task.deadlineReminderMinutes] || `提前 ${task.deadlineReminderMinutes} 分钟提醒`;
+  return {
+    classes: [late ? "overdue" : "", near ? "time18-soon" : ""].filter(Boolean).join(" "),
+    text,
+    title: `${localDateKey(deadline)} ${time} · ${reminder}`,
+  };
 }
 
 function shellRecurrenceLabel(recurrence) {
@@ -81,13 +116,12 @@ function renderShellTaskProperties(task) {
   // The Demo hides the today/priority/status trio only on the 今日 route.
   const showStatus = shellRoute() !== "today";
   const tags = normalizeTaskTags(task.tags);
-  const deadline = safeDate(task.deadlineAt);
-  const overdue = !shellTaskDone(task) && deadline && deadline.getTime() < Date.now();
+  const deadlineProperty = shellDeadlineProperty(task);
   return `<div class="task-properties">
     ${showStatus ? `<button class="badge ${isTaskScheduledForToday(task) ? "green" : ""}" type="button" data-action="toggle-task-tag" data-tag="today" data-task-id="${escAttr(task.id)}" aria-pressed="${tags.today}">${esc(shellTodayReason(task))}</button>
     <button class="property" type="button" data-action="toggle-task-priority-menu" data-task-id="${escAttr(task.id)}" aria-label="修改任务优先级">${shellIcon("flag")}${SHELL_PRIORITY_LABELS[normalizePriority(task.priority)]}${shellIcon("down")}</button>
     <span class="property">${shellTaskDone(task) ? "已完成" : "处理中"}</span>` : ""}
-    <button class="property ${overdue ? "overdue" : ""}" type="button" data-action="toggle-deadline-picker" data-task-id="${escAttr(task.id)}" aria-haspopup="dialog">${shellIcon("calendar")}${overdue ? "逾期 · " : ""}${esc(shellDeadlineLabel(task))}${shellIcon("down")}</button>
+    <button class="property ${deadlineProperty.classes}" type="button" data-action="toggle-deadline-picker" data-task-id="${escAttr(task.id)}" aria-haspopup="dialog" title="${escAttr(deadlineProperty.title)}">${shellIcon("calendar")}${esc(deadlineProperty.text)}${shellIcon("down")}</button>
     <button class="property" type="button" data-action="open-task-recurrence" aria-haspopup="dialog">${shellIcon("repeat")}${esc(shellRecurrenceLabel(task.recurrence))}${shellIcon("down")}</button>
     <button class="property group-property" type="button" data-action="toggle-task-group-select" data-task-id="${escAttr(task.id)}" title="移动分组">${shellIcon("folder")}${esc(shellGroupTitle(task.groupId))}${shellIcon("down")}</button>
   </div>`;
@@ -403,6 +437,14 @@ function renderShellWorkspace(task) {
 }
 
 function renderShellEmptyWorkspace() {
+  // Phase18: the Today route shows a minimal all-done / nothing-today state,
+  // and the all-done one links straight to today's completions.
+  if (shellRoute() === "today" && state.captureSourceFilter !== "quick" && state.todayFilter !== "done") {
+    const completed = shellCompletedToday().length;
+    return `<div class="workspace-empty time18-empty"><span>${completed ? "今日任务已完成" : "今天暂无任务"}</span>${completed
+      ? `<button class="text-button" type="button" data-action="show-today-completed">查看完成任务${shellIcon("arrow")}</button>`
+      : ""}</div>`;
+  }
   return `<div class="workspace-empty">暂无任务</div>`;
 }
 

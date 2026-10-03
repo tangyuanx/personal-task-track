@@ -1,0 +1,178 @@
+name: Publish v0.1.204
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/publish-v0.1.204.yml
+
+concurrency:
+  group: publish-v0.1.204
+  cancel-in-progress: false
+
+jobs:
+  # This workflow is the release record for v0.1.204: it runs on demand, and on
+  # any push to main that touches this file. The Windows runner checks the tree
+  # out with CRLF, so every multi-line assertion in tests/ matches on \r?\n.
+  verify:
+    name: Verify v0.1.204 time and desktop phases
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Verify version, renderer syntax and the frozen Demo layers
+        shell: bash
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          test "$version" = "0.1.204"
+          for f in app/renderer/src/*.js; do node --check "$f"; done
+          for f in app/main/*.cjs; do node --check "$f"; done
+          # Every frozen layer stays byte-identical to its baseline.
+          diff app/renderer/src/widget12.css prototypes/baseline/loop-plane-phase17-frozen/loop-widget-phase12-refinement.css
+          diff app/renderer/src/widget13.css prototypes/baseline/loop-plane-phase17-frozen/loop-widget-phase13.css
+          diff app/renderer/src/shell-refinement.css prototypes/baseline/loop-plane-phase17-frozen/loop-shell-refinement.css
+          diff app/renderer/src/settings.css prototypes/baseline/loop-plane-phase17-frozen/loop-settings-phase9.css
+          diff app/renderer/src/refinement.css prototypes/baseline/loop-plane-phase17-frozen/loop-refinement.css
+          diff app/renderer/src/time.css prototypes/baseline/loop-plane-phase18-frozen/loop-time-phase18.css
+          diff app/renderer/src/desktop.css prototypes/baseline/loop-plane-phase19-frozen/loop-desktop-phase19.css
+          # the reminder model keeps its own home, and both phase baselines are pinned
+          node -e "const m=require('./app/main/deadline-reminders.cjs'); for (const k of ['deadlineReminderGroups','deadlineReminderKey','reconcileDeadlineReminderState','reminderCopy']) if (typeof m[k] !== 'function') throw new Error('missing '+k)"
+          test -f prototypes/baseline/loop-plane-phase18-frozen/MANIFEST.sha256
+          test -f prototypes/baseline/loop-plane-phase19-frozen/MANIFEST.sha256
+          ! grep -rn "surface?\\.querySelector(\"#[a-z-]*form\")" app/renderer/src/actions.js
+          node --test tests/desktop.test.cjs tests/deadline-reminders.test.cjs tests/work-rhythm-ui.test.cjs tests/work-navigation-model.test.cjs
+
+  build:
+    name: Build v0.1.204 ${{ matrix.platform }}
+    needs: verify
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macOS
+            os: macos-latest
+            script: npm run dist:mac -- --x64 --arm64 --publish never
+            artifact: v0.1.204-macos
+          - platform: Windows
+            os: windows-latest
+            script: npm run dist:win -- --x64 --publish never
+            artifact: v0.1.204-windows
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Check JavaScript and tests
+        run: npm run check
+      - name: Build app
+        run: ${{ matrix.script }}
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+      - name: Test Windows installer upgrade matrix
+        if: matrix.platform == 'Windows'
+        shell: pwsh
+        run: |
+          $candidate = Get-ChildItem release -Filter "Loop-*-x64-setup.exe" | Select-Object -First 1
+          if (-not $candidate) { throw "Windows installer was not produced." }
+          ./tests/windows-upgrade-installer.test.ps1 -CandidateInstaller $candidate.FullName
+      - name: Verify update metadata
+        run: node tools/verify-update-artifacts.cjs release
+      - name: Stage v0.1.204 release assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            release/*.dmg
+            release/*.zip
+            release/*.exe
+            release/*.blockmap
+            release/latest.yml
+            release/latest-mac.yml
+          if-no-files-found: error
+          retention-days: 2
+
+  publish:
+    name: Publish v0.1.204 release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Refuse to replace an existing tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          if gh api "repos/${{ github.repository }}/git/ref/tags/v0.1.204" >/dev/null 2>&1; then
+            echo "v0.1.204 already exists; refusing to replace it."
+            exit 1
+          fi
+      - name: Collect v0.1.204 release assets
+        uses: actions/download-artifact@v4
+        with:
+          pattern: v0.1.204-*
+          path: release
+          merge-multiple: true
+      - name: Verify complete cross-platform update feed
+        run: node tools/verify-update-artifacts.cjs release --require-all-platforms
+      - name: Publish v0.1.204
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v0.1.204
+          target_commitish: ${{ github.sha }}
+          name: v0.1.204
+          body: |
+            ## 时间与任务状态（phase18）+ 桌面提醒（phase19）
+
+            两轮 Demo 阶段按冻结基线移植进正式应用，数据与操作全部走项目原有 API。
+
+            ### 时间与任务状态
+            - 新增共享时钟：Today 归属、截止时间、循环发生点、回顾区间、完成与更新时间戳由同一个"现在"驱动；
+              回顾页提供检阅用的「预览时间」（预设 + 自定义日期时间），只改应用内时间基准，不改系统时间。
+            - 截止时间在既有详情属性上呈现：一小时内显示"还剩 N 分钟 · HH:mm"、逾期显示"逾期 N 分钟/小时/天"，
+              转克制的橙色；未新增任何任务行标签。
+            - 循环面板显示本次发生点状态（本次已完成／本次待处理／尚未到本次时间）。
+            - 今日新增完成视图：已完成的一次性发生点仍可回看（底部"已完成 N"⇄"返回待办"），
+              并补齐极简的全完成／无任务状态与浮窗空态文案。
+            - 日期或循环变更会说明归属变化（"已移出今日，任务与处理记录保留"等）并可直达记录；跨天后收据失效。
+
+            ### 桌面提醒
+            - 提醒模型与冻结示例一致：按阶段与提醒档位分组、跳过已完成与不提醒、记住 id+截止时间+档位、
+              已发过的档位在逾期后不重发、改截止时间或恢复后重新可发、**发送失败不标记已提醒**并给出重试。
+            - 截止时间面板内新增限定范围的提醒状态行；设置→任务与浮窗新增"桌面提醒"行；
+              状态面板提供检查提醒／重试、查看日历与"检查设置"说明。
+            - 新增标注为"内容预览 · 实际通知外观由系统提供"的通知内容预览，可直接打开对应任务（多条则打开日历），
+              返回时保留正在编辑的草稿。
+            - 窗口协同：最小化时通过浮窗或提醒动作会先恢复并聚焦主窗口；完成校验被拦截时也会把主窗口带回前台。
+
+            ### 顺带修复
+            - 截止时间面板「应用」与循环任务面板「保存」的提交回调此前从未绑定（表单本身就是挂载出的
+              `.surface-popover`，`querySelector` 永远匹配不到），点击无反应；现已修复并有防回归断言。
+
+            验证：`node --test` 全绿（225 项，Windows CRLF 检出下 199 项）；真实应用行为检查 52（时间与状态）
+            + 19（桌面提醒）+ 36（交互修复）+ 62（浮窗）全部通过；与冻结 Demo 并排比对截止时间属性行与循环面板一致。
+          make_latest: true
+          files: |
+            release/*.dmg
+            release/*.zip
+            release/*.exe
+            release/*.blockmap
+            release/latest.yml
+            release/latest-mac.yml

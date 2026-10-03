@@ -216,6 +216,7 @@ function rendererHarness(personalTaskTrack = undefined) {
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "knowledge-document.js"), "utf8"),
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "knowledge-recovery.js"), "utf8"),
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "work-navigation-model.js"), "utf8"),
+    fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "clock.js"), "utf8"),
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "shell.js"), "utf8"),
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "workspace.js"), "utf8"),
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "actions.js"), "utf8"),
@@ -224,7 +225,7 @@ function rendererHarness(personalTaskTrack = undefined) {
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "pages.js"), "utf8"),
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "settings.js"), "utf8"),
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "app.js"), "utf8"),
-  ]).then(([documentSource, recoverySource, navigationSource, shellSource, workspaceSource, actionsSource, bulkSource, knowledgeSource, pagesSource, settingsSource, source]) => {
+  ]).then(([documentSource, recoverySource, navigationSource, clockSource, shellSource, workspaceSource, actionsSource, bulkSource, knowledgeSource, pagesSource, settingsSource, source]) => {
       vm.runInContext(documentSource, context, {
         filename: "app/renderer/src/knowledge-document.js",
       });
@@ -235,6 +236,9 @@ function rendererHarness(personalTaskTrack = undefined) {
         filename: "app/renderer/src/work-navigation-model.js",
       });
       // The three-column shell modules load before app.js, exactly as index.html does.
+      vm.runInContext(clockSource, context, {
+        filename: "app/renderer/src/clock.js",
+      });
       vm.runInContext(shellSource, context, {
         filename: "app/renderer/src/shell.js",
       });
@@ -2742,6 +2746,8 @@ test("Chinese and English font settings stay isolated in the application font ch
 test("Today widget is rebuilt from the frozen phase 12/13 widget layers", async () => {
   const rendererDir = path.join(__dirname, "..", "app", "renderer");
   const frozenDir = path.join(__dirname, "..", "prototypes", "baseline", "loop-plane-phase17-frozen");
+  const phase18Dir = path.join(__dirname, "..", "prototypes", "baseline", "loop-plane-phase18-frozen");
+  const phase19Dir = path.join(__dirname, "..", "prototypes", "baseline", "loop-plane-phase19-frozen");
   const [widget, surface, bridge, widget12, widget13, base12, base13, runtime, surfaceRuntime, shell, typography, baseShell, fonts, baseFonts, refinement, baseRefinement] = await Promise.all([
     fs.readFile(path.join(rendererDir, "today-widget.html"), "utf8"),
     fs.readFile(path.join(rendererDir, "widget-surface.html"), "utf8"),
@@ -2772,7 +2778,7 @@ test("Today widget is rebuilt from the frozen phase 12/13 widget layers", async 
   assert.doesNotMatch(widget, /--widget-focus:/);
   assert.doesNotMatch(widget, /mock-sidebar|mock-app|mock-repository/);
   for (const sheet of ["fonts.css", "shell.css", "typography.css", "widget12.css", "widget13.css", "shell-refinement.css", "widget-bridge.css"]) {
-    assert.match(widget, new RegExp(sheet.replace(".", "\\.") + "\\?v=0\\.1\\.203"), `today-widget.html must load ${sheet}`);
+    assert.match(widget, new RegExp(sheet.replace(".", "\\.") + "\\?v=0\\.1\\.204"), `today-widget.html must load ${sheet}`);
   }
   assert.match(widget, /id="widget-host"/);
   assert.match(surface, /id="surface-host"/);
@@ -3497,7 +3503,7 @@ test("every Today widget IPC channel inspects its sender and the duplicated bind
 });
 
 test("production Today widget uses its dedicated frontend and a sandboxed Electron window", async () => {
-  const [demo, runtime, surfaceRuntime, surfaceCss, widgetMain, appMain, preload, packageJson, rendererApp, settingsSource, shellSource, workspaceSource, bridgeSource, shellSource2, actionsSource2] = await Promise.all([
+  const [demo, runtime, surfaceRuntime, surfaceCss, widgetMain, appMain, preload, packageJson, rendererApp, settingsSource, shellSource, workspaceSource, bridgeSource, clockSource, desktopSource, remindersSource, shellSource2, actionsSource2] = await Promise.all([
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "today-widget.html"), "utf8"),
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "today-widget-runtime.js"), "utf8"),
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "widget-surface-runtime.js"), "utf8"),
@@ -3511,6 +3517,9 @@ test("production Today widget uses its dedicated frontend and a sandboxed Electr
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "shell.js"), "utf8"),
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "workspace.js"), "utf8"),
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "bridge.css"), "utf8"),
+    fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "clock.js"), "utf8"),
+    fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "desktop.js"), "utf8"),
+    fs.readFile(path.join(__dirname, "..", "app", "main", "deadline-reminders.cjs"), "utf8"),
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "shell.js"), "utf8"),
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "actions.js"), "utf8"),
   ]);
@@ -3519,10 +3528,10 @@ test("production Today widget uses its dedicated frontend and a sandboxed Electr
   // rendered DOM can be compared with loop-widget-phase13.js line by line.
   assert.match(demo, /id="widget-host"/);
   assert.doesNotMatch(demo, /按优先级与阻塞状态排序|项待办|刚刚同步|在主窗口查看全部|corner-anchor/);
-  assert.match(demo, /widget12\.css\?v=0\.1\.203/);
-  assert.match(demo, /widget13\.css\?v=0\.1\.203/);
-  assert.match(demo, /shell-refinement\.css\?v=0\.1\.203/);
-  assert.match(demo, /widget-bridge\.css\?v=0\.1\.203/);
+  assert.match(demo, /widget12\.css\?v=0\.1\.204/);
+  assert.match(demo, /widget13\.css\?v=0\.1\.204/);
+  assert.match(demo, /shell-refinement\.css\?v=0\.1\.204/);
+  assert.match(demo, /widget-bridge\.css\?v=0\.1\.204/);
 
   // Chrome, tabs, rows and the composer: the Demo's markup, icon for icon.
   assert.match(runtime, /class="today-widget widget12 widget13 '/);
@@ -3708,6 +3717,75 @@ test("production Today widget uses its dedicated frontend and a sandboxed Electr
   assert.match(actionsSource2, /function shellRefreshUpdatePanel\(\)/);
   assert.match(actionsSource2, /class="surface-popover utility-popover" aria-label="软件更新"/);
   assert.match(bridgeSource, /\.brand-update-slot \{\s*display: contents;/);
+  // ---- Phase18 · 时间与任务状态 (frozen Demo loop-time-phase18.js) ----
+  // one shared clock drives every time-based decision
+  assert.match(clockSource, /function loopNow\(\)/);
+  assert.match(clockSource, /function loopSetPreviewClock\(value\)/);
+  assert.match(clockSource, /function loopClearPreviewClock\(\)/);
+  assert.match(rendererApp, /function isTaskScheduledForToday\(task, at = loopNow\(\)\)/);
+  assert.match(rendererApp, /function recurringOccurrenceKey\(task, at = loopNow\(\)\)/);
+  assert.match(rendererApp, /function syncRecurringTasks\(at = loopNow\(\)\)/);
+  assert.match(rendererApp, /return loopNow\(\)\.toISOString\(\);/);
+  // today's completions stay reachable; minimal empty states; no row tags
+  assert.match(rendererApp, /function shellCompletedToday\(\)/);
+  assert.match(rendererApp, /state\.todayFilter === "done"/);
+  assert.match(shellSource2, /time18-list-empty/);
+  assert.match(workspaceSource, /time18-empty/);
+  assert.match(actionsSource2, /function shellCycleState\(\)/);
+  assert.match(workspaceSource, /time18-soon/);
+  // membership changes explain themselves and link to the record
+  assert.match(actionsSource2, /function shellMembershipFeedback\(task, wasScheduledToday\)/);
+  assert.match(actionsSource2, /已移出今日，任务与处理记录保留/);
+  // the review-only preview clock
+  assert.match(actionsSource2, /function shellApplyPreviewClock\(value\)/);
+  assert.match(actionsSource2, /function shellClockPresets\(\)/);
+  assert.match(actionsSource2, /data-action="time18-preset"/);
+  assert.match(shellSource2 + actionsSource2, /time18-clock/);
+  // a receipt belongs to its day
+  assert.match(actionsSource2, /receipt\.date !== loopTodayKey\(\)/);
+  // the two panels whose submit handler never bound (the form IS the surface)
+  assert.match(actionsSource2, /document\.querySelector\("#deadline-form"\)\?\.addEventListener\("submit"/);
+  assert.match(actionsSource2, /document\.querySelector\("#recurrence-form"\)\?\.addEventListener\("submit"/);
+  assert.doesNotMatch(actionsSource2, /surface\?\.querySelector\("#[a-z-]*form"\)/);
+  // ---- Phase19 · 桌面提醒与窗口协同 (frozen Demo loop-desktop-phase19.js) ----
+  // the reminder model mirrors the frozen Demo: one key per id+deadline+offset,
+  // grouping by stage+offset and reconciliation on completion/change
+  assert.match(remindersSource, /function deadlineReminderKey\(task\)/);
+  assert.match(remindersSource, /function deadlineReminderGroups\(tasks, at = new Date\(\), state = normalizeReminderState\(\{\}\)\)/);
+  assert.match(remindersSource, /function reconcileDeadlineReminderState\(tasks, state\)/);
+  assert.match(remindersSource, /deadlineReminderGroups,/);
+  // a failed send is remembered but never marked as notified
+  assert.match(remindersSource, /error = \{ code: String\(failure\?\.code/);
+  assert.match(remindersSource, /if \(notified\) \{\s*delivered = \[\.\..*\]\.slice\(0, DELIVERED_LIMIT\);/);
+  // the scoped state feed and the manual check
+  assert.match(remindersSource, /ipcMain\.handle\("deadline-reminders:check", \(\) => check\(\)\)/);
+  assert.match(remindersSource, /capability = isSupported\(\) \? "supported" : "unsupported"/);
+  assert.match(remindersSource, /broadcastState\(\)/);
+  assert.match(preload, /check: \(\) => ipcRenderer\.invoke\("deadline-reminders:check"\)/);
+  assert.match(preload, /onState: \(callback\) => subscribe\("deadline-reminders:state", callback\)/);
+  // the window coordination paths
+  assert.match(preload, /revealMain: \(\) => ipcRenderer\.invoke\("app:reveal-main"\)/);
+  assert.match(appMain, /ipcMain\.handle\("app:reveal-main", \(\) => \{[\s\S]*isMinimized\(\)\) mainWindow\.restore\(\)/);
+  assert.match(rendererApp, /personalTaskTrack\?\.window\?\.revealMain\?\.\(\)/);
+  // reminder surfaces: row, status panel, help, labelled preview, settings row
+  assert.match(desktopSource, /function desktopReminderStatusRow\(\)/);
+  assert.match(desktopSource, /function desktopReminderStatusPanel\(trigger\)/);
+  assert.match(desktopSource, /function desktopReminderHelpPanel\(trigger\)/);
+  assert.match(desktopSource, /function desktopReminderPreviewPanel\(trigger, entries\)/);
+  assert.match(desktopSource, /内容预览 · 实际通知外观由系统提供/);
+  assert.match(desktopSource, /function desktopReminderCheck\(trigger\)/);
+  assert.match(desktopSource, /function desktopReminderSettingsRow\(\)/);
+  assert.match(desktopSource, /function desktopReminderOpenEntry\(index\)/);
+  assert.match(actionsSource2, /desktopReminderStatusRow\(\)/);
+  assert.match(actionsSource2, /case "desk19-status":/);
+  assert.match(actionsSource2, /case "desk19-check":/);
+  assert.match(settingsSource, /desktopReminderSettingsRow\(\)/);
+  // a reminder return preserves the open draft
+  assert.match(rendererApp, /function shellPreserveDraftsForReturn\(\)/);
+  assert.match(rendererApp, /onOpenTask\?\.\(\(\{ taskId \} = \{\}\) => \{[\s\S]*shellPreserveDraftsForReturn\(\)/);
+
+  // the widget payload carries today's completion count
+  assert.match(widgetMain, /completedToday: Math\.max\(0, Math\.floor\(Number\(raw\.completedToday\) \|\| 0\)\)/);
   assert.match(widgetMain, /function stop\(\)[\s\S]*surfaceWindow\.destroy\(\)/);
   assert.match(appMain, /if \(!isQuitting && !updateInstallPrepared\) app\.quit\(\)/);
   assert.match(appMain, /did-resign-active[\s\S]*restoreAlwaysOnTopAfterAppDeactivation/);
@@ -4246,6 +4324,8 @@ test("the frozen Demo baseline is the renderer stylesheet authority", async () =
   const rendererDir = path.join(__dirname, "..", "app", "renderer");
   const index = await fs.readFile(path.join(rendererDir, "index.html"), "utf8");
   const frozenDir = path.join(__dirname, "..", "prototypes", "baseline", "loop-plane-phase17-frozen");
+  const phase18Dir = path.join(__dirname, "..", "prototypes", "baseline", "loop-plane-phase18-frozen");
+  const phase19Dir = path.join(__dirname, "..", "prototypes", "baseline", "loop-plane-phase19-frozen");
   const previousFrozenDir = path.join(__dirname, "..", "prototypes", "baseline", "loop-plane-phase1-frozen");
 
   // The Demo baseline must be present verbatim and must not be edited to fit
@@ -4268,18 +4348,20 @@ test("the frozen Demo baseline is the renderer stylesheet authority", async () =
     ["work.css", "loop-work-phase15.css"],
     ["task-entry.css", "loop-task-phase16.css"],
     ["journey.css", "loop-journey-phase17.css"],
+    ["time.css", "loop-time-phase18.css"],
+    ["desktop.css", "loop-desktop-phase19.css"],
   ];
   for (const [target, source] of copied) {
     const [a, b] = await Promise.all([
       fs.readFile(path.join(rendererDir, "src", target), "utf8"),
-      fs.readFile(path.join(frozenDir, source), "utf8"),
+      fs.readFile(path.join(source === "loop-time-phase18.css" ? phase18Dir : source === "loop-desktop-phase19.css" ? phase19Dir : frozenDir, source), "utf8"),
     ]);
     assert.equal(a, b, `src/${target} must stay byte-identical to the frozen ${source}`);
   }
 
   // Load order mirrors the Demo entry, and bridge.css is the only override layer.
   const linked = [...index.matchAll(/<link[^>]+href="\.\/src\/([^"?]+)/g)].map((match) => match[1]);
-  const order = ["shell.css", "vendor/milkdown-editor.css", "knowledge.css", "fonts.css", "settings.css", "typography.css", "refinement.css", "selection.css", "flow.css", "shell-refinement.css", "help.css", "work.css", "task-entry.css", "journey.css", "bridge.css"];
+  const order = ["shell.css", "vendor/milkdown-editor.css", "knowledge.css", "fonts.css", "settings.css", "typography.css", "refinement.css", "selection.css", "flow.css", "shell-refinement.css", "help.css", "work.css", "task-entry.css", "journey.css", "time.css", "desktop.css", "bridge.css"];
   assert.deepEqual(linked, order, "stylesheets must load in the frozen Demo order, with bridge.css last");
   assert.ok(!index.includes("approved-4174.css"), "the superseded approved-4174 shell must no longer be loaded");
   assert.ok(!index.includes("styles.css"), "the superseded styles.css must no longer be loaded");
@@ -5366,7 +5448,9 @@ test("recurrence controls feed every Today surface and refresh while the app sta
   assert.match(app, /data-recurrence-mode=/);
   assert.match(app, /data-recurrence-weekday=/);
   assert.match(app, /data-recurrence-field="time"/);
-  assert.match(app, /state\.taskFilter === "today" && !isTaskScheduledForToday\(task\)/);
+  // Phase18: the Today route now switches between the active list and today's
+  // completions (completed occurrences included), not only scheduled tasks.
+  assert.match(app, /if \(state\.taskFilter === "today"\) \{[\s\S]*state\.todayFilter === "done"[\s\S]*shellCompletedToday\(\)\.includes\(task\)[\s\S]*isTaskScheduledForToday\(task\)/);
   assert.match(app, /\.filter\(\(task\) => isTaskScheduledForToday\(task\)\)/);
   assert.match(app, /window\.setInterval\?\.\([\s\S]*?30000/);
 });

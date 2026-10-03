@@ -45,7 +45,7 @@
     position: "top-right", compact: false, opacity: 100, alwaysOnTop: true,
     clickThrough: false, launchWithApp: true, autoHeight: true, height: 0, customBounds: null,
   };
-  let snapshot = { date: "", activeTaskId: "", appearance: {}, items: [], quickCaptures: [], groups: [] };
+  let snapshot = { date: "", activeTaskId: "", completedToday: 0, appearance: {}, items: [], quickCaptures: [], groups: [] };
   let lane = "task";
   let editId = "";
   let editDraft = "";
@@ -152,7 +152,9 @@
         '<button data-widget-type="' + value + '" class="' + (lane === value ? "active" : "") + '" aria-pressed="' + (lane === value) + '">' + label + "<small>" + count + "</small></button>").join("")
       + "</nav>";
     const body = '<div class="widget-body"><ol class="widget-rows">' + items.map(row).join("") + "</ol>"
-      + (!items.length ? '<p class="widget-empty">暂无' + (lane === "task" ? "今日任务" : "速记") + "</p>" : "")
+      + (!items.length
+        ? '<p class="widget-empty">' + (lane === "task" && snapshot.completedToday ? "今日任务已完成" : "暂无" + (lane === "task" ? "今日任务" : "速记")) + "</p>"
+        : "")
       + "</div>";
     const capture = '<section class="widget-compose" aria-label="添加速记"><div class="widget-capture">'
       + '<textarea id="widget-capture" rows="1" maxlength="4000" aria-label="快速记录内容" title="Enter 保存速记；Shift+Enter 换行；Command / Ctrl+Enter 加入今日" placeholder="记一条速记…">' + esc(captureDraft()) + "</textarea>"
@@ -871,6 +873,7 @@
     snapshot = {
       date: String(next.date || ""),
       activeTaskId: String(next.activeTaskId || ""),
+      completedToday: Number(next.completedToday) || 0,
       appearance: next.appearance && typeof next.appearance === "object" ? next.appearance : {},
       items: Array.isArray(next.items) ? next.items : [],
       quickCaptures: Array.isArray(next.quickCaptures) ? next.quickCaptures : [],

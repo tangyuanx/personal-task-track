@@ -107,6 +107,8 @@ function shellSettingsTasks() {
     ${shellSettingsToggle("显示今日浮窗", "在独立小窗口中查看今日任务与速记。", todayWidgetWindowState.visible === true, `data-action="toggle-today-widget-visibility" ${desktopTodayWidget ? "" : "disabled"}`)}
     ${shellSettingsToggle("始终置顶", "使用其他应用时，浮窗仍保持在最前面。", todayWidgetWindowState.alwaysOnTop === true, `data-action="toggle-today-widget-always-on-top" ${desktopTodayWidget ? "" : "disabled"}`)}
     ${shellSettingsToggle("鼠标穿透", "让点击穿过浮窗，操作后面的应用。", todayWidgetWindowState.clickThrough === true, `data-action="toggle-today-widget-click-through" ${desktopTodayWidget ? "" : "disabled"}`)}
+    <h3 class="prefs-subheading">桌面提醒</h3>
+    ${typeof desktopReminderSettingsRow === "function" ? desktopReminderSettingsRow() : ""}
     <p class="prefs-native-caption">快捷键 <kbd>⌘ / Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>T</kbd> 可切换鼠标穿透。</p>`;
 }
 

@@ -1,0 +1,33 @@
+/* Temporal information stays in the existing property row, never in the task list. */
+.time18-soon{color:var(--orange)}
+.time18-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px}
+.time18-empty .text-button{font-size:calc(12px * var(--font-scale,1));color:var(--secondary);gap:6px}
+.time18-empty svg,#toast button svg{width:14px;height:14px}
+.time18-footer{gap:8px}
+.time18-footer .time18-completed{margin-left:auto;padding:0 3px;color:var(--secondary);font-size:inherit;min-height:26px;white-space:nowrap}
+.time18-cycle-state{margin:12px 0 16px;font-size:calc(12px * var(--font-scale,1));color:var(--text)}
+.time18-cycle-state span{color:var(--secondary)}
+.review-bar .review-note{display:flex;align-items:center;gap:6px}
+.time18-clock-trigger{color:var(--secondary);gap:6px;font-variant-numeric:tabular-nums}
+.time18-clock-trigger:hover,.time18-completed:hover{background:var(--hover);color:var(--text)}
+.time18-clock .schedule-hint{margin:0 0 16px}
+.time18-clock input{font-variant-numeric:tabular-nums;color-scheme:light}
+[data-theme="dark"] .time18-clock input{color-scheme:dark}
+.time18-presets{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:16px 0}
+.time18-presets button{display:flex;flex-direction:column;align-items:flex-start;gap:5px;padding:9px 10px;border-radius:6px;background:var(--list);color:var(--text);font-size:calc(12px * var(--font-scale,1));text-align:left}
+.time18-presets time{font-variant-numeric:tabular-nums;font-size:calc(11px * var(--font-scale,1));color:var(--secondary)}
+.time18-presets button:hover{background:var(--hover)}
+.time18-presets button.active{background:var(--selected);color:var(--green)}
+.time18-presets button.active time{color:var(--green)}
+.time18-scenes{display:flex;flex-wrap:wrap;gap:5px 10px;padding:13px 0 0;border-top:1px solid var(--line);font-size:calc(11px * var(--font-scale,1));color:var(--secondary)}
+.time18-scenes>span{width:100%}
+.time18-scenes button{padding:4px 0;font-size:calc(12px * var(--font-scale,1));color:var(--text);text-decoration:underline;text-underline-offset:3px;text-decoration-color:var(--line)}
+.time18-review ol{font-size:calc(12px * var(--font-scale,1));line-height:1.85;padding-left:18px;margin:12px 0 16px}
+.time18-review li+li{margin-top:10px}
+#toast button{display:inline-flex;align-items:center;gap:5px;margin-left:14px;color:inherit;padding:2px 0;text-decoration:underline;text-underline-offset:3px;font-size:inherit}
+@media(max-width:1300px){.review-bar{gap:8px}.review-bar .sample-label{display:none}.review-bar .review-controls{gap:6px}}
+
+.time18-clock .schedule-fields{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+.time18-clock .schedule-fields input{width:100%;min-width:0}
+/* Preserve toast contrast while its recovery action is hovered. */
+#toast button:hover{background:transparent;color:inherit}

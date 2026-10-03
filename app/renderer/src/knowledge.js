@@ -301,12 +301,17 @@ function shellKnowledgeSyncStats(task) {
 
 let shellToastTimer = 0;
 
-function shellToast(message) {
+function shellToast(message, record) {
   const host = document.querySelector("#toast");
   if (!host) return;
-  host.innerHTML = `<div class="toast">${esc(message)}</div>`;
+  // Phase18: an explanation of what moved can carry a link straight to the
+  // record, so the change is never a dead end.
+  const link = record && record.id
+    ? `<button type="button" data-action="open-toast-record" data-task-id="${escAttr(record.id)}">查看任务${shellIcon("arrow")}</button>`
+    : "";
+  host.innerHTML = `<div class="toast"><span>${esc(message)}</span>${link}</div>`;
   window.clearTimeout(shellToastTimer);
-  shellToastTimer = window.setTimeout(() => { host.innerHTML = ""; }, 2800);
+  shellToastTimer = window.setTimeout(() => { host.innerHTML = ""; }, link ? 6000 : 2800);
 }
 
 function shellKnowledgeEditorEntry() {

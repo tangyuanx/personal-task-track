@@ -1199,6 +1199,9 @@ function normalizeSnapshot(value) {
   const raw = value && typeof value === "object" ? value : {};
   return {
     date: String(raw.date || "").slice(0, 32),
+    // Phase18: how much of today is already finished decides the widget's empty
+    // copy ("今日任务已完成" instead of "暂无今日任务").
+    completedToday: Math.max(0, Math.floor(Number(raw.completedToday) || 0)),
     // the Demo marks the row open in the main window with .current
     activeTaskId: normalizeTaskId(raw.activeTaskId),
     appearance: normalizeTodayWidgetAppearance(raw.appearance),

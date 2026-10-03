@@ -22,7 +22,7 @@ function shellPageHeading(title, description, actions = "") {
 
 function shellCalendarMonth() {
   const parsed = safeDate(`${String(state.calendarMonth || "").slice(0, 7)}-01`);
-  return parsed || new Date();
+  return parsed || loopNow();
 }
 
 function shellCalendarDateKey(date) {
@@ -32,9 +32,9 @@ function shellCalendarDateKey(date) {
 function renderShellCalendar() {
   ensureCalendarState();
   const month = shellCalendarMonth();
-  const todayKey = localDateKey(new Date());
+  const todayKey = loopTodayKey();
   const selectedKey = state.calendarSelectedDate || todayKey;
-  const selected = safeDate(`${selectedKey}T12:00:00`) || new Date();
+  const selected = safeDate(`${selectedKey}T12:00:00`) || loopNow();
   const agenda = calendarTasksForDate(selectedKey);
   const first = new Date(month.getFullYear(), month.getMonth(), 1);
   const offset = (first.getDay() + 6) % 7;
@@ -124,6 +124,7 @@ function renderShellReview() {
       <div class="segmented" aria-label="回顾时间范围">
         ${SHELL_REVIEW_PRESETS.map(([value, label]) => `<button class="${state.reviewPreset === value ? "active" : ""}" type="button" data-action="set-review-preset" data-preset="${value}" aria-pressed="${state.reviewPreset === value}">${label}</button>`).join("")}
       </div>
+      <button class="text-button time18-clock-trigger" type="button" data-action="time18-clock" aria-haspopup="dialog" aria-expanded="false" title="切换检阅用的日期与时间（不修改系统时间）">${shellIcon("clock")}<span>${loopClockIsPreview() ? loopStamp() : "预览时间"}</span>${shellIcon("down")}</button>
       <label class="field-select">依据
         <select data-review-date-field aria-label="回顾日期依据">
           ${Object.entries(SHELL_REVIEW_FIELD_LABELS).map(([value, label]) => `<option value="${value}" ${state.reviewDateField === value ? "selected" : ""}>${label}</option>`).join("")}

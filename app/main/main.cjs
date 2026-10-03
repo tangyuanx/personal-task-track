@@ -355,6 +355,14 @@ function registerStorageHandlers() {
     if (event.sender.id !== updateInstallPreparation?.senderId) return;
     void finishUpdateInstallPreparation(success === true);
   });
+  ipcMain.handle("app:reveal-main", () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return { success: false };
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+    return { success: true };
+  });
+
   ipcMain.handle("app:confirm-destructive", async (event, value) => {
     const message = String(value?.message || "确定删除所选内容？").slice(0, 500);
     const parent = BrowserWindow.fromWebContents(event.sender);

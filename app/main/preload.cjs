@@ -50,9 +50,17 @@ contextBridge.exposeInMainWorld("personalTaskTrack", {
   dialogs: {
     confirmDestructive: (options) => ipcRenderer.invoke("app:confirm-destructive", options),
   },
+  window: {
+    // Phase19: a minimized window has to come back before an in-app readiness
+    // panel can be read.
+    revealMain: () => ipcRenderer.invoke("app:reveal-main"),
+  },
   deadlineReminders: {
     sync: (tasks) => ipcRenderer.invoke("deadline-reminders:sync", tasks),
     getState: () => ipcRenderer.invoke("deadline-reminders:get-state"),
+    // Phase19: the only path that asks for a scan, and the live state feed.
+    check: () => ipcRenderer.invoke("deadline-reminders:check"),
+    onState: (callback) => subscribe("deadline-reminders:state", callback),
     onOpenTask: (callback) => subscribe("deadline-reminders:open-task", callback),
     onOpenCalendar: (callback) => subscribe("deadline-reminders:open-calendar", callback),
   },

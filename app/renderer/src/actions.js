@@ -123,7 +123,8 @@ function shellCreateDraftFresh() {
 }
 
 function shellCreateDate(offsetDays) {
-  const date = new Date();
+  // Phase18: the panel's 今天 / 明天 presets follow the perceived clock.
+  const date = loopNow();
   date.setDate(date.getDate() + offsetDays);
   return localDateKey(date);
 }
@@ -282,7 +283,7 @@ function shellSubmitCreateDialog(event) {
   if (state.taskFilter === "done") state.taskFilter = "active";
   save();
   // Demo phase 17: creation shows the same inline receipt as completion.
-  state.journeyReceipt = { id: task.id, kind: "created", context: null, occurrence: "" };
+  state.journeyReceipt = { id: task.id, kind: "created", context: null, occurrence: "", date: loopTodayKey() };
   render();
   shellToast(quick ? "速记已保存" : "任务已创建");
 }
@@ -394,6 +395,17 @@ function renderShellJourneyReceipt() {
   if (!receipt) return "";
   const task = state.tasks.find((item) => item.id === receipt.id);
   if (!task) return "";
+  // Phase18 (frozen Demo loop-journey-phase17.js syncReceipt): a receipt belongs
+  // to the day it was shown on, and a completion receipt stops applying once the
+  // task is active again — a recurrence may have reopened it on a new day.
+  if (receipt.date && receipt.date !== loopTodayKey()) {
+    state.journeyReceipt = null;
+    return "";
+  }
+  if (receipt.kind === "done" && task.status !== "done") {
+    state.journeyReceipt = null;
+    return "";
+  }
   const quick = task.captureSource === "today-widget";
   const completed = receipt.kind === "done";
   const actions = completed
@@ -933,7 +945,7 @@ function shellChoiceMenu(trigger, title, options, selected, dataKey, iconName = 
 
 function shellDeadlineDraft(task) {
   const deadline = safeDate(task.deadlineAt);
-  const today = localDateKey(new Date());
+  const today = loopTodayKey();
   return {
     date: deadline ? localDateKey(deadline) : today,
     month: (deadline ? localDateKey(deadline) : today).slice(0, 7),
@@ -948,7 +960,7 @@ function shellScheduleDays(draft) {
   start.setDate(1 - ((first.getDay() + 6) % 7));
   const daysInMonth = new Date(first.getFullYear(), first.getMonth() + 1, 0).getDate();
   const weeks = Math.ceil((((first.getDay() + 6) % 7) + daysInMonth) / 7);
-  const today = localDateKey(new Date());
+  const today = loopTodayKey();
   return Array.from({ length: weeks * 7 }, (_, index) => {
     const date = new Date(start);
     date.setDate(start.getDate() + index);
@@ -970,12 +982,90 @@ function shellDeadlinePanel(trigger) {
   shellRenderDeadlinePanel(trigger);
 }
 
+// ------------------------------------------------------------
+// Phase18 · review-only preview clock
+//
+// The frozen Demo put a 预览时间 control in its review bar to move `demoNow`
+// so every time-based state could be inspected. The product keeps the same
+// control, and only this control changes the perceived clock.
+// ------------------------------------------------------------
+
+function shellClockPresets() {
+  const now = loopNow();
+  const day = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const at = (date, hours, minutes = 0) => {
+    const value = new Date(date);
+    value.setHours(hours, minutes, 0, 0);
+    return value;
+  };
+  const monday = new Date(day);
+  monday.setDate(day.getDate() + ((8 - (day.getDay() || 7)) % 7 || 7));
+  return [
+    ["", "真实时间", at(day, now.getHours(), now.getMinutes())],
+    ["today-1800", "今天 18:00", at(day, 18)],
+    ["tomorrow-0900", "明天 09:00", at(new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1), 9)],
+    ["next-monday", "下周一 09:00", at(monday, 9)],
+    ["next-month", "下月 1 日 09:00", at(new Date(day.getFullYear(), day.getMonth() + 1, 1), 9)],
+    ["next-year", "明年 1 月 1 日 09:00", at(new Date(day.getFullYear() + 1, 0, 1), 9)],
+  ];
+}
+
+function shellClockValueFor(preset) {
+  const entry = shellClockPresets().find(([key]) => key === preset);
+  return entry ? `${localDateKey(entry[2])}T${String(entry[2].getHours()).padStart(2, "0")}:${String(entry[2].getMinutes()).padStart(2, "0")}` : "";
+}
+
+function shellRenderClockPanel(trigger) {
+  const now = loopNow();
+  const date = localDateKey(now);
+  const time = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+  const presets = shellClockPresets();
+  shellMountSurface(
+    `<form class="surface-popover entry16-panel time18-clock" id="time18-clock-form" role="dialog" aria-modal="true" aria-label="预览时间">${shellSurfaceHeader("预览时间")}
+      <p class="schedule-hint">仅改变应用内的时间基准，不修改系统时间；本页的操作与记录会保留。</p>
+      <div class="schedule-fields">
+        <div><label for="time18-day">日期</label><input id="time18-day" name="day" type="date" value="${escAttr(date)}" min="2020-01-01" max="2035-12-31" required /></div>
+        <div><label for="time18-hour">时间</label><input id="time18-hour" name="hour" type="time" value="${escAttr(time)}" required /></div>
+      </div>
+      <div class="time18-presets" role="group" aria-label="时间场景">${presets.map(([key, label, value]) => `<button type="button" data-action="time18-preset" data-preset="${key}" class="${key === "" && !loopClockIsPreview() ? "active" : ""}" aria-pressed="${key === "" && !loopClockIsPreview()}"><span>${label}</span><time>${localDateKey(value).slice(5)} ${String(value.getHours()).padStart(2, "0")}:${String(value.getMinutes()).padStart(2, "0")}</time></button>`).join("")}</div>
+      <footer>
+        <button type="button" class="text-button" data-action="time18-clear" ${loopClockIsPreview() ? "" : "disabled"}>恢复真实时间</button>
+        <button type="button" class="button" data-action="close-dialog">取消</button>
+        <button class="button primary" type="submit">应用时间</button>
+      </footer>
+    </form>`,
+    trigger,
+    360,
+  );
+  shellPanelFinish(document.querySelector("#time18-clock-form"));
+  document.querySelector("#time18-clock-form")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const day = document.querySelector("#time18-day")?.value || "";
+    const hour = document.querySelector("#time18-hour")?.value || "";
+    if (day && hour) shellApplyPreviewClock(`${day}T${hour}`);
+  });
+}
+
+/** Move the perceived clock; every time-based surface follows. */
+function shellApplyPreviewClock(value) {
+  const oldDay = loopTodayKey();
+  if (value === "" || value === null) loopClearPreviewClock();
+  else if (!loopSetPreviewClock(value)) return;
+  if (state.calendarSelectedDate === oldDay) state.calendarSelectedDate = loopTodayKey();
+  if (state.calendarMonth && state.calendarMonth.slice(0, 4) === oldDay.slice(0, 4)) state.calendarMonth = `${loopTodayKey().slice(0, 7)}-01`;
+  syncRecurringTasks?.(loopNow());
+  shellCloseOverlay({ restoreFocus: false });
+  if (!filteredTasks().some((item) => item.id === state.activeTaskId)) state.activeTaskId = "";
+  render();
+  shellToast(loopClockIsPreview() ? `预览时间已切换 · ${loopStamp()}` : "已恢复真实时间");
+}
+
 function shellRenderDeadlinePanel(trigger) {
   const task = shellActiveTask();
   const draft = state.deadlineDraft;
   const month = new Date(`${draft.month}-01T12:00:00`);
-  const today = localDateKey(new Date());
-  const tomorrowDate = new Date();
+  const today = loopTodayKey();
+  const tomorrowDate = loopNow();
   tomorrowDate.setDate(tomorrowDate.getDate() + 1);
   const tomorrow = localDateKey(tomorrowDate);
   const selected = safeDate(`${draft.date}T${draft.time}`);
@@ -997,6 +1087,7 @@ function shellRenderDeadlinePanel(trigger) {
         <div><label for="deadline-reminder">系统提醒</label><select id="deadline-reminder" name="reminder">${Object.entries(deadlineReminderLabels).map(([value, label]) => shellOption(value, label, draft.reminder)).join("")}</select></div>
       </div>
       <p class="schedule-hint">${esc(shellDisplayDate(draft.date))} ${SHELL_WEEKDAY_NAMES[new Date(`${draft.date}T12:00:00`).getDay()]} · ${draft.date === today ? "会显示在今日任务中" : "截止日期不改变任务的分组"}</p>
+      ${typeof desktopReminderStatusRow === "function" ? desktopReminderStatusRow() : ""}
       <footer>
         ${task.deadlineAt ? '<button class="text-button" type="button" data-action="shell-remove-deadline">清除截止时间</button>' : ""}
         <button type="submit" class="button primary">应用</button>
@@ -1014,17 +1105,33 @@ function shellRenderDeadlinePanel(trigger) {
   const reminderSelect = surface?.querySelector("#deadline-reminder");
   timeInput?.addEventListener("input", () => { state.deadlineDraft.time = timeInput.value; shellRefreshDeadlineHint(); });
   reminderSelect?.addEventListener("change", () => { state.deadlineDraft.reminder = reminderSelect.value; });
-  surface?.querySelector("#deadline-form")?.addEventListener("submit", (event) => {
+  // #deadline-form IS the mounted .surface-popover, so query it from the document.
+  document.querySelector("#deadline-form")?.addEventListener("submit", (event) => {
     event.preventDefault();
+    const task = shellActiveTask();
+    const wasScheduledToday = task ? isTaskScheduledForToday(task) : false;
     shellApplyDeadline(state.deadlineDraft.date, timeInput?.value || state.deadlineDraft.time, reminderSelect?.value ?? state.deadlineDraft.reminder);
+    if (task) shellMembershipFeedback(task, wasScheduledToday);
   });
+}
+
+/**
+ * Phase18 (frozen Demo loop-time-phase18.js membershipFeedback): a date or cycle
+ * edit explains how the task's Today membership changed, and links to the record.
+ */
+function shellMembershipFeedback(task, wasScheduledToday) {
+  if (!task) return;
+  const scheduled = isTaskScheduledForToday(task);
+  if (wasScheduledToday && !scheduled) shellToast("已移出今日，任务与处理记录保留", task);
+  else if (shellRoute() === "today" && scheduled) shellToast(normalizeTaskTags(task.tags).today ? "已更新，手动加入的任务继续留在今日" : "已更新今日安排");
+  else shellToast("已更新任务安排");
 }
 
 function shellRefreshDeadlineHint() {
   const hint = document.querySelector("#deadline-form .schedule-hint");
   const draft = state.deadlineDraft;
   if (!hint || !draft) return;
-  const today = localDateKey(new Date());
+  const today = loopTodayKey();
   hint.textContent = `${shellDisplayDate(draft.date)} ${SHELL_WEEKDAY_NAMES[new Date(`${draft.date}T12:00:00`).getDay()]} · ${draft.date === today ? "会显示在今日任务中" : "截止日期不改变任务的分组"}`;
 }
 
@@ -1048,10 +1155,23 @@ function shellRecurrencePreview(recurrence) {
   const value = normalizeTaskRecurrence(recurrence);
   if (value.frequency === "none") return "";
   const items = recurrenceUpcomingLabels
-    ? recurrenceUpcomingLabels(value, new Date(), 3)
+    ? recurrenceUpcomingLabels(value, loopNow(), 3)
     : [];
   if (!items.length) return "";
   return `<div class="recurrence-preview"><strong>接下来</strong>${items.map((item) => `<p>${esc(item)}</p>`).join("")}</div>`;
+}
+
+/**
+ * Phase18: the cycle panel states which occurrence is current — the task's own
+ * occurrence key decides, and a completion dated today counts as done.
+ */
+function shellCycleState() {
+  const task = shellActiveTask();
+  if (!task) return "";
+  const occurrence = recurringOccurrenceKey(task);
+  const done = normalizeTaskRecurrence(task.recurrence).lastCompletedOccurrence === loopTodayKey();
+  const label = done ? "本次已完成" : occurrence ? "本次待处理" : "尚未到本次时间";
+  return `<p class="time18-cycle-state">${label}<span> · ${esc(shellDisplayDate(loopNow()))}</span></p>`;
 }
 
 function shellRenderRecurrencePanel(trigger) {
@@ -1059,6 +1179,7 @@ function shellRenderRecurrencePanel(trigger) {
   const surface = shellMountSurface(
     `<form class="surface-popover" id="recurrence-form" role="dialog" aria-modal="true" aria-label="设置循环任务">${shellSurfaceHeader("循环任务")}
       <div class="recurrence-modes" role="group" aria-label="循环周期">${[["none", "不循环"], ["daily", "每天"], ["weekly", "每周"]].map(([value, label]) => `<button type="button" class="${draft.frequency === value ? "active" : ""}" data-action="shell-recurrence-mode" data-mode="${value}" aria-pressed="${draft.frequency === value}">${label}</button>`).join("")}</div>
+      ${draft.frequency !== "none" ? shellCycleState() : ""}
       ${draft.frequency !== "none" ? `
         <label for="recurrence-time">显示在今日的时间</label>
         <input id="recurrence-time" name="time" type="time" value="${escAttr(draft.time)}" required />
@@ -1078,9 +1199,10 @@ function shellRenderRecurrencePanel(trigger) {
     if (host) host.innerHTML = shellRecurrencePreview(state.recurrenceDraft);
   });
     shellPanelFinish(document.querySelector("#recurrence-form"));
-  surface?.querySelector("#recurrence-form")?.addEventListener("submit", (event) => {
+  document.querySelector("#recurrence-form")?.addEventListener("submit", (event) => {
     event.preventDefault();
     const task = shellActiveTask();
+    const wasScheduledToday = task ? isTaskScheduledForToday(task) : false;
     const draft2 = state.recurrenceDraft;
     if (draft2.frequency === "weekly" && !draft2.weekdays.length) {
       const error = document.querySelector("#recurrence-error");
@@ -1091,10 +1213,11 @@ function shellRenderRecurrencePanel(trigger) {
     draft2.time = document.querySelector("#recurrence-time")?.value || draft2.time;
     task.recurrence = normalizeTaskRecurrence({ ...draft2, lastCompletedOccurrence: draft2.lastCompletedOccurrence || "" });
     task.updatedAt = now();
-    syncRecurringTasks?.(new Date());
+    syncRecurringTasks?.(loopNow());
     shellCloseOverlay({ restoreFocus: false });
     save();
     render();
+    shellMembershipFeedback(task, wasScheduledToday);
   });
 }
 
@@ -1194,6 +1317,52 @@ async function shellAction(data, event) {
       state.query = "";
       state.searchOpen = false;
       state.focusSearch = true;
+      return true;
+    case "open-toast-record":
+      // Reuse the completion receipt's own route to the record.
+      shellJourneyAction("result", document.querySelector(`[data-task-id="${CSS.escape(data.taskId || "")}"]`) || document.body);
+      return true;
+    case "desk19-status":
+      desktopReminderStatusPanel(trigger);
+      return true;
+    case "desk19-help":
+      desktopReminderHelpPanel(trigger);
+      return true;
+    case "desk19-check":
+      void desktopReminderCheck(trigger);
+      return true;
+    case "desk19-calendar":
+      shellCloseOverlay({ restoreFocus: false });
+      ensureCalendarState();
+      state.calendarOpen = true;
+      state.settingsOpen = false;
+      state.reviewOpen = false;
+      render();
+      return true;
+    case "desk19-preview-open":
+      desktopReminderOpenEntry(data.index);
+      return true;
+    case "time18-clock":
+      shellRenderClockPanel(trigger || shellDeadlineTrigger || document.body);
+      return true;
+    case "time18-preset": {
+      const preset = data.preset || "";
+      shellApplyPreviewClock(preset ? shellClockValueFor(preset) : "");
+      return true;
+    }
+    case "time18-clear":
+      shellApplyPreviewClock("");
+      return true;
+    case "show-today-completed":
+      // Phase18: today's completions stay reachable after they leave the list.
+      state.todayFilter = "done";
+      state.activeTaskId = "";
+      shellCloseOverlay({ restoreFocus: false });
+      return true;
+    case "show-today-active":
+      state.todayFilter = "active";
+      state.activeTaskId = "";
+      shellCloseOverlay({ restoreFocus: false });
       return true;
     case "clear-list-filters":
       state.query = "";
@@ -1325,17 +1494,19 @@ async function shellAction(data, event) {
     }
     case "shell-remove-deadline": {
       if (!task) return true;
+      const wasScheduledToday = isTaskScheduledForToday(task);
       task.deadlineAt = "";
       task.deadlineReminderMinutes = null;
       task.updatedAt = now();
       shellCloseOverlay({ restoreFocus: false });
       save();
       render();
+      shellMembershipFeedback(task, wasScheduledToday);
       return true;
     }
     case "shell-recurrence-mode":
       state.recurrenceDraft.frequency = ["none", "daily", "weekly"].includes(data.mode) ? data.mode : "none";
-      if (state.recurrenceDraft.frequency === "weekly" && !state.recurrenceDraft.weekdays.length) state.recurrenceDraft.weekdays = [new Date().getDay()];
+      if (state.recurrenceDraft.frequency === "weekly" && !state.recurrenceDraft.weekdays.length) state.recurrenceDraft.weekdays = [loopNow().getDay()];
       shellRenderRecurrencePanel(shellRecurrenceTrigger);
       return true;
     case "shell-recurrence-day": {

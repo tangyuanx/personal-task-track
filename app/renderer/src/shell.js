@@ -84,7 +84,7 @@ function shellIsWide() {
   return ["calendar", "review", "settings"].includes(shellRoute());
 }
 
-function shellDateLabel(date = new Date()) {
+function shellDateLabel(date = loopNow()) {
   return `${date.getMonth() + 1} 月 ${date.getDate()} 日`;
 }
 
@@ -268,7 +268,7 @@ function renderShellTopbar() {
         <b>${esc(crumb)}</b>
       </div>
       <div class="shell-actions">
-        <span class="preview-date">${esc(shellDateLabel())}，${SHELL_WEEKDAY_NAMES[new Date().getDay()]}</span>
+        <span class="preview-date">${esc(shellDateLabel())}，${SHELL_WEEKDAY_NAMES[loopNow().getDay()]}</span>
         <button class="icon-button ${todayWidgetWindowState.visible ? "active" : ""}" type="button" data-action="show-today-widget" aria-label="今日任务浮窗" title="今日任务浮窗" aria-pressed="${todayWidgetWindowState.visible === true}">${shellIcon("panel")}</button>
       </div>
     </header>`;
@@ -284,6 +284,14 @@ function shellListTitle() {
   }
   if (state.activeGroupId !== ALL_TASKS_GROUP_ID) return shellGroupTitle(state.activeGroupId);
   return "任务仓库";
+}
+
+/** Phase18: today's completions stay reachable from the list footer. */
+function shellTodayCompletedFoot() {
+  if (shellRoute() !== "today" || state.captureSourceFilter === "quick") return "";
+  const count = shellCompletedToday().length;
+  if (!count && state.todayFilter !== "done") return "";
+  return `<button class="text-button time18-completed" type="button" data-action="${state.todayFilter === "done" ? "show-today-active" : "show-today-completed"}">${state.todayFilter === "done" ? "返回待办" : `已完成 ${count}`}</button>`;
 }
 
 function shellListFoot() {
@@ -313,6 +321,10 @@ function renderShellTaskRow(task, displayOrder) {
 function renderShellTaskRows(list) {
   if (shellBulk.active && list.length) return renderShellBulkRows(list);
   if (!list.length) {
+    // Phase18: the Today route gets its own minimal copy instead of "暂无任务".
+    if (shellRoute() === "today" && state.captureSourceFilter !== "quick") {
+      return `<div class="empty time18-list-empty">${state.todayFilter === "done" ? "今天暂无完成任务" : "暂无待办"}</div>`;
+    }
     const filtered = taskListStatsTasks().length > 0;
     const noun = state.captureSourceFilter === "quick" ? "速记" : "任务";
     return `<div class="empty"><p>${filtered ? `没有匹配的${noun}` : `暂无${noun}`}</p>${filtered ? '<button class="text-button" type="button" data-action="clear-list-filters">清除筛选</button>' : ""}</div>`;
@@ -355,6 +367,6 @@ function renderShellTaskList(list) {
       <div class="tasks-scroll">${renderShellTaskRows(list)}</div>
       ${shellBulk.active
         ? `<footer class="list-foot bulk-dock" aria-label="批量操作">${shellBulkFooter()}</footer>`
-        : `<footer class="list-foot"><span>${esc(shellListFoot())}</span>${shellBulkFooter()}</footer>`}
+        : `<footer class="list-foot ${shellTodayCompletedFoot() ? "time18-footer" : ""}"><span>${esc(shellListFoot())}</span>${shellTodayCompletedFoot()}${shellBulkFooter()}</footer>`}
     </aside>`;
 }

@@ -125,6 +125,50 @@ function reminderCopy(stage, tasks, reminderMinutes) {
   return { title: "任务截止提醒", body: `${subject}将在 ${reminderOffsetLabel(reminderMinutes)}内截止。` };
 }
 
+/** Stable identity of one reminder: id + deadline + reminder offset. */
+function deadlineReminderKey(task) {
+  return `${task.id}|${task.deadlineAt}|${normalizeDeadlineReminderMinutes(task.deadlineReminderMinutes)}`;
+}
+
+/**
+ * Phase19 (frozen Demo loop-desktop-model19.js): pending reminders grouped by
+ * stage and offset. Completed tasks, tasks without a reminder and offsets that
+ * were already delivered for this deadline are skipped — a 60-minute reminder
+ * that fired before the deadline is not re-sent once the task is overdue.
+ */
+function deadlineReminderGroups(tasks, at = new Date(), state = normalizeReminderState({})) {
+  const groups = new Map();
+  (Array.isArray(tasks) ? tasks : []).forEach((task) => {
+    const stage = deadlineReminderStage(task, at);
+    if (!stage) return;
+    const reminderMinutes = normalizeDeadlineReminderMinutes(task.deadlineReminderMinutes);
+    if (reminderMinutes === null) return;
+    const record = state.tasks?.[task.id];
+    if (record?.deadlineAt === task.deadlineAt && record.notifiedMinutes.includes(reminderMinutes)) return;
+    const groupKey = `${stage}:${reminderMinutes}`;
+    if (!groups.has(groupKey)) groups.set(groupKey, { id: groupKey, stage, reminderMinutes, tasks: [] });
+    groups.get(groupKey).tasks.push(task);
+  });
+  return Array.from(groups.values());
+}
+
+/** Drop records whose task is gone, done or whose deadline/reminder changed. */
+function reconcileDeadlineReminderState(tasks, state) {
+  const active = new Map((Array.isArray(tasks) ? tasks : [])
+    .filter((task) => task.status !== "done" && task.deadlineReminderMinutes !== null)
+    .map((task) => [task.id, task]));
+  const next = normalizeReminderState(state);
+  let changed = false;
+  Object.keys(next.tasks).forEach((taskId) => {
+    const task = active.get(taskId);
+    if (!task || next.tasks[taskId].deadlineAt !== task.deadlineAt) {
+      delete next.tasks[taskId];
+      changed = true;
+    }
+  });
+  return { state: next, changed };
+}
+
 function createDeadlineReminderController({
   app,
   Notification,
@@ -138,6 +182,13 @@ function createDeadlineReminderController({
   let timer = null;
   let runQueue = Promise.resolve();
   const liveNotifications = new Set();
+  // Phase19 surfaces: what was delivered (for the labelled content preview and
+  // the reminder-status row) and the last failure (so a retry can be offered
+  // without ever marking the offset as notified).
+  let delivered = [];
+  let lastError = null;
+  let lastRunAt = "";
+  const DELIVERED_LIMIT = 20;
   const userDataPath = () => app.getPath("userData");
   const isSupported = () => Boolean(Notification?.isSupported?.());
 
@@ -155,24 +206,22 @@ function createDeadlineReminderController({
     state = await writeDeadlineReminderState(userDataPath(), state);
   }
 
+  function broadcastState() {
+    const window = getMainWindow?.() || ensureMainWindow?.();
+    if (!window || window.isDestroyed?.() || !window.webContents) return;
+    window.webContents.send("deadline-reminders:state", getState());
+  }
+
   async function evaluate() {
-    if (!isSupported()) return { supported: false, notified: 0 };
+    lastRunAt = now().toISOString();
+    if (!isSupported()) return { supported: false, notified: 0, delivered: [], error: null };
     const at = now();
-    const groups = new Map();
-    tasks.forEach((task) => {
-      const stage = deadlineReminderStage(task, at);
-      if (!stage) return;
-      const reminderMinutes = normalizeDeadlineReminderMinutes(task.deadlineReminderMinutes);
-      if (reminderMinutes === null) return;
-      const record = state.tasks[task.id];
-      if (record?.deadlineAt === task.deadlineAt && record.notifiedMinutes.includes(reminderMinutes)) return;
-      const groupKey = `${stage}:${reminderMinutes}`;
-      if (!groups.has(groupKey)) groups.set(groupKey, { stage, reminderMinutes, tasks: [] });
-      groups.get(groupKey).tasks.push(task);
-    });
+    const groups = deadlineReminderGroups(tasks, at, state);
 
     let notified = 0;
-    for (const group of groups.values()) {
+    const batch = [];
+    let error = null;
+    for (const group of groups) {
       const { stage, reminderMinutes, tasks: dueTasks } = group;
       const copy = reminderCopy(stage, dueTasks, reminderMinutes);
       let notification;
@@ -185,9 +234,12 @@ function createDeadlineReminderController({
         });
         notification.on?.("close", () => liveNotifications.delete(notification));
         notification.show();
-      } catch (error) {
-        console.error("Failed to show task deadline reminder.", error);
+      } catch (failure) {
+        console.error("Failed to show task deadline reminder.", failure);
         liveNotifications.delete(notification);
+        // A failed attempt must not mark the offset as notified; remember it so
+        // the interface can offer a calm retry.
+        error = { code: String(failure?.code || failure?.name || "NOTIFICATION_FAILED").slice(0, 64), at: now().toISOString(), stage, reminderMinutes };
         continue;
       }
       dueTasks.forEach((task) => {
@@ -195,9 +247,17 @@ function createDeadlineReminderController({
         state.tasks[task.id] = { deadlineAt: task.deadlineAt, notifiedMinutes: Array.from(new Set([...existing, reminderMinutes])) };
       });
       notified += dueTasks.length;
+      batch.push({ id: group.id, stage, reminderMinutes, title: copy.title, body: copy.body, at: now().toISOString(), tasks: dueTasks.map((task) => ({ id: task.id, title: task.title })) });
     }
-    if (notified) await persist();
-    return { supported: true, notified };
+    if (notified) {
+      delivered = [...batch, ...delivered].slice(0, DELIVERED_LIMIT);
+      await persist();
+    }
+    lastError = error;
+    // Phase19: a background delivery or failure must be visible to the scoped
+    // reminder surfaces without the user re-opening them.
+    if (notified || error) broadcastState();
+    return { supported: true, notified, delivered: batch, error };
   }
 
   function run() {
@@ -207,22 +267,38 @@ function createDeadlineReminderController({
 
   async function sync(value) {
     tasks = normalizeReminderTasks(value);
-    const active = new Map(tasks.filter((task) => task.status !== "done" && task.deadlineReminderMinutes !== null).map((task) => [task.id, task]));
-    let changed = false;
-    Object.keys(state.tasks).forEach((taskId) => {
-      const task = active.get(taskId);
-      if (!task || state.tasks[taskId].deadlineAt !== task.deadlineAt) {
-        delete state.tasks[taskId];
-        changed = true;
-      }
-    });
-    if (changed) await persist();
+    const reconciled = reconcileDeadlineReminderState(tasks, state);
+    state = reconciled.state;
+    if (reconciled.changed) await persist();
     return run();
+  }
+
+  /** Phase19: everything the reminder surfaces render from. */
+  function getState() {
+    const capability = isSupported() ? "supported" : "unsupported";
+    return {
+      supported: isSupported(),
+      // Capability only reports whether notifications are available, not the
+      // system permission state — that can only be observed by the user.
+      capability,
+      pending: deadlineReminderGroups(tasks, now(), state).length,
+      delivered: delivered.map((entry) => ({ ...entry, tasks: entry.tasks.map((task) => ({ ...task })) })),
+      error: lastError ? { ...lastError } : null,
+      lastRunAt,
+    };
+  }
+
+  async function check() {
+    // `state` is the cumulative picture the surfaces render; `outcome` is what
+    // this particular scan did, which is what a content preview may show.
+    const outcome = await run();
+    return { state: getState(), outcome };
   }
 
   function registerIpc() {
     ipcMain.handle("deadline-reminders:sync", (_event, value) => sync(value));
-    ipcMain.handle("deadline-reminders:get-state", () => ({ supported: isSupported() }));
+    ipcMain.handle("deadline-reminders:get-state", () => getState());
+    ipcMain.handle("deadline-reminders:check", () => check());
   }
 
   async function start({ schedule = true } = {}) {
@@ -239,18 +315,24 @@ function createDeadlineReminderController({
     timer = null;
     await runQueue.catch(() => {});
     liveNotifications.clear();
+    delivered = [];
+    lastError = null;
   }
 
-  return { registerIpc, start, stop, sync, run, getState: () => ({ supported: isSupported() }) };
+  return { registerIpc, start, stop, sync, run, check, getState, broadcastState };
 }
 
 module.exports = {
   createDeadlineReminderController,
+  deadlineReminderGroups,
+  deadlineReminderKey,
   deadlineReminderStage,
+  reconcileDeadlineReminderState,
   normalizeDeadlineReminderMinutes,
   normalizeReminderState,
   normalizeReminderTasks,
   readDeadlineReminderState,
+  reminderCopy,
   reminderOffsetLabel,
   reminderStateFilePath,
   writeDeadlineReminderState,
