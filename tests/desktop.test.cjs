@@ -2772,7 +2772,7 @@ test("Today widget is rebuilt from the frozen phase 12/13 widget layers", async 
   assert.doesNotMatch(widget, /--widget-focus:/);
   assert.doesNotMatch(widget, /mock-sidebar|mock-app|mock-repository/);
   for (const sheet of ["fonts.css", "shell.css", "typography.css", "widget12.css", "widget13.css", "shell-refinement.css", "widget-bridge.css"]) {
-    assert.match(widget, new RegExp(sheet.replace(".", "\\.") + "\\?v=0\\.1\\.202"), `today-widget.html must load ${sheet}`);
+    assert.match(widget, new RegExp(sheet.replace(".", "\\.") + "\\?v=0\\.1\\.203"), `today-widget.html must load ${sheet}`);
   }
   assert.match(widget, /id="widget-host"/);
   assert.match(surface, /id="surface-host"/);
@@ -2790,7 +2790,7 @@ test("Today widget is rebuilt from the frozen phase 12/13 widget layers", async 
   // The widget renderer carries the Demo's own template and interactions.
   assert.match(runtime, /class="today-widget widget12 widget13 '/);
   assert.match(runtime, /data-widget-lane="' \+ lane/);
-  assert.match(runtime, /class="widget-logo" src="\.\/assets\/loop-icon\.png"/);
+  assert.match(runtime, /class="widget-logo" src="\.\/src\/assets\/loop-icon\.png"/);
   assert.match(runtime, /class="widget-tabs"/);
   assert.match(runtime, /class="widget-compose"/);
   assert.match(runtime, /class="widget-empty"/);
@@ -3497,7 +3497,7 @@ test("every Today widget IPC channel inspects its sender and the duplicated bind
 });
 
 test("production Today widget uses its dedicated frontend and a sandboxed Electron window", async () => {
-  const [demo, runtime, surfaceRuntime, surfaceCss, widgetMain, appMain, preload, packageJson] = await Promise.all([
+  const [demo, runtime, surfaceRuntime, surfaceCss, widgetMain, appMain, preload, packageJson, rendererApp, settingsSource, shellSource, workspaceSource, bridgeSource, shellSource2, actionsSource2] = await Promise.all([
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "today-widget.html"), "utf8"),
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "today-widget-runtime.js"), "utf8"),
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "widget-surface-runtime.js"), "utf8"),
@@ -3506,24 +3506,31 @@ test("production Today widget uses its dedicated frontend and a sandboxed Electr
     fs.readFile(path.join(__dirname, "..", "app", "main", "main.cjs"), "utf8"),
     fs.readFile(path.join(__dirname, "..", "app", "main", "preload.cjs"), "utf8"),
     fs.readFile(path.join(__dirname, "..", "package.json"), "utf8").then(JSON.parse),
+    fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "app.js"), "utf8"),
+    fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "settings.js"), "utf8"),
+    fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "shell.js"), "utf8"),
+    fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "workspace.js"), "utf8"),
+    fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "bridge.css"), "utf8"),
+    fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "shell.js"), "utf8"),
+    fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "actions.js"), "utf8"),
   ]);
 
   // The two windows are hosts; every Demo class lives in the renderers so the
   // rendered DOM can be compared with loop-widget-phase13.js line by line.
   assert.match(demo, /id="widget-host"/);
   assert.doesNotMatch(demo, /按优先级与阻塞状态排序|项待办|刚刚同步|在主窗口查看全部|corner-anchor/);
-  assert.match(demo, /widget12\.css\?v=0\.1\.202/);
-  assert.match(demo, /widget13\.css\?v=0\.1\.202/);
-  assert.match(demo, /shell-refinement\.css\?v=0\.1\.202/);
-  assert.match(demo, /widget-bridge\.css\?v=0\.1\.202/);
+  assert.match(demo, /widget12\.css\?v=0\.1\.203/);
+  assert.match(demo, /widget13\.css\?v=0\.1\.203/);
+  assert.match(demo, /shell-refinement\.css\?v=0\.1\.203/);
+  assert.match(demo, /widget-bridge\.css\?v=0\.1\.203/);
 
   // Chrome, tabs, rows and the composer: the Demo's markup, icon for icon.
   assert.match(runtime, /class="today-widget widget12 widget13 '/);
-  assert.match(runtime, /class="widget-logo" src="\.\/assets\/loop-icon\.png"/);
+  assert.match(runtime, /class="widget-logo" src="\.\/src\/assets\/loop-icon\.png"/);
   assert.match(runtime, /<strong>今日<\/strong>/);
   assert.match(runtime, /class="widget-date"/);
   assert.match(runtime, /class="widget-count"/);
-  assert.match(runtime, /icon\(prefs\.compact \? "plus" : "minus"\)/);
+  assert.match(runtime, /icon\(prefs\.compact \? "expandRecord" : "minus"\)/);
   assert.match(runtime, /class="widget-tabs"/);
   assert.match(runtime, /\["task", "今日任务", counts\[0\]\]/);
   assert.doesNotMatch(runtime, /currentLane|function applyLane/);
@@ -3659,6 +3666,48 @@ test("production Today widget uses its dedicated frontend and a sandboxed Electr
   assert.match(widgetMain, /if \(preferences\.compact\)[\s\S]*size\?\.transient !== true[\s\S]*Math\.max\(254, Math\.min\(480/);
   assert.match(widgetMain, /autoHeight: false[\s\S]*height: currentContent\.height[\s\S]*customBounds:/);
   assert.match(widgetMain, /function stop\(\)[\s\S]*widgetWindow\.destroy\(\)/);
+  // The widget logo must point at the copy that ships inside build.files
+  // (app/renderer/src/**/*); app/renderer/assets is not packaged, which is why
+  // the logo was missing in the Windows build.
+  assert.ok(packageJson.build.files.includes("app/renderer/src/**/*"));
+  assert.doesNotMatch(runtime, /src="\.\/assets\/loop-icon\.png"/);
+
+  // Issue fixes pinned by contract:
+  // - the highlight mirrors the main window only while it is in front
+  assert.match(rendererApp, /function mainWindowShowsSelection\(\)[\s\S]*document\.hasFocus\(\)[\s\S]*visibilityState/);
+  assert.match(rendererApp, /activeTaskId: mainWindowShowsSelection\(\) \? state\.activeTaskId \|\| "" : ""/);
+  assert.match(rendererApp, /window\.addEventListener\("blur", \(\) => \{[\s\S]*publishTodayWidgetSnapshot\(\)/);
+  // - one update entry, one delegated handler, an immediate state and a live card
+  assert.match(settingsSource, /function shellSettingsInfo\(label, description, value\)/);
+  assert.match(settingsSource, /data-shell-update-detail/);
+  assert.match(settingsSource, /function shellSettingsSyncUpdateCard\(\)/);
+  assert.match(settingsSource, /lastUpdateAction === "check" \? "重新检查" : "重试下载"/);
+  assert.match(rendererApp, /function bindUpdateActionDelegation\(\)/);
+  assert.match(rendererApp, /let lastUpdateAction = "check"/);
+  assert.match(rendererApp, /const effective = action === "download" && !\["available", "downloaded"\]\.includes\(status\)/);
+  assert.match(rendererApp, /if \(typeof globalThis\.shellSettingsSyncUpdateCard === "function"\) \{\s*globalThis\.shellSettingsSyncUpdateCard\(\);/);
+  // - search copy trimmed, brief fields click-to-edit, group manage button in-row
+  assert.match(shellSource, /placeholder="搜索" aria-label="搜索全部任务、节点、速记"/);
+  assert.match(workspaceSource, /<button class="brief-value \$\{value \? "" : "muted"\}" type="button" data-action="shell-edit-brief"/);
+  // Group management was removed (the row had no visible control of its own);
+  // group rows now render as a single button.
+  assert.doesNotMatch(shellSource2, /group-menu-button/);
+  assert.doesNotMatch(shellSource2, /data-group-context-id/);
+  assert.doesNotMatch(rendererApp, /openRepositoryGroupContextMenu/);
+  assert.doesNotMatch(actionsSource2, /shellBindGroupMenus/);
+  assert.doesNotMatch(bridgeSource, /group-menu-button/);
+  assert.match(shellSource2, /class="group-nav-row">\s*<button class="nav-button/);
+  assert.match(bridgeSource, /\.brief-row \.brief-value \{[\s\S]*cursor: text;/);
+  // - anything the renderer adds after a render still has a working action
+  assert.match(rendererApp, /function bindActionDelegation\(\)[\s\S]*element\.dataset\.actionBound === "1"/);
+  assert.match(rendererApp, /element\.dataset\.actionBound = "1";\s*element\.addEventListener\("click"/);
+  // - the top-left update chip re-renders in place and its popover follows the state
+  assert.match(shellSource2, /data-brand-update-slot/);
+  assert.match(shellSource2, /function refreshShellBrandUpdate\(\)/);
+  assert.match(actionsSource2, /function shellUpdatePanelBody\(\)/);
+  assert.match(actionsSource2, /function shellRefreshUpdatePanel\(\)/);
+  assert.match(actionsSource2, /class="surface-popover utility-popover" aria-label="软件更新"/);
+  assert.match(bridgeSource, /\.brand-update-slot \{\s*display: contents;/);
   assert.match(widgetMain, /function stop\(\)[\s\S]*surfaceWindow\.destroy\(\)/);
   assert.match(appMain, /if \(!isQuitting && !updateInstallPrepared\) app\.quit\(\)/);
   assert.match(appMain, /did-resign-active[\s\S]*restoreAlwaysOnTopAfterAppDeactivation/);
@@ -4685,7 +4734,7 @@ test("the queued new task is scrolled into view after repository restoration", a
   assert.equal(result.revealTaskId, "");
 });
 
-test("repository groups render only record scope and personal groups with management actions", async () => {
+test("repository groups render record scope and personal groups without management actions", async () => {
   const harness = await rendererHarness();
   const result = harness.evaluate(`(() => {
     state.taskGroups = [
@@ -4715,51 +4764,40 @@ test("repository groups render only record scope and personal groups with manage
   assert.match(result.sidebar, /class="repository-heading-row"[\s\S]*class="repository-library-heading"[\s\S]*class="repository-context-actions"/);
   assert.match(result.sidebar, /class="repository-filter-popover"[\s\S]*class="repository-filter-label">分组<\/span>[\s\S]*class="repository-group-slot"[\s\S]*class="repository-group-picker is-open"[\s\S]*class="repository-segmented completion-segmented task-status-filters"/);
   assert.doesNotMatch(result.sidebar, /repository-context-row/);
-  assert.match(result.sidebar, /placeholder="搜索分组…"/);
+  assert.match(result.sidebar, /placeholder="搜索" aria-label="搜索分组"/);
   assert.match(result.sidebar, /data-action="add-group">＋ 新建分组/);
   assert.doesNotMatch(result.sidebar, /<section class="group-panel"/);
-  assert.match(result.menu, /重命名分组/);
-  assert.match(result.menu, /删除分组，任务移至未分组/);
-  assert.match(result.menu, /删除分组及其中任务/);
+  // Group management was removed: no row control, no context menu, no
+  // rename/delete/batch entries. Renaming through the picker's inline editor
+  // is a separate path and stays available.
+  assert.doesNotMatch(result.sidebar, /group-menu-button/);
+  assert.doesNotMatch(result.sidebar, /管理分组/);
+  assert.equal(result.menu, "");
   assert.match(result.editing, /data-group-title="group_work"/);
   assert.equal(result.open, true);
 });
 
-test("the visible personal-group trigger opens its context menu on the first right click", async () => {
+test("the personal-group trigger carries no group-management hooks", async () => {
   const harness = await rendererHarness();
   const result = harness.json(`(() => {
     state.taskGroups = [{ id: "group_work", title: "工作", order: 1 }];
     state.activeGroupId = "group_work";
     repositoryGroupPickerOpen = false;
     const picker = renderRepositoryGroupPicker();
-    const listeners = {};
-    const trigger = {
-      dataset: { groupContextId: "group_work" },
-      addEventListener(type, listener) { listeners[type] = listener; }
+    return {
+      picker,
+      binder: typeof bindRepositoryGroupOptionMenus,
+      opener: typeof openRepositoryGroupContextMenu,
     };
-    const scope = {
-      querySelectorAll(selector) { return selector === "[data-group-context-id]" ? [trigger] : []; }
-    };
-    let prevented = 0;
-    let stopped = 0;
-    let synced = 0;
-    syncContextMenuRoot = () => { synced += 1; };
-    bindRepositoryGroupOptionMenus(scope);
-    listeners.contextmenu({
-      clientX: 240,
-      clientY: 180,
-      preventDefault() { prevented += 1; },
-      stopPropagation() { stopped += 1; }
-    });
-    return { picker, contextMenu: state.contextMenu, prevented, stopped, synced };
   })()`);
 
-  assert.match(result.picker, /repository-group-trigger[^>]*data-group-context-id="group_work"/);
-  assert.deepEqual(result.contextMenu, { kind: "group", groupId: "group_work", x: 240, y: 180 });
-  assert.deepEqual({ prevented: result.prevented, stopped: result.stopped, synced: result.synced }, { prevented: 1, stopped: 1, synced: 1 });
+  assert.match(result.picker, /repository-group-trigger[^>]*data-action="toggle-repository-group-picker"/);
+  assert.doesNotMatch(result.picker, /data-group-context-id/);
+  assert.equal(result.binder, "undefined");
+  assert.equal(result.opener, "undefined");
 });
 
-test("repository group context-menu presses keep the picker DOM alive through the first click", async () => {
+test("repository group picker presses keep the picker DOM alive through the first click", async () => {
   const harness = await rendererHarness();
   const result = harness.json(`(() => {
     const targetInside = (selector) => ({ closest: (query) => query === selector ? {} : null });
@@ -4771,7 +4809,8 @@ test("repository group context-menu presses keep the picker DOM alive through th
     return { picker, groupMenu, taskMenu };
   })()`);
 
-  assert.deepEqual(result, { picker: true, groupMenu: true, taskMenu: false });
+  // Only the picker keeps the DOM alive; the group context menu no longer exists.
+  assert.deepEqual(result, { picker: true, groupMenu: false, taskMenu: false });
 });
 
 test("context-menu commands activate exactly once on the first primary pointer press", async () => {
@@ -5006,7 +5045,7 @@ test("global search floats from the app rail while repository tools remain conte
   assert.match(repositoryV172, /\.rail\.sidebar \.repository-primary-row \.add-task-floating \{[^}]*grid-column:5;/);
   assert.match(app, /function renderGlobalSearch\(\)[\s\S]*class="app-global-search search-box search gooey-search is-open"[\s\S]*id="search"/);
   assert.match(app, /function bindGooeySearch\(\)/);
-  assert.match(app, /function renderRepositoryGroupPicker\(\)[\s\S]*placeholder="搜索分组…"[\s\S]*data-action="add-group">＋ 新建分组/);
+  assert.match(app, /function renderRepositoryGroupPicker\(\)[\s\S]*placeholder="搜索" aria-label="搜索分组"[\s\S]*data-action="add-group">＋ 新建分组/);
   assert.match(app, /function openRepositoryGroupContextMenu\(groupId, event\)[\s\S]*kind: "group"/);
   assert.match(app, /function bindRepositoryGroupOptionMenus\(scope = document\)[\s\S]*querySelectorAll\("\[data-group-context-id\]"\)[\s\S]*openRepositoryGroupContextMenu/);
   assert.match(app, /function isEditableTarget\(target\)/);
@@ -5402,7 +5441,7 @@ test("app switching restores native and Milkdown editing selections", async () =
   assert.match(app, /function captureAppSwitchEditingFocus\(/);
   assert.match(app, /function restoreAppSwitchEditingFocus\(/);
   assert.match(app, /if \(!event\.relatedTarget && !appEditingPointerDown && captureAppSwitchEditingFocus\(event\.target\)\)/);
-  assert.match(app, /window\.addEventListener\("focus", \(\) => \{\s*if \(restoreAppSwitchEditingFocus\(\)\) return;/);
+  assert.match(app, /window\.addEventListener\("focus", \(\) => \{\s*publishTodayWidgetSnapshot\(\);\s*if \(restoreAppSwitchEditingFocus\(\)\) return;/);
   assert.match(app, /editor\.addEventListener\("blur",[\s\S]*captureAppSwitchEditingFocus/);
   assert.match(milkdown, /editorViewCtx/);
   assert.match(milkdown, /getSelection:/);

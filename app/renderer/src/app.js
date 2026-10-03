@@ -351,6 +351,9 @@ const knowledgeRecoveryWriteErrors = new Map();
 let cachedKnowledgePane = null;
 let appSwitchFocusSnapshot = null;
 let appEditingPointerDown = false;
+// What the user last asked the updater to do; an error then retries the same
+// thing instead of always offering a download.
+let lastUpdateAction = "check";
 let appUpdateState = normalizeAppUpdateState({
   status: desktopUpdates ? "idle" : "unsupported",
   supported: Boolean(desktopUpdates),
@@ -1898,7 +1901,7 @@ function renderGlobalSearch() {
       </button>
       <label class="gooey-search-field" for="search">
         ${briefFieldIcon("search", "app-command-icon")}
-        <input id="search" type="search" value="${escAttr(state.query)}" placeholder="搜索任务、节点或内容…" aria-label="搜索任务、节点或内容" autocomplete="off" enterkeyhint="search" tabindex="0" />
+        <input id="search" type="search" value="${escAttr(state.query)}" placeholder="搜索" aria-label="搜索任务、节点或内容" autocomplete="off" enterkeyhint="search" tabindex="0" />
         <span class="search-shortcut" aria-hidden="true">⌘ K</span>
       </label>
     </div>
@@ -2000,7 +2003,7 @@ function renderGlobalSearchResults() {
     <div class="global-search-empty">
       ${briefFieldIcon("search", "global-search-empty-icon")}
       <strong>${state.query.trim() ? "没有找到相关内容" : "还没有可搜索的任务"}</strong>
-      <span>${state.query.trim() ? "试试任务标题、节点名称或记录中的关键词" : "创建任务后，可以从这里快速定位"}</span>
+      <span>${state.query.trim() ? "换个关键词试试" : "创建任务后可以在这里定位"}</span>
     </div>
   `;
 }
@@ -2191,9 +2194,9 @@ function renderRepositoryGroupOption(groupId, title) {
   const selected = state.activeGroupId === groupId;
   const personalGroup = state.taskGroups.some((group) => group.id === groupId);
   if (personalGroup && state.editingGroupId === groupId) {
-    return `<div class="repository-group-option is-editing" role="option" aria-selected="${selected}" data-group-id="${escAttr(groupId)}" data-personal-group="true" data-group-context-id="${escAttr(groupId)}"><input class="repository-group-edit" data-group-title="${escAttr(groupId)}" value="${escAttr(title)}" aria-label="修改分组名称" /></div>`;
+    return `<div class="repository-group-option is-editing" role="option" aria-selected="${selected}" data-group-id="${escAttr(groupId)}" data-personal-group="true"><input class="repository-group-edit" data-group-title="${escAttr(groupId)}" value="${escAttr(title)}" aria-label="修改分组名称" /></div>`;
   }
-  return `<button class="repository-group-option ${selected ? "selected" : ""}" type="button" role="option" aria-selected="${selected}" data-action="select-repository-group" data-group-id="${escAttr(groupId)}" ${personalGroup ? `data-personal-group="true" data-group-context-id="${escAttr(groupId)}"` : ""}><span>${esc(title)}</span>${selected ? `<span class="repository-group-check" aria-hidden="true">✓</span>` : ""}</button>`;
+  return `<button class="repository-group-option ${selected ? "selected" : ""}" type="button" role="option" aria-selected="${selected}" data-action="select-repository-group" data-group-id="${escAttr(groupId)}" ${personalGroup ? 'data-personal-group="true"' : ""}><span>${esc(title)}</span>${selected ? `<span class="repository-group-check" aria-hidden="true">✓</span>` : ""}</button>`;
 }
 
 function renderRepositoryGroupOptions() {
@@ -2223,10 +2226,10 @@ function renderRepositoryGroupPicker() {
   const isGrowthSource = activePersonalGroup?.id === growthSource;
   return `
     <div class="repository-group-picker ${open ? "is-open" : ""}">
-      <button class="repository-group-trigger" type="button" data-action="toggle-repository-group-picker" ${activePersonalGroup ? `data-group-context-id="${escAttr(activePersonalGroup.id)}"` : ""} aria-expanded="${open}" aria-haspopup="listbox" title="选择分组；双击可修改当前分组名称"><span class="repository-group-value">${esc(repositoryGroupLabel())}</span>${briefFieldIcon("chevron-down", "repository-group-chevron")}</button>
+      <button class="repository-group-trigger" type="button" data-action="toggle-repository-group-picker" aria-expanded="${open}" aria-haspopup="listbox" title="选择分组；双击可修改当前分组名称"><span class="repository-group-value">${esc(repositoryGroupLabel())}</span>${briefFieldIcon("chevron-down", "repository-group-chevron")}</button>
       ${open ? `
         <div class="repository-group-popover" role="listbox" aria-label="选择分组">
-          <label class="repository-group-search"><span aria-hidden="true">⌕</span><input type="search" value="${escAttr(repositoryGroupQuery)}" placeholder="搜索分组…" aria-label="搜索分组" autocomplete="off" /></label>
+          <label class="repository-group-search"><span aria-hidden="true">⌕</span><input type="search" value="${escAttr(repositoryGroupQuery)}" placeholder="搜索" aria-label="搜索分组" autocomplete="off" /></label>
           <div class="repository-group-options">
             ${renderRepositoryGroupOptions()}
           </div>
@@ -3064,6 +3067,9 @@ function renderEmptyPage() {
 }
 
 function renderContextMenu() {
+  // Group management (打开/重命名/批量添加/删除分组) was removed from the product;
+  // a leftover kind must not fall through to the node menu.
+  if (state.contextMenu?.kind === "group") return "";
   if (!state.contextMenu) return "";
   const menu = state.contextMenu;
   if (menu.kind === "editor") {
@@ -3083,19 +3089,6 @@ function renderContextMenu() {
     return `
       <div class="context-menu" style="left:${menu.x}px; top:${menu.y}px">
         <button data-action="add-task">新增任务</button>
-      </div>
-    `;
-  }
-
-  if (menu.kind === "group") {
-    return `
-      <div class="context-menu" style="left:${menu.x}px; top:${menu.y}px">
-        <button data-action="select-group" data-group-id="${escAttr(menu.groupId)}">打开分组</button>
-        <button data-action="rename-group" data-group-id="${escAttr(menu.groupId)}">重命名分组</button>
-        <button data-action="batch-add-tasks" data-group-id="${escAttr(menu.groupId)}">批量添加任务…</button>
-        <hr />
-        <button class="danger" data-action="delete-group-keep-tasks" data-group-id="${escAttr(menu.groupId)}">删除分组，任务移至未分组</button>
-        <button class="danger" data-action="delete-group-with-tasks" data-group-id="${escAttr(menu.groupId)}">删除分组及其中任务</button>
       </div>
     `;
   }
@@ -4212,13 +4205,28 @@ function refreshSidebarUpdateControl() {
 function bindSidebarUpdateControl() {
   document.querySelector("[data-sidebar-update-action]")?.addEventListener("click", (event) => {
     event.stopPropagation();
-    void runUpdateAction("download");
+    // "available" downloads and then installs; "downloaded" installs; anything
+    // else means there is nothing to fetch, so re-check and say so.
+    void runUpdateAction(["available", "downloaded"].includes(appUpdateState.status) ? "download" : "check");
   });
 }
 
 function refreshUpdateSurfaces() {
   refreshSidebarUpdateControl();
   refreshUpdateSettings();
+  // settings.js renders the 软件更新 page; re-render just its status card so a
+  // click is reflected immediately (and progress ticks stay cheap).
+  if (typeof globalThis.shellSettingsSyncUpdateCard === "function") {
+    globalThis.shellSettingsSyncUpdateCard();
+  }
+  // The top-left chip and an open update popover show progress too.
+  if (typeof globalThis.refreshShellBrandUpdate === "function") globalThis.refreshShellBrandUpdate();
+  if (typeof globalThis.shellRefreshUpdatePanel === "function") globalThis.shellRefreshUpdatePanel();
+}
+
+/** True while the 软件更新 page is the one on screen. */
+function updatesPageIsOpen() {
+  return typeof activeSettingsPage === "string" && activeSettingsPage === "updates";
 }
 
 function refreshUpdateSettings() {
@@ -4243,16 +4251,41 @@ function bindUpdateSettingsControls() {
     refreshUpdateSettings();
   });
 
-  document.querySelectorAll("[data-update-action]").forEach((button) => {
-    button.addEventListener("click", (event) => {
-      event.stopPropagation();
-      const action = event.currentTarget.dataset.updateAction;
-      if (action === "later") {
-        event.currentTarget.closest(".settings-update-sheet")?.remove();
-        return;
-      }
-      void runUpdateAction(action);
-    });
+  // [data-update-action] is handled by one delegated listener (see
+  // bindUpdateActionDelegation) because the update surfaces re-render in place.
+}
+
+/**
+ * [data-action] elements are bound one by one on every render, so anything the
+ * renderer adds later (a live update chip, a refresh of a status card) would be
+ * silently dead. This fallback dispatches those clicks; elements bound by the
+ * render pass stop propagation, so nothing is handled twice.
+ */
+function bindActionDelegation() {
+  if (bindActionDelegation.bound) return;
+  bindActionDelegation.bound = true;
+  document.addEventListener("click", (event) => {
+    const element = event.target.closest?.("[data-action]");
+    if (!element || element.dataset.actionBound === "1" || element.disabled === true) return;
+    event.stopPropagation();
+    element.dataset.actionBound = "1";
+    void action(element.dataset, event);
+  });
+}
+
+function bindUpdateActionDelegation() {
+  if (bindUpdateActionDelegation.bound) return;
+  bindUpdateActionDelegation.bound = true;
+  document.addEventListener("click", (event) => {
+    const button = event.target.closest?.("[data-update-action]");
+    if (!button) return;
+    event.stopPropagation();
+    const action = button.dataset.updateAction;
+    if (action === "later") {
+      button.closest(".settings-update-sheet")?.remove();
+      return;
+    }
+    void runUpdateAction(action);
   });
 }
 
@@ -4316,13 +4349,28 @@ function bindDataBackupControls() {
 
 async function runUpdateAction(action) {
   if (!desktopUpdates) return;
-  if (action === "check") appUpdateState = { ...appUpdateState, status: "checking", errorCode: "" };
-  if (action === "download") appUpdateState = { ...appUpdateState, status: "downloading", percent: 0, errorCode: "" };
+  // A click must never look dead. Two things can make it look dead: asking for a
+  // download while nothing is downloadable (the updater returns the unchanged
+  // state), and waiting for the first push from the main process. So the action
+  // is validated against the current state and the result is reflected here,
+  // before anything is awaited.
+  const status = appUpdateState.status;
+  const effective = action === "download" && !["available", "downloaded"].includes(status)
+    ? "check"
+    : action === "install" && status !== "downloaded"
+      ? "check"
+      : action;
+  lastUpdateAction = effective;
+  appUpdateState = effective === "check"
+    ? { ...appUpdateState, status: "checking", errorCode: "" }
+    : effective === "download"
+      ? { ...appUpdateState, status: "downloading", percent: 0, errorCode: "" }
+      : { ...appUpdateState, status: "preparing", errorCode: "" };
   refreshUpdateSurfaces();
   try {
-    const result = action === "check"
+    const result = effective === "check"
       ? await desktopUpdates.check()
-      : action === "download"
+      : effective === "download"
         ? await desktopUpdates.download()
         : await desktopUpdates.install();
     if (result && typeof result === "object") appUpdateState = normalizeAppUpdateState(result);
@@ -4333,6 +4381,8 @@ async function runUpdateAction(action) {
 }
 
 async function initializeAppUpdates() {
+  bindActionDelegation();
+  bindUpdateActionDelegation();
   if (!desktopUpdates?.getState) return;
   try {
     appUpdateState = normalizeAppUpdateState(await desktopUpdates.getState());
@@ -5274,6 +5324,7 @@ function bindTaskRepositoryRows(scope = document) {
   });
 
   document.querySelectorAll("[data-action]").forEach((element) => {
+    element.dataset.actionBound = "1";
     element.addEventListener("click", (event) => {
       event.stopPropagation();
       action(element.dataset, event);
@@ -5370,7 +5421,6 @@ function bindTaskRepositoryRows(scope = document) {
       const options = document.querySelector(".repository-group-options");
       if (options) {
         options.innerHTML = renderRepositoryGroupOptions();
-        bindRepositoryGroupOptionMenus(options);
       }
     });
     repositoryGroupSearch.addEventListener("keydown", (event) => {
@@ -5398,7 +5448,6 @@ function bindTaskRepositoryRows(scope = document) {
     });
   }
 
-  bindRepositoryGroupOptionMenus(document);
 
   document.querySelectorAll("[data-edit-key]").forEach((element) => {
     element.addEventListener("input", (event) => {
@@ -5930,31 +5979,9 @@ function bindTaskRepositoryRows(scope = document) {
   }
 }
 
-function openRepositoryGroupContextMenu(groupId, event) {
-  if (!state.taskGroups.some((group) => group.id === groupId)) return false;
-  event.preventDefault();
-  event.stopPropagation();
-  state.contextMenu = {
-    kind: "group",
-    groupId,
-    x: Math.min(event.clientX, window.innerWidth - 250),
-    y: Math.min(event.clientY, window.innerHeight - 220),
-  };
-  syncContextMenuRoot();
-  return true;
-}
-
 function isRepositoryGroupInteraction(target) {
-  if (target?.closest?.(".repository-group-picker")) return true;
-  return Boolean(target?.closest?.(".context-menu") && state.contextMenu?.kind === "group");
-}
-
-function bindRepositoryGroupOptionMenus(scope = document) {
-  scope.querySelectorAll("[data-group-context-id]").forEach((element) => {
-    element.addEventListener("contextmenu", (event) => {
-      openRepositoryGroupContextMenu(element.dataset.groupContextId, event);
-    });
-  });
+  // Group management was removed; only the picker itself still holds dismissal.
+  return Boolean(target?.closest?.(".repository-group-picker"));
 }
 
 function activateRepositoryTask(taskId) {
@@ -7244,14 +7271,6 @@ async function action(data, event = null) {
     document.dispatchEvent(new CustomEvent("loop-task-batch:open", { detail: { groupId } }));
     return;
   }
-  if (data.action === "rename-group") {
-    startRenameGroup(data.groupId);
-    render();
-    return;
-  }
-  if (data.action === "delete-group" && !(await deleteGroup(data.groupId, "ungroup"))) return;
-  if (data.action === "delete-group-keep-tasks" && !(await deleteGroup(data.groupId, "ungroup"))) return;
-  if (data.action === "delete-group-with-tasks" && !(await deleteGroup(data.groupId, "delete"))) return;
   if (data.action === "select-focus") {
     openTaskFromGlobalList(data.taskId, "", { keepToday: true });
   }
@@ -8844,6 +8863,13 @@ function reorderTodayWidgetItem(taskId, lane, direction) {
   return { success: true, code: "MOVED", taskId };
 }
 
+// True while the main window is the one the user is looking at. Minimised or
+// background windows keep state.activeTaskId, but the widget must not echo it.
+function mainWindowShowsSelection() {
+  if (typeof document.hasFocus === "function" && !document.hasFocus()) return false;
+  return document.visibilityState !== "hidden";
+}
+
 function todayWidgetSnapshot() {
   const rootFontSize = Number.parseFloat(window.getComputedStyle?.(document.documentElement)?.fontSize);
   const rootFontScale = window.getComputedStyle?.(document.documentElement)?.getPropertyValue("--font-scale")?.trim();
@@ -8864,8 +8890,11 @@ function todayWidgetSnapshot() {
       // one font pipeline instead of duplicating the family tables.
       sans: rootFontSans || "",
     },
-    // the Demo marks the row open in the main window with .current
-    activeTaskId: state.activeTaskId || "",
+    // the Demo marks the row open in the main window with .current. The widget
+    // is a separate always-on window, so a stale selection there would keep one
+    // row highlighted while the main window is in the background: only publish
+    // it while that window is actually in front.
+    activeTaskId: mainWindowShowsSelection() ? state.activeTaskId || "" : "",
     items: todayFocusItems().map(({ task, kind, nextText }) => ({
       taskId: task.id,
       title: task.title || "未命名任务",
@@ -9116,9 +9145,13 @@ window.addEventListener("blur", () => {
   if (!appEditingPointerDown) captureAppSwitchEditingFocus(document.activeElement);
   if (appSwitchFocusSnapshot) appSwitchFocusSnapshot.restore = true;
   storeMarkdownSelection(activeMarkdownEditor(), true);
+  // The widget mirrors the selection with .current; leaving it set while this
+  // window is in the background made the highlight look stuck.
+  publishTodayWidgetSnapshot();
 });
 
 window.addEventListener("focus", () => {
+  publishTodayWidgetSnapshot();
   if (restoreAppSwitchEditingFocus()) return;
   window.requestAnimationFrame(() => {
     if (!restoreAppSwitchEditingFocus() && state.restoreMarkdownFocus) restoreMarkdownSelection();

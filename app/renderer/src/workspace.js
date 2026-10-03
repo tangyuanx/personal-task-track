@@ -109,7 +109,7 @@ function renderShellBrief(task) {
       <label id="label-${field}" ${editing ? `for="draft-${field}"` : ""}>${label}</label>
       ${editing
         ? `<div class="brief-editing"><textarea class="brief-editor" id="draft-${field}" data-shell-draft="${escAttr(key)}" aria-labelledby="label-${field}" placeholder="${placeholder}">${esc(state.shellDrafts[key])}</textarea>${renderShellEditActions(key)}</div>`
-        : `<div class="brief-value ${value ? "" : "muted"}">${esc(value || placeholder)}</div><button class="brief-edit" type="button" data-action="shell-edit-brief" data-field="${field}" data-task-id="${escAttr(task.id)}" aria-label="编辑${label}" title="编辑${label}">${shellIcon("edit")}</button>`}
+        : `<button class="brief-value ${value ? "" : "muted"}" type="button" data-action="shell-edit-brief" data-field="${field}" data-task-id="${escAttr(task.id)}" aria-label="编辑${label}" title="点击编辑${label}">${esc(value || placeholder)}</button><button class="brief-edit" type="button" data-action="shell-edit-brief" data-field="${field}" data-task-id="${escAttr(task.id)}" aria-label="编辑${label}" title="编辑${label}">${shellIcon("edit")}</button>`}
     </div>`;
   }).join("")}</section>`;
 }

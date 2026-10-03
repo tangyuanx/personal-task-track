@@ -59,8 +59,8 @@ test("work navigation goes through the project bridge, not a private copy", () =
     assert.ok(js.includes(call), `work.js must use bridge.${call}`);
   }
   assert.doesNotMatch(js, /state\.tasks\.push/);
-  assert.match(html, /work\.css\?v=0\.1\.202/);
-  assert.match(html, /work\.js\?v=0\.1\.202/);
+  assert.match(html, /work\.css\?v=0\.1\.203/);
+  assert.match(html, /work\.js\?v=0\.1\.203/);
   assert.doesNotMatch(html, /work-rhythm\./);
 });
 

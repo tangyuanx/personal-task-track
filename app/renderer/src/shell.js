@@ -167,6 +167,13 @@ function renderShellBrandUpdate() {
   return `<button class="icon-button shell-update brand-update" type="button" data-action="open-update-panel" aria-label="软件更新：${escAttr(label)}" title="${escAttr(label)}" ${busy ? 'aria-busy="true" disabled' : ""}>${shellIcon("download")}</button>`;
 }
 
+/** Live refresh of the top-left update chip (progress ticks while downloading). */
+function refreshShellBrandUpdate() {
+  const slot = document.querySelector("[data-brand-update-slot]");
+  if (!slot) return;
+  slot.innerHTML = renderShellBrandUpdate();
+}
+
 function shellNavButton(route, text, image) {
   const current = shellRoute();
   const active = current === route;
@@ -201,7 +208,6 @@ function renderShellGroupNavigation() {
         <button class="nav-button ${active ? "active" : ""}" type="button" data-action="select-nav-group" data-group-id="${escAttr(group.id)}" title="${escAttr(group.title)}" aria-current="${active ? "page" : "false"}">
           <i class="group-mark"></i><span>${esc(group.title)}</span><span class="count">${shellGroupOpenCount(group.id)}</span>
         </button>
-        <button class="group-menu-button" type="button" data-context="group" data-group-context-id="${escAttr(group.id)}" aria-label="管理分组：${escAttr(group.title)}" aria-haspopup="menu" aria-expanded="false">${shellIcon("more")}</button>
       </div>`;
   }).join("");
   const ungroupedActive = shellRoute() === "tasks" && state.activeGroupId === UNGROUPED_TASKS_GROUP_ID;
@@ -231,7 +237,7 @@ function renderShellNavigation() {
         <span class="brand-mark"><img src="./src/assets/loop-icon.png" alt="Loop" /></span>
         <strong>Loop</strong>
         <button class="icon-button nav-toggle" type="button" data-action="toggle-nav" aria-label="${collapsed ? "展开导航" : "收起导航"}" title="${collapsed ? "展开导航" : "收起导航"}">${shellIcon("panel")}</button>
-        ${renderShellBrandUpdate()}
+        <span class="brand-update-slot" data-brand-update-slot>${renderShellBrandUpdate()}</span>
       </div>
       ${shellNavButton("today", "今日", "home")}
       ${shellNavButton("tasks", "任务仓库", "tasks")}
@@ -334,8 +340,8 @@ function renderShellTaskList(list) {
       <span class="list-resizer" data-action="resize-list-column" role="separator" tabindex="0" aria-orientation="vertical" aria-label="调整任务列表宽度" aria-valuemin="230" aria-valuemax="460" aria-valuenow="${normalizeSidebarWidth(state.sidebarWidth)}" title="拖动调整任务列表宽度"></span>
       <div class="list-search" role="search">
         ${shellIcon("search")}
-        <input id="search" type="search" placeholder="搜索全部任务、节点、速记" aria-label="搜索全部记录" aria-controls="global-results" aria-expanded="${state.searchOpen}" autocomplete="off" value="${escAttr(state.query)}" />
-        <button class="search-clear" type="button" data-action="clear-search" aria-label="清空搜索" title="清空搜索（Esc）" ${state.query ? "" : "hidden"}>${shellIcon("close")}</button>
+        <input id="search" type="search" placeholder="搜索" aria-label="搜索全部任务、节点、速记" aria-controls="global-results" aria-expanded="${state.searchOpen}" autocomplete="off" value="${escAttr(state.query)}" />
+        <button class="search-clear" type="button" data-action="clear-search" aria-label="清空搜索" title="清空搜索" ${state.query ? "" : "hidden"}>${shellIcon("close")}</button>
       </div>
       <div class="list-heading">
         <h2>${esc(shellListTitle())}<span class="count">${list.length}</span></h2>

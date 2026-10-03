@@ -1,0 +1,165 @@
+name: Publish v0.1.203
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/publish-v0.1.203.yml
+
+concurrency:
+  group: publish-v0.1.203
+  cancel-in-progress: false
+
+jobs:
+  # This workflow is the release record for v0.1.203: it runs on demand, and on
+  # any push to main that touches this file (the path filter is what re-runs a
+  # release after a fix). The Windows runner checks the tree out with CRLF, so
+  # every multi-line assertion in tests/ matches on \r?\n.
+  verify:
+    name: Verify v0.1.203 reported fixes
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Verify version, renderer syntax and the frozen Demo layers
+        shell: bash
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          test "$version" = "0.1.203"
+          for f in app/renderer/src/*.js; do node --check "$f"; done
+          # The frozen widget layers must stay byte-identical to the baseline.
+          diff app/renderer/src/widget12.css prototypes/baseline/loop-plane-phase17-frozen/loop-widget-phase12-refinement.css
+          diff app/renderer/src/widget13.css prototypes/baseline/loop-plane-phase17-frozen/loop-widget-phase13.css
+          diff app/renderer/src/shell-refinement.css prototypes/baseline/loop-plane-phase17-frozen/loop-shell-refinement.css
+          # bridge.css is the only override layer; settings.css stays frozen.
+          diff app/renderer/src/settings.css prototypes/baseline/loop-plane-phase17-frozen/loop-settings-phase9.css
+          diff app/renderer/src/refinement.css prototypes/baseline/loop-plane-phase17-frozen/loop-refinement.css
+          # Group management must be gone from the rendered shell.
+          ! grep -rn "group-menu-button\|data-group-context-id" app/renderer/src/shell.js
+          ! grep -rn "openRepositoryGroupContextMenu\|bindRepositoryGroupOptionMenus" app/renderer/src/app.js
+          node --test tests/desktop.test.cjs tests/work-rhythm-ui.test.cjs tests/work-navigation-model.test.cjs
+
+  build:
+    name: Build v0.1.203 ${{ matrix.platform }}
+    needs: verify
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macOS
+            os: macos-latest
+            script: npm run dist:mac -- --x64 --arm64 --publish never
+            artifact: v0.1.203-macos
+          - platform: Windows
+            os: windows-latest
+            script: npm run dist:win -- --x64 --publish never
+            artifact: v0.1.203-windows
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Check JavaScript and tests
+        run: npm run check
+      - name: Build app
+        run: ${{ matrix.script }}
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+      - name: Test Windows installer upgrade matrix
+        if: matrix.platform == 'Windows'
+        shell: pwsh
+        run: |
+          $candidate = Get-ChildItem release -Filter "Loop-*-x64-setup.exe" | Select-Object -First 1
+          if (-not $candidate) { throw "Windows installer was not produced." }
+          ./tests/windows-upgrade-installer.test.ps1 -CandidateInstaller $candidate.FullName
+      - name: Verify update metadata
+        run: node tools/verify-update-artifacts.cjs release
+      - name: Stage v0.1.203 release assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            release/*.dmg
+            release/*.zip
+            release/*.exe
+            release/*.blockmap
+            release/latest.yml
+            release/latest-mac.yml
+          if-no-files-found: error
+          retention-days: 2
+
+  publish:
+    name: Publish v0.1.203 release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Refuse to replace an existing tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          if gh api "repos/${{ github.repository }}/git/ref/tags/v0.1.203" >/dev/null 2>&1; then
+            echo "v0.1.203 already exists; refusing to replace it."
+            exit 1
+          fi
+      - name: Collect v0.1.203 release assets
+        uses: actions/download-artifact@v4
+        with:
+          pattern: v0.1.203-*
+          path: release
+          merge-multiple: true
+      - name: Verify complete cross-platform update feed
+        run: node tools/verify-update-artifacts.cjs release --require-all-platforms
+      - name: Publish v0.1.203
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v0.1.203
+          target_commitish: ${{ github.sha }}
+          name: v0.1.203
+          body: |
+            ## 交互反馈修复与精简
+
+            针对实际使用中"点了没反应"和几处多余入口的修复。
+
+            - **软件更新**：状态卡成为唯一入口，"当前版本"行改为只读值（去掉重复的"检查更新"）；
+              检查后一定给出明确结果（正在检查 / 当前已是最新版本 vX · 刚刚检查 / 新版本 vX 可用 /
+              失败原因与重试）。设置页、左上角更新芯片与更新气泡都会随状态即时刷新，下载进度实时可见。
+            - **左上角更新入口**：气泡 markup 缺少 `.surface-popover`，`shellMountSurface` 会静默返回 null ——
+              点击等于什么都没发生；现已修复并补上即时反馈。
+            - **渲染后新建的控件**：`[data-action]` 原来只在每次渲染时逐个绑定，渲染后新增的节点没有监听器，
+              点击无反应。新增 document 级兜底委派（已绑定节点通过标记与 stopPropagation 避免重复执行）。
+            - **分组管理已移除**：侧栏分组行不再有管理按钮，也没有右键菜单（重命名/删除/批量添加入口一并移除）。
+              分组的新建、选择与仓库内联改名保留。后续会重新设计"针对分组批量添加任务"。
+            - **右栏 背景 / 进展 / 结论**：点击文字即可编辑，不再需要点小铅笔。
+            - **搜索框**：提示词精简为"搜索"，保留完整的无障碍名称。
+            - **今日浮窗**：左上角图标改为随包发布的资源路径（此前 Windows/打包版本 404）；
+              展开按钮改用四角展开图标而不再是"+"；主窗口失焦后不再错误保留任务的选中背景。
+
+            验证：`node --test` 全绿（220 项，Windows CRLF 检出下 190 项），真实应用行为检查 36/36。
+          make_latest: true
+          files: |
+            release/*.dmg
+            release/*.zip
+            release/*.exe
+            release/*.blockmap
+            release/latest.yml
+            release/latest-mac.yml

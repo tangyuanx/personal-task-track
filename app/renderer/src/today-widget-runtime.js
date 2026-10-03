@@ -23,6 +23,8 @@
     close: "m6 6 12 12M6 18 18 6",
     note: "M5 3h14v18H5zM8 8h8M8 12h8M8 16h5",
     minus: "M5 12h14",
+    // from the frozen Demo's final path map: four corners outward = expand
+    expandRecord: "M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5",
     plus: "M12 5v14M5 12h14",
     down: "m5 9 7 7 7-7",
     up: "m5 15 7-7 7 7",
@@ -138,11 +140,11 @@
     const items = listItems();
     const counts = laneCounts();
     const header = '<header class="widget-header" tabindex="0" aria-label="移动浮窗" aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight" title="拖动移动 · 聚焦后方向键微调">'
-      + '<img class="widget-logo" src="./assets/loop-icon.png" alt="Loop" draggable="false"><strong>今日</strong>'
+      + '<img class="widget-logo" src="./src/assets/loop-icon.png" alt="Loop" draggable="false"><strong>今日</strong>'
       + (prefs.compact
         ? '<span class="widget-count">' + counts[0] + " 项</span>"
         : '<span class="widget-date">' + esc(formatDate(snapshot.date)) + "</span>")
-      + '<button class="icon-button" data-action="compact-widget" aria-label="' + (prefs.compact ? "展开浮窗" : "收起浮窗") + '">' + icon(prefs.compact ? "plus" : "minus") + "</button>"
+      + '<button class="icon-button" data-action="compact-widget" aria-label="' + (prefs.compact ? "展开浮窗" : "收起浮窗") + '">' + icon(prefs.compact ? "expandRecord" : "minus") + "</button>"
       + '<button class="icon-button" data-action="widget-preferences" aria-label="浮窗设置" aria-haspopup="dialog" aria-expanded="' + String(surfaceKind === "settings") + '">' + icon("settings") + "</button>"
       + '<button class="icon-button" data-action="toggle-widget" aria-label="关闭今日浮窗">' + icon("close") + "</button></header>";
     const tabs = '<nav class="widget-tabs" aria-label="浮窗记录类型">'

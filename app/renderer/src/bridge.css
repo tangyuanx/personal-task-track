@@ -199,3 +199,61 @@
 .list-resizer:focus-visible::after { background: var(--green); opacity: .45; }
 .list-resizer:focus-visible { outline: none; }
 .task-list-pane { position: relative; }
+
+/* ============================================================
+   Main-window overrides. The frozen Demo layers above this file must stay
+   byte-identical, so every correction the product needs lives here.
+   ============================================================ */
+
+/* 背景 / 进展 / 结论 are click-to-edit: the value itself is the control, so it
+   must keep the plain text look (the global button rule would make it a hover-
+   highlighted pill) while staying focusable and keyboard-activatable. */
+.brief-row .brief-value {
+  display: block;
+  width: 100%;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: text;
+  border-radius: 3px;
+}
+
+.brief-row .brief-value:hover,
+.brief-row .brief-value:not(:disabled):hover {
+  background: transparent;
+}
+
+.brief-row .brief-value.muted {
+  color: var(--secondary);
+}
+
+.brief-row .brief-value:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+}
+
+/* Passive settings row value (e.g. 当前版本 in 软件更新): same rhythm as a control
+   row, but it holds a value instead of offering a second, duplicate action.
+   settings.css is a frozen Demo layer, so this lives in the override sheet. */
+.prefs-info-value {
+  color: var(--secondary);
+  font-size: calc(12px * var(--font-scale, 1));
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* The top-left update chip lives in a slot so it can be re-rendered in place
+   (its label carries live download progress). display:contents keeps the slot
+   out of the .brand flex layout, so an empty slot adds no gap. */
+.brand-update-slot {
+  display: contents;
+}
+
+/* The Demo's hover padding reserved room for a second in-row control that the
+   product does not have, and it only truncated the group title on hover. */
+.group-nav-row:hover .nav-button > span:first-of-type,
+.group-nav-row:focus-within .nav-button > span:first-of-type {
+  padding-right: 0;
+}

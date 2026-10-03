@@ -620,6 +620,7 @@ function shellBindOverlayDelegation() {
     if (action && !action.disabled) {
       event.preventDefault();
       event.stopPropagation();
+      action.dataset.actionBound = "1";   // the document-level fallback must not repeat this
       void (globalThis.action || action)(action.dataset, event);
       return true;
     }
@@ -795,7 +796,7 @@ function shellFlowLocator(trigger) {
   const surface = shellMountSurface(
     `<section class="surface-popover flow-locator" role="dialog" aria-modal="true" aria-label="定位处理流节点">${shellSurfaceHeader("定位节点")}
       <label class="sr-only" for="flow-locator-query">搜索当前任务的节点与记录</label>
-      <input id="flow-locator-query" type="search" placeholder="搜索节点标题或处理记录" autocomplete="off" autofocus />
+      <input id="flow-locator-query" type="search" placeholder="搜索节点" autocomplete="off" autofocus />
       <div class="flow-locator-results" aria-live="polite">${shellLocatorResults()}</div>
     </section>`,
     trigger,
@@ -859,7 +860,7 @@ function shellCombinedFilter(trigger) {
   });
 }
 
-function shellUpdatePanel(trigger) {
+function shellUpdatePanelBody() {
   const update = appUpdateState;
   const titles = {
     available: "新版本可用",
@@ -883,8 +884,7 @@ function shellUpdatePanel(trigger) {
   const progress = ["downloading", "preparing", "installing"].includes(update.status)
     ? `<div class="update-progress" role="progressbar" aria-label="更新下载进度" aria-valuenow="${Math.round(update.percent || 0)}" aria-valuemin="0" aria-valuemax="100"><span style="width:${Math.max(4, Math.round(update.percent || 0))}%"></span></div>`
     : "";
-  shellMountSurface(
-    `<section class="utility-popover" aria-label="软件更新">${shellSurfaceHeader("")}
+  return `${shellSurfaceHeader("")}
       <h2>${esc(titles[update.status] || "软件更新")}</h2>
       <p>当前 v${esc(update.currentVersion || APP_VERSION || "")}${esc(version)}</p>
       <p>${esc(bodies[update.status] || "暂无可用更新。")}</p>
@@ -893,11 +893,21 @@ function shellUpdatePanel(trigger) {
         <button type="button" class="text-button" data-action="close-dialog">稍后</button>
         ${["available", "error"].includes(update.status) ? `<button type="button" class="button primary" data-action="run-update-download">${update.status === "error" ? "重试下载" : "下载更新"}</button>` : ""}
         ${update.status === "downloaded" ? '<button type="button" class="button primary" data-action="run-update-install">重启并安装</button>' : ""}
-      </footer>
-    </section>`,
-    trigger,
-    310,
-  );
+      </footer>`;
+}
+
+function shellUpdatePanel(trigger) {
+  // shellMountSurface only mounts when the markup contains .surface-popover;
+  // without it the click silently did nothing at all.
+  shellMountSurface(`<section class="surface-popover utility-popover" aria-label="软件更新">${shellUpdatePanelBody()}</section>`, trigger, 310);
+}
+
+/** Keep an open 软件更新 popover in step with the state (progress, errors). */
+function shellRefreshUpdatePanel() {
+  const panel = document.querySelector('.utility-popover[aria-label="软件更新"]');
+  if (!panel) return false;
+  panel.innerHTML = shellUpdatePanelBody();
+  return true;
 }
 
 // ------------------------------------------------------------
@@ -1578,16 +1588,6 @@ function shellBindNodeRecord() {
   });
 }
 
-function shellBindGroupMenus() {
-  document.querySelectorAll("[data-group-context-id]").forEach((element) => {
-    element.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      openRepositoryGroupContextMenu(element.dataset.groupContextId, event);
-    });
-  });
-}
-
 const SHELL_OVERLAY_TRIGGERS = [
   "[data-action='open-combined-filter']", "[data-action='open-update-panel']",
   "[data-action='open-flow-locator']", "[data-action='open-node-status']",
@@ -1672,5 +1672,4 @@ function shellBindOverlay() {
   shellBindNodeDraft();
   shellBindBriefDrafts();
   shellBindNodeRecord();
-  shellBindGroupMenus();
 }

@@ -120,16 +120,25 @@ function shellSettingsData() {
     <p class="prefs-transfer-status" data-backup-status role="status"></p>`;
 }
 
-function shellSettingsUpdates() {
+function shellSettingsInfo(label, description, value) {
+  return shellSettingsRow(label, description, `<span class="prefs-info-value">${esc(value)}</span>`);
+}
+
+/** The changing part of 软件更新, re-rendered in place on every state change. */
+function shellSettingsUpdateCardBody() {
   const update = appUpdateState;
   const status = update.status;
+  const checkedAt = update.lastCheckedAt ? new Date(update.lastCheckedAt) : null;
+  const checkedLabel = checkedAt && !Number.isNaN(checkedAt.getTime())
+    ? `刚刚检查 · ${checkedAt.getHours()}:${String(checkedAt.getMinutes()).padStart(2, "0")}`
+    : "";
   const titles = {
     available: `新版本 v${update.version || ""} 可用`,
     downloading: `正在下载更新 · ${Math.round(update.percent || 0)}%`,
     downloaded: "更新已准备好",
     preparing: "正在保存并准备升级…",
     installing: "正在完成升级…",
-    error: "更新未完成",
+    error: lastUpdateAction === "check" ? "检查更新失败" : "更新未完成",
     latest: "当前已是最新版本",
     checking: "正在检查更新…",
     idle: "尚未检查更新",
@@ -140,8 +149,8 @@ function shellSettingsUpdates() {
     downloaded: "请保存正在编辑的内容，然后重启完成安装。",
     preparing: "正在安全写入任务与知识笔记草稿。",
     installing: "应用即将自动重启，请稍候。",
-    error: "请检查网络连接后重试。",
-    latest: `刚刚检查 · 当前为 v${esc(update.currentVersion || APP_VERSION || "")}`,
+    error: update.errorCode ? `未能完成（${update.errorCode}）。请检查网络连接后重试。` : "请检查网络连接后重试。",
+    latest: `当前为 v${esc(update.currentVersion || APP_VERSION || "")}${checkedLabel ? " · " + checkedLabel : ""}`,
     checking: "正在连接 GitHub Release。",
     idle: "应用启动后会定期检查，也可以手动检查。",
   };
@@ -149,19 +158,34 @@ function shellSettingsUpdates() {
   const progress = ["downloading", "preparing", "installing"].includes(status)
     ? `<div class="prefs-progress" role="progressbar" aria-label="更新进度" aria-valuenow="${Math.round(update.percent || 0)}" aria-valuemin="0" aria-valuemax="100"><span style="width:${Math.max(4, Math.round(update.percent || 0))}%"></span></div>`
     : "";
+  // One entry point. What it does follows the state, so it is never a no-op:
+  // checking while busy is disabled, otherwise it offers the only useful action.
   const actions = status === "available" ? '<button class="button primary" type="button" data-update-action="download">升级并重启</button>'
     : status === "downloaded" ? '<button class="button primary" type="button" data-update-action="install">重启并安装</button>'
-      : status === "error" ? '<button class="button" type="button" data-update-action="download">重试下载</button>'
-        : '<button class="button" type="button" data-update-action="check" ' + (busy ? "disabled" : "") + ">检查更新</button>";
-  return `<h2>软件更新</h2><p>检查新版本，管理更新方式。</p>
-    ${shellSettingsToggle("自动检查更新", update.automaticChecks ? "应用启动后定期检查。" : "仅在手动操作时检查。", update.automaticChecks === true, `data-update-automatic ${update.supported ? "" : "disabled"}`)}
-    ${shellSettingsAction("当前版本", `Loop v${esc(update.currentVersion || APP_VERSION || "")}`, "检查更新", `data-update-action="check" ${busy || !update.supported ? "disabled" : ""}`)}
-    <section class="prefs-update-detail" aria-live="polite">
-      <h3>${esc(titles[status] || "软件更新")}</h3>
+      : status === "error" ? `<button class="button primary" type="button" data-update-action="${lastUpdateAction === "check" ? "check" : "download"}">${lastUpdateAction === "check" ? "重新检查" : "重试下载"}</button>`
+        : `<button class="button" type="button" data-update-action="check" ${busy || !update.supported ? "disabled" : ""}>${status === "checking" ? "检查中…" : "检查更新"}</button>`;
+  return `<h3>${esc(titles[status] || "软件更新")}</h3>
       <p>${esc(bodies[status] || "")}</p>
       ${progress}
-      ${actions ? `<footer>${actions}</footer>` : ""}
-    </section>
+      ${actions ? `<footer>${actions}</footer>` : ""}`;
+}
+
+/** Cheap in-place sync used by app.js whenever appUpdateState changes. */
+function shellSettingsSyncUpdateCard() {
+  if (typeof activeSettingsPage === "string" && activeSettingsPage !== "updates") return;
+  const node = document.querySelector("[data-shell-update-detail]");
+  if (!node) return;
+  node.innerHTML = shellSettingsUpdateCardBody();
+  const toggle = document.querySelector("[data-update-automatic]");
+  if (toggle) toggle.setAttribute("aria-checked", String(appUpdateState.automaticChecks === true));
+}
+
+function shellSettingsUpdates() {
+  const update = appUpdateState;
+  return `<h2>软件更新</h2><p>检查新版本，管理更新方式。</p>
+    ${shellSettingsToggle("自动检查更新", update.automaticChecks ? "应用启动后定期检查。" : "仅在手动操作时检查。", update.automaticChecks === true, `data-update-automatic ${update.supported ? "" : "disabled"}`)}
+    ${shellSettingsInfo("当前版本", "Loop 的当前安装版本。", `Loop v${esc(update.currentVersion || APP_VERSION || "")}`)}
+    <section class="prefs-update-detail" data-shell-update-detail aria-live="polite">${shellSettingsUpdateCardBody()}</section>
     ${update.supported ? "" : '<p class="prefs-native-caption">开发模式或未签名的构建不连接更新服务。</p>'}`;
 }
 
