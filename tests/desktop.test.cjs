@@ -2778,7 +2778,7 @@ test("Today widget is rebuilt from the frozen phase 12/13 widget layers", async 
   assert.doesNotMatch(widget, /--widget-focus:/);
   assert.doesNotMatch(widget, /mock-sidebar|mock-app|mock-repository/);
   for (const sheet of ["fonts.css", "shell.css", "typography.css", "widget12.css", "widget13.css", "shell-refinement.css", "widget-bridge.css"]) {
-    assert.match(widget, new RegExp(sheet.replace(".", "\\.") + "\\?v=0\\.1\\.208"), `today-widget.html must load ${sheet}`);
+    assert.match(widget, new RegExp(sheet.replace(".", "\\.") + "\\?v=0\\.1\\.209"), `today-widget.html must load ${sheet}`);
   }
   assert.match(widget, /id="widget-host"/);
   assert.match(surface, /id="surface-host"/);
@@ -3529,10 +3529,10 @@ test("production Today widget uses its dedicated frontend and a sandboxed Electr
   // rendered DOM can be compared with loop-widget-phase13.js line by line.
   assert.match(demo, /id="widget-host"/);
   assert.doesNotMatch(demo, /按优先级与阻塞状态排序|项待办|刚刚同步|在主窗口查看全部|corner-anchor/);
-  assert.match(demo, /widget12\.css\?v=0\.1\.208/);
-  assert.match(demo, /widget13\.css\?v=0\.1\.208/);
-  assert.match(demo, /shell-refinement\.css\?v=0\.1\.208/);
-  assert.match(demo, /widget-bridge\.css\?v=0\.1\.208/);
+  assert.match(demo, /widget12\.css\?v=0\.1\.209/);
+  assert.match(demo, /widget13\.css\?v=0\.1\.209/);
+  assert.match(demo, /shell-refinement\.css\?v=0\.1\.209/);
+  assert.match(demo, /widget-bridge\.css\?v=0\.1\.209/);
 
   // Chrome, tabs, rows and the composer: the Demo's markup, icon for icon.
   assert.match(runtime, /class="today-widget widget12 widget13 '/);
@@ -4347,6 +4347,7 @@ test("the frozen Demo baseline is the renderer stylesheet authority", async () =
   const phase20Dir = path.join(__dirname, "..", "prototypes", "baseline", "loop-plane-phase20-frozen");
   const phase21Dir = path.join(__dirname, "..", "prototypes", "baseline", "loop-plane-phase21-frozen");
   const phase22Dir = path.join(__dirname, "..", "prototypes", "baseline", "loop-plane-phase22-frozen");
+  const phase23Dir = path.join(__dirname, "..", "prototypes", "baseline", "loop-plane-phase23-frozen");
   const previousFrozenDir = path.join(__dirname, "..", "prototypes", "baseline", "loop-plane-phase1-frozen");
 
   // The Demo baseline must be present verbatim and must not be edited to fit
@@ -4374,18 +4375,19 @@ test("the frozen Demo baseline is the renderer stylesheet authority", async () =
     ["scale.css", "loop-scale-phase20.css"],
     ["brief21.css", "loop-brief-phase21.css"],
     ["controls22.css", "loop-controls-phase22.css"],
+    ["notebook23.css", "loop-notebook-phase23.css"],
   ];
   for (const [target, source] of copied) {
     const [a, b] = await Promise.all([
       fs.readFile(path.join(rendererDir, "src", target), "utf8"),
-      fs.readFile(path.join(source === "loop-time-phase18.css" ? phase18Dir : source === "loop-desktop-phase19.css" ? phase19Dir : source === "loop-scale-phase20.css" ? phase20Dir : source === "loop-brief-phase21.css" ? phase21Dir : source === "loop-controls-phase22.css" ? phase22Dir : frozenDir, source), "utf8"),
+      fs.readFile(path.join(source === "loop-time-phase18.css" ? phase18Dir : source === "loop-desktop-phase19.css" ? phase19Dir : source === "loop-scale-phase20.css" ? phase20Dir : source === "loop-brief-phase21.css" ? phase21Dir : source === "loop-controls-phase22.css" ? phase22Dir : source === "loop-notebook-phase23.css" ? phase23Dir : frozenDir, source), "utf8"),
     ]);
     assert.equal(a, b, `src/${target} must stay byte-identical to the frozen ${source}`);
   }
 
   // Load order mirrors the Demo entry, and bridge.css is the only override layer.
   const linked = [...index.matchAll(/<link[^>]+href="\.\/src\/([^"?]+)/g)].map((match) => match[1]);
-  const order = ["shell.css", "vendor/milkdown-editor.css", "knowledge.css", "fonts.css", "settings.css", "typography.css", "refinement.css", "selection.css", "flow.css", "shell-refinement.css", "help.css", "work.css", "task-entry.css", "journey.css", "time.css", "desktop.css", "scale.css", "brief21.css", "controls22.css", "bridge.css"];
+  const order = ["shell.css", "vendor/milkdown-editor.css", "knowledge.css", "fonts.css", "settings.css", "typography.css", "refinement.css", "selection.css", "flow.css", "shell-refinement.css", "help.css", "work.css", "task-entry.css", "journey.css", "time.css", "desktop.css", "scale.css", "brief21.css", "controls22.css", "notebook23.css", "bridge.css"];
   assert.deepEqual(linked, order, "stylesheets must load in the frozen Demo order, with bridge.css last");
   assert.ok(!index.includes("approved-4174.css"), "the superseded approved-4174 shell must no longer be loaded");
   assert.ok(!index.includes("styles.css"), "the superseded styles.css must no longer be loaded");

@@ -285,3 +285,8 @@
 @media (min-width: 1600px) {
   .app { --nav-width: 200px !important; --list-width: 300px !important; }
 }
+
+/* phase23: a programmatic focus restore must not paint a ring (bridge is the override layer). */
+/* Keyboard focus stays visible; a programmatic restore of focus must not paint a ring. */
+body[data-notebook23-enabled] .note23-filename.note23-focus-quiet:focus,
+body[data-notebook23-enabled] .note23-filename.note23-focus-quiet:focus-visible {outline: none !important; box-shadow: none !important;}

@@ -1,0 +1,49 @@
+body[data-notebook23-enabled] .knowledge-header {min-height: 48px; gap: 12px; padding-inline: 28px;}
+.note23-identity {display: flex; align-items: center; min-width: 0; flex: 1; gap: 8px;}
+.note23-filename {justify-content: flex-start; min-width: 0; max-width: 320px; padding: 4px 0; font-size: calc(12px * var(--font-scale,1));}
+.note23-filename svg {width: 14px; height: 14px; color: var(--secondary);}
+.note23-filename span {overflow: hidden; white-space: nowrap; text-overflow: ellipsis;}
+.note23-dirty {width: 5px; height: 5px; border-radius: 50%; background: var(--orange); flex-shrink: 0;}
+.note23-tools {display: flex; gap: 3px; padding-right: 9px; margin-right: 2px; border-right: 1px solid var(--line);}
+.note23-tools button[aria-pressed="true"] {background: var(--selected); color: var(--green);}
+body[data-notebook23-enabled] .knowledge-header-actions {gap: 6px;}
+body[data-notebook23-enabled] .knowledge-insert-toolbar {gap: 0;}
+body[data-notebook23-enabled] .knowledge-rich-host .ProseMirror {white-space: pre-wrap;}
+body[data-notebook23-enabled] .knowledge-notice {background: var(--orange-soft); border: 0; border-radius: 0; margin: 0; padding: 9px 28px; font-size: calc(11px * var(--font-scale,1));}
+body[data-notebook23-enabled] .knowledge-notice.recovered {background: var(--green-soft);}
+.note23-content {display: flex; flex: 1; min-height: 0; overflow: hidden;}
+.note23-content > .knowledge-body {flex: 1; min-width: 0;}
+.note23-outline {width: 166px; flex-shrink: 0; overflow: auto; padding: 20px 12px; border-left: 1px solid var(--line); background: var(--canvas);}
+.note23-outline header {display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; color: var(--secondary); font-size: calc(11px * var(--font-scale,1));}
+.note23-outline button[data-note23-heading] {display: block; width: 100%; padding: 6px 7px; text-align: left; font-size: calc(11px * var(--font-scale,1)); color: var(--secondary); line-height: 1.6; overflow-wrap: anywhere;}
+.note23-outline button[data-note23-heading]:hover {color: var(--text);}
+.note23-outline button[aria-current="location"] {color: var(--green); background: var(--selected);}
+.note23-outline p {font-size: calc(11px * var(--font-scale,1)); color: var(--secondary); padding: 5px 7px;}
+.note23-find {display: flex; align-items: center; gap: 7px; padding: 8px 28px; border-bottom: 1px solid var(--line); background: var(--list);}
+.note23-find input {width: min(260px,45%); min-width: 80px;}
+.note23-find output {color: var(--secondary); margin-right: auto; white-space: nowrap; font-size: calc(11px * var(--font-scale,1)); font-variant-numeric: tabular-nums;}
+.note23-find .icon-button {width: 25px; height: 25px;}
+::highlight(note23-matches) {background: var(--orange-soft); color: var(--text);}
+::highlight(note23-current) {background: var(--selected); color: var(--green);}
+body[data-notebook23-enabled] .knowledge-footer {min-height: 42px; padding-inline: 28px; gap: 12px;}
+.note23-receipt {display: flex; align-items: center; gap: 7px; min-width: 0; color: var(--secondary); font-size: calc(11px * var(--font-scale,1));}
+.note23-receipt span {overflow: hidden; text-overflow: ellipsis; white-space: nowrap;}
+.note23-receipt svg {width: 13px; height: 13px; color: var(--green);}
+.note23-receipt.attention svg {color: var(--orange);}
+body[data-notebook23-enabled] .knowledge-footer-meta {margin-left: auto; font-size: calc(10px * var(--font-scale,1)); flex-shrink: 0;}
+body[data-notebook23-enabled] .knowledge-footer .button {min-height: 28px; font-size: calc(11px * var(--font-scale,1));}
+.note23-details {font-size: calc(12px * var(--font-scale,1));}
+.note23-details dl {display: grid; grid-template-columns: 74px minmax(0,1fr); gap: 13px 16px; margin: 16px 0;}
+.note23-details dt {color: var(--secondary);}
+.note23-details dd {margin: 0; overflow-wrap: anywhere;}
+.note23-details p {color: var(--secondary); line-height: 1.8;}
+.note23-menu-label {padding: 7px 9px 4px; color: var(--secondary); font-size: calc(10px * var(--font-scale,1));}
+.note23-review-actions {display: flex; flex-wrap: wrap; gap: 7px; margin: 14px 0;}
+@media(max-width:1100px) {
+  body[data-notebook23-enabled] .knowledge-header,body[data-notebook23-enabled] .knowledge-footer {padding-inline: 18px;}
+  .note23-find {padding-inline: 18px;}
+  .note23-outline {width: 145px; padding-inline: 8px;}
+  .note23-filename {max-width: 180px;}
+  body[data-notebook23-enabled] .knowledge-footer-meta {display: none;}
+  .note23-tools {padding-right: 5px;}
+}
