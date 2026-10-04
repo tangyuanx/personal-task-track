@@ -7793,15 +7793,18 @@ function renameGroup(groupId, value, commit = false) {
  * Delete a task group and either ungroup or delete the tasks it contains.
  * @param {string} groupId - Group ID to delete
  * @param {"ungroup"|"delete"} taskPolicy - How to handle tasks in the group
+ * @param {{ skipConfirm?: boolean }} [options] - The phase24a impact panel already
+ *   states the impact and takes an explicit decision, so the native prompt would
+ *   be a second, redundant confirmation (same contract as deleteTask's).
  */
-async function deleteGroup(groupId, taskPolicy = "ungroup") {
+async function deleteGroup(groupId, taskPolicy = "ungroup", { skipConfirm = false } = {}) {
   const group = state.taskGroups.find((item) => item.id === groupId);
   if (!group) return false;
   const deleteTasks = taskPolicy === "delete";
   const prompt = deleteTasks
     ? `确定删除分组「${group.title}」以及其中的所有任务吗？此操作不可撤销。`
     : `确定删除分组「${group.title}」吗？其中的任务会保留并移至未分组。`;
-  if (!(await confirmDestructiveAction(prompt))) return false;
+  if (!skipConfirm && !(await confirmDestructiveAction(prompt))) return false;
 
   if (deleteTasks) {
     if (state.tasks.some((task) => task.groupId === groupId && task.id === state.activeTaskId)) {

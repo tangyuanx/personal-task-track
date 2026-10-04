@@ -1,0 +1,190 @@
+name: Publish v0.1.210
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/publish-v0.1.210.yml
+
+concurrency:
+  group: publish-v0.1.210
+  cancel-in-progress: false
+
+jobs:
+  # This workflow is the release record for v0.1.210: it runs on demand, and on
+  # any push to main that touches this file.
+  verify:
+    name: Verify v0.1.210 task and group editing
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Verify version, syntax and the frozen layer set
+        shell: bash
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          test "$version" = "0.1.210"
+          for f in app/renderer/src/*.js; do node --check "$f"; done
+          for f in app/main/*.cjs; do node --check "$f"; done
+          # Every frozen layer stays byte-identical to its baseline.
+          diff app/renderer/src/widget12.css prototypes/baseline/loop-plane-phase17-frozen/loop-widget-phase12-refinement.css
+          diff app/renderer/src/widget13.css prototypes/baseline/loop-plane-phase17-frozen/loop-widget-phase13.css
+          diff app/renderer/src/shell-refinement.css prototypes/baseline/loop-plane-phase17-frozen/loop-shell-refinement.css
+          diff app/renderer/src/settings.css prototypes/baseline/loop-plane-phase17-frozen/loop-settings-phase9.css
+          diff app/renderer/src/refinement.css prototypes/baseline/loop-plane-phase17-frozen/loop-refinement.css
+          diff app/renderer/src/time.css prototypes/baseline/loop-plane-phase18-frozen/loop-time-phase18.css
+          diff app/renderer/src/desktop.css prototypes/baseline/loop-plane-phase19-frozen/loop-desktop-phase19.css
+          diff app/renderer/src/scale.css prototypes/baseline/loop-plane-phase20-frozen/loop-scale-phase20.css
+          diff app/renderer/src/brief21.css prototypes/baseline/loop-plane-phase21-frozen/loop-brief-phase21.css
+          diff app/renderer/src/controls22.css prototypes/baseline/loop-plane-phase22-frozen/loop-controls-phase22.css
+          diff app/renderer/src/notebook23.css prototypes/baseline/loop-plane-phase23-frozen/loop-notebook-phase23.css
+          diff app/renderer/src/management24.css prototypes/baseline/loop-plane-phase24-frozen/loop-management-phase24.css
+      - name: Verify the phase24a layer contract
+        shell: bash
+        run: |
+          # The layer is gated and loads after the layers it sits on, before work.js.
+          grep -q 'data-management24-enabled' app/renderer/index.html
+          node -e "const h=require('fs').readFileSync('app/renderer/index.html','utf8');const n=h.indexOf('src/notebook23.js'),m=h.indexOf('src/management24.js'),w=h.indexOf('src/work.js');if(!(n>=0&&m>n))throw new Error('management24.js must load after notebook23.js');if(!(w>=0&&m<w))throw new Error('management24.js must load before work.js')"
+          # In-place naming uses one quiet skin; ordinary fields keep the phase22 one.
+          grep -q 'manage24-row-title' app/renderer/src/management24.js
+          grep -q 'manage24-title-input' app/renderer/src/management24.js
+          grep -q 'manage24-heading-actions' app/renderer/src/management24.js
+          grep -q 'manage24-group-menu' app/renderer/src/management24.js
+          grep -q 'control22-field.manage24-row-title-input' app/renderer/src/bridge.css
+          grep -q 'control22-field.manage24-title-input' app/renderer/src/bridge.css
+          # The group menu keeps the Demo geometry and arrow rotation.
+          grep -q 'surface-popover.manage24-group-menu\[role=menu\]>button' app/renderer/src/management24.css
+          grep -q 'manage24-group-menu \[data-manage24=group-up\] svg' app/renderer/src/management24.css
+          grep -q 'manage24-up svg' app/renderer/src/management24.css
+          # No per-row management button, and no naming hint or trailing confirm control.
+          ! grep -q 'group-menu-button' app/renderer/src/management24.js
+          ! grep -qE '点击别处保存|Esc 取消|按 Esc' app/renderer/src/management24.js
+          # Groups are addressed by their stable id, never by title.
+          grep -q 'data-group-id' app/renderer/src/management24.js
+          grep -q 'deleteGroup(draft.groupId' app/renderer/src/management24.js
+          grep -q 'skipConfirm' app/renderer/src/app.js
+          # The navigation editor must not carry the live-commit rename binding.
+          node -e "const s=require('fs').readFileSync('app/renderer/src/management24.js','utf8');if(/id=\"group-title\"[^>]*data-group-title/.test(s))throw new Error('the nav editor must not carry data-group-title');if(!s.includes('document.getElementById(\"group-title\")'))throw new Error('the nav editor must be read via #group-title')"
+          # Per-task drafts and the real write acknowledgement stay in place.
+          grep -q 'manage24PropertyDrafts' app/renderer/src/management24.js
+          grep -q 'manage24TitleDrafts' app/renderer/src/management24.js
+          grep -q 'flushSave' app/renderer/src/management24.js
+          grep -q 'MANAGE24_UNDO_MS = 12000' app/renderer/src/management24.js
+          # The frozen Demo baseline for this phase is present and complete.
+          test -f prototypes/baseline/loop-plane-phase24-frozen/MANIFEST.sha256
+          test -f prototypes/baseline/loop-plane-phase24-frozen/loop-plane-phase1.html
+          test -f prototypes/baseline/loop-plane-phase24-frozen/loop-management-phase24.js
+          grep -q 'loop-management-phase24.css' prototypes/baseline/loop-plane-phase24-frozen/MANIFEST.sha256
+      - name: Run the desktop and contract suites
+        run: npm run check
+
+  build:
+    name: Build v0.1.210 ${{ matrix.platform }}
+    needs: verify
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macOS
+            os: macos-latest
+            script: npm run dist:mac -- --x64 --arm64 --publish never
+            artifact: v0.1.210-macos
+          - platform: Windows
+            os: windows-latest
+            script: npm run dist:win -- --x64 --publish never
+            artifact: v0.1.210-windows
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Check JavaScript and tests
+        run: npm run check
+      - name: Build app
+        run: ${{ matrix.script }}
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+      - name: Test Windows installer upgrade matrix
+        if: matrix.platform == 'Windows'
+        shell: pwsh
+        run: |
+          $candidate = Get-ChildItem release -Filter "Loop-*-x64-setup.exe" | Select-Object -First 1
+          if (-not $candidate) { throw "Windows installer was not produced." }
+          ./tests/windows-upgrade-installer.test.ps1 -CandidateInstaller $candidate.FullName
+      - name: Verify update metadata
+        run: node tools/verify-update-artifacts.cjs release
+      - name: Stage v0.1.210 release assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            release/*.dmg
+            release/*.zip
+            release/*.exe
+            release/*.blockmap
+            release/latest.yml
+            release/latest-mac.yml
+          if-no-files-found: error
+          retention-days: 2
+
+  publish:
+    name: Publish v0.1.210 release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Refuse to replace an existing tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          if gh api "repos/${{ github.repository }}/git/ref/tags/v0.1.210" >/dev/null 2>&1; then
+            echo "v0.1.210 already exists; refusing to replace it."
+            exit 1
+          fi
+      - name: Collect v0.1.210 release assets
+        uses: actions/download-artifact@v4
+        with:
+          pattern: v0.1.210-*
+          path: release
+          merge-multiple: true
+      - name: Verify complete cross-platform update feed
+        run: node tools/verify-update-artifacts.cjs release --require-all-platforms
+      - name: Publish v0.1.210
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v0.1.210
+          target_commitish: ${{ github.sha }}
+          name: v0.1.210
+          body: |
+            ## 任务与分组编辑：原位改名、管理面板与真实保存
+
+            以冻结的第 24A 阶段基准（`loop-management-phase24.css/js` v4 + `MANIFEST.sha256`，全程未修改）为唯一标准等效复现。
+
+            - **原位改名**：双击列表任务名、双击导航分组名，右栏任务标题点击即进入输入；点击任意其他位置（含不可聚焦的文字与背景）自动保存，Enter 保存、Esc 撤回。名称后没有确认按钮，也没有「点击别处保存／Esc 取消」一类提示。
+            - **统一的输入外观**：三种原位命名都是透明背景、无整圈边框、1px 细底线、零圆角、无阴影；属性面板的普通字段继续沿用 Phase22 的弱边框与 6px 圆角，两者语义不同、不做混用。
+            - **分组行**：每行只有身份标识、名称与右对齐数量，不再有单独的管理按钮；「任务分组」右侧保留集中整理与新建入口，每组操作走右键菜单（200px、34px 行高、14px 图标列、图标与文字左对齐、上/下箭头方向正确、边界项禁用），并保留 F2 改名与 Shift+F10／菜单键打开菜单。
+            - **属性面板**：360px、18px 内边距、主体可滚动，标题／分组／优先级（高·中·低三段）／手动今日·卡住·稍后，以及按需展开的「时间与安排」（截止日期与时间、提醒、循环与进入今日的时间、重复日期、预计时长）。未提交的草稿按任务稳定 ID 保留，A→B→A 各自恢复；显式取消或成功保存只清当前对象；只有真实写入成功后才有回执。
+            - **迁移**：330px，目标分组可搜索并包含未分组，显示计数与无匹配状态；只改变归属，不动今日安排、处理流、简报与笔记；移动后保留来源列表与筛选，并提供「前往目标／返回列表」。
+            - **删除分组**：390px 影响说明，默认保留内容并迁至未分组或指定分组，选择同时删除才展开额外影响与理解确认；若该组是成长来源，必须显式替换或停用；撤销入口保留 12 秒，只回滚仍未被后续修改的记录。
+            - 分组一律使用稳定 ID，保留已有同名分组，重命名不改变归属；不改名外部 Markdown 与附件。
+
+            验证：`npm run check` 全绿（渲染器 231 项 + 服务 11 项）；同条件比对 54 组（9 状态 × 3 视口 × 2 主题）无成块差异，浮层几何逐值相同（菜单 200×204、集中整理 510×403、属性 360×439、迁移 330×418、删除影响 390×335）；真实交互与读写已复核：改名、分组、顺序与属性重启后读回，删除保留内容与撤销、选择删除内容均按真实结果执行。

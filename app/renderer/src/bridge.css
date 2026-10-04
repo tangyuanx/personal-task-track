@@ -290,3 +290,44 @@
 /* Keyboard focus stays visible; a programmatic restore of focus must not paint a ring. */
 body[data-notebook23-enabled] .note23-filename.note23-focus-quiet:focus,
 body[data-notebook23-enabled] .note23-filename.note23-focus-quiet:focus-visible {outline: none !important; box-shadow: none !important;}
+
+/* ============================================================
+   Phase 24A · 原位命名（任务行 / 右栏标题 / 导航分组）
+   The frozen Demo scopes these three editors with a `body[data-management24-
+   enabled]` prefix, while the Phase22 field skin is scoped with
+   `body[data-controls22-enabled]` at equal specificity — the winner would
+   depend on stylesheet order and the generic skin would repaint the in-place
+   editor as a boxed field. bridge.css loads last, so the Demo's own computed
+   result (transparent, no box, 1px bottom rule, radius 0) is restored here.
+   Ordinary property fields keep the Phase22 weak-border skin.
+   ============================================================ */
+body[data-management24-enabled] .control22-field.manage24-row-title-input,
+body[data-management24-enabled] .control22-field.manage24-title-input {
+  height: 26px;
+  min-height: 26px;
+  padding: 0;
+  color: var(--text);
+  background-color: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--field22-focus, var(--green));
+  border-radius: 0;
+  outline: none;
+  box-shadow: none;
+  caret-color: var(--green);
+}
+body[data-management24-enabled] .control22-field.manage24-title-input {
+  height: auto;
+  min-height: 0;
+  padding: 0 0 3px;
+  line-height: 1.35;
+}
+body[data-management24-enabled] .control22-field.manage24-row-title-input:focus,
+body[data-management24-enabled] .control22-field.manage24-title-input:focus {
+  background-color: transparent;
+  border-color: var(--field22-focus, var(--green));
+  box-shadow: none;
+}
+body[data-management24-enabled] .control22-field.manage24-row-title-input[aria-invalid="true"],
+body[data-management24-enabled] .control22-field.manage24-title-input[aria-invalid="true"] {
+  border-color: var(--orange);
+}
