@@ -151,13 +151,21 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Refuse to replace an existing tag
+      # The tag-triggered "Release Desktop Apps" workflow publishes this same
+      # version, so this job must tolerate the tag already existing when it
+      # points at this very commit (and still refuse a different one).
+      - name: Check the v0.1.210 tag is not another commit
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          if gh api "repos/${{ github.repository }}/git/ref/tags/v0.1.210" >/dev/null 2>&1; then
-            echo "v0.1.210 already exists; refusing to replace it."
+          existing="$(gh api "repos/${{ github.repository }}/git/ref/tags/v0.1.210" --jq '.object.sha' 2>/dev/null || true)"
+          if [ -z "$existing" ]; then
+            echo "v0.1.210 does not exist yet; this job will create it."
+          elif [ "$existing" = "${{ github.sha }}" ]; then
+            echo "v0.1.210 already points at ${{ github.sha }}; publishing the same version and commit."
+          else
+            echo "v0.1.210 already points at $existing, not ${{ github.sha }}; refusing to replace it."
             exit 1
           fi
       - name: Collect v0.1.210 release assets
