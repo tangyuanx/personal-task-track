@@ -92,6 +92,21 @@ jobs:
       - name: Verify complete cross-platform update feed
         run: node tools/verify-update-artifacts.cjs release --require-all-platforms
 
+      # One source of truth for the notes: docs/release-notes/<tag>.md when the
+      # version has hand-written notes, otherwise the generated changelog.
+      - name: Resolve the release notes
+        id: notes
+        shell: bash
+        run: |
+          file="docs/release-notes/${GITHUB_REF_NAME}.md"
+          if [ -f "$file" ]; then
+            echo "body_path=$file" >> "$GITHUB_OUTPUT"
+            echo "using hand-written notes from $file"
+          else
+            echo "body_path=" >> "$GITHUB_OUTPUT"
+            echo "no $file; the release will use the generated changelog"
+          fi
+
       - name: Upload complete release assets
         uses: softprops/action-gh-release@v2
         with:
@@ -102,5 +117,6 @@ jobs:
             release/*.blockmap
             release/latest.yml
             release/latest-mac.yml
-          generate_release_notes: true
+          body_path: ${{ steps.notes.outputs.body_path }}
+          generate_release_notes: ${{ steps.notes.outputs.body_path == '' }}
           prerelease: ${{ contains(github.ref_name, '-') }}
