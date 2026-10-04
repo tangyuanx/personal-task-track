@@ -1,6 +1,7 @@
 const fs = require("node:fs/promises");
 const path = require("node:path");
 const crypto = require("node:crypto");
+const { createNotificationCapabilityReader } = require("./notification-capability.cjs");
 
 const REMINDER_STATE_FILE = "deadline-reminders.json";
 const REMINDER_STATE_VERSION = 2;
@@ -176,6 +177,9 @@ function createDeadlineReminderController({
   getMainWindow,
   ensureMainWindow,
   now = () => new Date(),
+  appId = "",
+  // Phase19: the real notification-permission probe (Electron exposes none).
+  capabilityReader = createNotificationCapabilityReader({ platform: process.platform, appId, bundleId: appId }),
 } = {}) {
   let tasks = [];
   let state = normalizeReminderState({});
@@ -186,6 +190,7 @@ function createDeadlineReminderController({
   // the reminder-status row) and the last failure (so a retry can be offered
   // without ever marking the offset as notified).
   let delivered = [];
+  let permission = { state: "unknown", source: "none", detail: "" };
   let lastError = null;
   let lastRunAt = "";
   const DELIVERED_LIMIT = 20;
@@ -214,7 +219,13 @@ function createDeadlineReminderController({
 
   async function evaluate() {
     lastRunAt = now().toISOString();
-    if (!isSupported()) return { supported: false, notified: 0, delivered: [], error: null };
+    permission = await capabilityReader.read().catch(() => ({ state: "unknown", source: "none", detail: "" }));
+    if (permission.state === "blocked") {
+      // The system holds a record that allows no notification style for Loop.
+      // Reminders stay pending — nothing is marked as notified.
+      return { supported: true, notified: 0, delivered: [], error: null, permission };
+    }
+    if (!isSupported()) return { supported: false, notified: 0, delivered: [], error: null, permission };
     const at = now();
     const groups = deadlineReminderGroups(tasks, at, state);
 
@@ -257,7 +268,7 @@ function createDeadlineReminderController({
     // Phase19: a background delivery or failure must be visible to the scoped
     // reminder surfaces without the user re-opening them.
     if (notified || error) broadcastState();
-    return { supported: true, notified, delivered: batch, error };
+    return { supported: true, notified, delivered: batch, error, permission };
   }
 
   function run() {
@@ -275,12 +286,12 @@ function createDeadlineReminderController({
 
   /** Phase19: everything the reminder surfaces render from. */
   function getState() {
-    const capability = isSupported() ? "supported" : "unsupported";
+    // Phase19 vocabulary: blocked comes from a real platform probe, not a guess.
+    const capability = !isSupported() ? "unsupported" : permission.state === "blocked" ? "blocked" : "supported";
     return {
       supported: isSupported(),
-      // Capability only reports whether notifications are available, not the
-      // system permission state — that can only be observed by the user.
       capability,
+      permission: { ...permission },
       pending: deadlineReminderGroups(tasks, now(), state).length,
       delivered: delivered.map((entry) => ({ ...entry, tasks: entry.tasks.map((task) => ({ ...task })) })),
       error: lastError ? { ...lastError } : null,
@@ -291,6 +302,7 @@ function createDeadlineReminderController({
   async function check() {
     // `state` is the cumulative picture the surfaces render; `outcome` is what
     // this particular scan did, which is what a content preview may show.
+    permission = await capabilityReader.read({ force: true }).catch(() => permission);
     const outcome = await run();
     return { state: getState(), outcome };
   }

@@ -2778,7 +2778,7 @@ test("Today widget is rebuilt from the frozen phase 12/13 widget layers", async 
   assert.doesNotMatch(widget, /--widget-focus:/);
   assert.doesNotMatch(widget, /mock-sidebar|mock-app|mock-repository/);
   for (const sheet of ["fonts.css", "shell.css", "typography.css", "widget12.css", "widget13.css", "shell-refinement.css", "widget-bridge.css"]) {
-    assert.match(widget, new RegExp(sheet.replace(".", "\\.") + "\\?v=0\\.1\\.204"), `today-widget.html must load ${sheet}`);
+    assert.match(widget, new RegExp(sheet.replace(".", "\\.") + "\\?v=0\\.1\\.205"), `today-widget.html must load ${sheet}`);
   }
   assert.match(widget, /id="widget-host"/);
   assert.match(surface, /id="surface-host"/);
@@ -3503,7 +3503,7 @@ test("every Today widget IPC channel inspects its sender and the duplicated bind
 });
 
 test("production Today widget uses its dedicated frontend and a sandboxed Electron window", async () => {
-  const [demo, runtime, surfaceRuntime, surfaceCss, widgetMain, appMain, preload, packageJson, rendererApp, settingsSource, shellSource, workspaceSource, bridgeSource, clockSource, desktopSource, remindersSource, shellSource2, actionsSource2] = await Promise.all([
+  const [demo, runtime, surfaceRuntime, surfaceCss, widgetMain, appMain, preload, packageJson, rendererApp, settingsSource, shellSource, workspaceSource, bridgeSource, clockSource, desktopSource, remindersSource, capabilitySource, shellSource2, actionsSource2] = await Promise.all([
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "today-widget.html"), "utf8"),
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "today-widget-runtime.js"), "utf8"),
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "widget-surface-runtime.js"), "utf8"),
@@ -3520,6 +3520,7 @@ test("production Today widget uses its dedicated frontend and a sandboxed Electr
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "clock.js"), "utf8"),
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "desktop.js"), "utf8"),
     fs.readFile(path.join(__dirname, "..", "app", "main", "deadline-reminders.cjs"), "utf8"),
+    fs.readFile(path.join(__dirname, "..", "app", "main", "notification-capability.cjs"), "utf8"),
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "shell.js"), "utf8"),
     fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "actions.js"), "utf8"),
   ]);
@@ -3528,10 +3529,10 @@ test("production Today widget uses its dedicated frontend and a sandboxed Electr
   // rendered DOM can be compared with loop-widget-phase13.js line by line.
   assert.match(demo, /id="widget-host"/);
   assert.doesNotMatch(demo, /按优先级与阻塞状态排序|项待办|刚刚同步|在主窗口查看全部|corner-anchor/);
-  assert.match(demo, /widget12\.css\?v=0\.1\.204/);
-  assert.match(demo, /widget13\.css\?v=0\.1\.204/);
-  assert.match(demo, /shell-refinement\.css\?v=0\.1\.204/);
-  assert.match(demo, /widget-bridge\.css\?v=0\.1\.204/);
+  assert.match(demo, /widget12\.css\?v=0\.1\.205/);
+  assert.match(demo, /widget13\.css\?v=0\.1\.205/);
+  assert.match(demo, /shell-refinement\.css\?v=0\.1\.205/);
+  assert.match(demo, /widget-bridge\.css\?v=0\.1\.205/);
 
   // Chrome, tabs, rows and the composer: the Demo's markup, icon for icon.
   assert.match(runtime, /class="today-widget widget12 widget13 '/);
@@ -3759,7 +3760,7 @@ test("production Today widget uses its dedicated frontend and a sandboxed Electr
   assert.match(remindersSource, /if \(notified\) \{\s*delivered = \[\.\..*\]\.slice\(0, DELIVERED_LIMIT\);/);
   // the scoped state feed and the manual check
   assert.match(remindersSource, /ipcMain\.handle\("deadline-reminders:check", \(\) => check\(\)\)/);
-  assert.match(remindersSource, /capability = isSupported\(\) \? "supported" : "unsupported"/);
+  assert.match(remindersSource, /capability = !isSupported\(\) \? "unsupported" : permission\.state === "blocked" \? "blocked" : "supported"/);
   assert.match(remindersSource, /broadcastState\(\)/);
   assert.match(preload, /check: \(\) => ipcRenderer\.invoke\("deadline-reminders:check"\)/);
   assert.match(preload, /onState: \(callback\) => subscribe\("deadline-reminders:state", callback\)/);
@@ -3780,6 +3781,23 @@ test("production Today widget uses its dedicated frontend and a sandboxed Electr
   assert.match(actionsSource2, /case "desk19-status":/);
   assert.match(actionsSource2, /case "desk19-check":/);
   assert.match(settingsSource, /desktopReminderSettingsRow\(\)/);
+  // ---- Phase19 · real notification-permission probe ----
+  // Electron exposes no notification permission API, so each platform is read
+  assert.match(capabilitySource, /function parseWindowsToastSetting\(output\)/);
+  assert.match(capabilitySource, /DisabledForApplication\|DisabledForUser\|DisabledByGroupPolicy\|DisabledByManifest/);
+  assert.match(capabilitySource, /function parsePlistDicts\(xml, sectionKey = "apps"\)/);
+  assert.match(capabilitySource, /state: flags === 0 \? "blocked" : "allowed"/);
+  assert.match(capabilitySource, /createNotificationCapabilityReader/);
+  assert.match(remindersSource, /capabilityReader = createNotificationCapabilityReader/);
+  assert.match(remindersSource, /permission\.state === "blocked"/);
+  assert.match(remindersSource, /capability = !isSupported\(\) \? "unsupported" : permission\.state === "blocked" \? "blocked" : "supported"/);
+  assert.match(appMain, /appId: desktopIdentity\?\.appId \|\| DESKTOP_APP_ID/);
+  // the interface only claims what the probe reported
+  assert.match(desktopSource, /if \(desktopReminderState\.capability === "blocked"\) return "blocked"/);
+  assert.match(desktopSource, /系统通知关闭/);
+  assert.match(desktopSource, /function desktopReminderPermissionDetail\(\)/);
+  assert.match(desktopSource, /macos-ncprefs/);
+
   // a reminder return preserves the open draft
   assert.match(rendererApp, /function shellPreserveDraftsForReturn\(\)/);
   assert.match(rendererApp, /onOpenTask\?\.\(\(\{ taskId \} = \{\}\) => \{[\s\S]*shellPreserveDraftsForReturn\(\)/);

@@ -282,3 +282,50 @@ test("phase19: a failed send is reported without marking the offset as notified"
 
   await harness.controller.stop();
 });
+
+
+test("phase19: a blocked platform record keeps reminders pending and reports the capability", async () => {
+  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "loop-reminders-blocked-"));
+  const harness = createHarness(userDataPath, new Date("2026-10-02T17:30:00"));
+  // the harness builds its own controller; this one injects a blocked probe
+  const { createDeadlineReminderController: create } = require("../app/main/deadline-reminders.cjs");
+  const handlers = new Map();
+  let blocked = true;
+  const controller = create({
+    app: { getPath: () => userDataPath },
+    Notification: FakeNotification,
+    ipcMain: { handle: (channel, handler) => handlers.set(channel, handler), removeHandler: (channel) => handlers.delete(channel) },
+    getMainWindow: () => null,
+    ensureMainWindow: () => null,
+    now: () => new Date("2026-10-02T17:30:00"),
+    appId: "io.example.app",
+    capabilityReader: {
+      read: async () => (blocked
+        ? { state: "blocked", source: "macos-ncprefs", detail: "flags=0" }
+        : { state: "allowed", source: "macos-ncprefs", detail: "flags=12" }),
+    },
+  });
+  await controller.start({ schedule: false });
+  controller.registerIpc();
+
+  const tasks = [{
+    id: "task_blocked", title: "发布校验", status: "active",
+    deadlineAt: new Date("2026-10-02T18:00:00").toISOString(), deadlineReminderMinutes: 60,
+  }];
+  const whileBlocked = await handlers.get("deadline-reminders:sync")(null, tasks);
+  assert.equal(whileBlocked.notified, 0, "a blocked system must not be marked as notified");
+  const blockedState = await handlers.get("deadline-reminders:get-state")();
+  assert.equal(blockedState.capability, "blocked");
+  assert.deepEqual(blockedState.permission, { state: "blocked", source: "macos-ncprefs", detail: "flags=0" });
+  assert.equal(blockedState.pending, 1, "the reminder stays pending while notifications are off");
+
+  // once the system allows notifications again, the same reminder is delivered
+  blocked = false;
+  const afterUnblock = await handlers.get("deadline-reminders:check")();
+  assert.equal(afterUnblock.state.capability, "supported");
+  assert.equal(afterUnblock.outcome.notified, 1);
+  assert.equal(afterUnblock.outcome.delivered.length, 1);
+
+  await controller.stop();
+  await harness.controller.stop?.();
+});

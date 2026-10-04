@@ -23,8 +23,12 @@ let desktopReminderSubscribed = false;
 
 function desktopReminderCapability() {
   if (desktopReminderUnavailable()) return "unsupported";
+  // The main process probes the platform (Windows toast setting / macOS
+  // ncprefs), so "blocked" is a reported fact, never an assumption.
+  if (desktopReminderState.capability === "blocked") return "blocked";
+  if (!desktopReminderState.supported) return "unsupported";
   if (desktopReminderState.error) return "failed";
-  return desktopReminderState.supported ? "supported" : "unsupported";
+  return "supported";
 }
 
 function desktopReminderUnavailable() {
@@ -32,6 +36,9 @@ function desktopReminderUnavailable() {
 }
 
 function desktopReminderCopy(capability = desktopReminderCapability()) {
+  if (capability === "blocked") {
+    return { label: "系统通知关闭", hint: "截止安排与处理记录保留，可在系统设置中检查 Loop 的通知权限。" };
+  }
   if (capability === "unsupported") {
     return { label: "当前环境不支持通知", hint: "当前环境无法发送系统通知，仍可在今日和日历查看任务。" };
   }
@@ -73,11 +80,13 @@ function desktopReminderStatusRow() {
 
 /** The settings 任务 page row. */
 function desktopReminderSettingsRow() {
+  // The demo labels the row with the capability itself (系统通知关闭 / 通知能力可用)
+  // under the 桌面提醒 heading that settings.js already renders.
   const copy = desktopReminderCopy();
   const control = `<button class="button" type="button" data-action="desk19-status">查看状态</button>`;
   return typeof shellSettingsRow === "function"
-    ? shellSettingsRow("桌面提醒", copy.hint, control).replace("<h2>", "<h3>")
-    : `<h3>桌面提醒</h3><div class="setting-row"><div><span class="setting-label">${esc(copy.label)}</span><p>${esc(copy.hint)}</p></div>${control}</div>`;
+    ? shellSettingsRow(copy.label, copy.hint, control)
+    : `<div class="setting-row"><div><span class="setting-label">${esc(copy.label)}</span><p>${esc(copy.hint)}</p></div>${control}</div>`;
 }
 
 function desktopReminderMount(markup, trigger, width = 370) {
@@ -104,6 +113,21 @@ function desktopReminderStatusPanel(trigger) {
   );
 }
 
+/** What the platform actually reported, so a wrong reading is diagnosable. */
+function desktopReminderPermissionDetail() {
+  const permission = desktopReminderState.permission || {};
+  if (!permission.source || permission.source === "none") return "";
+  const labels = {
+    "windows-toast": "Windows 通知设置",
+    "macos-ncprefs": "macOS 通知记录",
+    "platform-unsupported": "当前平台不提供通知设置",
+  };
+  const label = labels[permission.source] || permission.source;
+  const detail = permission.detail && permission.detail !== "not-registered" ? ` · ${permission.detail}` : "";
+  const stateText = permission.state === "blocked" ? "已关闭" : permission.state === "allowed" ? "已允许" : "未注册";
+  return `<p class="schedule-hint" style="margin-top:14px">读取自${esc(label)}：${esc(stateText)}${esc(detail)}</p>`;
+}
+
 function desktopReminderHelpPanel(trigger) {
   desktopReminderMount(
     `<section class="surface-popover entry16-panel desk19-panel" role="dialog" aria-modal="true" aria-label="检查通知设置">${shellSurfaceHeader("检查通知设置")}
@@ -112,6 +136,7 @@ function desktopReminderHelpPanel(trigger) {
         <strong style="margin-top:14px">检查专注模式</strong><p>专注模式可能静默或暂缓显示通知。</p>
         <strong style="margin-top:14px">保持 Loop 运行</strong><p>最小化主窗口后仍可提醒；关闭主窗口会退出软件。</p>
       </div></div>
+      ${desktopReminderPermissionDetail()}
       <p class="schedule-hint">以上检查需在系统设置中完成，Loop 不会打开或更改系统设置。</p>
     </section>`,
     trigger,
