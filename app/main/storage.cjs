@@ -204,6 +204,19 @@ function migrateKnowledgeTaskData(data) {
   };
 }
 
+// Phase21 records one history line per changed brief-editing session. The field
+// existed in the model before but was never persisted, so it is normalized here:
+// [[time, text], ...] pairs, newest first, bounded.
+const TASK_HISTORY_LIMIT = 60;
+
+function normalizeTaskHistory(history) {
+  return (Array.isArray(history) ? history : [])
+    .filter((entry) => Array.isArray(entry) && entry.length >= 2)
+    .map(([time, text]) => [normalizeText(time).slice(0, 40), normalizeText(text).slice(0, 200)])
+    .filter(([time, text]) => time || text)
+    .slice(0, TASK_HISTORY_LIMIT);
+}
+
 function normalizeTasks(tasks) {
   const seenTaskIds = new Set();
   return (Array.isArray(tasks) ? tasks : [])
@@ -239,6 +252,7 @@ function normalizeTasks(tasks) {
           hypothesis ? updatedAt : "",
         ),
         conclusion: normalizeText(task.conclusion),
+        history: normalizeTaskHistory(task.history),
         navigationRecovery: workNavigationModel.normalizeRecovery(task.navigationRecovery),
         estimateMinutes: clampNumber(task.estimateMinutes, 0, 0, 720),
         origin: workNavigationModel.normalizeOrigin(task.origin),

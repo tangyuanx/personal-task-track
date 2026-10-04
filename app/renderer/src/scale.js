@@ -117,6 +117,8 @@ function scale20Decorate() {
  * ("恢复处理流后正确还原").
  */
 function scale20SetupBrief() {
+  // Phase21 replaces this step entirely (its own toggle and editing model).
+  if (document.body.hasAttribute("data-brief21-enabled")) return;
   document.querySelector(".scale20-brief-toggle")?.remove();
   const brief = document.querySelector(".workspace>.brief");
   if (!brief) return;

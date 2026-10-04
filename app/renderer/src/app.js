@@ -5285,7 +5285,10 @@ function bindTaskRepositoryRows(scope = document) {
           action(control.dataset, event);
         });
       });
-      element.querySelectorAll("[data-edit-key]").forEach((control) => {
+      // Phase21 brief inputs own their lifecycle: this legacy binding also
+      // re-rendered the repository on the change event that fires when the field
+      // loses focus.
+      element.querySelectorAll("[data-edit-key]:not(.brief21-input)").forEach((control) => {
         control.addEventListener("input", (event) => edit(event.target.dataset, event.target.value));
         control.addEventListener("change", (event) => {
           edit(event.target.dataset, event.target.value);
@@ -5478,7 +5481,10 @@ function bindTaskRepositoryRows(scope = document) {
   }
 
 
-  document.querySelectorAll("[data-edit-key]").forEach((element) => {
+  // Phase21's brief inputs carry data-edit-key for compatibility with the code
+  // that locates a field by key, but they own their editing lifecycle: the
+  // legacy binding re-rendered on blur and swallowed the next click.
+  document.querySelectorAll("[data-edit-key]:not(.brief21-input)").forEach((element) => {
     element.addEventListener("input", (event) => {
       edit(event.target.dataset, event.target.value);
       if (event.target.closest(".task-brief")) resizeTaskBriefTextarea(event.target);

@@ -452,7 +452,9 @@ function shellJourneyAction(action, trigger) {
       state.taskPane = "flow";
       state.recordDraft = "";
       render();
-      document.querySelector("[data-action='shell-edit-brief'][data-field='conclusion']")?.click();
+      if (!(document.body.hasAttribute("data-brief21-enabled") && brief21BeginEdit(`${state.activeTaskId}:conclusion`))) {
+        document.querySelector("[data-action='shell-edit-brief'][data-field='conclusion']")?.click();
+      }
     } else {
       const nodeId = trigger?.dataset.nextNode;
       if (nodeId) {
@@ -468,6 +470,7 @@ function shellJourneyAction(action, trigger) {
   }
   if (action === "result") {
     shellJourneyRevealTask(task.id);
+    if (document.body.hasAttribute("data-brief21-enabled")) { brief21BeginEdit(`${state.activeTaskId}:conclusion`); return; }
     document.querySelector("[data-action='shell-edit-brief'][data-field='conclusion']")?.scrollIntoView({ block: "nearest" });
     return true;
   }

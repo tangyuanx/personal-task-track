@@ -2778,7 +2778,7 @@ test("Today widget is rebuilt from the frozen phase 12/13 widget layers", async 
   assert.doesNotMatch(widget, /--widget-focus:/);
   assert.doesNotMatch(widget, /mock-sidebar|mock-app|mock-repository/);
   for (const sheet of ["fonts.css", "shell.css", "typography.css", "widget12.css", "widget13.css", "shell-refinement.css", "widget-bridge.css"]) {
-    assert.match(widget, new RegExp(sheet.replace(".", "\\.") + "\\?v=0\\.1\\.206"), `today-widget.html must load ${sheet}`);
+    assert.match(widget, new RegExp(sheet.replace(".", "\\.") + "\\?v=0\\.1\\.207"), `today-widget.html must load ${sheet}`);
   }
   assert.match(widget, /id="widget-host"/);
   assert.match(surface, /id="surface-host"/);
@@ -3529,10 +3529,10 @@ test("production Today widget uses its dedicated frontend and a sandboxed Electr
   // rendered DOM can be compared with loop-widget-phase13.js line by line.
   assert.match(demo, /id="widget-host"/);
   assert.doesNotMatch(demo, /按优先级与阻塞状态排序|项待办|刚刚同步|在主窗口查看全部|corner-anchor/);
-  assert.match(demo, /widget12\.css\?v=0\.1\.206/);
-  assert.match(demo, /widget13\.css\?v=0\.1\.206/);
-  assert.match(demo, /shell-refinement\.css\?v=0\.1\.206/);
-  assert.match(demo, /widget-bridge\.css\?v=0\.1\.206/);
+  assert.match(demo, /widget12\.css\?v=0\.1\.207/);
+  assert.match(demo, /widget13\.css\?v=0\.1\.207/);
+  assert.match(demo, /shell-refinement\.css\?v=0\.1\.207/);
+  assert.match(demo, /widget-bridge\.css\?v=0\.1\.207/);
 
   // Chrome, tabs, rows and the composer: the Demo's markup, icon for icon.
   assert.match(runtime, /class="today-widget widget12 widget13 '/);
@@ -4345,6 +4345,7 @@ test("the frozen Demo baseline is the renderer stylesheet authority", async () =
   const phase18Dir = path.join(__dirname, "..", "prototypes", "baseline", "loop-plane-phase18-frozen");
   const phase19Dir = path.join(__dirname, "..", "prototypes", "baseline", "loop-plane-phase19-frozen");
   const phase20Dir = path.join(__dirname, "..", "prototypes", "baseline", "loop-plane-phase20-frozen");
+  const phase21Dir = path.join(__dirname, "..", "prototypes", "baseline", "loop-plane-phase21-frozen");
   const previousFrozenDir = path.join(__dirname, "..", "prototypes", "baseline", "loop-plane-phase1-frozen");
 
   // The Demo baseline must be present verbatim and must not be edited to fit
@@ -4370,18 +4371,19 @@ test("the frozen Demo baseline is the renderer stylesheet authority", async () =
     ["time.css", "loop-time-phase18.css"],
     ["desktop.css", "loop-desktop-phase19.css"],
     ["scale.css", "loop-scale-phase20.css"],
+    ["brief21.css", "loop-brief-phase21.css"],
   ];
   for (const [target, source] of copied) {
     const [a, b] = await Promise.all([
       fs.readFile(path.join(rendererDir, "src", target), "utf8"),
-      fs.readFile(path.join(source === "loop-time-phase18.css" ? phase18Dir : source === "loop-desktop-phase19.css" ? phase19Dir : source === "loop-scale-phase20.css" ? phase20Dir : frozenDir, source), "utf8"),
+      fs.readFile(path.join(source === "loop-time-phase18.css" ? phase18Dir : source === "loop-desktop-phase19.css" ? phase19Dir : source === "loop-scale-phase20.css" ? phase20Dir : source === "loop-brief-phase21.css" ? phase21Dir : frozenDir, source), "utf8"),
     ]);
     assert.equal(a, b, `src/${target} must stay byte-identical to the frozen ${source}`);
   }
 
   // Load order mirrors the Demo entry, and bridge.css is the only override layer.
   const linked = [...index.matchAll(/<link[^>]+href="\.\/src\/([^"?]+)/g)].map((match) => match[1]);
-  const order = ["shell.css", "vendor/milkdown-editor.css", "knowledge.css", "fonts.css", "settings.css", "typography.css", "refinement.css", "selection.css", "flow.css", "shell-refinement.css", "help.css", "work.css", "task-entry.css", "journey.css", "time.css", "desktop.css", "scale.css", "bridge.css"];
+  const order = ["shell.css", "vendor/milkdown-editor.css", "knowledge.css", "fonts.css", "settings.css", "typography.css", "refinement.css", "selection.css", "flow.css", "shell-refinement.css", "help.css", "work.css", "task-entry.css", "journey.css", "time.css", "desktop.css", "scale.css", "brief21.css", "bridge.css"];
   assert.deepEqual(linked, order, "stylesheets must load in the frozen Demo order, with bridge.css last");
   assert.ok(!index.includes("approved-4174.css"), "the superseded approved-4174 shell must no longer be loaded");
   assert.ok(!index.includes("styles.css"), "the superseded styles.css must no longer be loaded");
@@ -6087,4 +6089,86 @@ test("batch import appends selected tasks and immediately reconciles the growth 
   assert.deepEqual(result.estimates.slice(1), [45, 60]);
   assert.deepEqual(result.origins, ["task-batch", "task-batch"]);
   assert.equal(result.growthQueueIds.length, 3);
+});
+
+// ------------------------------------------------------------
+// Phase21 · task brief direct input
+// ------------------------------------------------------------
+
+test("the phase21 brief layer is gated, ordered and built on the frozen sheet", async () => {
+  const rendererDir = path.join(__dirname, "..", "app", "renderer");
+  const frozenDir = path.join(__dirname, "..", "prototypes", "baseline", "loop-plane-phase21-frozen");
+  const [html, sheet, frozenSheet, script] = await Promise.all([
+    fs.readFile(path.join(rendererDir, "index.html"), "utf8"),
+    fs.readFile(path.join(rendererDir, "src", "brief21.css"), "utf8"),
+    fs.readFile(path.join(frozenDir, "loop-brief-phase21.css"), "utf8"),
+    fs.readFile(path.join(rendererDir, "src", "brief21.js"), "utf8"),
+  ]);
+
+  // The gate is a body attribute, exactly like the Demo's data-brief21-enabled.
+  assert.match(html, /<body data-scale20-enabled data-brief21-enabled>/);
+  assert.equal(sheet, frozenSheet, "src/brief21.css must stay byte-identical to the frozen phase 21 sheet");
+
+  const order = ["scale.css", "brief21.css", "bridge.css"];
+  const positions = order.map((name) => html.indexOf(`src/${name}`));
+  assert.ok(positions.every((index) => index >= 0), "index.html must load every phase layer");
+  assert.deepEqual([...positions].sort((a, b) => a - b), positions, "brief21.css must load after scale.css and before bridge.css");
+
+  // brief21 overrides renderShellBrief and wraps render, so it loads after both.
+  assert.ok(html.indexOf("src/brief21.js") > html.indexOf("src/scale.js"), "brief21.js must load after scale.js");
+  assert.ok(html.indexOf("src/brief21.js") > html.indexOf("src/app.js"), "brief21.js must load after app.js");
+
+  // The frozen sheet owns the look; the script owns the behaviour.
+  for (const marker of ["body[data-brief21-enabled] .workspace > .brief", "brief21-input", "brief21-toggle", "min(280px,36dvh)", "max-width:1100px"]) {
+    assert.ok(frozenSheet.includes(marker), `the frozen phase 21 sheet must keep ${marker}`);
+  }
+  assert.match(script, /renderShellBrief = function brief21Brief/);
+  assert.match(script, /document\.querySelector\("\.scale20-brief-toggle"\)\?\.remove\(\)/);
+  assert.match(script, /data-brief21-toggle/);
+  assert.match(script, /aria-controls/);
+  assert.match(script, /event\.isComposing \|\| event\.keyCode === 229/);
+  assert.match(script, /task\.history\.unshift\(\["刚刚", `更新任务\$\{label\}`\]\)/);
+  assert.match(script, /brief21BeginEdit/);
+  // The old explicit-save editors must not render inside the brief any more.
+  assert.equal(/class="brief-value/.test(script), false);
+});
+
+test("the legacy edit binding never hijacks a phase21 brief input", async () => {
+  const app = await fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "app.js"), "utf8");
+  // The generic [data-edit-key] binding re-rendered on blur, which replaced the
+  // DOM between mousedown and mouseup and swallowed the click that should move
+  // the caret from one field to the next.
+  assert.match(app, /querySelectorAll\("\[data-edit-key\]:not\(\.brief21-input\)"\)/);
+  assert.equal(/querySelectorAll\("\[data-edit-key\]"\).forEach/.test(app), false);
+});
+
+test("phase20's brief step yields to the phase21 layer", async () => {
+  const scale = await fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "scale.js"), "utf8");
+  assert.match(scale, /if \(document\.body\.hasAttribute\("data-brief21-enabled"\)\) return;/);
+});
+
+test("brief-editing history is persisted with the task", async () => {
+  const storage = await fs.readFile(path.join(__dirname, "..", "app", "main", "storage.cjs"), "utf8");
+  assert.match(storage, /function normalizeTaskHistory/);
+  assert.match(storage, /history: normalizeTaskHistory\(task\.history\)/);
+  const { normalizeTaskData } = require("../app/main/storage.cjs");
+  const payload = normalizeTaskData({
+    tasks: [
+      {
+        id: "t1",
+        title: "带历史的记录",
+        history: [["刚刚", "更新任务结论"], ["坏数据"], ["", ""], "x", ["昨天", "更新任务背景"]],
+      },
+      { id: "t2", title: "没有历史" },
+    ],
+    taskGroups: [],
+  });
+  assert.deepEqual(payload.tasks[0].history, [["刚刚", "更新任务结论"], ["昨天", "更新任务背景"]]);
+  assert.deepEqual(payload.tasks[1].history, []);
+  const long = normalizeTaskData({
+    tasks: [{ id: "t3", title: "很长", history: Array.from({ length: 90 }, (_, index) => ["刚刚", `第${index}条`]) }],
+    taskGroups: [],
+  });
+  assert.equal(long.tasks[0].history.length, 60);
+  assert.equal(long.tasks[0].history[0][1], "第0条");
 });
