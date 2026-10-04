@@ -26,8 +26,11 @@
 
    实测：1024→454/555/631，1280→594/726/826，1440→710/867/986，
         1920→840/1120/1414（与 Demo 相同）。 */
-.knowledge-page.width-default { max-width: min(840px, 72%); }
-.knowledge-page.width-wide { max-width: min(1120px, 88%); }
+/* Phase20 parity: the Demo's note page keeps its own fixed ladder (the frozen
+   scale layer handles the narrow-window padding instead), so the page width
+   preset must not shrink the default page. */
+.knowledge-page.width-default { max-width: 840px; }
+.knowledge-page.width-wide { max-width: 1120px; }
 .knowledge-page.width-full { max-width: none; }
 
 /* --- 知识笔记正文行距 ------------------------------------------------------
@@ -41,15 +44,19 @@
    编辑模式与预览模式同时生效以保持一致。
    撤销：删掉本段即可回到 Demo 的排版。 */
 .knowledge-rich-host .ProseMirror,
-.knowledge-preview { line-height: 1.7; }
+/* Phase20 parity: the Demo's note preview is 1.9, not 1.7. */
+.knowledge-preview { line-height: 1.9; }
 .knowledge-rich-host .ProseMirror p,
-.knowledge-preview p { margin: 0 0 10px; }
+/* Phase20 parity: the Demo's note typography (frozen loop-knowledge-phase8.css)
+   — paragraph and heading rhythm must match or the whole page drifts. */
+.knowledge-preview p { margin: 0 0 16px; }
 .knowledge-rich-host .ProseMirror h1,
-.knowledge-preview h1 { margin: 0 0 12px; }
+.knowledge-preview h1 { margin: 0 0 16px; }
+.knowledge-preview h1:first-child { margin-top: 0; }
 .knowledge-rich-host .ProseMirror h2,
-.knowledge-preview h2 { margin: 20px 0 8px; }
+.knowledge-preview h2 { margin: 28px 0 12px; }
 .knowledge-rich-host .ProseMirror h3,
-.knowledge-preview h3 { margin: 16px 0 7px; }
+.knowledge-preview h3 { margin: 24px 0 10px; }
 
 /* --- 新增界面结构的样式收口 ------------------------------------------------
    以下三块是「Demo 完全没有对应结构、经用户批准新增」的界面：
@@ -214,7 +221,15 @@
   padding: 0;
   background: transparent;
   color: inherit;
-  font: inherit;
+  /* Phase20 parity: the value keeps the Demo's own value typography (12px × the
+     font ladder, 1.8 line height) instead of inheriting the row's or the global
+     button's font — the button must measure exactly like the Demo's div. */
+  font-family: inherit;
+  font-size: calc(12px * var(--font-scale, 1));
+  font-weight: inherit;
+  line-height: 1.8;
+  letter-spacing: inherit;
+  gap: 0;
   text-align: left;
   cursor: text;
   border-radius: 3px;
@@ -256,4 +271,17 @@
 .group-nav-row:hover .nav-button > span:first-of-type,
 .group-nav-row:focus-within .nav-button > span:first-of-type {
   padding-right: 0;
+}
+
+/* Phase20 parity: the product keeps the task-list width as an inline custom
+   property on .app (the persisted, draggable preference), which would defeat the
+   Demo's responsive ladder. The Demo's own breakpoints win at the edges so the
+   three-column ratio is reproduced exactly; the stored width still applies
+   inside the default range. */
+@media (max-width: 1100px) {
+  .app { --nav-width: 154px !important; --list-width: 239px !important; }
+}
+
+@media (min-width: 1600px) {
+  .app { --nav-width: 200px !important; --list-width: 300px !important; }
 }

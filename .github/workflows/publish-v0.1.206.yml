@@ -1,0 +1,201 @@
+name: Publish v0.1.206
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/publish-v0.1.206.yml
+
+concurrency:
+  group: publish-v0.1.206
+  cancel-in-progress: false
+
+jobs:
+  # This workflow is the release record for v0.1.206: it runs on demand, and on
+  # any push to main that touches this file. The Windows runner checks the tree
+  # out with CRLF, so every multi-line assertion in tests/ matches on \r?\n.
+  verify:
+    name: Verify v0.1.206 phase20 desktop scale layer
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Verify version, syntax, frozen layers and the reminder contract
+        shell: bash
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          test "$version" = "0.1.206"
+          for f in app/renderer/src/*.js; do node --check "$f"; done
+          for f in app/main/*.cjs; do node --check "$f"; done
+          # Every frozen layer stays byte-identical to its baseline.
+          diff app/renderer/src/widget12.css prototypes/baseline/loop-plane-phase17-frozen/loop-widget-phase12-refinement.css
+          diff app/renderer/src/widget13.css prototypes/baseline/loop-plane-phase17-frozen/loop-widget-phase13.css
+          diff app/renderer/src/shell-refinement.css prototypes/baseline/loop-plane-phase17-frozen/loop-shell-refinement.css
+          diff app/renderer/src/settings.css prototypes/baseline/loop-plane-phase17-frozen/loop-settings-phase9.css
+          diff app/renderer/src/refinement.css prototypes/baseline/loop-plane-phase17-frozen/loop-refinement.css
+          diff app/renderer/src/time.css prototypes/baseline/loop-plane-phase18-frozen/loop-time-phase18.css
+          diff app/renderer/src/desktop.css prototypes/baseline/loop-plane-phase19-frozen/loop-desktop-phase19.css
+          diff app/renderer/src/scale.css prototypes/baseline/loop-plane-phase20-frozen/loop-scale-phase20.css
+          # phase20 is gated by the body attribute and wraps render(), so scale.js
+          # must load after app.js
+          grep -q 'data-scale20-enabled' app/renderer/index.html
+          node -e "const h=require('fs').readFileSync('app/renderer/index.html','utf8');const a=h.indexOf('src/app.js'),s=h.indexOf('src/scale.js');if(!(a>=0&&s>a))throw new Error('scale.js must load after app.js')"
+          grep -q 'render = function scale20Render' app/renderer/src/scale.js
+          grep -q 'scale20-table-scroll' app/renderer/src/scale.js
+          grep -q 'scale20-brief-toggle' app/renderer/src/scale.js
+          grep -q 'scale20-locate' app/renderer/src/scale.js
+          # the Demo's responsive ladder and note typography must not be shadowed
+          grep -q 'max-width: 1100px' app/renderer/src/bridge.css
+          grep -q 'min-width: 1600px' app/renderer/src/bridge.css
+          grep -q 'max-width: 840px' app/renderer/src/bridge.css
+          grep -q 'line-height: 1.9' app/renderer/src/bridge.css
+          # no reviewer bar, scale switcher or synthetic fixture may reach the product
+          ! grep -rn 'scale20-scene\|syntheticScale20\|内容规模' app/renderer/src/*.js app/renderer/src/*.css
+          # the reminder model and the permission probe keep their own homes
+          node -e "const m=require('./app/main/deadline-reminders.cjs'); for (const k of ['deadlineReminderGroups','deadlineReminderKey','reconcileDeadlineReminderState','reminderCopy']) if (typeof m[k] !== 'function') throw new Error('missing '+k)"
+          node -e "const c=require('./app/main/notification-capability.cjs'); for (const k of ['detectNotificationCapability','parseWindowsToastSetting','parseMacNotificationFlags','createNotificationCapabilityReader']) if (typeof c[k] !== 'function') throw new Error('missing '+k)"
+          # a reminder must never be marked as notified while the system holds them
+          grep -q 'permission.state === "blocked"' app/main/deadline-reminders.cjs
+          # the panels that silently had no submit handler stay fixed
+          ! grep -rn "surface?\.querySelector(\"#[a-z-]*form\")" app/renderer/src/actions.js
+          node --test tests/desktop.test.cjs tests/deadline-reminders.test.cjs tests/notification-capability.test.cjs tests/work-rhythm-ui.test.cjs tests/work-navigation-model.test.cjs
+
+  build:
+    name: Build v0.1.206 ${{ matrix.platform }}
+    needs: verify
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macOS
+            os: macos-latest
+            script: npm run dist:mac -- --x64 --arm64 --publish never
+            artifact: v0.1.206-macos
+          - platform: Windows
+            os: windows-latest
+            script: npm run dist:win -- --x64 --publish never
+            artifact: v0.1.206-windows
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Check JavaScript and tests
+        run: npm run check
+      - name: Build app
+        run: ${{ matrix.script }}
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+      - name: Test Windows installer upgrade matrix
+        if: matrix.platform == 'Windows'
+        shell: pwsh
+        run: |
+          $candidate = Get-ChildItem release -Filter "Loop-*-x64-setup.exe" | Select-Object -First 1
+          if (-not $candidate) { throw "Windows installer was not produced." }
+          ./tests/windows-upgrade-installer.test.ps1 -CandidateInstaller $candidate.FullName
+      - name: Verify update metadata
+        run: node tools/verify-update-artifacts.cjs release
+      - name: Stage v0.1.206 release assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            release/*.dmg
+            release/*.zip
+            release/*.exe
+            release/*.blockmap
+            release/latest.yml
+            release/latest-mac.yml
+          if-no-files-found: error
+          retention-days: 2
+
+  publish:
+    name: Publish v0.1.206 release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Refuse to replace an existing tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          if gh api "repos/${{ github.repository }}/git/ref/tags/v0.1.206" >/dev/null 2>&1; then
+            echo "v0.1.206 already exists; refusing to replace it."
+            exit 1
+          fi
+      - name: Collect v0.1.206 release assets
+        uses: actions/download-artifact@v4
+        with:
+          pattern: v0.1.206-*
+          path: release
+          merge-multiple: true
+      - name: Verify complete cross-platform update feed
+        run: node tools/verify-update-artifacts.cjs release --require-all-platforms
+      - name: Publish v0.1.206
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v0.1.206
+          target_commitish: ${{ github.sha }}
+          name: v0.1.206
+          body: |
+            ## 桌面规模与收纳：把 Demo 第二十阶段移植进真实应用
+
+            以冻结的 phase20 基准（`loop-scale-phase20.css/js` + `MANIFEST.sha256`，全程未修改）为唯一标准，
+            在与 Demo 相同的 Electron/Chromium、相同内容与顺序、相同滚动、相同主题、相同字号档（标准 = 1.08）、
+            相同预览时钟与相同内容区尺寸（DPR=1）下逐区域比对后等效复现。
+
+            - **断点与三栏宽度**：恢复 Demo 的响应式阶梯（`≤1100px → 侧栏 154 / 列表 239`，
+              `≥1600px → 200 / 300`）。产品把列表宽度作为持久化、可拖拽的偏好内联在 `.app` 上，
+              该内联值此前压过了断点，现在由覆盖层按 Demo 让断点在两端生效，默认区间仍保留用户宽度。
+            - **列表与分组收纳**：长分组名截断 + 22px 固定数量列 + 分组区独立滚动 + 粘性分组标题；
+              列表标题、面包屑、列表页脚、分组属性都补上截断与 `title` 全文提示；属性行单行横向滚动，
+              分组属性上限 165px。
+            - **滚动与定位**：切换任务与重渲染保持列表/侧栏/笔记滚动位置（换筛选或范围则回到顶部），
+              并新增「定位当前」——仅当选中行完全离开可视区时出现，点击居中并把焦点交还该行。
+            - **知识笔记**：表头与正文共用一个横向滚动容器（表格 `min-width: 760px`），长代码保持
+              `white-space: pre` 独立滚动；笔记预览的行高、段落与标题间距、默认页宽按 Demo 对齐
+              （行高 1.9、`p` 16px、`h2` 28/12、`h3` 24/10、默认页宽 840px）。
+            - **处理流与阅读**：打开节点记录即收起简报（宽窗为可切换按钮并报告 `aria-expanded`，
+              窄窗抽屉外为只读「任务简报已收起」）；展开阅读时让出工作区标题/简报/开关，退出后**正确还原**
+              （Demo 在该场景会保持隐藏，这里按 brief 要求修正）。菜单按实际占用矩形夹取，末组菜单不越界。
+
+            隔离边界：Demo 的评审栏、内容规模切换、示例时钟与合成数据（132 任务 / 21 分组 / 九层树 /
+            长笔记）只存在于 `fixtures/phase20/` 与冻结 Demo 中，未写入任何正式业务数据
+            （检阅数据目录实测 0 条合成记录）。
+
+            验证：`node --test` 全绿（231 项，Windows CRLF 检出下 205 项）；真实应用行为检查 19 项全通过；
+            同条件三图比对覆盖 1894×1344 / 1280×720 / 1024×720 × 浅色/深色 × 9 状态 = 54 组，
+            非文字区域像素差 0.00%，文字差异仅在字形边缘（字体族/字号/行高/字距/换行行框实测一致）。
+            既有阶段探针无回归（52 + 36 + 62 + 24）。
+
+            已知边界（如实说明）：`flow`/`brief` 两个状态在验收驱动下存在 28px 的横向滚动差异
+            （产品在选中节点变更时按 Demo 同规则横向揭示节点，验收为直接置状态，仅触发产品侧；
+            两侧滚动宽度实测相同 640/510）；产品按用户先前指令已移除分组管理菜单，故「末组菜单不越界」
+            以任务菜单与弹层等价验证；Windows、真实数据下的持久化回归与无障碍认证未验证。
+          make_latest: true
+          files: |
+            release/*.dmg
+            release/*.zip
+            release/*.exe
+            release/*.blockmap
+            release/latest.yml
+            release/latest-mac.yml

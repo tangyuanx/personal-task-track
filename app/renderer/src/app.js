@@ -267,6 +267,9 @@ let state = {
   reviewPreset: "week",
   // Phase18: the Today route's own view — active list or today's completions.
   todayFilter: "active",
+  // Phase20: the task brief is collapsed while a node record is open and can be
+  // expanded from the toggle in a wide window.
+  scale20SummaryOpen: false,
   reviewDateField: "updated",
   reviewStartDate: "",
   reviewEndDate: "",
