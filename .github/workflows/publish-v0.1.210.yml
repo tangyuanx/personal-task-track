@@ -151,37 +151,53 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      # The tag-triggered "Release Desktop Apps" workflow publishes this same
-      # version, so this job must tolerate the tag already existing when it
-      # points at this very commit (and still refuse a different one).
-      - name: Check the v0.1.210 tag is not another commit
+      # The tag push runs the "Release Desktop Apps" workflow, which creates the
+      # tag and the GitHub Release for this same version and commit. This record
+      # job therefore never competes with it: if a v0.1.210 release already
+      # exists it verifies that, reports it, and stops; otherwise it publishes.
+      - name: Detect an existing v0.1.210 release
+        id: existing
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          # An annotated tag's ref points at the tag object, not the commit, so
-          # ask the API to peel it (git/tags/<sha> -> .object.sha).
-          existing="$(gh api "repos/${{ github.repository }}/git/ref/tags/v0.1.210" --jq '.object.sha' 2>/dev/null || true)"
-          if [ -n "$existing" ]; then
-            existing="$(gh api "repos/${{ github.repository }}/git/tags/$existing" --jq '.object.sha' 2>/dev/null || echo "$existing")"
-          fi
-          if [ -z "$existing" ]; then
-            echo "v0.1.210 does not exist yet; this job will create it."
-          elif [ "$existing" = "${{ github.sha }}" ]; then
-            echo "v0.1.210 already points at ${{ github.sha }}; publishing the same version and commit."
+          tag_sha="$(gh api "repos/${{ github.repository }}/git/ref/tags/v0.1.210" --jq '.object.sha' 2>/dev/null || true)"
+          if [ -n "$tag_sha" ]; then
+            commit_sha="$(gh api "repos/${{ github.repository }}/git/tags/$tag_sha" --jq '.object.sha' 2>/dev/null || echo "$tag_sha")"
+            echo "tag v0.1.210 -> $commit_sha"
+            echo "tag_commit=$commit_sha" >> "$GITHUB_OUTPUT"
           else
-            echo "v0.1.210 already points at $existing, not ${{ github.sha }}; refusing to replace it."
-            exit 1
+            echo "tag v0.1.210 does not exist yet"
+            echo "tag_commit=" >> "$GITHUB_OUTPUT"
           fi
+          if gh release view v0.1.210 >/dev/null 2>&1; then
+            echo "release_exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "release_exists=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Report an already published release and stop
+        if: steps.existing.outputs.release_exists == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          echo "v0.1.210 is already published (tag -> ${{ steps.existing.outputs.tag_commit }})."
+          echo "The tag-triggered Release workflow produced the installers for this"
+          echo "version and commit, so this record job has nothing left to publish."
+          gh release view v0.1.210 --json tagName,name,isDraft,isPrerelease,publishedAt,assets \
+            --jq '"release \(.tagName) draft=\(.isDraft) prerelease=\(.isPrerelease) at \(.publishedAt) assets=\(.assets|length)"'
       - name: Collect v0.1.210 release assets
+        if: steps.existing.outputs.release_exists != 'true'
         uses: actions/download-artifact@v4
         with:
           pattern: v0.1.210-*
           path: release
           merge-multiple: true
       - name: Verify complete cross-platform update feed
+        if: steps.existing.outputs.release_exists != 'true'
         run: node tools/verify-update-artifacts.cjs release --require-all-platforms
       - name: Publish v0.1.210
+        if: steps.existing.outputs.release_exists != 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v0.1.210
