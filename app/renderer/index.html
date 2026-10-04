@@ -15,27 +15,28 @@
       result stays pixel-comparable. Do not hand-edit them: add overrides in
       bridge.css instead.
     -->
-    <link rel="stylesheet" href="./src/shell.css?v=0.1.207" />
+    <link rel="stylesheet" href="./src/shell.css?v=0.1.208" />
     <link rel="stylesheet" href="./src/vendor/milkdown-editor.css?v=0.1.117" />
-    <link rel="stylesheet" href="./src/knowledge.css?v=0.1.207" />
-    <link rel="stylesheet" href="./src/fonts.css?v=0.1.207" />
-    <link rel="stylesheet" href="./src/settings.css?v=0.1.207" />
-    <link rel="stylesheet" href="./src/typography.css?v=0.1.207" />
-    <link rel="stylesheet" href="./src/refinement.css?v=0.1.207" />
-    <link rel="stylesheet" href="./src/selection.css?v=0.1.207" />
-    <link rel="stylesheet" href="./src/flow.css?v=0.1.207" />
-    <link rel="stylesheet" href="./src/shell-refinement.css?v=0.1.207" />
-    <link rel="stylesheet" href="./src/help.css?v=0.1.207" />
-    <link rel="stylesheet" href="./src/work.css?v=0.1.207" />
-    <link rel="stylesheet" href="./src/task-entry.css?v=0.1.207" />
-    <link rel="stylesheet" href="./src/journey.css?v=0.1.207" />
-    <link rel="stylesheet" href="./src/time.css?v=0.1.207" />
-    <link rel="stylesheet" href="./src/desktop.css?v=0.1.207" />
-    <link rel="stylesheet" href="./src/scale.css?v=0.1.207" />
-    <link rel="stylesheet" href="./src/brief21.css?v=0.1.207" />
-    <link rel="stylesheet" href="./src/bridge.css?v=0.1.207" />
+    <link rel="stylesheet" href="./src/knowledge.css?v=0.1.208" />
+    <link rel="stylesheet" href="./src/fonts.css?v=0.1.208" />
+    <link rel="stylesheet" href="./src/settings.css?v=0.1.208" />
+    <link rel="stylesheet" href="./src/typography.css?v=0.1.208" />
+    <link rel="stylesheet" href="./src/refinement.css?v=0.1.208" />
+    <link rel="stylesheet" href="./src/selection.css?v=0.1.208" />
+    <link rel="stylesheet" href="./src/flow.css?v=0.1.208" />
+    <link rel="stylesheet" href="./src/shell-refinement.css?v=0.1.208" />
+    <link rel="stylesheet" href="./src/help.css?v=0.1.208" />
+    <link rel="stylesheet" href="./src/work.css?v=0.1.208" />
+    <link rel="stylesheet" href="./src/task-entry.css?v=0.1.208" />
+    <link rel="stylesheet" href="./src/journey.css?v=0.1.208" />
+    <link rel="stylesheet" href="./src/time.css?v=0.1.208" />
+    <link rel="stylesheet" href="./src/desktop.css?v=0.1.208" />
+    <link rel="stylesheet" href="./src/scale.css?v=0.1.208" />
+    <link rel="stylesheet" href="./src/brief21.css?v=0.1.208" />
+    <link rel="stylesheet" href="./src/controls22.css?v=0.1.208" />
+    <link rel="stylesheet" href="./src/bridge.css?v=0.1.208" />
   </head>
-  <body data-scale20-enabled data-brief21-enabled>
+  <body data-scale20-enabled data-brief21-enabled data-controls22-enabled>
     <div id="root"></div>
     <div id="overlay"></div>
     <div id="toast" role="status" aria-live="polite"></div>
@@ -43,20 +44,22 @@
     <script src="./src/knowledge-document.js?v=0.1.120"></script>
     <script src="./src/knowledge-recovery.js?v=0.1.120"></script>
     <script src="./src/work-navigation-model.js?v=0.1.179"></script>
-    <script src="./src/clock.js?v=0.1.207"></script>
-    <script src="./src/shell.js?v=0.1.207"></script>
-    <script src="./src/workspace.js?v=0.1.207"></script>
-    <script src="./src/actions.js?v=0.1.207"></script>
-    <script src="./src/bulk.js?v=0.1.207"></script>
-    <script src="./src/knowledge.js?v=0.1.207"></script>
-    <script src="./src/pages.js?v=0.1.207"></script>
-    <script src="./src/desktop.js?v=0.1.207"></script>
-    <script src="./src/settings.js?v=0.1.207"></script>
-    <script src="./src/app.js?v=0.1.207"></script>
+    <script src="./src/clock.js?v=0.1.208"></script>
+    <script src="./src/shell.js?v=0.1.208"></script>
+    <script src="./src/workspace.js?v=0.1.208"></script>
+    <script src="./src/actions.js?v=0.1.208"></script>
+    <script src="./src/bulk.js?v=0.1.208"></script>
+    <script src="./src/knowledge.js?v=0.1.208"></script>
+    <script src="./src/pages.js?v=0.1.208"></script>
+    <script src="./src/desktop.js?v=0.1.208"></script>
+    <script src="./src/settings.js?v=0.1.208"></script>
+    <script src="./src/app.js?v=0.1.208"></script>
     <!-- phase20 wraps render(), so it loads after app.js -->
-    <script src="./src/scale.js?v=0.1.207"></script>
+    <script src="./src/scale.js?v=0.1.208"></script>
     <!-- phase21 overrides renderShellBrief and the flow brief toggle -->
-    <script src="./src/brief21.js?v=0.1.207"></script>
-    <script src="./src/work.js?v=0.1.207"></script>
+    <script src="./src/brief21.js?v=0.1.208"></script>
+    <!-- phase22 shares one field skin and one listbox for native selects -->
+    <script src="./src/controls22.js?v=0.1.208"></script>
+    <script src="./src/work.js?v=0.1.208"></script>
   </body>
 </html>

@@ -1,0 +1,215 @@
+name: Publish v0.1.208
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/publish-v0.1.208.yml
+
+concurrency:
+  group: publish-v0.1.208
+  cancel-in-progress: false
+
+jobs:
+  # This workflow is the release record for v0.1.208: it runs on demand, and on
+  # any push to main that touches this file. The Windows runner checks the tree
+  # out with CRLF, so every multi-line assertion in tests/ matches on \r?\n.
+  verify:
+    name: Verify v0.1.208 shared input and select primitives
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Verify version, syntax, frozen layers and the reminder contract
+        shell: bash
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          test "$version" = "0.1.208"
+          for f in app/renderer/src/*.js; do node --check "$f"; done
+          for f in app/main/*.cjs; do node --check "$f"; done
+          # Every frozen layer stays byte-identical to its baseline.
+          diff app/renderer/src/widget12.css prototypes/baseline/loop-plane-phase17-frozen/loop-widget-phase12-refinement.css
+          diff app/renderer/src/widget13.css prototypes/baseline/loop-plane-phase17-frozen/loop-widget-phase13.css
+          diff app/renderer/src/shell-refinement.css prototypes/baseline/loop-plane-phase17-frozen/loop-shell-refinement.css
+          diff app/renderer/src/settings.css prototypes/baseline/loop-plane-phase17-frozen/loop-settings-phase9.css
+          diff app/renderer/src/refinement.css prototypes/baseline/loop-plane-phase17-frozen/loop-refinement.css
+          diff app/renderer/src/time.css prototypes/baseline/loop-plane-phase18-frozen/loop-time-phase18.css
+          diff app/renderer/src/desktop.css prototypes/baseline/loop-plane-phase19-frozen/loop-desktop-phase19.css
+          diff app/renderer/src/scale.css prototypes/baseline/loop-plane-phase20-frozen/loop-scale-phase20.css
+          diff app/renderer/src/brief21.css prototypes/baseline/loop-plane-phase21-frozen/loop-brief-phase21.css
+          diff app/renderer/src/controls22.css prototypes/baseline/loop-plane-phase22-frozen/loop-controls-phase22.css
+          grep -q 'data-controls22-enabled' app/renderer/index.html
+          node -e "const h=require('fs').readFileSync('app/renderer/index.html','utf8');const b=h.indexOf('src/brief21.js'),c=h.indexOf('src/controls22.js');if(!(b>=0&&c>b))throw new Error('controls22.js must load after brief21.js')"
+          grep -q 'control22-listbox' app/renderer/src/controls22.js
+          grep -q 'aria-activedescendant' app/renderer/src/controls22.js
+          grep -q 'CONTROL22_SKIP' app/renderer/src/controls22.js
+          # phase21 is gated by a body attribute and the script loads after the
+          # layers it overrides (renderShellBrief, render, beginEdit entries)
+          grep -q 'data-brief21-enabled' app/renderer/index.html
+          node -e "const h=require('fs').readFileSync('app/renderer/index.html','utf8');const a=h.indexOf('src/app.js'),b=h.indexOf('src/brief21.js');if(!(a>=0&&b>a))throw new Error('brief21.js must load after app.js')"
+          grep -q 'renderShellBrief = function brief21Brief' app/renderer/src/brief21.js
+          grep -q 'brief21-flow-toggle' app/renderer/src/brief21.js
+          grep -q 'task.history.unshift' app/renderer/src/brief21.js
+          grep -q 'function normalizeTaskHistory' app/main/storage.cjs
+          # the legacy edit bindings must never take over a phase21 brief input
+          ! grep -rnF 'querySelectorAll("[data-edit-key]").forEach' app/renderer/src/app.js
+          test "$(grep -cF '[data-edit-key]:not(.brief21-input)' app/renderer/src/app.js)" = "2"
+
+          # phase20 is gated by the body attribute and wraps render(), so scale.js
+          # must load after app.js
+          grep -q 'data-scale20-enabled' app/renderer/index.html
+          node -e "const h=require('fs').readFileSync('app/renderer/index.html','utf8');const a=h.indexOf('src/app.js'),s=h.indexOf('src/scale.js');if(!(a>=0&&s>a))throw new Error('scale.js must load after app.js')"
+          grep -q 'render = function scale20Render' app/renderer/src/scale.js
+          grep -q 'scale20-table-scroll' app/renderer/src/scale.js
+          grep -q 'scale20-brief-toggle' app/renderer/src/scale.js
+          grep -q 'scale20-locate' app/renderer/src/scale.js
+          # the Demo's responsive ladder and note typography must not be shadowed
+          grep -q 'max-width: 1100px' app/renderer/src/bridge.css
+          grep -q 'min-width: 1600px' app/renderer/src/bridge.css
+          grep -q 'max-width: 840px' app/renderer/src/bridge.css
+          grep -q 'line-height: 1.9' app/renderer/src/bridge.css
+          # no reviewer bar, scale switcher or synthetic fixture may reach the product
+          ! grep -rn 'scale20-scene\|syntheticScale20\|内容规模' app/renderer/src/*.js app/renderer/src/*.css
+          # the reminder model and the permission probe keep their own homes
+          node -e "const m=require('./app/main/deadline-reminders.cjs'); for (const k of ['deadlineReminderGroups','deadlineReminderKey','reconcileDeadlineReminderState','reminderCopy']) if (typeof m[k] !== 'function') throw new Error('missing '+k)"
+          node -e "const c=require('./app/main/notification-capability.cjs'); for (const k of ['detectNotificationCapability','parseWindowsToastSetting','parseMacNotificationFlags','createNotificationCapabilityReader']) if (typeof c[k] !== 'function') throw new Error('missing '+k)"
+          # a reminder must never be marked as notified while the system holds them
+          grep -q 'permission.state === "blocked"' app/main/deadline-reminders.cjs
+          # the panels that silently had no submit handler stay fixed
+          ! grep -rn "surface?\.querySelector(\"#[a-z-]*form\")" app/renderer/src/actions.js
+          node --test tests/desktop.test.cjs tests/deadline-reminders.test.cjs tests/notification-capability.test.cjs tests/work-rhythm-ui.test.cjs tests/work-navigation-model.test.cjs
+
+  build:
+    name: Build v0.1.208 ${{ matrix.platform }}
+    needs: verify
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macOS
+            os: macos-latest
+            script: npm run dist:mac -- --x64 --arm64 --publish never
+            artifact: v0.1.208-macos
+          - platform: Windows
+            os: windows-latest
+            script: npm run dist:win -- --x64 --publish never
+            artifact: v0.1.208-windows
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Check JavaScript and tests
+        run: npm run check
+      - name: Build app
+        run: ${{ matrix.script }}
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+      - name: Test Windows installer upgrade matrix
+        if: matrix.platform == 'Windows'
+        shell: pwsh
+        run: |
+          $candidate = Get-ChildItem release -Filter "Loop-*-x64-setup.exe" | Select-Object -First 1
+          if (-not $candidate) { throw "Windows installer was not produced." }
+          ./tests/windows-upgrade-installer.test.ps1 -CandidateInstaller $candidate.FullName
+      - name: Verify update metadata
+        run: node tools/verify-update-artifacts.cjs release
+      - name: Stage v0.1.208 release assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            release/*.dmg
+            release/*.zip
+            release/*.exe
+            release/*.blockmap
+            release/latest.yml
+            release/latest-mac.yml
+          if-no-files-found: error
+          retention-days: 2
+
+  publish:
+    name: Publish v0.1.208 release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Refuse to replace an existing tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          if gh api "repos/${{ github.repository }}/git/ref/tags/v0.1.208" >/dev/null 2>&1; then
+            echo "v0.1.208 already exists; refusing to replace it."
+            exit 1
+          fi
+      - name: Collect v0.1.208 release assets
+        uses: actions/download-artifact@v4
+        with:
+          pattern: v0.1.208-*
+          path: release
+          merge-multiple: true
+      - name: Verify complete cross-platform update feed
+        run: node tools/verify-update-artifacts.cjs release --require-all-platforms
+      - name: Publish v0.1.208
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v0.1.208
+          target_commitish: ${{ github.sha }}
+          name: v0.1.208
+          body: |
+            ## 输入与选择：一套共享的字段与下拉原语
+
+            以冻结的 phase22 基准（`loop-controls-phase22.css/js` + `MANIFEST.sha256`，全程未修改）为唯一标准等效复现。
+
+            - **共享字段皮肤**：浅底色、1px 细边框、6px 圆角、34px 高；悬停加深边框，焦点只保留单层绿色细线
+              （不再出现外圈+内圈双层），无效态橙色，禁用/只读与占位符各有明确样式，光标为品牌绿。
+            - **选择**：原生单选下拉保留真实 `<select>`（name／value／options／校验／FormData 全部不变），展开使用统一
+              列表：统一行高与留白、选中项带勾选、optgroup 有小标题、长列表可滚动且不越出窗口、贴近底部时向上翻转；
+              方向键／Home／End 移动，Enter 或空格确认并派发 `change`，Esc 收起并把焦点交还字段，首字母可跳转。
+            - **点击语义**：外部点击只收起最上层的菜单并消耗该次点击，底层任务行不会被误选。
+            - **无框例外**：任务简报保持 Phase21 的无框直接输入；搜索与速记只在外层反馈焦点，内层输入无框。
+            - **菜单节奏**：既有自定义菜单（截止、循环、筛选、设置入口等）统一为无边框、8px 圆角、6px 内边距、
+              32px 选项行与选中高亮；笔记页宽选项保留其示意图高度。
+            - 日期/时间的系统选择器保留不动。
+
+            类名映射（如实说明）：产品侧原生下拉为 `.note-heading-select` 与回顾范围下拉，按冻结样式表它们本就是
+            「透明/28px」与「26px」的变体；行内标题映射为 `.task-title/.page-title/.flow-title-input`。
+
+            验证：`node --test` 全绿（236 项），含 phase22 契约锚点（冻结样式表逐字节、加载顺序、门控、原生 select
+            保留、listbox 角色、点击消耗、排除清单）；真实应用行为检查 15 项全通过（含 30 项长列表滚动与越界夹取、
+            外部点击不改变底层选中行、FormData 保持、浅/深箭头不同）；同条件三图 24 组（1894×1344／1280×720／1024×720
+            × 浅／深 × 4 状态）0 失败，非文字区域像素差 0.00%，且实测 Demo 与产品的搜索外壳计算样式完全一致。
+
+            比对边界（如实说明）：listbox 的像素标准只能取冻结样式表计算值 + Demo 脚本行为——Demo 的原生 select 全部
+            位于其评审栏（脚手架，比对时隐藏）或不可见位置，没有可比对的可见实例。
+
+            已知边界：`brief` 状态在验收驱动下存在 28px 横向滚动差异（产品在选中变化时按 Demo 同规则横向揭示节点，
+            验收为直接置状态、只触发产品侧；两侧滚动宽度实测相同）；Windows 实机、真实数据长期持久化回归与
+            无障碍认证未验证。
+          make_latest: true
+          files: |
+            release/*.dmg
+            release/*.zip
+            release/*.exe
+            release/*.blockmap
+            release/latest.yml
+            release/latest-mac.yml

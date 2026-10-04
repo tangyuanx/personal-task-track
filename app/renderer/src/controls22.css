@@ -1,0 +1,91 @@
+/* Shared form primitives. Document canvases and Phase21 inline brief remain unframed. */
+body[data-controls22-enabled] {
+  --field22-bg: color-mix(in srgb, var(--list) 72%, var(--canvas));
+  --field22-line: color-mix(in srgb, var(--line) 72%, var(--canvas));
+  --field22-hover: color-mix(in srgb, var(--secondary) 28%, var(--canvas));
+  --field22-focus: color-mix(in srgb, var(--green) 72%, var(--canvas));
+  --field22-radius: 6px;
+  --field22-height: 34px;
+}
+/* Specificity deliberately outranks the older form-specific skins. */
+body[data-controls22-enabled] .control22-field.control22-field {
+  border: 1px solid var(--field22-line);
+  border-radius: var(--field22-radius);
+  background-color: var(--field22-bg);
+  color: var(--text);
+  outline: none;
+  box-shadow: none;
+  padding: 7px 10px;
+  font-size: calc(12px * var(--font-scale, 1));
+  line-height: 1.5;
+  caret-color: var(--green);
+}
+body[data-controls22-enabled] input.control22-field,
+body[data-controls22-enabled] select.control22-field {height: var(--field22-height); min-height: var(--field22-height);}
+body[data-controls22-enabled] .control22-field.control22-field:hover:not(:disabled):not([readonly]):not([aria-invalid="true"]):not(:focus) {border-color: var(--field22-hover);}
+body[data-controls22-enabled] .control22-field.control22-field:focus,
+body[data-controls22-enabled] .control22-field.control22-field:focus-visible {border-color: var(--field22-focus); background-color: var(--canvas); outline: none; box-shadow: none;}
+body[data-controls22-enabled] .control22-field.control22-field[aria-invalid="true"] {border-color: var(--orange);}
+body[data-controls22-enabled] .control22-field.control22-field:disabled {color: var(--secondary); background-color: var(--nav); border-color: var(--field22-line); opacity: .7; cursor: default;}
+body[data-controls22-enabled] .control22-field.control22-field[readonly] {color: var(--secondary);}
+body[data-controls22-enabled] .control22-field::placeholder {color: var(--secondary); opacity: 1;}
+body[data-controls22-enabled] select.control22-field {
+  appearance: none;
+  padding-right: 30px;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none' stroke='%23626b78' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m3 4.5 3 3 3-3'/%3E%3C/svg%3E");
+  background-position: right 10px center;
+  background-repeat: no-repeat;
+  text-overflow: ellipsis;
+}
+html[data-theme="dark"] body[data-controls22-enabled] select.control22-field {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none' stroke='%23a0a8b4' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m3 4.5 3 3 3-3'/%3E%3C/svg%3E");
+}
+body[data-controls22-enabled] .control22-field.control22-inline {
+  min-height: 28px; height: 28px; padding: 3px 7px; background-color: transparent; border-color: transparent;
+}
+body[data-controls22-enabled] .note-heading-select.control22-field {height: 28px; min-height: 28px; padding-block: 3px; background-color: transparent;}
+body[data-controls22-enabled] .review-controls select.control22-field {height: 26px; min-height: 26px; padding-block: 2px; font-size: calc(11px * var(--font-scale, 1));}
+body[data-controls22-enabled] :is(.list-search, .widget-capture) {
+  border: 1px solid var(--field22-line); border-radius: var(--field22-radius); background: var(--field22-bg); outline: none; box-shadow: none;
+}
+body[data-controls22-enabled] :is(.list-search, .widget-capture):hover {border-color: var(--field22-hover);}
+body[data-controls22-enabled] :is(.list-search, .widget-capture):focus-within {border-color: var(--field22-focus); background: var(--canvas); outline: none; box-shadow: none;}
+body[data-controls22-enabled] :is(.list-search input, .widget-capture textarea),
+body[data-controls22-enabled] :is(.list-search input, .widget-capture textarea):focus-visible {border: 0; outline: none; box-shadow: none; background: transparent;}
+body[data-controls22-enabled] :is(#overlay label:not(.check-row):not(.entry16-today):not(.widget12-setting-row), .setting-row > div > label) {font-size: calc(11px * var(--font-scale, 1));}
+body[data-controls22-enabled] input:is([type="checkbox"], [type="radio"], [type="range"]) {accent-color: var(--green);}
+/* Existing custom menus share item rhythm; rich width choices retain their diagrams. */
+body[data-controls22-enabled] .surface-popover[role="menu"] {border: 0; border-radius: 8px; padding: 6px; box-shadow: 0 6px 24px #0002;}
+body[data-controls22-enabled] .surface-popover[role="menu"] > header {margin: 0 4px 5px; padding: 6px 4px 8px;}
+body[data-controls22-enabled] .surface-popover[role="menu"] > button:is([role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"]) {
+  min-height: 32px; border: 0; border-radius: 4px; padding: 6px 9px; gap: 8px; font-size: calc(12px * var(--font-scale, 1)); line-height: 1.5; text-align: left;
+}
+body[data-controls22-enabled] .surface-popover[role="menu"] > button[aria-checked="true"] {background: var(--selected); color: var(--green);}
+body[data-controls22-enabled] .surface-popover[role="menu"] > button:focus-visible {outline: 1px solid var(--field22-focus); outline-offset: -1px;}
+body[data-controls22-enabled] .surface-popover[role="menu"] > .note-width-option {min-height: 58px;}
+body[data-controls22-enabled] button.prefs-choice {height: var(--field22-height); min-height: var(--field22-height);}
+body[data-controls22-enabled] .popover[role="menu"] {border: 0; border-radius: 8px; padding: 6px; box-shadow: 0 6px 24px #0002;}
+body[data-controls22-enabled] .popover[role="menu"] > button {min-height: 32px; padding: 6px 9px; border-radius: 4px; line-height: 1.5;}
+.control22-listbox {
+  position: fixed; z-index: 200; margin: 0; padding: 5px; border: 0; border-radius: 8px;
+  background: var(--canvas); box-shadow: 0 6px 24px #0002;
+  overflow: auto; overscroll-behavior: contain; color: var(--text);
+  font-size: calc(12px * var(--font-scale, 1)); line-height: 1.5;
+}
+html[data-theme="dark"] .control22-listbox {box-shadow: 0 8px 28px #0006;}
+.control22-option {
+  display: flex; align-items: center; gap: 10px; min-height: 32px; padding: 6px 9px; border-radius: 4px; cursor: pointer;
+}
+.control22-option > span {flex: 1; min-width: 0; overflow-wrap: anywhere;}
+.control22-option > svg {width: 14px; height: 14px; margin-left: auto; flex-shrink: 0;}
+.control22-option[aria-selected="true"] {color: var(--green); background: var(--selected);}
+.control22-option[data-active] {background: var(--hover);}
+.control22-option[data-active][aria-selected="true"] {background: var(--selected);}
+.control22-option[aria-disabled="true"] {color: var(--secondary); opacity: .65; cursor: default;}
+.control22-optgroup {padding: 7px 9px 4px; color: var(--secondary); font-size: calc(11px * var(--font-scale, 1));}
+@media (forced-colors: active) {
+  body[data-controls22-enabled] .control22-field.control22-field:focus {outline: 1px solid Highlight; outline-offset: 0;}
+  .control22-listbox {border: 1px solid CanvasText;}
+  .control22-option[data-active] {outline: 1px solid Highlight;}
+}

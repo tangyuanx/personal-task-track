@@ -2778,7 +2778,7 @@ test("Today widget is rebuilt from the frozen phase 12/13 widget layers", async 
   assert.doesNotMatch(widget, /--widget-focus:/);
   assert.doesNotMatch(widget, /mock-sidebar|mock-app|mock-repository/);
   for (const sheet of ["fonts.css", "shell.css", "typography.css", "widget12.css", "widget13.css", "shell-refinement.css", "widget-bridge.css"]) {
-    assert.match(widget, new RegExp(sheet.replace(".", "\\.") + "\\?v=0\\.1\\.207"), `today-widget.html must load ${sheet}`);
+    assert.match(widget, new RegExp(sheet.replace(".", "\\.") + "\\?v=0\\.1\\.208"), `today-widget.html must load ${sheet}`);
   }
   assert.match(widget, /id="widget-host"/);
   assert.match(surface, /id="surface-host"/);
@@ -3529,10 +3529,10 @@ test("production Today widget uses its dedicated frontend and a sandboxed Electr
   // rendered DOM can be compared with loop-widget-phase13.js line by line.
   assert.match(demo, /id="widget-host"/);
   assert.doesNotMatch(demo, /按优先级与阻塞状态排序|项待办|刚刚同步|在主窗口查看全部|corner-anchor/);
-  assert.match(demo, /widget12\.css\?v=0\.1\.207/);
-  assert.match(demo, /widget13\.css\?v=0\.1\.207/);
-  assert.match(demo, /shell-refinement\.css\?v=0\.1\.207/);
-  assert.match(demo, /widget-bridge\.css\?v=0\.1\.207/);
+  assert.match(demo, /widget12\.css\?v=0\.1\.208/);
+  assert.match(demo, /widget13\.css\?v=0\.1\.208/);
+  assert.match(demo, /shell-refinement\.css\?v=0\.1\.208/);
+  assert.match(demo, /widget-bridge\.css\?v=0\.1\.208/);
 
   // Chrome, tabs, rows and the composer: the Demo's markup, icon for icon.
   assert.match(runtime, /class="today-widget widget12 widget13 '/);
@@ -4346,6 +4346,7 @@ test("the frozen Demo baseline is the renderer stylesheet authority", async () =
   const phase19Dir = path.join(__dirname, "..", "prototypes", "baseline", "loop-plane-phase19-frozen");
   const phase20Dir = path.join(__dirname, "..", "prototypes", "baseline", "loop-plane-phase20-frozen");
   const phase21Dir = path.join(__dirname, "..", "prototypes", "baseline", "loop-plane-phase21-frozen");
+  const phase22Dir = path.join(__dirname, "..", "prototypes", "baseline", "loop-plane-phase22-frozen");
   const previousFrozenDir = path.join(__dirname, "..", "prototypes", "baseline", "loop-plane-phase1-frozen");
 
   // The Demo baseline must be present verbatim and must not be edited to fit
@@ -4372,18 +4373,19 @@ test("the frozen Demo baseline is the renderer stylesheet authority", async () =
     ["desktop.css", "loop-desktop-phase19.css"],
     ["scale.css", "loop-scale-phase20.css"],
     ["brief21.css", "loop-brief-phase21.css"],
+    ["controls22.css", "loop-controls-phase22.css"],
   ];
   for (const [target, source] of copied) {
     const [a, b] = await Promise.all([
       fs.readFile(path.join(rendererDir, "src", target), "utf8"),
-      fs.readFile(path.join(source === "loop-time-phase18.css" ? phase18Dir : source === "loop-desktop-phase19.css" ? phase19Dir : source === "loop-scale-phase20.css" ? phase20Dir : source === "loop-brief-phase21.css" ? phase21Dir : frozenDir, source), "utf8"),
+      fs.readFile(path.join(source === "loop-time-phase18.css" ? phase18Dir : source === "loop-desktop-phase19.css" ? phase19Dir : source === "loop-scale-phase20.css" ? phase20Dir : source === "loop-brief-phase21.css" ? phase21Dir : source === "loop-controls-phase22.css" ? phase22Dir : frozenDir, source), "utf8"),
     ]);
     assert.equal(a, b, `src/${target} must stay byte-identical to the frozen ${source}`);
   }
 
   // Load order mirrors the Demo entry, and bridge.css is the only override layer.
   const linked = [...index.matchAll(/<link[^>]+href="\.\/src\/([^"?]+)/g)].map((match) => match[1]);
-  const order = ["shell.css", "vendor/milkdown-editor.css", "knowledge.css", "fonts.css", "settings.css", "typography.css", "refinement.css", "selection.css", "flow.css", "shell-refinement.css", "help.css", "work.css", "task-entry.css", "journey.css", "time.css", "desktop.css", "scale.css", "brief21.css", "bridge.css"];
+  const order = ["shell.css", "vendor/milkdown-editor.css", "knowledge.css", "fonts.css", "settings.css", "typography.css", "refinement.css", "selection.css", "flow.css", "shell-refinement.css", "help.css", "work.css", "task-entry.css", "journey.css", "time.css", "desktop.css", "scale.css", "brief21.css", "controls22.css", "bridge.css"];
   assert.deepEqual(linked, order, "stylesheets must load in the frozen Demo order, with bridge.css last");
   assert.ok(!index.includes("approved-4174.css"), "the superseded approved-4174 shell must no longer be loaded");
   assert.ok(!index.includes("styles.css"), "the superseded styles.css must no longer be loaded");
@@ -6106,7 +6108,7 @@ test("the phase21 brief layer is gated, ordered and built on the frozen sheet", 
   ]);
 
   // The gate is a body attribute, exactly like the Demo's data-brief21-enabled.
-  assert.match(html, /<body data-scale20-enabled data-brief21-enabled>/);
+  assert.match(html, /<body[^>]*data-scale20-enabled[^>]*data-brief21-enabled/);
   assert.equal(sheet, frozenSheet, "src/brief21.css must stay byte-identical to the frozen phase 21 sheet");
 
   const order = ["scale.css", "brief21.css", "bridge.css"];
@@ -6131,6 +6133,35 @@ test("the phase21 brief layer is gated, ordered and built on the frozen sheet", 
   assert.match(script, /brief21BeginEdit/);
   // The old explicit-save editors must not render inside the brief any more.
   assert.equal(/class="brief-value/.test(script), false);
+});
+
+test("the phase22 controls layer is gated, ordered and built on the frozen sheet", async () => {
+  const rendererDir = path.join(__dirname, "..", "app", "renderer");
+  const frozenDir = path.join(__dirname, "..", "prototypes", "baseline", "loop-plane-phase22-frozen");
+  const [html, sheet, frozenSheet, script] = await Promise.all([
+    fs.readFile(path.join(rendererDir, "index.html"), "utf8"),
+    fs.readFile(path.join(rendererDir, "src", "controls22.css"), "utf8"),
+    fs.readFile(path.join(frozenDir, "loop-controls-phase22.css"), "utf8"),
+    fs.readFile(path.join(rendererDir, "src", "controls22.js"), "utf8"),
+  ]);
+  assert.match(html, /<body[^>]*data-scale20-enabled[^>]*data-brief21-enabled[^>]*data-controls22-enabled/);
+  assert.equal(sheet, frozenSheet, "src/controls22.css must stay byte-identical to the frozen phase 22 sheet");
+  const order = ["brief21.css", "controls22.css", "bridge.css"];
+  const positions = order.map((name) => html.indexOf(`src/${name}`));
+  assert.ok(positions.every((index) => index >= 0));
+  assert.deepEqual([...positions].sort((a, b) => a - b), positions, "controls22.css must load after brief21.css and before bridge.css");
+  assert.ok(html.indexOf("src/controls22.js") > html.indexOf("src/brief21.js"), "controls22.js must load after brief21.js");
+  for (const marker of ["--field22-bg", ".control22-field", "select.control22-field", ".control22-listbox", ".control22-option", "forced-colors"]) {
+    assert.ok(frozenSheet.includes(marker), `the frozen phase 22 sheet must keep ${marker}`);
+  }
+  // native selects keep their element; the layer only decorates and expands them
+  assert.match(script, /el instanceof HTMLSelectElement && !el\.multiple && el\.size <= 1/);
+  assert.match(script, /menu\.setAttribute\("role", "listbox"\)/);
+  assert.match(script, /aria-activedescendant/);
+  assert.match(script, /select\.dispatchEvent\(new Event\("change", \{ bubbles: true \}\)\)/);
+  assert.match(script, /control22ConsumeClick = true;\s*\n\s*control22Stop\(event\)/);
+  assert.match(script, /CONTROL22_SKIP/);
+  assert.match(script, /"\.brief21-input", "#knowledge-source"/);
 });
 
 test("the legacy edit binding never hijacks a phase21 brief input", async () => {
