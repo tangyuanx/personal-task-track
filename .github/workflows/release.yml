@@ -120,3 +120,13 @@ jobs:
           body_path: ${{ steps.notes.outputs.body_path }}
           generate_release_notes: ${{ steps.notes.outputs.body_path == '' }}
           prerelease: ${{ contains(github.ref_name, '-') }}
+
+      # action-gh-release uploads assets for an existing release but does not
+      # rewrite its body, so a re-run (a re-pointed tag, a retried release)
+      # would keep the stale notes. Set them explicitly.
+      - name: Keep the release notes in sync
+        if: steps.notes.outputs.body_path != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: gh release edit "$GITHUB_REF_NAME" --notes-file "${{ steps.notes.outputs.body_path }}"
