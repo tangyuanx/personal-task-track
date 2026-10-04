@@ -159,7 +159,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
+          # An annotated tag's ref points at the tag object, not the commit, so
+          # ask the API to peel it (git/tags/<sha> -> .object.sha).
           existing="$(gh api "repos/${{ github.repository }}/git/ref/tags/v0.1.210" --jq '.object.sha' 2>/dev/null || true)"
+          if [ -n "$existing" ]; then
+            existing="$(gh api "repos/${{ github.repository }}/git/tags/$existing" --jq '.object.sha' 2>/dev/null || echo "$existing")"
+          fi
           if [ -z "$existing" ]; then
             echo "v0.1.210 does not exist yet; this job will create it."
           elif [ "$existing" = "${{ github.sha }}" ]; then
