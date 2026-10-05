@@ -188,11 +188,28 @@ jobs:
           fi
           if gh release view v0.1.213 >/dev/null 2>&1; then
             echo "release_exists=true" >> "$GITHUB_OUTPUT"
+            # An existing Release is not proof that this version is published.
+            # The tag-triggered Release workflow only runs when the tag itself
+            # triggers it; a tag created with GITHUB_TOKEN (as the API call above
+            # can do) does NOT trigger further workflows, which left an empty
+            # Release and no installers. Treat the release as published only when
+            # it actually carries assets, so this job repairs that case instead
+            # of short-circuiting past the upload.
+            asset_count="$(gh release view v0.1.213 --json assets --jq '.assets | length' 2>/dev/null || echo 0)"
+            case "$asset_count" in ''|*[!0-9]*) asset_count=0 ;; esac
+            if [ "$asset_count" -gt 0 ]; then
+              echo "assets_present=true" >> "$GITHUB_OUTPUT"
+              echo "v0.1.213 already carries $asset_count asset(s)"
+            else
+              echo "assets_present=false" >> "$GITHUB_OUTPUT"
+              echo "::warning::v0.1.213 has a Release but no assets; this run will build and upload them."
+            fi
           else
             echo "release_exists=false" >> "$GITHUB_OUTPUT"
+            echo "assets_present=false" >> "$GITHUB_OUTPUT"
           fi
       - name: Report an already published release and stop
-        if: steps.existing.outputs.release_exists == 'true'
+        if: steps.existing.outputs.assets_present == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -203,17 +220,17 @@ jobs:
           gh release view v0.1.213 --json tagName,name,isDraft,isPrerelease,publishedAt,assets \
             --jq '"release \(.tagName) draft=\(.isDraft) prerelease=\(.isPrerelease) at \(.publishedAt) assets=\(.assets|length)"'
       - name: Collect v0.1.213 release assets
-        if: steps.existing.outputs.release_exists != 'true'
+        if: steps.existing.outputs.assets_present != 'true'
         uses: actions/download-artifact@v4
         with:
           pattern: v0.1.213-*
           path: release
           merge-multiple: true
       - name: Verify complete cross-platform update feed
-        if: steps.existing.outputs.release_exists != 'true'
+        if: steps.existing.outputs.assets_present != 'true'
         run: node tools/verify-update-artifacts.cjs release --require-all-platforms
       - name: Publish v0.1.213
-        if: steps.existing.outputs.release_exists != 'true'
+        if: steps.existing.outputs.assets_present != 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v0.1.213
