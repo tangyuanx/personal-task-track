@@ -5455,7 +5455,10 @@ test("calendar owns one global navigation entry, fills the workspace, and keeps 
   assert.match(shell, /shellNavButton\("review", "回顾", "history"\)/);
 
   // Wide routes hide the task-list column and let the workspace take the row.
-  assert.match(app, /\$\{shellWide \? "" : renderShellTaskList\(filteredTasks\(\)\)\}/);
+  // render() builds the list markup once so it can be reused as a region, and
+  // retainRegion clears the slot when that markup is empty.
+  assert.match(app, /const listMarkup = shellWide \? "" : renderShellTaskList\(filteredTasks\(\)\);/);
+  assert.match(app, /retainRegion\("task-list", listMarkup\);/);
   assert.match(app, /const shellWide = shellIsWide\(\);/);
   assert.match(shellCss, /\.app-wide\{grid-template-columns:var\(--nav-width\) minmax\(0,1fr\)\}/);
 

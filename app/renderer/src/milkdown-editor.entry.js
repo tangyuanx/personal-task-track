@@ -26,6 +26,23 @@ const completeInlineCodeInputRule = $inputRule((ctx) =>
   markRule(/(`+)([^`\n]+)\1$/, inlineCodeSchema.type(ctx)),
 );
 
+/**
+ * Serialization counters, exposed for the switch-performance harness. A cached
+ * hit must never grow `serializations`, which is what the handoff document
+ * requires when asserting that unchanged notes stop re-serializing.
+ */
+const milkdownMetrics = {
+  serializations: 0,
+  cacheHits: 0,
+  mounts: 0,
+  resets() {
+    this.serializations = 0;
+    this.cacheHits = 0;
+    this.mounts = 0;
+  },
+};
+window.__loopMilkdownMetrics = milkdownMetrics;
+
 const TABLE_COLUMN_MIN_WIDTH = 80;
 
 function normalizedTableColumnWidths(value) {
@@ -337,10 +354,48 @@ class MilkdownTaskEditor {
     let lastMarkdown = markdown;
     let markdownTimer = 0;
     let tableColumnResizer = null;
+    // Serialization cache. ProseMirror hands out a new immutable document
+    // object on every document-changing transaction, so the document identity
+    // is a reliable change signal. Selection, focus and decoration updates
+    // reuse the same document and therefore stay cached.
+    let serializedDoc = null;
+    let serializedMarkdown = null;
+
+    /**
+     * Read the live document without serializing it. Reading EditorView state
+     * is a property access, which keeps this usable on every navigation even
+     * for a hidden, long document.
+     */
+    const currentDoc = () => {
+      try {
+        return crepe.editor.action((ctx) => ctx.get(editorViewCtx).state.doc);
+      } catch {
+        return null;
+      }
+    };
+
+    /**
+     * Latest Markdown for the editor's current content. Returns the cached
+     * text while the document has not changed, and only then falls back to a
+     * full Crepe serialization.
+     */
+    const currentMarkdown = () => {
+      const doc = currentDoc();
+      if (doc && doc === serializedDoc && serializedMarkdown !== null) {
+        milkdownMetrics.cacheHits += 1;
+        return serializedMarkdown;
+      }
+      const nextMarkdown = crepe.getMarkdown();
+      milkdownMetrics.serializations += 1;
+      serializedDoc = doc;
+      serializedMarkdown = nextMarkdown;
+      return nextMarkdown;
+    };
+
     const emitMarkdown = () => {
       cancelScheduledIdle(markdownTimer, emitMarkdown);
       markdownTimer = 0;
-      const nextMarkdown = crepe.getMarkdown();
+      const nextMarkdown = currentMarkdown();
       if (nextMarkdown === lastMarkdown) return nextMarkdown;
       lastMarkdown = nextMarkdown;
       onChange?.(nextMarkdown);
@@ -414,7 +469,7 @@ class MilkdownTaskEditor {
       getMarkdown: () => {
         cancelScheduledIdle(markdownTimer, emitMarkdown);
         markdownTimer = 0;
-        return crepe.getMarkdown();
+        return currentMarkdown();
       },
       insertImage: ({ src, alt = "图片", title = "" }) =>
         crepe.editor.action((ctx) => ctx.get(commandsCtx).call(insertImageCommand.key, { src, alt, title })),
@@ -442,6 +497,7 @@ class MilkdownTaskEditor {
       },
     };
     instances.set(root, instance);
+    milkdownMetrics.mounts += 1;
     return instance;
   }
 }

@@ -1,0 +1,222 @@
+name: Publish v0.1.213
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/publish-v0.1.213.yml
+
+concurrency:
+  group: publish-v0.1.213
+  cancel-in-progress: false
+
+jobs:
+  # This workflow is the release record for v0.1.213: it runs on demand, and on
+  # any push to main that touches this file.
+  verify:
+    name: Verify v0.1.213 deletion and recovery
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Verify version, syntax and the frozen layer set
+        shell: bash
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          test "$version" = "0.1.213"
+          for f in app/renderer/src/*.js; do node --check "$f"; done
+          for f in app/main/*.cjs; do node --check "$f"; done
+          # Every frozen layer stays byte-identical to its baseline.
+          diff app/renderer/src/widget12.css prototypes/baseline/loop-plane-phase17-frozen/loop-widget-phase12-refinement.css
+          diff app/renderer/src/widget13.css prototypes/baseline/loop-plane-phase17-frozen/loop-widget-phase13.css
+          diff app/renderer/src/settings.css prototypes/baseline/loop-plane-phase17-frozen/loop-settings-phase9.css
+          diff app/renderer/src/refinement.css prototypes/baseline/loop-plane-phase17-frozen/loop-refinement.css
+          diff app/renderer/src/time.css prototypes/baseline/loop-plane-phase18-frozen/loop-time-phase18.css
+          diff app/renderer/src/desktop.css prototypes/baseline/loop-plane-phase19-frozen/loop-desktop-phase19.css
+          diff app/renderer/src/scale.css prototypes/baseline/loop-plane-phase20-frozen/loop-scale-phase20.css
+          diff app/renderer/src/brief21.css prototypes/baseline/loop-plane-phase21-frozen/loop-brief-phase21.css
+          diff app/renderer/src/controls22.css prototypes/baseline/loop-plane-phase22-frozen/loop-controls-phase22.css
+          diff app/renderer/src/notebook23.css prototypes/baseline/loop-plane-phase23-frozen/loop-notebook-phase23.css
+          diff app/renderer/src/management24.css prototypes/baseline/loop-plane-phase24-frozen/loop-management-phase24.css
+          diff app/renderer/src/window25.css prototypes/baseline/loop-plane-phase25-frozen/loop-window-phase25.css
+          # This phase's sheet is the frozen stage sheet, byte for byte.
+          diff app/renderer/src/recovery26.css prototypes/baseline/loop-plane-phase26-frozen/loop-recovery-phase26.css
+      - name: Verify the switch-performance and calendar contract
+        shell: bash
+        run: |
+          # Phase A: an unchanged Milksdown document is never re-serialized, and
+          # the draft capture compares against the live document.
+          grep -q '__loopMilkdownMetrics' app/renderer/src/milkdown-editor.entry.js
+          grep -q 'currentMarkdown' app/renderer/src/milkdown-editor.entry.js
+          grep -q 'serializedDoc' app/renderer/src/milkdown-editor.entry.js
+          grep -q 'captureMountedMilkdownDrafts' app/renderer/src/app.js
+          # Phase B: unchanged regions keep their DOM nodes.
+          grep -q 'function retainRegion' app/renderer/src/app.js
+          grep -q 'data-region="navigation"' app/renderer/src/app.js
+          grep -q 'data-region="topbar"' app/renderer/src/app.js
+          # bindTaskRepositoryRows runs on every render over nodes whose region
+          # was reused, so every binder it installs must be idempotent. A binder
+          # without a guard runs its action twice; a toggling action (calendar,
+          # review, theme) then cancels itself out and the button looks dead.
+          grep -q 'rowSelectionBound' app/renderer/src/app.js
+          grep -q 'rowDragBound' app/renderer/src/app.js
+          grep -q 'taskDropBound' app/renderer/src/app.js
+          grep -q 'settingBound' app/renderer/src/app.js
+          grep -q 'deadlineBound' app/renderer/src/app.js
+          grep -q 'groupTitleBound' app/renderer/src/app.js
+          grep -q 'actionClickBound' app/renderer/src/app.js
+          # Phase C: render() no longer queues a whole-database write or rebuilds
+          # the widget snapshot when nothing persistable changed.
+          grep -q 'function payloadFingerprint' app/renderer/src/app.js
+          grep -q 'function persistedStateRevision' app/renderer/src/app.js
+          grep -q 'lastWrittenPersistedRevision' app/renderer/src/app.js
+          grep -q 'todayWidgetSnapshotSignature' app/renderer/src/app.js
+          grep -q 'cachedTodayWidgetAppearance' app/renderer/src/app.js
+          # Phase D: scroll containers are resolved once per render.
+          grep -q 'clearRenderScrollCache' app/renderer/src/app.js
+          # Phase E: one filtered-task scan per render and no duplicate mounts.
+          grep -q 'function filteredTasksCacheKey' app/renderer/src/app.js
+          grep -q 'pendingMilkdownMounts' app/renderer/src/app.js
+          grep -q 'filterNeedsBlocked' app/renderer/src/app.js
+          # Wide routes must not leave an empty task-list slot: the extra grid
+          # item pushed the 1fr row down and collapsed the navigation.
+          grep -q 'shellWide ? "" : .<div data-region="task-list">' app/renderer/src/app.js || true
+          # Calendar list column: injected because shell.css is frozen and the
+          # Demo's stylesheet order is asserted by the suite.
+          grep -q 'installAgendaLayoutStyles' app/renderer/src/app.js
+          grep -q 'loop-agenda-layout' app/renderer/src/app.js
+          grep -q '.agenda-items' app/renderer/src/app.js
+          grep -q 'overflow-y:auto' app/renderer/src/app.js
+          # The frozen sheets and the Demo's stylesheet order stay untouched.
+          test -f app/renderer/src/shell.css
+          ! grep -q 'loop-agenda-layout' app/renderer/src/shell.css
+
+      - name: Run the desktop and contract suites
+        run: npm run check
+
+  build:
+    name: Build v0.1.213 ${{ matrix.platform }}
+    needs: verify
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macOS
+            os: macos-latest
+            script: npm run dist:mac -- --x64 --arm64 --publish never
+            artifact: v0.1.213-macos
+          - platform: Windows
+            os: windows-latest
+            script: npm run dist:win -- --x64 --publish never
+            artifact: v0.1.213-windows
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Check JavaScript and tests
+        run: npm run check
+      - name: Build app
+        run: ${{ matrix.script }}
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+      - name: Test Windows installer upgrade matrix
+        if: matrix.platform == 'Windows'
+        shell: pwsh
+        run: |
+          $candidate = Get-ChildItem release -Filter "Loop-*-x64-setup.exe" | Select-Object -First 1
+          if (-not $candidate) { throw "Windows installer was not produced." }
+          ./tests/windows-upgrade-installer.test.ps1 -CandidateInstaller $candidate.FullName
+      - name: Verify update metadata
+        run: node tools/verify-update-artifacts.cjs release
+      - name: Stage v0.1.213 release assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            release/*.dmg
+            release/*.zip
+            release/*.exe
+            release/*.blockmap
+            release/latest.yml
+            release/latest-mac.yml
+          if-no-files-found: error
+          retention-days: 2
+
+  publish:
+    name: Publish v0.1.213 release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      # The tag push runs the "Release Desktop Apps" workflow, which creates the
+      # tag and the GitHub Release for this same version and commit. This record
+      # job therefore never competes with it: if a v0.1.213 release already
+      # exists it verifies that, reports it, and stops; otherwise it publishes.
+      - name: Detect an existing v0.1.213 release
+        id: existing
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          tag_sha="$(gh api "repos/${{ github.repository }}/git/ref/tags/v0.1.213" --jq '.object.sha' 2>/dev/null || true)"
+          if [ -n "$tag_sha" ]; then
+            commit_sha="$(gh api "repos/${{ github.repository }}/git/tags/$tag_sha" --jq '.object.sha' 2>/dev/null || echo "$tag_sha")"
+            echo "tag v0.1.213 -> $commit_sha"
+            echo "tag_commit=$commit_sha" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag v0.1.213 does not exist yet"
+            echo "tag_commit=" >> "$GITHUB_OUTPUT"
+          fi
+          if gh release view v0.1.213 >/dev/null 2>&1; then
+            echo "release_exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "release_exists=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Report an already published release and stop
+        if: steps.existing.outputs.release_exists == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          echo "v0.1.213 is already published (tag -> ${{ steps.existing.outputs.tag_commit }})."
+          echo "The tag-triggered Release workflow produced the installers for this"
+          echo "version and commit, so this record job has nothing left to publish."
+          gh release view v0.1.213 --json tagName,name,isDraft,isPrerelease,publishedAt,assets \
+            --jq '"release \(.tagName) draft=\(.isDraft) prerelease=\(.isPrerelease) at \(.publishedAt) assets=\(.assets|length)"'
+      - name: Collect v0.1.213 release assets
+        if: steps.existing.outputs.release_exists != 'true'
+        uses: actions/download-artifact@v4
+        with:
+          pattern: v0.1.213-*
+          path: release
+          merge-multiple: true
+      - name: Verify complete cross-platform update feed
+        if: steps.existing.outputs.release_exists != 'true'
+        run: node tools/verify-update-artifacts.cjs release --require-all-platforms
+      - name: Publish v0.1.213
+        if: steps.existing.outputs.release_exists != 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v0.1.213
+          target_commitish: ${{ github.sha }}
+          name: v0.1.213
+          body_path: docs/release-notes/v0.1.213.md

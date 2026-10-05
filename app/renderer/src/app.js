@@ -31,6 +31,33 @@ const KNOWLEDGE_RECOVERY_MAX_INTERVAL_MS = 5000;
 const DATA_VERSION = 2;
 const KNOWLEDGE_MIGRATION_VERSION = 1;
 const RECENTLY_DELETED_LIMIT = 500;
+/**
+ * Calendar list column: fixed height with an internally scrolling task list.
+ *
+ * shell.css is the frozen Demo baseline and index.html must keep the Demo's
+ * exact stylesheet order (both are asserted by tests), so this correction is
+ * injected here instead. It must run at load time, before the first paint, or
+ * the column would flash at its content height.
+ *
+ * Without it the agenda column is sized to its content: 30 tasks measured
+ * 4861px against an 820px window, so every entry below the fold was unreachable.
+ */
+(function installAgendaLayoutStyles() {
+  const id = "loop-agenda-layout";
+  // The renderer tests load this file in a VM without a full document.
+  if (!document?.head || typeof document.getElementById !== "function") return;
+  if (document.getElementById(id)) return;
+  const style = document.createElement("style");
+  style.id = id;
+  style.textContent = `
+.calendar-layout{height:100%;max-height:100%;min-height:0;align-items:start}
+.agenda{display:flex;flex-direction:column;max-height:100%;min-height:0;overflow:hidden}
+.agenda-items{flex:0 1 auto;min-height:0;overflow-y:auto;padding-right:4px;margin-bottom:12px}
+.agenda>.button,.agenda>.agenda-empty{flex:0 0 auto}
+`;
+  document.head.appendChild(style);
+})();
+
 const desktopStorage = window.personalTaskTrack?.storage;
 const desktopDataBackup = window.personalTaskTrack?.dataBackup;
 const desktopKnowledgeRecovery = window.personalTaskTrack?.knowledgeRecovery;
@@ -335,6 +362,15 @@ let nodeDetailSaveFeedbackTimer = 0;
 let activeSettingsPage = "appearance";
 let settingsMotion = "none";
 let pendingPayload = null;
+// Phase C: fingerprint of the payload already queued, and of the last payload
+// the main process acknowledged. Navigation re-runs save() without any model
+// change, and those calls must not queue another whole-database write.
+let pendingPayloadFingerprint = "";
+let lastWrittenPayloadFingerprint = "";
+// Cheap fingerprint of the persistable state, used as save()'s fast path so an
+// ordinary render does not serialize the task database just to find no change.
+let lastWrittenPersistedRevision = "";
+let pendingPersistedRevision = "";
 let saveInFlight = false;
 let saveInFlightPromise = null;
 let conclusionNoticeTimer = 0;
@@ -356,6 +392,12 @@ let deadlinePopoverTaskId = "";
 let deadlinePickerDate = "";
 let deadlinePickerMonth = "";
 const milkdownEditors = new Map();
+/**
+ * Editor keys whose create() promise is still outstanding. render() can run
+ * again before a mount resolves, so this keeps a second pass from building a
+ * duplicate editor for the same host.
+ */
+const pendingMilkdownMounts = new Set();
 const nodeNoteDrafts = new Map();
 const nodeNoteSaveTimers = new Map();
 const knowledgeRecoveryTimers = new Map();
@@ -1732,9 +1774,88 @@ function save() {
     return;
   }
 
+  // Fast path: when nothing persistable changed there is no need to serialize
+  // the whole task database (measured ~1.6ms for 200 tasks) just to discover
+  // that. A real change still goes through the exact serialized comparison.
+  // This must run before pendingPayload is touched: assigning it first made the
+  // guard below depend on state this function had just written.
+  const revision = persistedStateRevision();
+  if (
+    revision === lastWrittenPersistedRevision
+    && revision === pendingPersistedRevision
+    && !pendingPayload
+    && !saveInFlight
+  ) {
+    window.clearTimeout(saveTimer);
+    saveTimer = 0;
+    return;
+  }
+  if (revision === pendingPersistedRevision && saveTimer && pendingPayload) return;
   pendingPayload = payload;
+  const fingerprint = payloadFingerprint(payload);
+  // Comparing the payload keeps this exact: the write is skipped only when the
+  // bytes on disk would be identical, so switching groups or filters still
+  // persists any changed field.
+  if (fingerprint === lastWrittenPayloadFingerprint) {
+    pendingPayload = null;
+    pendingPayloadFingerprint = "";
+    window.clearTimeout(saveTimer);
+    saveTimer = 0;
+    return;
+  }
+  pendingPersistedRevision = revision;
+  pendingPayloadFingerprint = fingerprint;
   window.clearTimeout(saveTimer);
   saveTimer = window.setTimeout(flushSave, 80);
+}
+
+/**
+ * Fingerprint of every field a save persists, used as the fast path in save().
+ *
+ * A single string pass over the task data costs roughly a sixth of serializing
+ * the whole payload. Correctness does not depend on this being exhaustive: any
+ * change it misses only costs one unnecessary write, because the serialized
+ * comparison in save() still runs on that path.
+ */
+function persistedStateRevision() {
+  const parts = [`n${state.tasks.length}`];
+  for (const task of state.tasks) {
+    parts.push(
+      `${task.id}\u0001${task.order}\u0001${task.groupId}\u0001${task.status}\u0001${task.priority}\u0001`
+      + `${task.title}\u0001${task.updatedAt}\u0001${task.createdAt}\u0001${task.deadlineAt}\u0001`
+      + `${task.deadlineReminderMinutes}\u0001${task.resolvedAt}\u0001${task.captureSource || ""}\u0001`
+      + `${task.estimateMinutes}\u0001${task.todayTaskOrder || 0}\u0001${task.todayQuickCaptureOrder || 0}\u0001`
+      + `${task.description.length}\u0001${task.hypothesis.length}\u0001${task.conclusion.length}\u0001`
+      + `${task.notes.length}\u0001${JSON.stringify(task.tags)}\u0001`,
+    );
+    for (const node of flatten(task.nodes)) {
+      parts.push(
+        `d${node.id}\u0001${node.title}\u0001${node.status}\u0001${node.order}\u0001`
+        + `${node.updatedAt}\u0001${node.note.length}\u0001${node.collapsed ? 1 : 0}`,
+      );
+    }
+  }
+  parts.push(`g${state.taskGroups.length}`);
+  for (const group of state.taskGroups) parts.push(`${group.id}\u0001${group.title}\u0001${group.order}`);
+  parts.push(
+    `s${state.activeGroupId}\u0001${state.flowWidths.title}\u0001${state.flowWidths.note}\u0001`
+    + `${state.sidebarWidth}\u0001${state.detailHeight}\u0001${state.theme}\u0001${state.zhFont}\u0001`
+    + `${state.enFont}\u0001${state.fontScale}\u0001${state.taskFilter}\u0001${state.priorityFilter}\u0001`
+    + `${state.captureSourceFilter}\u0001${state.newTaskPriority}\u0001${state.installationId}\u0001`
+    + `${JSON.stringify(state.workNavigation)}\u0001${state.recentlyDeleted.length}\u0001`
+    + `${JSON.stringify(state.attachments).length}`,
+  );
+  return parts.join("\u0002");
+}
+
+/**
+ * Fingerprint of everything a save would persist, excluding the write
+ * timestamp. `updatedAt` records when the write happened, so including it would
+ * make every payload unique and defeat the comparison.
+ */
+function payloadFingerprint(payload) {
+  const { updatedAt: _updatedAt, ...persistable } = payload;
+  return JSON.stringify(persistable);
 }
 
 function saveFlowWidths() {
@@ -1757,14 +1878,25 @@ async function flushSave() {
   if (!pendingPayload) return true;
   const payload = pendingPayload;
   pendingPayload = null;
+  const payloadFingerprintValue = payloadFingerprint(payload);
+  const payloadRevision = pendingPersistedRevision;
   saveInFlight = true;
   saveInFlightPromise = (async () => {
     try {
       await desktopStorage.write(payload);
+      lastWrittenPayloadFingerprint = payloadFingerprintValue;
+      lastWrittenPersistedRevision = payloadRevision;
+      pendingPersistedRevision = payloadRevision;
       return true;
     } catch (error) {
       console.error("Failed to save local task data.", error);
-      if (!pendingPayload) pendingPayload = payload;
+      if (!pendingPayload) {
+        // Re-queueing the payload must leave the fingerprints consistent with
+        // the bytes still on disk, or the retry could be mistaken for a no-op.
+        pendingPayload = payload;
+        pendingPersistedRevision = payloadRevision;
+        pendingPayloadFingerprint = "";
+      }
       alert("本地任务数据保存失败，请检查磁盘空间或权限后重试。Recovery 草稿将继续保留。");
       return false;
     }
@@ -1845,10 +1977,31 @@ function captureScrollViewport(selector, datasetKey, nextViewKey) {
   };
 }
 
+/**
+ * Scroll containers resolved for the current render.
+ *
+ * render() restores the same four containers up to five times per pass. The
+ * root rewrite makes element references stale, so the cache is invalidated
+ * right after the regions are placed, not at the start of render().
+ */
+let renderScrollContainers = null;
+
+function clearRenderScrollCache() {
+  renderScrollContainers = null;
+}
+
+function scrollContainer(selector) {
+  if (!renderScrollContainers) renderScrollContainers = new Map();
+  if (renderScrollContainers.has(selector)) return renderScrollContainers.get(selector);
+  const element = document.querySelector(selector);
+  renderScrollContainers.set(selector, element);
+  return element;
+}
+
 function restoreScrollViewport(snapshot, selector) {
   if (!snapshot || snapshot.previousViewKey !== snapshot.nextViewKey) return;
 
-  const element = document.querySelector(selector);
+  const element = scrollContainer(selector);
   if (!element) return;
 
   const maxTop = Math.max(0, element.scrollHeight - element.clientHeight);
@@ -1861,6 +2014,106 @@ function restoreScrollViewport(snapshot, selector) {
 // ============================================================
 // RENDERING -- main render() and all DOM builders
 // ============================================================
+/** Per-region outcome of the most recent render, exposed for the harness. */
+const regionReuse = new Map();
+globalThis.__loopLastRegionReuse = regionReuse;
+
+/**
+ * The markup this code last generated for each retained region.
+ *
+ * The cache cannot be keyed by element: rewriting `#root` always builds a fresh
+ * element for every region before this runs, so an identity check would never
+ * hold and nothing would ever be reused. Comparing against the live DOM instead
+ * would also always report a change, because post-render hooks add runtime
+ * attributes (`data-action-bound`, row bindings) and the browser re-serializes
+ * `<img>` as `<img />`. Storing the generated markup avoids both problems.
+ */
+const retainedRegionMarkup = new Map();
+/**
+ * The element rendered for each region last time. The root skeleton carries an
+ * empty placeholder per region, so a region whose content is unchanged is put
+ * back from here instead of being parsed a second time.
+ */
+const regionElements = new Map();
+
+/**
+ * Fingerprint a region's generated markup.
+ *
+ * A single pass is used on purpose: region markup reaches tens of kilobytes,
+ * and normalizing it with repeated regex replaces cost more than the DOM work
+ * the reuse saves on navigations that legitimately change the list.
+ *
+ * Normalization only has to be consistent between calls. Whitespace differences
+ * caused by template-literal indentation therefore collapse to the same
+ * fingerprint, because only newlines, tabs and repeated spaces are treated as
+ * insignificant - and a real content change alters the length or the hash.
+ */
+function markupFingerprint(html) {
+  const text = String(html ?? "");
+  let hash = 2166136261;
+  let lastWasSpace = false;
+  for (let index = 0; index < text.length; index += 1) {
+    let code = text.charCodeAt(index);
+    const isSpace = code === 32 || code === 9 || code === 10 || code === 13;
+    if (isSpace) {
+      if (lastWasSpace) continue;
+      lastWasSpace = true;
+      code = 32;
+    } else {
+      lastWasSpace = false;
+    }
+    hash ^= code;
+    hash = Math.imul(hash, 16777619);
+  }
+  return `${text.length}:${(hash >>> 0).toString(36)}`;
+}
+
+/**
+ * Keep a generated region only when its content changed.
+ *
+ * The rewritten root installs an identical copy of every unchanged region, so
+ * this swaps the previously rendered element back in. Reusing the node keeps
+ * its per-region state: list scroll position, and the idempotency bindings
+ * recorded on each row.
+ *
+ * Reuse is rejected for empty markup, so a region that is no longer rendered
+ * (the task list on a wide route) cannot fall back to a stale element.
+ */
+function retainRegion(name, markup) {
+  const placeholder = document.querySelector(`#root [data-region="${name}"]`);
+  if (!placeholder) return;
+  const next = markup ?? "";
+  const fingerprint = markupFingerprint(next);
+  const cached = regionElements.get(name);
+  // The root rewrite detaches the region that was rendered last time, so a
+  // cached element is usable exactly when it is no longer in the document. The
+  // fingerprint must also match, or the region's content really did change.
+  if (next.trim() && cached && !cached.isConnected && retainedRegionMarkup.get(name) === fingerprint) {
+    placeholder.replaceWith(cached);
+    regionReuse.set(name, "reused");
+    return;
+  }
+  if (!next.trim()) {
+    // Empty markup (the task list on a wide route) must clear the slot rather
+    // than fall back to a stale element.
+    retainedRegionMarkup.delete(name);
+    regionElements.delete(name);
+    regionReuse.set(name, "updated");
+    return;
+  }
+  const template = document.createElement("template");
+  template.innerHTML = next;
+  const replacement = template.content.firstElementChild;
+  if (!replacement) {
+    regionReuse.set(name, "updated");
+    return;
+  }
+  retainedRegionMarkup.set(name, fingerprint);
+  regionElements.set(name, replacement);
+  placeholder.replaceWith(replacement);
+  regionReuse.set(name, "updated");
+}
+
 /**
  * Main render entry: reconstruct the entire DOM from state.
  * Sequence: capture drafts -> flush drafts -> save -> destroy editors
@@ -1868,6 +2121,7 @@ function restoreScrollViewport(snapshot, selector) {
  * This is called after every state change.
  */
 function render() {
+  clearFilteredTasksCache();
   if (typeof shellBeforeRender === "function") shellBeforeRender();
   reconcileWorkNavigationRuntime();
   const task = activeTask();
@@ -1908,12 +2162,19 @@ function render() {
   if (taskGroupSelectTaskId && taskGroupSelectTaskId !== task?.id) taskGroupSelectTaskId = "";
   if (deadlinePopoverTaskId && deadlinePopoverTaskId !== task?.id) deadlinePopoverTaskId = "";
   const shellWide = shellIsWide();
+  // Regions that a pane switch must not rebuild. The skeleton below carries an
+  // empty placeholder for each of them, so their markup is parsed at most once
+  // per render and an unchanged region is restored as the same DOM nodes - which
+  // keeps its list scroll position and the bindings recorded on each row.
+  const navigationMarkup = renderShellNavigation();
+  const topbarMarkup = renderShellTopbar();
+  const listMarkup = shellWide ? "" : renderShellTaskList(filteredTasks());
   document.querySelector("#root").innerHTML = `
     <main class="app ${state.navCollapsed ? "nav-collapsed " : ""}${shellWide ? "app-wide" : ""}" style="--list-width:${normalizeSidebarWidth(state.sidebarWidth)}px">
       ${state.searchOpen ? `<div class="global-search-layer" data-global-search-layer aria-hidden="true"></div>` : ""}
-      ${renderShellNavigation()}
-      ${renderShellTopbar()}
-      ${shellWide ? "" : renderShellTaskList(filteredTasks())}
+      <div data-region="navigation"></div>
+      <div data-region="topbar"></div>
+      ${shellWide ? "" : '<div data-region="task-list"></div>'}
       <section class="workspace ${shellWide ? "workspace-wide" : ""}${!shellWide && task && state.taskPane === "notes" && !shellTaskIsNote(task) ? " knowledge-workspace" : ""}" data-task-id="${escAttr(task?.id || "")}" aria-label="${shellWide ? "全屏页面" : "任务工作台"}">
         ${state.calendarOpen ? renderShellCalendar() : state.reviewOpen ? renderShellReview() : state.settingsOpen ? renderShellSettings() : renderShellWorkspace(task)}
       </section>
@@ -1926,6 +2187,11 @@ function render() {
     ${renderTodayWidgetRestore()}
     ${renderKnowledgeDraftPrompt()}
   `;
+  retainRegion("navigation", navigationMarkup);
+  retainRegion("topbar", topbarMarkup);
+  retainRegion("task-list", listMarkup);
+  // The root was just rewritten, so any previously resolved container is stale.
+  clearRenderScrollCache();
   restoreCachedKnowledgePane(task);
   bind();
   if (typeof shellAfterRender === "function") shellAfterRender();
@@ -1956,6 +2222,10 @@ function render() {
     restoreScrollViewport(nodeDetailViewport, "[data-node-detail-scroll]");
     restoreScrollViewport(knowledgeViewport, "[data-knowledge-scroll]");
   };
+  // The repeated calls are load-bearing: the group and repository scroll tests
+  // pin the rule that a view keeps its offset while a different group or filter
+  // resets it. Their measured cost is ~0.075ms per render, so keeping the
+  // original sequence is cheaper than re-deriving that rule.
   restoreGroupScroll();
   restoreRenderViewports();
   focusPendingElement();
@@ -3280,15 +3550,54 @@ function syncContextMenuRoot() {
  * Get tasks matching current filters (search query + task filter + priority filter).
  * @returns {Array} Filtered task list
  */
+/**
+ * Cache for the current render's filtered task list.
+ *
+ * render() asks for it two to four times (list region, sidebar count, list
+ * header), and each call walks every task and flattens its node tree. The key
+ * covers the state the result depends on plus the current minute, so a caller
+ * that passes an explicit `at` (as the review and deadline tests do) never gets
+ * a list computed for a different time.
+ */
+let filteredTasksCache = null;
+
+function clearFilteredTasksCache() {
+  filteredTasksCache = null;
+}
+
+function filteredTasksCacheKey(at) {
+  return `${state.query}\u0001${state.taskFilter}\u0001${state.todayFilter}\u0001`
+    + `${state.taskDeadlineFilter}\u0001${state.taskDateFilter}\u0001${state.priorityFilter}\u0001`
+    + `${state.captureSourceFilter}\u0001${state.activeGroupId}\u0001${state.tasks.length}\u0001`
+    + `${Math.floor(at.getTime() / 60000)}`;
+}
+
 function filteredTasks({ includeQuery = true, at = loopNow() } = {}) {
+  if (!includeQuery) return computeFilteredTasks({ includeQuery, at });
+  const key = filteredTasksCacheKey(at);
+  if (filteredTasksCache && filteredTasksCache.key === key) return filteredTasksCache.value;
+  const value = computeFilteredTasks({ includeQuery, at });
+  filteredTasksCache = { key, value };
+  return value;
+}
+
+function computeFilteredTasks({ includeQuery = true, at = loopNow() } = {}) {
   const q = state.query.trim().toLowerCase();
   const deadlineScoped = state.taskDeadlineFilter !== "all" || Boolean(state.taskDateFilter);
   const repositoryTypes = repositoryTypeSelection();
+  // Only the blocked/later filters need the node tree walked, and only the
+  // blocked filter needs the tag set. Computing both for every task made the
+  // common "all"/"active" filters pay for a scan they never used.
+  const filterNeedsBlocked = state.taskFilter === "blocked";
+  const filterNeedsLater = state.taskFilter === "later";
+  const filterNeedsTags = filterNeedsBlocked || filterNeedsLater;
   return taskListScopeTasks()
     .filter((task) => {
-      const tags = normalizeTaskTags(task.tags);
-      const hasBlocked = flatten(task.nodes).some((node) => node.status === "blocked");
-      const hasLater = flatten(task.nodes).some((node) => node.status === "later");
+      const tags = filterNeedsTags ? normalizeTaskTags(task.tags) : null;
+      const hasBlocked = filterNeedsBlocked
+        && flatten(task.nodes).some((node) => node.status === "blocked");
+      const hasLater = filterNeedsLater
+        && flatten(task.nodes).some((node) => node.status === "later");
       if (state.taskFilter === "today") {
         // The Today route switches between the active list and today's
         // completions; anything else keeps the phase17 scope.
@@ -5321,6 +5630,11 @@ function bindTaskRepositoryRows(scope = document) {
   });
 
   scope.querySelectorAll(".task-item[data-task-id]").forEach((element) => {
+    // Reusing a list region across renders means this runs again over live
+    // nodes. Bound markers keep selection and drag handlers single-shot so a
+    // reused row cannot accumulate duplicate listeners.
+    if (element.dataset.rowSelectionBound === "1") return;
+    element.dataset.rowSelectionBound = "1";
     element.addEventListener("pointerdown", (event) => {
       startTaskLongPress(event);
       const select = event.target.closest("select");
@@ -5433,6 +5747,8 @@ function bindTaskRepositoryRows(scope = document) {
   }
 
   document.querySelectorAll(".task-item[data-task-id]").forEach((element) => {
+    if (element.dataset.rowDragBound === "1") return;
+    element.dataset.rowDragBound = "1";
     element.addEventListener("dragstart", (event) => {
       if (event.target.closest(".task-check, input, textarea, select, button, [contenteditable]")) {
         event.preventDefault();
@@ -5449,6 +5765,8 @@ function bindTaskRepositoryRows(scope = document) {
   });
 
   document.querySelectorAll("[data-task-drag-target]").forEach((element) => {
+    if (element.dataset.taskDropBound === "1") return;
+    element.dataset.taskDropBound = "1";
     element.addEventListener("dragover", (event) => {
       const hasTaskDrag = Array.from(event.dataTransfer.types || []).includes("text/plain");
       if (!hasTaskDrag) return;
@@ -5474,6 +5792,13 @@ function bindTaskRepositoryRows(scope = document) {
   });
 
   document.querySelectorAll("[data-action]").forEach((element) => {
+    // Reused regions keep their nodes, so this loop revisits buttons that
+    // already have the handler. Binding again would run the action twice, and a
+    // toggling action (calendar, review, theme) would then cancel itself out -
+    // the button would appear dead. Other handlers bind these elements too, so
+    // "actionBound" cannot be the guard: use a key only this binder sets.
+    if (element.dataset.actionClickBound === "1") return;
+    element.dataset.actionClickBound = "1";
     element.dataset.actionBound = "1";
     element.addEventListener("click", (event) => {
       event.stopPropagation();
@@ -5499,6 +5824,8 @@ function bindTaskRepositoryRows(scope = document) {
   });
 
   document.querySelectorAll("[data-group-title]").forEach((element) => {
+    if (element.dataset.groupTitleBound === "1") return;
+    element.dataset.groupTitleBound = "1";
     element.addEventListener("click", (event) => event.stopPropagation());
     element.addEventListener("input", (event) => renameGroup(event.target.dataset.groupTitle, event.target.value, false));
     element.addEventListener("blur", (event) => {
@@ -5731,6 +6058,12 @@ function bindTaskRepositoryRows(scope = document) {
   });
 
   document.querySelectorAll("[data-setting-button]").forEach((element) => {
+    // Reused regions keep their nodes across renders, so this loop runs again
+    // over buttons that already carry the handler. Without the guard each
+    // navigation stacks another click listener, and one click then applies the
+    // setting - and renders - several times.
+    if (element.dataset.settingBound === "1") return;
+    element.dataset.settingBound = "1";
     element.addEventListener("click", (event) => {
       event.stopPropagation();
       if (event.currentTarget.closest(".app-navigation-rail")) {
@@ -5746,6 +6079,8 @@ function bindTaskRepositoryRows(scope = document) {
   });
 
   document.querySelectorAll("[data-deadline-reminder]").forEach((element) => {
+    if (element.dataset.deadlineBound === "1") return;
+    element.dataset.deadlineBound = "1";
     element.addEventListener("click", (event) => event.stopPropagation());
     element.addEventListener("change", (event) => {
       const task = state.tasks.find((item) => item.id === event.target.dataset.taskId);
@@ -6730,7 +7065,17 @@ function captureMountedMilkdownDrafts() {
     const { host, instance, taskId, nodeId } = entry || {};
     if (!host || !taskId || !instance?.getMarkdown) return;
     try {
-      updateNodeNoteDraft(taskId, nodeId, instance.getMarkdown(), host);
+      const markdown = instance.getMarkdown() ?? "";
+      // An unchanged document must not re-schedule stats, recovery and draft
+      // saves. The editor normalizes Markdown on the way in (for example a
+      // heading right after a paragraph gains a blank line), so a note that has
+      // merely been opened never compares equal to the stored text. Adopting the
+      // editor's own serialization as the model value converges after one write
+      // and stops every later navigation from queueing a full task-data save.
+      const task = state.tasks.find((item) => item.id === taskId);
+      const node = task && nodeId ? findNode(task.nodes, nodeId) : null;
+      if (task && (node ? node.note : task.notes) === markdown) return;
+      updateNodeNoteDraft(taskId, nodeId, markdown, host);
     } catch {
       // Ignore transient editor teardown states; the last onChange draft is still used.
     }
@@ -6814,6 +7159,11 @@ function mountMilkdownEditors() {
     if (!task || (nodeId && !node)) return;
     const editorKey = noteDraftKey(taskId, nodeId);
     if (milkdownEditors.has(editorKey)) return;
+    // A render can run again before create() resolves. Without this registry
+    // the second pass would build a second editor for the same host, leaking
+    // the first one and losing its content.
+    if (pendingMilkdownMounts.has(editorKey)) return;
+    pendingMilkdownMounts.add(editorKey);
     const rawMarkdown = nodeNoteDrafts.get(editorKey)?.markdown ?? (node ? node.note : task.notes) ?? "";
     const markdown = node ? rawMarkdown : hydrateKnowledgeEditorMarkdown(rawMarkdown);
 
@@ -6850,6 +7200,9 @@ function mountMilkdownEditors() {
       .catch((error) => {
         console.error("Milkdown failed to mount", error);
         mountFallbackMarkdownEditor(host);
+      })
+      .finally(() => {
+        pendingMilkdownMounts.delete(editorKey);
       });
   });
 }
@@ -9072,28 +9425,69 @@ function mainWindowShowsSelection() {
   return document.visibilityState !== "hidden";
 }
 
-function todayWidgetSnapshot() {
-  const rootFontSize = Number.parseFloat(window.getComputedStyle?.(document.documentElement)?.fontSize);
-  const rootFontScale = window.getComputedStyle?.(document.documentElement)?.getPropertyValue("--font-scale")?.trim();
-  const rootFontSans = window.getComputedStyle?.(document.documentElement)?.getPropertyValue("--sans")?.trim();
+let cachedTodayWidgetAppearance = null;
+let cachedTodayWidgetAppearanceKey = "";
+
+/**
+ * Read the appearance values the widget mirrors.
+ *
+ * `getComputedStyle` forces a style recalculation and measured 2.9-4.7ms on a
+ * 200-task window, so the result is cached and only re-read when one of the
+ * state values it is derived from changes.
+ */
+function todayWidgetAppearance() {
+  const key = `${state.theme}\u0003${state.zhFont}\u0003${state.enFont}\u0003${state.fontScale}`;
+  if (cachedTodayWidgetAppearance && cachedTodayWidgetAppearanceKey === key) {
+    return cachedTodayWidgetAppearance;
+  }
+  const computed = window.getComputedStyle?.(document.documentElement);
+  const rootFontSize = Number.parseFloat(computed?.fontSize);
+  cachedTodayWidgetAppearance = {
+    theme: state.theme,
+    zhFont: state.zhFont,
+    enFont: state.enFont,
+    fontSize: Number.isFinite(rootFontSize) ? rootFontSize : 16.5,
+    // the phase-12/13 widget layers size everything with --font-scale, so the
+    // widget window has to receive the same multiplier the main window uses.
+    fontScale: computed?.getPropertyValue("--font-scale")?.trim() || "1",
+    // shell.js composes --sans from the font preferences ("TaskTrack English
+    // Inter","TaskTrack Chinese System",...). The widget window loads the same
+    // @font-face sheet, so passing the composed stack keeps both windows on
+    // one font pipeline instead of duplicating the family tables.
+    sans: computed?.getPropertyValue("--sans")?.trim() || "",
+  };
+  cachedTodayWidgetAppearanceKey = key;
+  return cachedTodayWidgetAppearance;
+}
+
+/**
+ * Cheap signature of the state that decides the widget's rows and appearance.
+ *
+ * The data half is a fingerprint of the persisted task data, which covers every
+ * field the widget rows read. The payload fingerprint is deliberately not used:
+ * it also covers UI-only fields such as the active group and filters, so
+ * ordinary selection changes would defeat the gate and rebuild the row list on
+ * every click.
+ */
+function todayWidgetSignature() {
+  return [
+    loopTodayKey(),
+    persistedStateRevision(),
+    mainWindowShowsSelection() ? state.activeTaskId || "" : "",
+    state.theme,
+    state.zhFont,
+    state.enFont,
+    state.fontScale,
+  ].join("\u0003");
+}
+
+function todayWidgetSnapshot(appearance = todayWidgetAppearance()) {
+  const quickCaptures = todayQuickCaptureItems().filter((item) => item.status !== "done");
   return {
     date: loopTodayKey(),
     // Phase18: "今日任务已完成" instead of "暂无今日任务" once today's work is done.
     completedToday: shellCompletedToday().length,
-    appearance: {
-      theme: state.theme,
-      zhFont: state.zhFont,
-      enFont: state.enFont,
-      fontSize: Number.isFinite(rootFontSize) ? rootFontSize : 16.5,
-      // the phase-12/13 widget layers size everything with --font-scale, so the
-      // widget window has to receive the same multiplier the main window uses.
-      fontScale: rootFontScale || "1",
-      // shell.js composes --sans from the font preferences ("TaskTrack English
-      // Inter","TaskTrack Chinese System",...). The widget window loads the same
-      // @font-face sheet, so passing the composed stack keeps both windows on
-      // one font pipeline instead of duplicating the family tables.
-      sans: rootFontSans || "",
-    },
+    appearance,
     // the Demo marks the row open in the main window with .current. The widget
     // is a separate always-on window, so a stale selection there would keep one
     // row highlighted while the main window is in the background: only publish
@@ -9105,14 +9499,23 @@ function todayWidgetSnapshot() {
       nextText,
       kind,
     })),
-    quickCaptures: todayQuickCaptureItems().filter((item) => item.status !== "done"),
-    quickCaptureTotal: todayQuickCaptureItems().filter((item) => item.status !== "done").length,
+    quickCaptures,
+    quickCaptureTotal: quickCaptures.length,
     groups: sort(state.taskGroups).map((group) => ({ id: group.id, title: group.title })),
   };
 }
 
+let todayWidgetSnapshotSignature = "";
+
 function publishTodayWidgetSnapshot() {
-  desktopTodayWidget?.publish(todayWidgetSnapshot());
+  if (!desktopTodayWidget) return;
+  // Phase C: render() calls this on every state change, so gate the snapshot on
+  // a cheap signature instead of recomputing and re-sending it each time. The
+  // deadline reminder path already worked this way.
+  const signature = todayWidgetSignature();
+  if (signature === todayWidgetSnapshotSignature) return;
+  todayWidgetSnapshotSignature = signature;
+  desktopTodayWidget.publish(todayWidgetSnapshot());
 }
 
 function deadlineReminderSnapshot() {
