@@ -263,6 +263,8 @@ function shellRenderBulkDialog(returnAction, title, body, focusAction) {
 // Dispatcher
 // ------------------------------------------------------------
 
+/** Phase26: batch delete goes through the same archive service as a single
+ *  delete, using the real selected ids and the same impact dialog. */
 async function shellBulkActionRun(action, element, event) {
   const list = shellBulkSelected();
   switch (action) {
@@ -354,6 +356,14 @@ async function shellBulkActionRun(action, element, event) {
       return true;
     }
     case "delete":
+      // Phase26: the unified archive confirmation replaces this stage's own
+      // delete review; it uses the same real selected ids and the same
+      // draft-capture-before-snapshot rule.
+      if (typeof recovery26ReviewDeleteBulk === "function") {
+        shellCloseOverlay({ restoreFocus: false });
+        recovery26ReviewDeleteBulk(list.map((task) => task.id));
+        return true;
+      }
       shellBulkReviewDelete();
       return true;
     case "confirm-delete": {

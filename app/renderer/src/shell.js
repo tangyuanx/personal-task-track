@@ -328,7 +328,13 @@ function renderShellTaskRows(list) {
     }
     const filtered = taskListStatsTasks().length > 0;
     const noun = state.captureSourceFilter === "quick" ? "速记" : "任务";
-    return `<div class="empty"><p>${filtered ? `没有匹配的${noun}` : `暂无${noun}`}</p>${filtered ? '<button class="text-button" type="button" data-action="clear-list-filters">清除筛选</button>' : ""}</div>`;
+    // Phase26: the Demo keeps a reachable recovery entrance in the empty list,
+    // without adding a permanent navigation row that would change the height.
+    const archive = typeof state !== "undefined" && Array.isArray(state.recentlyDeleted) ? state.recentlyDeleted.length : 0;
+    const recovery = typeof recovery26Open === "function" && archive
+      ? '<button class="text-button" type="button" data-recovery26="open">最近删除</button>'
+      : "";
+    return `<div class="empty"><p>${filtered ? `没有匹配的${noun}` : `暂无${noun}`}</p>${filtered ? '<button class="text-button" type="button" data-action="clear-list-filters">清除筛选</button>' : ""}${recovery}</div>`;
   }
   return `<ol class="task-rows" aria-label="任务列表">${list.map((task, index) => renderShellTaskRow(task, index + 1)).join("")}</ol>`;
 }

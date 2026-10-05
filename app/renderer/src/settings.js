@@ -113,7 +113,15 @@ function shellSettingsTasks() {
 }
 
 function shellSettingsData() {
+  // Phase26: the Demo puts 最近删除 at the top of 数据; it operates on the
+  // software's own objects, so it stays separate from the whole-workspace
+  // backup/replace/restart flow below it.
+  const deleted = typeof state !== "undefined" && Array.isArray(state.recentlyDeleted) ? state.recentlyDeleted.length : 0;
+  const recoveryEntry = typeof recovery26Open === "function"
+    ? `<div class="recovery26-data-entry"><div>最近删除<small>恢复任务、分组、节点与笔记${deleted ? ` · ${deleted} 项` : ""}</small></div><button class="button" type="button" data-recovery26="open">管理</button></div>`
+    : "";
   return `<h2>数据</h2><p>备份整个工作空间，在需要时恢复。</p>
+    ${recoveryEntry}
     ${shellSettingsAction("完整备份", "包含任务、分组、处理记录、笔记恢复内容及应用偏好。", "导出备份", `data-backup-action="export" ${desktopDataBackup ? "" : "disabled"}`)}
     <h3 class="prefs-subheading">恢复工作空间</h3>
     ${shellSettingsAction("从备份文件恢复", "选择 Loop 完整备份（.loopbackup）。", "选择文件", `data-backup-action="import-file" ${desktopDataBackup ? "" : "disabled"}`)}

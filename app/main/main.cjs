@@ -735,6 +735,15 @@ function createMenu() {
 
 app.whenReady().then(async () => {
   if (!hasSingleInstanceLock) return;
+  // Verification hook: `--phase26-lock-writes` holds the data-maintenance lock
+  // for the whole session, exactly like a backup import does, so a probe can
+  // prove that a refused write loses nothing. It is never passed by the app
+  // itself, releases itself, and changes no product behaviour.
+  if (process.argv.includes("--phase26-lock-writes")) {
+    dataMaintenance.begin("phase26-lock-writes");
+    setTimeout(() => dataMaintenance.end(), 30000).unref?.();
+    console.log("[loop] task-data writes are locked for this session (verification hook)");
+  }
   try {
     // A caller-provided profile is isolated on purpose: never pull the machine's
     // real task database into it (and never write backups next to it).

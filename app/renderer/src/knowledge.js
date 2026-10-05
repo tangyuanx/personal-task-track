@@ -207,6 +207,11 @@ function shellKnowledgeFileMenu(trigger) {
   const task = shellActiveTask();
   if (!task) return;
   const bound = Boolean(task.knowledgeNote?.filePath);
+  // Phase26: a body that is not stored anywhere outside Loop can be removed into
+  // 最近删除 from this same menu, exactly like the Demo's own file menu.
+  const removable = String(task.notes || "").trim()
+    ? '<div class="menu-divider"></div><button class="button danger-action" type="button" role="menuitem" data-recovery26="remove-note" data-task-id="' + escAttr(task.id) + '">' + shellIcon("close") + '移除软件内笔记…</button>'
+    : "";
   shellMountSurface(
     `<div class="surface-popover" role="menu" aria-label="笔记文件操作">${shellSurfaceHeader("笔记文件")}
       <button class="button" type="button" role="menuitem" data-action="relocate-knowledge" data-task-id="${escAttr(task.id)}">打开 Markdown 文件…</button>
@@ -217,7 +222,7 @@ function shellKnowledgeFileMenu(trigger) {
       <button class="button" type="button" role="menuitem" data-action="share-task" data-task-id="${escAttr(task.id)}">分享／导出任务…</button>
       <div class="menu-divider"></div>
       <button class="button" type="button" role="menuitem" data-action="close-knowledge-editor" data-task-id="${escAttr(task.id)}">关闭笔记</button>
-    </div>`,
+      ${removable}</div>`,
     trigger,
     232,
   );

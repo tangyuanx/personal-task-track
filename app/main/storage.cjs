@@ -20,6 +20,17 @@ const workNavigationModel = require("../renderer/src/work-navigation-model.js");
 const DATA_FILE = "task-data.json";
 const DATA_VERSION = 2;
 const KNOWLEDGE_MIGRATION_VERSION = 1;
+// Phase26 -- Recently Deleted.
+//
+// The archive is a first-class collection of `task-data.json` so that a delete
+// and the archive entry that records it are written by the same atomic rename,
+// and so that every existing path (portable export, verified backup, import,
+// legacy recovery and the corrupt-file rescue) already carries it. The schema
+// version travels with the collection, mirroring `knowledgeSchemaVersion`.
+const RECENTLY_DELETED_SCHEMA_VERSION = 1;
+const RECENTLY_DELETED_LIMIT = 500;
+const RECENTLY_DELETED_KINDS = new Set(["task", "quick", "group", "node", "note"]);
+const RECENTLY_DELETED_GROUP_POLICIES = new Set(["keep", "delete"]);
 const DEFAULT_GROUP = { id: "group_inbox", title: "默认", order: 1 };
 const ALL_TASKS_GROUP_ID = "group_all";
 const UNGROUPED_TASKS_GROUP_ID = "group_ungrouped";
@@ -122,6 +133,7 @@ async function readOnDiskDataVersion(userDataPath) {
     return {
       version: Number(parsed.version),
       knowledgeSchemaVersion: Number(parsed.knowledgeSchemaVersion),
+      recentlyDeletedSchemaVersion: Number(parsed.recentlyDeletedSchemaVersion),
     };
   } catch {
     return null;
@@ -131,12 +143,15 @@ async function readOnDiskDataVersion(userDataPath) {
 function isNewerThanSupported(record) {
   if (!record) return false;
   return (Number(record.version) > DATA_VERSION)
-    || (Number(record.knowledgeSchemaVersion) > KNOWLEDGE_MIGRATION_VERSION);
+    || (Number(record.knowledgeSchemaVersion) > KNOWLEDGE_MIGRATION_VERSION)
+    || (Number(record.recentlyDeletedSchemaVersion) > RECENTLY_DELETED_SCHEMA_VERSION);
 }
 
 function assertSupportedDataVersion(data) {
   if (!isRecord(data)) return;
-  if (Number(data.version) > DATA_VERSION || Number(data.knowledgeSchemaVersion) > KNOWLEDGE_MIGRATION_VERSION) {
+  if (Number(data.version) > DATA_VERSION
+    || Number(data.knowledgeSchemaVersion) > KNOWLEDGE_MIGRATION_VERSION
+    || Number(data.recentlyDeletedSchemaVersion) > RECENTLY_DELETED_SCHEMA_VERSION) {
     throw Object.assign(new Error("任务数据版本高于当前应用支持范围"), { code: "UNSUPPORTED_DATA_VERSION" });
   }
 }
@@ -149,6 +164,8 @@ function normalizeTaskData(data) {
   return {
     version: DATA_VERSION,
     knowledgeSchemaVersion: KNOWLEDGE_MIGRATION_VERSION,
+    recentlyDeletedSchemaVersion: RECENTLY_DELETED_SCHEMA_VERSION,
+    recentlyDeleted: normalizeRecentlyDeleted(safeData.recentlyDeleted),
     tasks,
     taskGroups,
     activeGroupId: safeData.activeGroupId === ALL_TASKS_GROUP_ID || safeData.activeGroupId === UNGROUPED_TASKS_GROUP_ID || taskGroups.some((group) => group.id === safeData.activeGroupId)
@@ -208,6 +225,92 @@ function migrateKnowledgeTaskData(data) {
 // existed in the model before but was never persisted, so it is normalized here:
 // [[time, text], ...] pairs, newest first, bounded.
 const TASK_HISTORY_LIMIT = 60;
+
+/**
+ * Phase26 -- normalize one archived record.
+ *
+ * Snapshots are deliberately preserved rather than re-derived: a task snapshot
+ * has to keep its own id, group, order and knowledge-note binding, because that
+ * is exactly what a later restore writes back. Only the envelope is validated,
+ * so an unknown future field inside a snapshot survives a round trip.
+ */
+function normalizeRecentlyDeletedEntry(entry, seenIds) {
+  if (!isRecord(entry)) return null;
+  const kind = RECENTLY_DELETED_KINDS.has(entry.kind) ? entry.kind : "";
+  if (!kind) return null;
+  const id = normalizeIdentifier(entry.id);
+  if (!id || seenIds.has(id)) return null;
+  seenIds.add(id);
+  const normalized = {
+    ...entry,
+    id,
+    kind,
+    deletedAt: normalizeDateValue(entry.deletedAt, new Date().toISOString()),
+    transactionId: normalizeIdentifier(entry.transactionId),
+    objectId: normalizeIdentifier(entry.objectId),
+  };
+  if (kind === "task" || kind === "quick") {
+    const record = isRecord(entry.record) ? entry.record : null;
+    if (!record) return null;
+    normalized.record = record;
+    normalized.objectId = normalizeIdentifier(entry.objectId) || normalizeIdentifier(record.id);
+    normalized.groupId = normalizeIdentifier(entry.groupId);
+    normalized.groupTitle = normalizeText(entry.groupTitle);
+    normalized.position = normalizeOrder(entry.position, 1);
+    normalized.hadKnowledgeNoteBinding = Boolean(entry.hadKnowledgeNoteBinding);
+  } else if (kind === "node") {
+    const record = isRecord(entry.record) ? entry.record : null;
+    if (!record) return null;
+    normalized.record = record;
+    normalized.ownerTaskId = normalizeIdentifier(entry.ownerTaskId);
+    normalized.ownerTaskTitle = normalizeText(entry.ownerTaskTitle);
+    normalized.parentNodeId = normalizeIdentifier(entry.parentNodeId);
+    normalized.parentNodeTitle = normalizeText(entry.parentNodeTitle);
+    normalized.position = normalizeOrder(entry.position, 1);
+    normalized.nodeCount = normalizeOrder(entry.nodeCount, countNodes(record));
+    normalized.objectId = normalizeIdentifier(entry.objectId) || normalizeIdentifier(record.id);
+  } else if (kind === "group") {
+    normalized.groupId = normalizeIdentifier(entry.groupId);
+    normalized.title = normalizeText(entry.title);
+    normalized.groupOrder = normalizeOrder(entry.groupOrder, 1);
+    normalized.policy = RECENTLY_DELETED_GROUP_POLICIES.has(entry.policy) ? entry.policy : "keep";
+    normalized.targetGroupId = normalizeIdentifier(entry.targetGroupId);
+    normalized.wasGrowthSource = Boolean(entry.wasGrowthSource);
+    normalized.groupReplacementId = normalizeIdentifier(entry.groupReplacementId);
+    normalized.members = Array.isArray(entry.members)
+      ? entry.members.filter(isRecord).map((member) => ({
+        ...member,
+        record: isRecord(member.record) ? member.record : null,
+        position: normalizeOrder(member.position, 1),
+      })).filter((member) => member.record)
+      : [];
+    normalized.migrated = Array.isArray(entry.migrated) ? entry.migrated.filter(isRecord).map((item) => ({
+      taskId: normalizeIdentifier(item.taskId),
+      direction: normalizeIdentifier(item.direction),
+      revision: normalizeText(item.revision),
+    })).filter((item) => item.taskId) : [];
+    normalized.objectId = normalizeIdentifier(entry.objectId) || normalized.groupId;
+  } else if (kind === "note") {
+    normalized.ownerTaskId = normalizeIdentifier(entry.ownerTaskId);
+    normalized.ownerTaskTitle = normalizeText(entry.ownerTaskTitle);
+    normalized.groupId = normalizeIdentifier(entry.groupId);
+    normalized.title = normalizeText(entry.title);
+    normalized.body = normalizeText(entry.body);
+    normalized.sourcePath = normalizeText(entry.sourcePath);
+    normalized.knowledgeNote = isRecord(entry.knowledgeNote) ? entry.knowledgeNote : null;
+    normalized.objectId = normalizeIdentifier(entry.objectId) || normalized.ownerTaskId;
+  }
+  return normalized;
+}
+
+function normalizeRecentlyDeleted(value) {
+  const seenIds = new Set();
+  return (Array.isArray(value) ? value : [])
+    .map((entry) => normalizeRecentlyDeletedEntry(entry, seenIds))
+    .filter(Boolean)
+    .sort((a, b) => Date.parse(b.deletedAt) - Date.parse(a.deletedAt))
+    .slice(0, RECENTLY_DELETED_LIMIT);
+}
 
 function normalizeTaskHistory(history) {
   return (Array.isArray(history) ? history : [])
@@ -400,6 +503,12 @@ function isRecord(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
+/** Count a node subtree; also used to size an archived node snapshot. */
+function countNodes(node) {
+  if (!isRecord(node)) return 0;
+  return 1 + (Array.isArray(node.children) ? node.children.reduce((total, child) => total + countNodes(child), 0) : 0);
+}
+
 function normalizeText(value) {
   return typeof value === "string" ? value : value == null ? "" : String(value);
 }
@@ -476,8 +585,11 @@ module.exports = {
   isNewerThanSupported,
   readOnDiskDataVersion,
   KNOWLEDGE_MIGRATION_VERSION,
+  RECENTLY_DELETED_LIMIT,
+  RECENTLY_DELETED_SCHEMA_VERSION,
   dataFilePath,
   migrateKnowledgeTaskData,
+  normalizeRecentlyDeleted,
   normalizeTaskData,
   readTaskData,
   writeTaskData,

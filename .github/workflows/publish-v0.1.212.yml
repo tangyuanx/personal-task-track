@@ -1,0 +1,222 @@
+name: Publish v0.1.212
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/publish-v0.1.212.yml
+
+concurrency:
+  group: publish-v0.1.212
+  cancel-in-progress: false
+
+jobs:
+  # This workflow is the release record for v0.1.212: it runs on demand, and on
+  # any push to main that touches this file.
+  verify:
+    name: Verify v0.1.212 deletion and recovery
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Verify version, syntax and the frozen layer set
+        shell: bash
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          test "$version" = "0.1.212"
+          for f in app/renderer/src/*.js; do node --check "$f"; done
+          for f in app/main/*.cjs; do node --check "$f"; done
+          # Every frozen layer stays byte-identical to its baseline.
+          diff app/renderer/src/widget12.css prototypes/baseline/loop-plane-phase17-frozen/loop-widget-phase12-refinement.css
+          diff app/renderer/src/widget13.css prototypes/baseline/loop-plane-phase17-frozen/loop-widget-phase13.css
+          diff app/renderer/src/settings.css prototypes/baseline/loop-plane-phase17-frozen/loop-settings-phase9.css
+          diff app/renderer/src/refinement.css prototypes/baseline/loop-plane-phase17-frozen/loop-refinement.css
+          diff app/renderer/src/time.css prototypes/baseline/loop-plane-phase18-frozen/loop-time-phase18.css
+          diff app/renderer/src/desktop.css prototypes/baseline/loop-plane-phase19-frozen/loop-desktop-phase19.css
+          diff app/renderer/src/scale.css prototypes/baseline/loop-plane-phase20-frozen/loop-scale-phase20.css
+          diff app/renderer/src/brief21.css prototypes/baseline/loop-plane-phase21-frozen/loop-brief-phase21.css
+          diff app/renderer/src/controls22.css prototypes/baseline/loop-plane-phase22-frozen/loop-controls-phase22.css
+          diff app/renderer/src/notebook23.css prototypes/baseline/loop-plane-phase23-frozen/loop-notebook-phase23.css
+          diff app/renderer/src/management24.css prototypes/baseline/loop-plane-phase24-frozen/loop-management-phase24.css
+          diff app/renderer/src/window25.css prototypes/baseline/loop-plane-phase25-frozen/loop-window-phase25.css
+          # This phase's sheet is the frozen stage sheet, byte for byte.
+          diff app/renderer/src/recovery26.css prototypes/baseline/loop-plane-phase26-frozen/loop-recovery-phase26.css
+      - name: Verify the phase26 deletion and recovery contract
+        shell: bash
+        run: |
+          # The recovery sheet loads last (so it wins exactly where it won in the
+          # Demo) and the layer loads after phase24a's task menu and phase25's
+          # render wrapper, before work.js.
+          grep -q 'data-recovery26-enabled' app/renderer/index.html
+          node -e "const h=require('fs').readFileSync('app/renderer/index.html','utf8');const b=h.indexOf('src/bridge.css'),r=h.indexOf('src/recovery26.css');if(!(b>=0&&r>b))throw new Error('recovery26.css must load after bridge.css');const m=h.indexOf('src/management24.js'),w=h.indexOf('src/window25.js'),j=h.indexOf('src/recovery26.js'),k=h.indexOf('src/work.js');if(!(j>m&&j>w))throw new Error('recovery26.js must load after the phase24a and phase25 layers');if(!(k>=0&&j<k))throw new Error('recovery26.js must load before work.js')"
+          # The archive is a first-class, schema-versioned collection of
+          # task-data.json with its own newer-version guard, so a downgrade can
+          # never drop it.
+          grep -q 'RECENTLY_DELETED_SCHEMA_VERSION' app/main/storage.cjs
+          grep -q 'recentlyDeletedSchemaVersion' app/main/storage.cjs
+          grep -q 'recentlyDeleted: normalizeRecentlyDeleted' app/main/storage.cjs
+          grep -q 'normalizeRecentlyDeleted' app/renderer/src/app.js
+          grep -q 'recentlyDeleted: state.recentlyDeleted' app/renderer/src/app.js
+          # Every delete entry point goes through the one archive service.
+          grep -q 'recovery26ReviewDeleteTask' app/renderer/src/app.js
+          grep -q 'recovery26DeleteQuickFromWidget' app/renderer/src/app.js
+          grep -q 'recovery26ReviewDeleteBulk' app/renderer/src/bulk.js
+          grep -q 'recovery26ReviewDeleteNode' app/renderer/src/actions.js
+          grep -q 'recovery26DeleteGroup' app/renderer/src/management24.js
+          grep -q 'recovery26ReviewUnlinkNote' app/renderer/src/app.js
+          grep -q 'recovery26ReviewRemoveNote' app/renderer/src/recovery26.js
+          grep -q 'data-recovery26="open"' app/renderer/src/settings.js
+          grep -q 'data-recovery26="open"' app/renderer/src/shell.js
+          grep -q 'data-recovery26="open"' app/renderer/src/management24.js
+          # The single-record action area is a fixed sibling of the scrolling
+          # detail body, above the separate batch footer.
+          grep -q 'recovery26-detailbody' app/renderer/src/recovery26.js
+          grep -q 'recovery26-detailbody' app/renderer/src/recovery26.css
+          grep -q 'min-height:66px' app/renderer/src/recovery26.css
+          grep -q 'min-height:57px' app/renderer/src/recovery26.css
+          # Permanent removal keeps its own explicit confirmation and never
+          # reaches for a disk file or a backup.
+          grep -q 'recovery26-purge-agree' app/renderer/src/recovery26.js
+          grep -q 'recovery26PurgeConfirm' app/renderer/src/recovery26.js
+          ! grep -qE 'fs\.(unlink|rm)|shell\.trashItem' app/renderer/src/recovery26.js
+          # No page-memory prototype scaffolding survives in the product layer.
+          ! grep -qE '本 Demo 仅操作页面示例|刷新恢复示例|loopWorkGroup24|MutationObserver' app/renderer/src/recovery26.js
+          ! grep -qE 'r26-|seed26' app/renderer/src/recovery26.js
+          # The frozen Demo baseline for this phase is present and complete.
+          test -f prototypes/baseline/loop-plane-phase26-frozen/MANIFEST.sha256
+          test -f prototypes/baseline/loop-plane-phase26-frozen/DEPENDENCIES.sha256
+          test -f prototypes/baseline/loop-plane-phase26-frozen/README.md
+          test -f prototypes/baseline/loop-plane-phase26-frozen/loop-plane-phase26-candidate.html
+          test -f prototypes/baseline/loop-plane-phase26-frozen/loop-recovery-phase26.js
+          grep -q 'loop-recovery-phase26.css' prototypes/baseline/loop-plane-phase26-frozen/MANIFEST.sha256
+          # The stage sheet is frozen at the hash the migration prompt pinned.
+          echo '5a5b7d6aa2ffd2d173e100cffb3f927a3e8c42d2feca1efed24926df8a2de76a  prototypes/baseline/loop-plane-phase26-frozen/loop-recovery-phase26.css' | sha256sum -c -
+      - name: Run the desktop and contract suites
+        run: npm run check
+
+  build:
+    name: Build v0.1.212 ${{ matrix.platform }}
+    needs: verify
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macOS
+            os: macos-latest
+            script: npm run dist:mac -- --x64 --arm64 --publish never
+            artifact: v0.1.212-macos
+          - platform: Windows
+            os: windows-latest
+            script: npm run dist:win -- --x64 --publish never
+            artifact: v0.1.212-windows
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Check JavaScript and tests
+        run: npm run check
+      - name: Build app
+        run: ${{ matrix.script }}
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+      - name: Test Windows installer upgrade matrix
+        if: matrix.platform == 'Windows'
+        shell: pwsh
+        run: |
+          $candidate = Get-ChildItem release -Filter "Loop-*-x64-setup.exe" | Select-Object -First 1
+          if (-not $candidate) { throw "Windows installer was not produced." }
+          ./tests/windows-upgrade-installer.test.ps1 -CandidateInstaller $candidate.FullName
+      - name: Verify update metadata
+        run: node tools/verify-update-artifacts.cjs release
+      - name: Stage v0.1.212 release assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            release/*.dmg
+            release/*.zip
+            release/*.exe
+            release/*.blockmap
+            release/latest.yml
+            release/latest-mac.yml
+          if-no-files-found: error
+          retention-days: 2
+
+  publish:
+    name: Publish v0.1.212 release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      # The tag push runs the "Release Desktop Apps" workflow, which creates the
+      # tag and the GitHub Release for this same version and commit. This record
+      # job therefore never competes with it: if a v0.1.212 release already
+      # exists it verifies that, reports it, and stops; otherwise it publishes.
+      - name: Detect an existing v0.1.212 release
+        id: existing
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          tag_sha="$(gh api "repos/${{ github.repository }}/git/ref/tags/v0.1.212" --jq '.object.sha' 2>/dev/null || true)"
+          if [ -n "$tag_sha" ]; then
+            commit_sha="$(gh api "repos/${{ github.repository }}/git/tags/$tag_sha" --jq '.object.sha' 2>/dev/null || echo "$tag_sha")"
+            echo "tag v0.1.212 -> $commit_sha"
+            echo "tag_commit=$commit_sha" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag v0.1.212 does not exist yet"
+            echo "tag_commit=" >> "$GITHUB_OUTPUT"
+          fi
+          if gh release view v0.1.212 >/dev/null 2>&1; then
+            echo "release_exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "release_exists=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Report an already published release and stop
+        if: steps.existing.outputs.release_exists == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          echo "v0.1.212 is already published (tag -> ${{ steps.existing.outputs.tag_commit }})."
+          echo "The tag-triggered Release workflow produced the installers for this"
+          echo "version and commit, so this record job has nothing left to publish."
+          gh release view v0.1.212 --json tagName,name,isDraft,isPrerelease,publishedAt,assets \
+            --jq '"release \(.tagName) draft=\(.isDraft) prerelease=\(.isPrerelease) at \(.publishedAt) assets=\(.assets|length)"'
+      - name: Collect v0.1.212 release assets
+        if: steps.existing.outputs.release_exists != 'true'
+        uses: actions/download-artifact@v4
+        with:
+          pattern: v0.1.212-*
+          path: release
+          merge-multiple: true
+      - name: Verify complete cross-platform update feed
+        if: steps.existing.outputs.release_exists != 'true'
+        run: node tools/verify-update-artifacts.cjs release --require-all-platforms
+      - name: Publish v0.1.212
+        if: steps.existing.outputs.release_exists != 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v0.1.212
+          target_commitish: ${{ github.sha }}
+          name: v0.1.212
+          body_path: docs/release-notes/v0.1.212.md

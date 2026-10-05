@@ -11,8 +11,11 @@ const { UUID } = require("builder-util-runtime");
 const {
   DATA_FILE,
   KNOWLEDGE_MIGRATION_VERSION,
+  RECENTLY_DELETED_SCHEMA_VERSION,
+  normalizeRecentlyDeleted,
   normalizeTaskData,
   migrateKnowledgeTaskData,
+  isNewerThanSupported,
   readTaskData,
   writeTaskData,
 } = require("../app/main/storage.cjs");
@@ -4350,6 +4353,7 @@ test("the frozen Demo baseline is the renderer stylesheet authority", async () =
   const phase23Dir = path.join(__dirname, "..", "prototypes", "baseline", "loop-plane-phase23-frozen");
   const phase24Dir = path.join(__dirname, "..", "prototypes", "baseline", "loop-plane-phase24-frozen");
   const phase25Dir = path.join(__dirname, "..", "prototypes", "baseline", "loop-plane-phase25-frozen");
+  const phase26Dir = path.join(__dirname, "..", "prototypes", "baseline", "loop-plane-phase26-frozen");
   const previousFrozenDir = path.join(__dirname, "..", "prototypes", "baseline", "loop-plane-phase1-frozen");
 
   // The Demo baseline must be present verbatim and must not be edited to fit
@@ -4380,18 +4384,19 @@ test("the frozen Demo baseline is the renderer stylesheet authority", async () =
     ["notebook23.css", "loop-notebook-phase23.css"],
     ["management24.css", "loop-management-phase24.css"],
     ["window25.css", "loop-window-phase25.css"],
+    ["recovery26.css", "loop-recovery-phase26.css"],
   ];
   for (const [target, source] of copied) {
     const [a, b] = await Promise.all([
       fs.readFile(path.join(rendererDir, "src", target), "utf8"),
-      fs.readFile(path.join(source === "loop-time-phase18.css" ? phase18Dir : source === "loop-desktop-phase19.css" ? phase19Dir : source === "loop-scale-phase20.css" ? phase20Dir : source === "loop-brief-phase21.css" ? phase21Dir : source === "loop-controls-phase22.css" ? phase22Dir : source === "loop-notebook-phase23.css" ? phase23Dir : source === "loop-management-phase24.css" ? phase24Dir : source === "loop-window-phase25.css" ? phase25Dir : frozenDir, source), "utf8"),
+      fs.readFile(path.join(source === "loop-time-phase18.css" ? phase18Dir : source === "loop-desktop-phase19.css" ? phase19Dir : source === "loop-scale-phase20.css" ? phase20Dir : source === "loop-brief-phase21.css" ? phase21Dir : source === "loop-controls-phase22.css" ? phase22Dir : source === "loop-notebook-phase23.css" ? phase23Dir : source === "loop-management-phase24.css" ? phase24Dir : source === "loop-window-phase25.css" ? phase25Dir : source === "loop-recovery-phase26.css" ? phase26Dir : frozenDir, source), "utf8"),
     ]);
     assert.equal(a, b, `src/${target} must stay byte-identical to the frozen ${source}`);
   }
 
   // Load order mirrors the Demo entry, and bridge.css is the only override layer.
   const linked = [...index.matchAll(/<link[^>]+href="\.\/src\/([^"?]+)/g)].map((match) => match[1]);
-  const order = ["shell.css", "vendor/milkdown-editor.css", "knowledge.css", "fonts.css", "settings.css", "typography.css", "refinement.css", "selection.css", "flow.css", "shell-refinement.css", "help.css", "work.css", "task-entry.css", "journey.css", "time.css", "desktop.css", "scale.css", "brief21.css", "controls22.css", "notebook23.css", "management24.css", "window25.css", "bridge.css"];
+  const order = ["shell.css", "vendor/milkdown-editor.css", "knowledge.css", "fonts.css", "settings.css", "typography.css", "refinement.css", "selection.css", "flow.css", "shell-refinement.css", "help.css", "work.css", "task-entry.css", "journey.css", "time.css", "desktop.css", "scale.css", "brief21.css", "controls22.css", "notebook23.css", "management24.css", "window25.css", "bridge.css", "recovery26.css"];
   assert.deepEqual(linked, order, "stylesheets must load in the frozen Demo order, with bridge.css last");
   const scripts = [...index.matchAll(/<script[^>]+src="\.\/src\/([^"?]+)/g)].map((match) => match[1]);
   const phase24Script = scripts.indexOf("management24.js");
@@ -4402,6 +4407,14 @@ test("the frozen Demo baseline is the renderer stylesheet authority", async () =
   assert.ok(window25Script > scripts.indexOf("management24.js"), "phase25 must load after the phase24 layer");
   assert.ok(window25Script < scripts.indexOf("work.js"), "phase25 must load before the work-navigation layer");
   assert.ok(index.includes("data-window25-enabled"), "the phase25 sheet is gated on the body flag");
+  // Phase26: the recovery sheet is the last stylesheet (so it wins exactly where
+  // it won in the Demo), it is a byte copy of the frozen stage sheet, and the
+  // recovery layer loads after phase24a's task menu and before work.js.
+  const recovery26Script = scripts.indexOf("recovery26.js");
+  assert.ok(recovery26Script > scripts.indexOf("management24.js"), "phase26 must load after the phase24 task-menu layer");
+  assert.ok(recovery26Script > scripts.indexOf("window25.js"), "phase26 must load after the phase25 render wrapper");
+  assert.ok(recovery26Script < scripts.indexOf("work.js"), "phase26 must load before the work-navigation layer");
+  assert.ok(index.includes("data-recovery26-enabled"), "the phase26 sheet is gated on the body flag");
   assert.ok(!index.includes("approved-4174.css"), "the superseded approved-4174 shell must no longer be loaded");
   assert.ok(!index.includes("styles.css"), "the superseded styles.css must no longer be loaded");
   assert.match(index, /<div id="overlay"><\/div>/);
@@ -6271,4 +6284,108 @@ test("brief-editing history is persisted with the task", async () => {
   });
   assert.equal(long.tasks[0].history.length, 60);
   assert.equal(long.tasks[0].history[0][1], "第0条");
+});
+
+// ============================================================
+// Phase26 -- Recently Deleted archive schema
+// ============================================================
+
+test("the archive persists inside task-data.json and round-trips every kind", async () => {
+  const deletedAt = "2026-10-05T09:20:00.000Z";
+  const task = {
+    id: "task_keep",
+    title: "整理开发环境迁移记录",
+    groupId: "group_tools",
+    order: 3,
+    notes: "迁移步骤",
+    knowledgeNote: { noteId: "task_keep", filePath: null, documentState: "DRAFT" },
+    nodes: [{ id: "node_a", title: "核对工具链", children: [] }],
+  };
+  const payload = {
+    tasks: [task],
+    taskGroups: [{ id: "group_tools", title: "工具与环境", order: 1 }],
+    recentlyDeleted: [
+      { id: "rd_task", kind: "task", deletedAt, transactionId: "tx-1", objectId: "task_gone", title: "确认新环境编译参数", groupId: "group_tools", groupTitle: "工具与环境", position: 2, record: { id: "task_gone", title: "确认新环境编译参数" } },
+      { id: "rd_quick", kind: "quick", deletedAt, objectId: "task_quick", title: "随手记", position: 1, record: { id: "task_quick", title: "随手记", captureSource: "today-widget" } },
+      { id: "rd_group", kind: "group", deletedAt, objectId: "group_tools", groupId: "group_tools", title: "工具与环境", groupOrder: 2, policy: "delete", targetGroupId: "", wasGrowthSource: true, groupReplacementId: "", members: [{ record: { id: "task_member", title: "成员" }, position: 3, groupId: "group_tools" }], migrated: [] },
+      { id: "rd_node", kind: "node", deletedAt, objectId: "node_gone", title: "验证中断恢复路径", ownerTaskId: "task_keep", ownerTaskTitle: "整理开发环境迁移记录", parentNodeId: "", parentNodeTitle: "", position: 1, nodeCount: 2, record: { id: "node_gone", title: "验证中断恢复路径", note: "记录", children: [{ id: "node_gone_child", title: "子节点", children: [] }] } },
+      { id: "rd_note", kind: "note", deletedAt, objectId: "note_1", title: "中断机制学习 · 知识笔记", ownerTaskId: "task_keep", ownerTaskTitle: "整理开发环境迁移记录", groupId: "group_tools", body: "# 中断机制学习\n\n排查记录", sourcePath: "/tmp/knowledge.md", knowledgeNote: { noteId: "note_1", filePath: "/tmp/knowledge.md" } },
+      { id: "rd_bad", kind: "nonsense", deletedAt, title: "should be dropped" },
+    ],
+  };
+  const normalized = normalizeTaskData(payload);
+  assert.equal(normalized.recentlyDeletedSchemaVersion, RECENTLY_DELETED_SCHEMA_VERSION);
+  assert.equal(normalized.recentlyDeleted.length, 5, "an unknown kind is dropped, the other four survive");
+  const byId = new Map(normalized.recentlyDeleted.map((entry) => [entry.id, entry]));
+  assert.equal(byId.get("rd_node").nodeCount, 2);
+  assert.equal(byId.get("rd_node").ownerTaskId, "task_keep");
+  assert.equal(byId.get("rd_group").policy, "delete");
+  assert.equal(byId.get("rd_group").members.length, 1);
+  assert.equal(byId.get("rd_note").body.includes("排查记录"), true);
+  assert.equal(byId.get("rd_task").position, 2);
+  // A snapshot keeps the fields a restore has to write back, untouched.
+  assert.equal(byId.get("rd_task").record.title, "确认新环境编译参数");
+  // Idempotent: writing the normalized form again changes nothing.
+  assert.deepEqual(normalizeTaskData(normalized), normalized);
+});
+
+test("the archive round-trips through disk and survives an older payload", async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "loop-recovery26-"));
+  try {
+    const entry = { id: "rd_1", kind: "task", deletedAt: "2026-10-05T09:20:00.000Z", title: "已删除任务", record: { id: "task_1", title: "已删除任务" } };
+    await writeTaskData(dir, { tasks: [], recentlyDeleted: [entry] });
+    const read = await readTaskData(dir);
+    assert.equal(read.recentlyDeleted.length, 1);
+    assert.equal(read.recentlyDeleted[0].title, "已删除任务");
+    const raw = JSON.parse(await fs.readFile(path.join(dir, DATA_FILE), "utf8"));
+    assert.equal(raw.recentlyDeleted.length, 1, "the archive is a real collection in task-data.json");
+    // A database written before this stage simply has no archive, and gains an
+    // empty one without losing anything.
+    await writeTaskData(dir, { tasks: [] });
+    const older = await readTaskData(dir);
+    assert.deepEqual(older.recentlyDeleted, []);
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a newer archive schema is never overwritten by an older app", async () => {
+  assert.equal(isNewerThanSupported({ recentlyDeletedSchemaVersion: RECENTLY_DELETED_SCHEMA_VERSION }), false);
+  assert.equal(isNewerThanSupported({ recentlyDeletedSchemaVersion: RECENTLY_DELETED_SCHEMA_VERSION + 1 }), true);
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "loop-recovery26-guard-"));
+  try {
+    await fs.writeFile(path.join(dir, DATA_FILE), JSON.stringify({
+      version: 2,
+      knowledgeSchemaVersion: KNOWLEDGE_MIGRATION_VERSION,
+      recentlyDeletedSchemaVersion: RECENTLY_DELETED_SCHEMA_VERSION + 1,
+      tasks: [],
+      recentlyDeleted: [{ id: "rd_future", kind: "task", title: "来自更新版本", record: { id: "t" } }],
+    }), "utf8");
+    await assert.rejects(
+      () => writeTaskData(dir, { tasks: [] }),
+      (error) => error.code === "UNSUPPORTED_DATA_VERSION",
+    );
+    const untouched = JSON.parse(await fs.readFile(path.join(dir, DATA_FILE), "utf8"));
+    assert.equal(untouched.recentlyDeleted.length, 1, "a downgrade must not drop the archive");
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("archive ids are de-duplicated and the collection is bounded and newest-first", () => {
+  const entries = Array.from({ length: 4 }, (_, index) => ({
+    id: "rd_same",
+    kind: "task",
+    deletedAt: `2026-10-0${index + 1}T00:00:00.000Z`,
+    title: `记录 ${index}`,
+    record: { id: `task_${index}` },
+  }));
+  const normalized = normalizeRecentlyDeleted(entries);
+  assert.equal(normalized.length, 1, "a repeated archive id is not allowed twice");
+  const ordered = normalizeRecentlyDeleted([
+    { id: "a", kind: "task", deletedAt: "2026-10-01T00:00:00.000Z", title: "旧", record: { id: "t1" } },
+    { id: "b", kind: "task", deletedAt: "2026-10-09T00:00:00.000Z", title: "新", record: { id: "t2" } },
+  ]);
+  assert.deepEqual(ordered.map((entry) => entry.id), ["b", "a"]);
+  assert.deepEqual(normalizeRecentlyDeleted(null), []);
 });

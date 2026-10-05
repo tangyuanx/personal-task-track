@@ -768,6 +768,14 @@ function shellNodeDelete(trigger, nodeId) {
   );
   document.querySelector("#delete-node-form")?.addEventListener("submit", async (event) => {
     event.preventDefault();
+    // Phase26 routes the node's whole-subtree removal through the unified
+    // archive: the Demo's own impact dialog replaces this stage's panel, and the
+    // subtree keeps its parent and sibling position for a later restore.
+    if (typeof recovery26ReviewDeleteNode === "function") {
+      shellCloseOverlay({ restoreFocus: false });
+      recovery26ReviewDeleteNode(task.id, nodeId);
+      return;
+    }
     shellCloseOverlay({ restoreFocus: false });
     await deleteNode(task.id, nodeId);
     render();

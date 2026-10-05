@@ -21,10 +21,16 @@ const ATTACHMENTS_KEY = "task-track-attachments";
 const INSTALLATION_ID_KEY = "task-track-installation-id";
 const KNOWLEDGE_RECOVERY_KEY = "task-track-knowledge-recovery-v1";
 const WORK_NAVIGATION_KEY = "task-track-work-navigation-v1";
+// Phase26 -- Recently Deleted. The archive travels inside task-data.json so a
+// delete and its archive entry share one atomic write; in a browser it falls
+// back to its own localStorage key, like every other collection here.
+const RECENTLY_DELETED_KEY = "task-track-recently-deleted-v1";
+const RECENTLY_DELETED_SCHEMA_VERSION = 1;
 const KNOWLEDGE_RECOVERY_DEBOUNCE_MS = 800;
 const KNOWLEDGE_RECOVERY_MAX_INTERVAL_MS = 5000;
 const DATA_VERSION = 2;
 const KNOWLEDGE_MIGRATION_VERSION = 1;
+const RECENTLY_DELETED_LIMIT = 500;
 const desktopStorage = window.personalTaskTrack?.storage;
 const desktopDataBackup = window.personalTaskTrack?.dataBackup;
 const desktopKnowledgeRecovery = window.personalTaskTrack?.knowledgeRecovery;
@@ -290,6 +296,9 @@ let state = {
   sidebarWidth: defaultSidebarWidth,
   detailHeight: defaultDetailHeight,
   attachments: { images: {} },
+  // Phase26: archived deletions, newest first. Each entry is a snapshot plus
+  // the stable ids needed to put the object back where it came from.
+  recentlyDeleted: [],
   knowledgeAssets: {},
   knowledgeFileIssues: {},
   knowledgeRecovery: { version: 1, records: {} },
@@ -489,6 +498,17 @@ function loadBrowserTasks() {
   }
 }
 
+/** Load the Recently Deleted archive from localStorage (browser-only fallback). */
+function loadBrowserRecentlyDeleted() {
+  let saved = null;
+  try {
+    saved = JSON.parse(localStorage.getItem(RECENTLY_DELETED_KEY) || "null");
+  } catch (_) {
+    saved = null;
+  }
+  return normalizeRecentlyDeleted(saved);
+}
+
 function loadBrowserWorkNavigation(taskGroups = []) {
   let saved = null;
   try {
@@ -499,6 +519,99 @@ function loadBrowserWorkNavigation(taskGroups = []) {
   return workNavigationModel.normalizeWorkNavigation(saved, {
     groupIds: taskGroups.map((group) => group.id),
   });
+}
+
+// ------------------------------------------------------------
+// Phase26 -- Recently Deleted archive normalization
+//
+// Mirrors storage.cjs so that the Electron path and the browser fallback agree
+// on the shape, and so a payload the renderer sends is already in the form the
+// main process will validate. Snapshots are kept as-is: a task snapshot has to
+// retain its own id, group, order and knowledge-note binding, because that is
+// exactly what a restore writes back.
+// ------------------------------------------------------------
+
+const RECENTLY_DELETED_KINDS = new Set(["task", "quick", "group", "node", "note"]);
+const RECENTLY_DELETED_GROUP_POLICIES = new Set(["keep", "delete"]);
+
+function normalizeRecentlyDeleted(value) {
+  const seenIds = new Set();
+  return (Array.isArray(value) ? value : [])
+    .filter(isRecord)
+    .map((entry) => {
+      const kind = RECENTLY_DELETED_KINDS.has(entry.kind) ? entry.kind : "";
+      const id = normalizeIdentifier(entry.id);
+      if (!kind || !id || seenIds.has(id)) return null;
+      seenIds.add(id);
+      const normalized = {
+        ...entry,
+        id,
+        kind,
+        deletedAt: normalizeDateValue(entry.deletedAt, now()),
+        transactionId: normalizeIdentifier(entry.transactionId),
+        objectId: normalizeIdentifier(entry.objectId),
+      };
+      if (kind === "task" || kind === "quick") {
+        if (!isRecord(entry.record)) return null;
+        normalized.record = entry.record;
+        normalized.objectId = normalizeIdentifier(entry.objectId) || normalizeIdentifier(entry.record.id);
+        normalized.groupId = normalizeIdentifier(entry.groupId);
+        normalized.groupTitle = normalizeText(entry.groupTitle);
+        normalized.position = normalizeRecentlyDeletedOrder(entry.position);
+        normalized.hadKnowledgeNoteBinding = Boolean(entry.hadKnowledgeNoteBinding);
+      } else if (kind === "node") {
+        if (!isRecord(entry.record)) return null;
+        normalized.record = entry.record;
+        normalized.ownerTaskId = normalizeIdentifier(entry.ownerTaskId);
+        normalized.ownerTaskTitle = normalizeText(entry.ownerTaskTitle);
+        normalized.parentNodeId = normalizeIdentifier(entry.parentNodeId);
+        normalized.parentNodeTitle = normalizeText(entry.parentNodeTitle);
+        normalized.position = normalizeRecentlyDeletedOrder(entry.position);
+        normalized.nodeCount = normalizeRecentlyDeletedOrder(entry.nodeCount);
+        normalized.objectId = normalizeIdentifier(entry.objectId) || normalizeIdentifier(entry.record.id);
+      } else if (kind === "group") {
+        normalized.groupId = normalizeIdentifier(entry.groupId);
+        normalized.title = normalizeText(entry.title);
+        normalized.groupOrder = normalizeRecentlyDeletedOrder(entry.groupOrder);
+        normalized.policy = RECENTLY_DELETED_GROUP_POLICIES.has(entry.policy) ? entry.policy : "keep";
+        normalized.targetGroupId = normalizeIdentifier(entry.targetGroupId);
+        normalized.wasGrowthSource = Boolean(entry.wasGrowthSource);
+        normalized.groupReplacementId = normalizeIdentifier(entry.groupReplacementId);
+        normalized.members = Array.isArray(entry.members)
+          ? entry.members.filter(isRecord).filter((member) => isRecord(member.record)).map((member) => ({
+            ...member,
+            record: member.record,
+            position: normalizeRecentlyDeletedOrder(member.position),
+          }))
+          : [];
+        normalized.migrated = Array.isArray(entry.migrated)
+          ? entry.migrated.filter(isRecord).map((item) => ({
+            taskId: normalizeIdentifier(item.taskId),
+            direction: normalizeIdentifier(item.direction),
+            revision: normalizeText(item.revision),
+          })).filter((item) => item.taskId)
+          : [];
+        normalized.objectId = normalizeIdentifier(entry.objectId) || normalized.groupId;
+      } else if (kind === "note") {
+        normalized.ownerTaskId = normalizeIdentifier(entry.ownerTaskId);
+        normalized.ownerTaskTitle = normalizeText(entry.ownerTaskTitle);
+        normalized.groupId = normalizeIdentifier(entry.groupId);
+        normalized.title = normalizeText(entry.title);
+        normalized.body = normalizeText(entry.body);
+        normalized.sourcePath = normalizeText(entry.sourcePath);
+        normalized.knowledgeNote = isRecord(entry.knowledgeNote) ? entry.knowledgeNote : null;
+        normalized.objectId = normalizeIdentifier(entry.objectId) || normalized.ownerTaskId;
+      }
+      return normalized;
+    })
+    .filter(Boolean)
+    .sort((a, b) => Date.parse(b.deletedAt) - Date.parse(a.deletedAt))
+    .slice(0, RECENTLY_DELETED_LIMIT);
+}
+
+function normalizeRecentlyDeletedOrder(value) {
+  const order = Math.round(Number(value));
+  return Number.isFinite(order) && order > 0 ? order : 1;
 }
 
 function normalizeTasks(tasks) {
@@ -1526,7 +1639,8 @@ async function loadAppData() {
       const workNavigation = workNavigationModel.normalizeWorkNavigation(stored?.workNavigation, {
         groupIds: taskGroups.map((group) => group.id),
       });
-      return { tasks, taskGroups, activeGroupId, flowWidths, sidebarWidth, detailHeight, attachments, theme, zhFont, enFont, fontScale, taskFilter, priorityFilter, captureSourceFilter, newTaskPriority, installationId, workNavigation };
+      const recentlyDeleted = normalizeRecentlyDeleted(stored?.recentlyDeleted);
+      return { tasks, taskGroups, activeGroupId, flowWidths, sidebarWidth, detailHeight, attachments, theme, zhFont, enFont, fontScale, taskFilter, priorityFilter, captureSourceFilter, newTaskPriority, installationId, workNavigation, recentlyDeleted };
     } catch (error) {
       console.error("Failed to read local task data.", error);
       // Electron only forwards the message of an error thrown inside an
@@ -1558,6 +1672,7 @@ async function loadAppData() {
     attachments: loadBrowserAttachments(),
     installationId: loadBrowserInstallationId(),
     workNavigation: loadBrowserWorkNavigation(taskGroups),
+    recentlyDeleted: loadBrowserRecentlyDeleted(),
     theme: loadBrowserTheme(),
     ...typography,
     ...preferences,
@@ -1590,6 +1705,8 @@ function save() {
     newTaskPriority: state.newTaskPriority,
     installationId: state.installationId,
     workNavigation: state.workNavigation,
+    recentlyDeletedSchemaVersion: RECENTLY_DELETED_SCHEMA_VERSION,
+    recentlyDeleted: state.recentlyDeleted,
     updatedAt: now(),
   };
 
@@ -1611,6 +1728,7 @@ function save() {
     localStorage.setItem(NEW_TASK_PRIORITY_KEY, state.newTaskPriority);
     localStorage.setItem(INSTALLATION_ID_KEY, state.installationId);
     localStorage.setItem(WORK_NAVIGATION_KEY, JSON.stringify(state.workNavigation));
+    localStorage.setItem(RECENTLY_DELETED_KEY, JSON.stringify(state.recentlyDeleted));
     return;
   }
 
@@ -7060,6 +7178,9 @@ async function action(data, event = null) {
     return;
   }
   if (data.action === "remove-knowledge-binding") {
+    // Phase26: the Demo's own 解除文件关联 dialog replaces the native confirm,
+    // keeps the 12-second undo, and never touches the file on disk.
+    if (typeof recovery26ReviewUnlinkNote === "function" && recovery26ReviewUnlinkNote(data.taskId)) return;
     const result = await removeKnowledgeBinding(data.taskId);
     if (!result?.canceled) render();
     return;
@@ -7080,12 +7201,29 @@ async function action(data, event = null) {
     const mode = state.knowledgeDraftPrompt?.mode;
     state.knowledgeDraftPrompt = null;
     if (mode === "close-editor") {
-      await discardUnfiledKnowledgeDraft(data.taskId);
-      state.taskPane = "flow";
+      // Phase26: clearing the in-app body is a deletion, so it is archived.
+      if (typeof recovery26RemoveNote === "function") {
+        const outcome = await recovery26Transaction(() => recovery26RemoveNote(data.taskId));
+        if (outcome.ok) {
+          state.taskPane = "flow";
+          render();
+          recovery26Receipt("1 项已移到最近删除", outcome.entries);
+        } else {
+          render();
+          recovery26Receipt(outcome.message);
+        }
+      } else {
+        await discardUnfiledKnowledgeDraft(data.taskId);
+        state.taskPane = "flow";
+        render();
+      }
+    } else if (typeof recovery26ReviewDeleteTask === "function") {
+      recovery26ReviewDeleteTask(data.taskId);
+      return;
     } else {
       await deleteTask(data.taskId, { skipDraftPrompt: true });
+      render();
     }
-    render();
     return;
   }
   if (data.action === "save-knowledge-before-delete") {
@@ -7349,7 +7487,18 @@ async function action(data, event = null) {
     if (typeof shellOpenCreateDialog === "function") shellOpenCreateDialog();
     else addBlankTask();
   }
-  if (data.action === "delete-task" && !(await deleteTask(data.taskId))) return;
+  if (data.action === "delete-task") {
+    // Phase26: every record delete goes through the archive service, which
+    // captures the current drafts, shows the impact dialog and only removes the
+    // record once the archive entry is on disk.
+    if (typeof recovery26ReviewDeleteTask === "function") {
+      state.taskMenuOpen = false;
+      state.contextMenu = null;
+      recovery26ReviewDeleteTask(data.taskId);
+      return;
+    }
+    if (!(await deleteTask(data.taskId))) return;
+  }
   if (data.action === "select-node") {
     selectNodeForInspector(data.taskId, data.nodeId);
   }
@@ -7386,7 +7535,14 @@ async function action(data, event = null) {
     render();
     return;
   }
-  if (data.action === "delete-node" && !(await deleteNode(data.taskId, data.nodeId))) return;
+  if (data.action === "delete-node") {
+    if (typeof recovery26ReviewDeleteNode === "function") {
+      state.contextMenu = null;
+      recovery26ReviewDeleteNode(data.taskId, data.nodeId);
+      return;
+    }
+    if (!(await deleteNode(data.taskId, data.nodeId))) return;
+  }
   if (data.action === "toggle-node-detail-fullscreen") state.nodeDetailFullscreen = !state.nodeDetailFullscreen;
   if (data.action === "close-node-detail") {
     state.selectedNodeId = "";
@@ -7730,6 +7886,10 @@ function promoteQuickCaptureFromWidget(taskId, groupId) {
 async function deleteQuickCaptureFromWidget(taskId) {
   const task = state.tasks.find((item) => item.id === taskId && item.captureSource === "today-widget");
   if (!task) return { success: false, code: "TASK_NOT_FOUND", taskId };
+  // Phase26: the floating window's quick note is deleted with the same business
+  // semantics as the main window — archived first, removed second, undoable from
+  // 最近删除 in the main window.
+  if (typeof recovery26DeleteQuickFromWidget === "function") return recovery26DeleteQuickFromWidget(taskId);
   const deleted = await deleteTask(taskId, { skipConfirm: true });
   if (!deleted) return { success: false, code: "DELETE_CANCELLED", taskId };
   render();
@@ -9188,6 +9348,7 @@ async function bootstrap() {
   state.workNavigation = workNavigationModel.normalizeWorkNavigation(data.workNavigation, {
     groupIds: state.taskGroups.map((group) => group.id),
   });
+  state.recentlyDeleted = normalizeRecentlyDeleted(data.recentlyDeleted);
   await restoreKnowledgeRecoveryDrafts();
   state.activeTaskId = tasksInActiveGroup()[0]?.id || "";
   syncRecurringTasks(loopNow());

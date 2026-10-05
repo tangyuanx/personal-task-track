@@ -1,8 +1,11 @@
 const assert = require("node:assert/strict");
+const crypto = require("node:crypto");
 const fs = require("node:fs/promises");
 const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
+
+const TASK_DATA_FILE = "task-data.json";
 
 const {
   BACKUP_ROOT_DIRECTORY,
@@ -381,4 +384,62 @@ test("settings and preload expose complete backup export plus file and directory
   assert.match(preload, /dataBackup:[\s\S]*importDirectory/);
   assert.match(main, /data-backup:export/);
   assert.match(main, /data-backup:import/);
+});
+
+test("a portable backup carries the Recently Deleted archive both ways", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "loop-recovery26-backup-"));
+  const source = path.join(root, "source");
+  const destination = path.join(root, "restored");
+  const backupFile = path.join(root, "loop-backup.loopbackup");
+  await fs.mkdir(source, { recursive: true });
+  await fs.mkdir(destination, { recursive: true });
+  try {
+    const archive = [
+      { id: "rd_task", kind: "task", deletedAt: "2026-10-05T09:20:00.000Z", transactionId: "tx-1", title: "已删除任务", groupId: "group_tools", position: 1, record: { id: "task_gone", title: "已删除任务", nodes: [] } },
+      { id: "rd_note", kind: "note", deletedAt: "2026-10-05T09:10:00.000Z", transactionId: "tx-2", title: "笔记", ownerTaskId: "task_live", body: "# 正文\n\n保留", sourcePath: "/tmp/note.md" },
+    ];
+    await fs.writeFile(path.join(source, TASK_DATA_FILE), JSON.stringify({
+      version: 2,
+      knowledgeSchemaVersion: 1,
+      recentlyDeletedSchemaVersion: 1,
+      tasks: [{ id: "task_live", title: "仍然存在的任务" }],
+      taskGroups: [],
+      recentlyDeleted: archive,
+    }), "utf8");
+
+    const exported = await exportPortableBackup({ userDataPath: source, destinationPath: backupFile, appVersion: "0.1.212" });
+    assert.ok(exported.fileCount >= 1);
+
+    // A backup written before this stage simply has no archive key; importing it
+    // must still succeed and leave an empty archive rather than failing.
+    const legacyBackup = path.join(root, "legacy.loopbackup");
+    const legacyPayload = JSON.parse(await fs.readFile(backupFile, "utf8"));
+    legacyPayload.files = legacyPayload.files.map((file) => {
+      if (file.relativePath !== TASK_DATA_FILE) return file;
+      const data = JSON.parse(Buffer.from(file.contentBase64, "base64").toString("utf8"));
+      delete data.recentlyDeleted;
+      delete data.recentlyDeletedSchemaVersion;
+      const content = Buffer.from(`${JSON.stringify(data, null, 2)}\n`, "utf8");
+      return {
+        relativePath: file.relativePath,
+        bytes: content.length,
+        sha256: crypto.createHash("sha256").update(content).digest("hex"),
+        contentBase64: content.toString("base64"),
+      };
+    });
+    await fs.writeFile(legacyBackup, `${JSON.stringify(legacyPayload)}\n`, "utf8");
+    const stagedLegacy = await readPortableBackup(legacyBackup);
+    assert.equal(stagedLegacy.files.length, legacyPayload.files.length);
+    const legacyData = JSON.parse(stagedLegacy.files.find((file) => file.relativePath === TASK_DATA_FILE).content.toString("utf8"));
+    assert.equal(Object.hasOwn(legacyData, "recentlyDeleted"), false, "an older backup has no archive key and must still be readable");
+
+    // The current backup still carries every archive entry byte for byte.
+    const staged = await readPortableBackup(backupFile);
+    const restoredData = JSON.parse(staged.files.find((file) => file.relativePath === TASK_DATA_FILE).content.toString("utf8"));
+    assert.equal(restoredData.recentlyDeleted.length, 2);
+    assert.equal(restoredData.recentlyDeleted[0].id, "rd_task");
+    assert.equal(restoredData.recentlyDeleted[1].body.includes("保留"), true);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
 });

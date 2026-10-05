@@ -576,6 +576,8 @@
   renderShellTaskMenu = function manage24TaskMenu(task) {
     const tags = normalizeTaskTags(task.tags);
     return `<div class="popover" role="menu" aria-label="任务操作">
+      <button type="button" role="menuitem" data-recovery26="open">${manage24Icon("folder")}最近删除</button>
+      <div class="menu-divider"></div>
       <button type="button" role="menuitem" data-manage24="properties" data-task-id="${manage24Attr(task.id)}">${manage24Icon("edit")}编辑属性</button>
       <button type="button" role="menuitem" data-action="toggle-task-group-select" data-task-id="${manage24Attr(task.id)}">${manage24Icon("folder")}移动到分组…</button>
       <div class="menu-divider"></div>
@@ -884,6 +886,28 @@
     };
 
     // The impact panel is the confirmation: one explicit decision, one dialog.
+    //
+    // Phase26: the delete itself is one archived transaction. The group record,
+    // its retained members and its growth-source change are captured together,
+    // and the panel's target decides where retained content lands.
+    if (typeof recovery26DeleteGroup === "function") {
+      const outcome = await recovery26Transaction(() => recovery26DeleteGroup(draft.groupId, {
+        policy: draft.remove ? "delete" : "keep",
+        targetGroupId,
+        replacement: dependent ? (draft.replacement === "stop" ? "stop" : draft.replacement) : null,
+      }));
+      if (!outcome.ok) { fail(outcome.message || "分组未删除"); return; }
+      manage24RetainedTaskId = "";
+      manage24Undo = null;
+      manage24CloseSurface();
+      manage24DeleteDraft = null;
+      render();
+      recovery26AfterRemoval(outcome.entries, draft.remove
+        ? "分组及内容已移到最近删除"
+        : `分组已删除，内容移至「${manage24GroupTitle(targetGroupId)}」`);
+      return;
+    }
+
     const deleted = await deleteGroup(draft.groupId, draft.remove ? "delete" : "ungroup", { skipConfirm: true });
     if (!deleted) { fail("分组未删除"); return; }
 
