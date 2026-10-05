@@ -331,3 +331,77 @@ body[data-management24-enabled] .control22-field.manage24-row-title-input[aria-i
 body[data-management24-enabled] .control22-field.manage24-title-input[aria-invalid="true"] {
   border-color: var(--orange);
 }
+
+/* ============================================================
+   Phase 25 · 一体化标题栏 (src/window25.css 是冻结 Demo 的逐字节副本)
+   冻结层只认它自己的 HTML 控件；产品保留系统控件，所以原生控件所占的
+   区域在这里补上，并且只补「测量得到」的面积，不写死 138px。
+   ============================================================ */
+
+/* macOS：Demo 的 .window25-traffic 占位 56px（12px 圆点 ×3 + 8px 间隔 ×2 = 52px，
+   左对齐）外加 2px 右边距，随后才是 .brand 自身的 6px 间距。系统红黄绿控制由
+   trafficLightPosition 放到同一位置，因此这里保留同样的占位盒，视觉结果一致。
+   控件之间的空隙仍可拖动窗口（与系统标题栏一致）。 */
+body[data-window25-enabled] .topbar > .brand > .window25-native-traffic {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 12px;
+  flex: 0 0 56px;
+  margin-right: 2px;
+}
+
+/* macOS 全屏时系统隐藏红黄绿控制，占位必须同时撤掉，不能留一段空洞
+   （Demo 没有真实全屏，这是系统呈现方式决定的必要差异）。 */
+body[data-window25="mac"][data-window25-fullscreen] .topbar > .brand > .window25-native-traffic {
+  display: none;
+}
+
+/* Windows / Linux：Demo 的 .window25-caption 是 46px×3 的窗口控制组，
+   margin-left:2px。产品用 titleBarOverlay 的系统按钮，宽度来自
+   navigator.windowControlsOverlay.getTitlebarAreaRect()（随 DPI 变化），
+   写入 --window25-native-caption-width。这一块不再作为拖动区，避免
+   app-region 抢占系统按钮的点击。 */
+body[data-window25-enabled] .topbar > .window25-native-caption {
+  display: flex;
+  height: 48px;
+  flex-shrink: 0;
+  width: var(--window25-native-caption-width, 0px);
+  margin-left: 2px;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+/* Windows 收起导航后，更新入口与导航收起按钮一起移到品牌区右侧（顶栏工具区）。
+   品牌槽 .brand-update-slot 必须整体搬移：它承载实时下载进度的就地重绘。
+   Demo 里被搬出品牌区的按钮命中 body[data-window25] .topbar>.icon-button:not(.nav-toggle)
+   （权重 40）与 body[data-window25=windows] .topbar>.brand-update（权重 30），
+   最终计算值是 width/height 26px、margin 0 14px 0 10px；这里按计算值复现，
+   并显式保留 position:relative，让更新提示点继续附着在按钮上（refinement.css
+   的 .brand .brand-update 在搬移后不再匹配，提示点会漂走）。 */
+body[data-window25-enabled] .topbar > .brand-update-slot > .brand-update {
+  position: relative;
+  width: 26px;
+  height: 26px;
+  margin: 0 14px 0 10px;
+  flex-shrink: 0;
+}
+
+/* 同一搬移下，Demo 的非活动规则（.topbar>.icon-button 转次要色）本来会命中该按钮。 */
+body[data-window25-inactive] .topbar > .brand-update-slot > .brand-update {
+  color: var(--secondary);
+}
+
+/* Phase25：收起后的导航栏在 Demo 里始终是 64px（refinement.css 的
+   .app.nav-collapsed{--nav-width:64px}）。Phase20 为了让正文三栏比例与 Demo
+   一致，把 --nav-width 用 !important 钉在响应式梯级上，于是 ≤1100px 与
+   ≥1600px 时连「收起」也被钉住（1024px 收起后仍是 154px，而 Demo 是 64px）。
+   一体化标题栏的品牌区宽度绑定 --nav-width，所以这里让收起状态回到 Demo 的
+   64px；展开状态的响应式梯级不受影响。 */
+@media (max-width: 1100px) {
+  .app.nav-collapsed { --nav-width: 64px !important; }
+}
+
+@media (min-width: 1600px) {
+  .app.nav-collapsed { --nav-width: 64px !important; }
+}

@@ -56,6 +56,40 @@ app.on("second-instance", () => {
  */
 
 const isMac = process.platform === "darwin";
+
+/**
+ * Phase25 -- integrated title bar.
+ *
+ * The application header is one 48px row that also owns the window controls, so
+ * the platform's own controls are kept and only the separate title strip is
+ * removed. `titleBarStyle: "hidden"` keeps the native frame capabilities (resize
+ * edges, shadow/rounded corners, system menu, Snap and full screen); macOS keeps
+ * its traffic lights at a calibrated position and Windows/Linux keep the
+ * window-controls overlay at the header's height.
+ */
+const HEADER_HEIGHT = 48;
+const WINDOW_HEADER_THEMES = {
+  light: { color: "#ffffff", symbolColor: "#20242b" },
+  dark: { color: "#17191d", symbolColor: "#e7e9ed" },
+};
+// Calibrated against the frozen Demo's Mac identity (probe/phase25/
+// calibrate-traffic.cjs, measured on the real window image): macOS draws 14px
+// controls at its own 23px centre spacing, so only the group origin is ours to
+// choose. x=9 puts the close control's centre at 15.5px, exactly the Demo mock's
+// centre, and y=17 puts it at 23.5px, the centre of the 47px content row. The
+// remaining 2px size and 6px spacing of the last control are macOS's own drawing
+// and cannot be changed from Electron (see the phase25 report).
+const MAC_TRAFFIC_LIGHT_POSITION = { x: 9, y: 17 };
+const WINDOW_STATE_EVENTS = [
+  "maximize",
+  "unmaximize",
+  "enter-full-screen",
+  "leave-full-screen",
+  "focus",
+  "blur",
+  "minimize",
+  "restore",
+];
 let updateController = null;
 let todayWidgetController = null;
 let deadlineReminderController = null;
@@ -84,6 +118,7 @@ function createWindow() {
     backgroundColor: "#ffffff",
     show: false,
     autoHideMenuBar: true,
+    ...windowChromeOptions(),
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
@@ -92,6 +127,9 @@ function createWindow() {
     },
   });
   mainWindow = window;
+  // The renderer mirrors real window state (active / maximized / full screen)
+  // instead of tracking its own clicks, so every platform event is forwarded.
+  for (const eventName of WINDOW_STATE_EVENTS) window.on(eventName, () => publishWindowState(window));
 /**
  * Open external URLs (http/https/mailto) in the system browser.
  * @param {string} url - URL to open
@@ -126,6 +164,66 @@ function createWindow() {
     app.quit();
   });
   return window;
+}
+
+/** Native window chrome for the Phase25 integrated header. */
+function windowChromeOptions() {
+  const options = { titleBarStyle: "hidden" };
+  if (isMac) options.trafficLightPosition = { ...MAC_TRAFFIC_LIGHT_POSITION };
+  else options.titleBarOverlay = { ...WINDOW_HEADER_THEMES.light, height: HEADER_HEIGHT };
+  return options;
+}
+
+function windowStateOf(win) {
+  return {
+    focused: win.isFocused(),
+    maximized: win.isMaximized(),
+    fullScreen: win.isFullScreen(),
+    minimized: win.isMinimized(),
+  };
+}
+
+function publishWindowState(win) {
+  if (!win || win.isDestroyed() || win.webContents.isDestroyed()) return;
+  win.webContents.send("window-controls:state", windowStateOf(win));
+}
+
+function normalizeHexColor(value) {
+  const text = String(value || "").trim();
+  return /^#[0-9a-f]{6}$/i.test(text) ? text.toLowerCase() : "";
+}
+
+/**
+ * Phase25 window chrome bridge: read-only state plus the overlay colours.
+ * The window controls themselves stay native, so this exposes no window action;
+ * every request is bound to the main window's own webContents.
+ */
+function registerWindowChromeHandlers() {
+  const senderWindow = (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    return win && win === mainWindow && !win.isDestroyed() ? win : null;
+  };
+  ipcMain.handle("window-controls:get-state", (event) => {
+    const win = senderWindow(event);
+    return win ? windowStateOf(win) : null;
+  });
+  ipcMain.handle("window-controls:set-chrome-colors", (event, payload) => {
+    const win = senderWindow(event);
+    if (!win) return { success: false, code: "UNKNOWN_WINDOW" };
+    if (isMac) return { success: false, code: "NO_NATIVE_OVERLAY" };
+    const color = normalizeHexColor(payload?.background);
+    const symbolColor = normalizeHexColor(payload?.symbol);
+    const height = Number(payload?.height);
+    if (!color || !symbolColor || !Number.isInteger(height) || height < 24 || height > 120) {
+      return { success: false, code: "INVALID_CHROME" };
+    }
+    try {
+      win.setTitleBarOverlay({ color, symbolColor, height });
+    } catch (error) {
+      return { success: false, code: "OVERLAY_UNAVAILABLE" };
+    }
+    return { success: true };
+  });
 }
 
 function openExternalUrl(url) {
@@ -661,6 +759,7 @@ app.whenReady().then(async () => {
     await app.dock.show();
   }
   registerStorageHandlers();
+  registerWindowChromeHandlers();
   todayWidgetController = createTodayWidgetController({
     app,
     BrowserWindow,

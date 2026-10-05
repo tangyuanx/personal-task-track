@@ -55,6 +55,14 @@ contextBridge.exposeInMainWorld("personalTaskTrack", {
     // panel can be read.
     revealMain: () => ipcRenderer.invoke("app:reveal-main"),
   },
+  // Phase25 integrated title bar. The window controls stay native (macOS traffic
+  // lights / Windows-Linux controls overlay), so this bridge only reports real
+  // window state and paints the overlay with the app's own theme colours.
+  windowControls: {
+    getState: () => ipcRenderer.invoke("window-controls:get-state"),
+    setChromeColors: (colors) => ipcRenderer.invoke("window-controls:set-chrome-colors", colors),
+    onState: (callback) => subscribe("window-controls:state", callback),
+  },
   deadlineReminders: {
     sync: (tasks) => ipcRenderer.invoke("deadline-reminders:sync", tasks),
     getState: () => ipcRenderer.invoke("deadline-reminders:get-state"),

@@ -1,0 +1,50 @@
+/* Phase25: integrated desktop chrome. Browser-only window controls are simulations. */
+body[data-window25] .app{grid-template-rows:48px minmax(0,1fr)}
+body[data-window25] .navigation{grid-row:2;padding-top:12px}
+body[data-window25] .topbar{grid-column:1/-1;grid-row:1;padding:0;gap:0;background:var(--canvas);user-select:none;-webkit-app-region:drag;app-region:drag}
+body[data-window25] .topbar button,body[data-window25] .topbar input,body[data-window25] .topbar a{app-region:no-drag;-webkit-app-region:no-drag}
+body[data-window25] .topbar .brand{height:48px;flex-direction:row;flex:0 0 184px;width:184px;padding:0 12px;gap:7px;background:var(--nav);margin:0;justify-content:flex-start}
+body[data-window25] .brand strong{display:block;font-size:16px;font-weight:500;letter-spacing:-.02em}
+body[data-window25] .brand .brand-mark{width:22px;height:22px;flex-shrink:0}
+body[data-window25] .brand .brand-update{display:inline-flex;width:26px;height:26px;margin-left:auto}
+body[data-window25] .topbar>.nav-toggle{display:inline-flex;width:28px;height:28px;margin:0 8px 0 12px;flex-shrink:0}
+body[data-window25] .breadcrumb{padding-right:16px;flex:0 1 auto;min-width:0;max-width:48%;overflow:hidden}
+body[data-window25] .topbar .rhythm{margin-left:auto;padding-left:20px}
+body[data-window25] .topbar>.icon-button:not(.nav-toggle){margin:0 14px 0 10px}
+body[data-window25=mac] .topbar .brand{gap:6px;padding:0 10px}
+body[data-window25=mac] .brand strong{font-size:15px}
+body[data-window25=mac] .brand .brand-mark{width:20px;height:20px}
+.window25-traffic{display:flex;align-items:center;gap:8px;flex:0 0 56px;margin-right:2px}
+.window25-traffic button{position:relative;width:12px;height:12px;min-width:12px;padding:0;border-radius:50%;border:1px solid #00000012;background:var(--traffic-color);color:#4b2419;box-shadow:none}
+.window25-traffic button:not(:disabled):hover{background:var(--traffic-color);filter:brightness(.94)}
+.window25-traffic button svg{width:8px;height:8px;stroke-width:1.8;opacity:0}
+.window25-traffic:hover button svg,.window25-traffic:focus-within button svg{opacity:1}
+.window25-traffic .close{--traffic-color:#ff5f57}.window25-traffic .minimize{--traffic-color:#febc2e}.window25-traffic .expand{--traffic-color:#28c840;color:#07591e}
+.window25-caption{display:flex;height:48px;flex-shrink:0;margin-left:2px}
+.window25-caption button{width:46px;height:48px;border-radius:0;padding:0;color:var(--text);background:transparent}
+.window25-caption button svg{width:13px;height:13px;stroke-width:1.25}
+.window25-caption .close:not(:disabled):hover{background:#c42b1c;color:white}
+.window25-caption button:focus-visible{outline:2px solid var(--green);outline-offset:-4px}
+body[data-window25-inactive] .brand strong,body[data-window25-inactive] .breadcrumb,body[data-window25-inactive] .rhythm,body[data-window25-inactive] .topbar>.icon-button{color:var(--secondary)}
+body[data-window25-inactive] .window25-traffic button{background:#c5c7ca;border-color:#00000010;color:#64676b}
+:root[data-theme=dark] body[data-window25-inactive] .window25-traffic button{background:#555960;border-color:transparent;color:#ced1d6}
+.window25-review-tools{display:flex;gap:2px;align-items:center}
+.window25-review-tools button{height:26px;padding:0 8px;color:var(--secondary)}
+.window25-review-tools .active{background:var(--selected);color:var(--green)}
+.window25-state{font-size:11px;color:var(--secondary);white-space:nowrap}
+body[data-window25] .review-bar .sample-label,body[data-window25] .review-note{display:none}
+body[data-window25] .review-bar{gap:10px}
+body[data-window25] .review-controls{gap:4px!important}
+@media(max-width:1100px){body[data-window25] .review-bar [data-action=desk19-more],body[data-window25] .review-bar [data-action=desk19-scenes]{display:none}body[data-window25] .topbar .rhythm{padding-left:10px}body[data-window25] .breadcrumb{max-width:42%}}
+
+/* Windows identity follows the sidebar width; its actions form one aligned group. */
+body[data-window25=windows] .topbar .brand{flex-basis:var(--nav-width);width:var(--nav-width);gap:6px;padding:0 12px}
+body[data-window25=windows] .brand .nav-toggle{display:inline-flex;flex-shrink:0;width:28px;height:28px;margin-left:auto}
+body[data-window25=windows] .brand .brand-update{margin-left:0;flex-shrink:0}
+body[data-window25=windows] .brand strong{white-space:nowrap}
+body[data-window25=windows] .breadcrumb{margin-left:20px}
+body[data-window25=windows] .nav-collapsed .brand{justify-content:center;padding:0;gap:0}
+body[data-window25=windows] .nav-collapsed .brand strong{display:none}
+body[data-window25=windows] .topbar>.brand-update{position:relative;width:26px;height:26px;margin:0 0 0 2px}
+body[data-window25=windows] .nav-collapsed .topbar>.nav-toggle{margin-right:4px}
+body[data-window25=windows] .nav-collapsed .breadcrumb{margin-left:16px}

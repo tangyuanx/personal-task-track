@@ -4349,6 +4349,7 @@ test("the frozen Demo baseline is the renderer stylesheet authority", async () =
   const phase22Dir = path.join(__dirname, "..", "prototypes", "baseline", "loop-plane-phase22-frozen");
   const phase23Dir = path.join(__dirname, "..", "prototypes", "baseline", "loop-plane-phase23-frozen");
   const phase24Dir = path.join(__dirname, "..", "prototypes", "baseline", "loop-plane-phase24-frozen");
+  const phase25Dir = path.join(__dirname, "..", "prototypes", "baseline", "loop-plane-phase25-frozen");
   const previousFrozenDir = path.join(__dirname, "..", "prototypes", "baseline", "loop-plane-phase1-frozen");
 
   // The Demo baseline must be present verbatim and must not be edited to fit
@@ -4378,29 +4379,88 @@ test("the frozen Demo baseline is the renderer stylesheet authority", async () =
     ["controls22.css", "loop-controls-phase22.css"],
     ["notebook23.css", "loop-notebook-phase23.css"],
     ["management24.css", "loop-management-phase24.css"],
+    ["window25.css", "loop-window-phase25.css"],
   ];
   for (const [target, source] of copied) {
     const [a, b] = await Promise.all([
       fs.readFile(path.join(rendererDir, "src", target), "utf8"),
-      fs.readFile(path.join(source === "loop-time-phase18.css" ? phase18Dir : source === "loop-desktop-phase19.css" ? phase19Dir : source === "loop-scale-phase20.css" ? phase20Dir : source === "loop-brief-phase21.css" ? phase21Dir : source === "loop-controls-phase22.css" ? phase22Dir : source === "loop-notebook-phase23.css" ? phase23Dir : source === "loop-management-phase24.css" ? phase24Dir : frozenDir, source), "utf8"),
+      fs.readFile(path.join(source === "loop-time-phase18.css" ? phase18Dir : source === "loop-desktop-phase19.css" ? phase19Dir : source === "loop-scale-phase20.css" ? phase20Dir : source === "loop-brief-phase21.css" ? phase21Dir : source === "loop-controls-phase22.css" ? phase22Dir : source === "loop-notebook-phase23.css" ? phase23Dir : source === "loop-management-phase24.css" ? phase24Dir : source === "loop-window-phase25.css" ? phase25Dir : frozenDir, source), "utf8"),
     ]);
     assert.equal(a, b, `src/${target} must stay byte-identical to the frozen ${source}`);
   }
 
   // Load order mirrors the Demo entry, and bridge.css is the only override layer.
   const linked = [...index.matchAll(/<link[^>]+href="\.\/src\/([^"?]+)/g)].map((match) => match[1]);
-  const order = ["shell.css", "vendor/milkdown-editor.css", "knowledge.css", "fonts.css", "settings.css", "typography.css", "refinement.css", "selection.css", "flow.css", "shell-refinement.css", "help.css", "work.css", "task-entry.css", "journey.css", "time.css", "desktop.css", "scale.css", "brief21.css", "controls22.css", "notebook23.css", "management24.css", "bridge.css"];
+  const order = ["shell.css", "vendor/milkdown-editor.css", "knowledge.css", "fonts.css", "settings.css", "typography.css", "refinement.css", "selection.css", "flow.css", "shell-refinement.css", "help.css", "work.css", "task-entry.css", "journey.css", "time.css", "desktop.css", "scale.css", "brief21.css", "controls22.css", "notebook23.css", "management24.css", "window25.css", "bridge.css"];
   assert.deepEqual(linked, order, "stylesheets must load in the frozen Demo order, with bridge.css last");
   const scripts = [...index.matchAll(/<script[^>]+src="\.\/src\/([^"?]+)/g)].map((match) => match[1]);
   const phase24Script = scripts.indexOf("management24.js");
   assert.ok(phase24Script > scripts.indexOf("notebook23.js"), "phase24 must load after the phase23 layer");
   assert.ok(phase24Script < scripts.indexOf("work.js"), "phase24 must load before the work-navigation layer");
   assert.ok(index.includes("data-management24-enabled"), "the phase24 sheet is gated on the body flag");
+  const window25Script = scripts.indexOf("window25.js");
+  assert.ok(window25Script > scripts.indexOf("management24.js"), "phase25 must load after the phase24 layer");
+  assert.ok(window25Script < scripts.indexOf("work.js"), "phase25 must load before the work-navigation layer");
+  assert.ok(index.includes("data-window25-enabled"), "the phase25 sheet is gated on the body flag");
   assert.ok(!index.includes("approved-4174.css"), "the superseded approved-4174 shell must no longer be loaded");
   assert.ok(!index.includes("styles.css"), "the superseded styles.css must no longer be loaded");
   assert.match(index, /<div id="overlay"><\/div>/);
   assert.match(shell, /:root\{--canvas:#fff/);
   assert.match(shell, /:root\[data-theme=dark\]\{--canvas:#17191d/);
+});
+
+test("the integrated title bar keeps the platform's own window controls", async () => {
+  const rendererDir = path.join(__dirname, "..", "app", "renderer", "src");
+  const [index, main, preload, window25, bridge] = await Promise.all([
+    fs.readFile(path.join(__dirname, "..", "app", "renderer", "index.html"), "utf8"),
+    fs.readFile(path.join(__dirname, "..", "app", "main", "main.cjs"), "utf8"),
+    fs.readFile(path.join(__dirname, "..", "app", "main", "preload.cjs"), "utf8"),
+    fs.readFile(path.join(rendererDir, "window25.js"), "utf8"),
+    fs.readFile(path.join(rendererDir, "bridge.css"), "utf8"),
+  ]);
+
+  // The window keeps its native chrome capabilities: only the title strip goes.
+  assert.match(main, /titleBarStyle: "hidden"/);
+  assert.match(main, /trafficLightPosition = \{ \.\.\.MAC_TRAFFIC_LIGHT_POSITION \}/);
+  assert.match(main, /titleBarOverlay = \{ \.\.\.WINDOW_HEADER_THEMES\.light, height: HEADER_HEIGHT \}/);
+  assert.match(main, /const MAC_TRAFFIC_LIGHT_POSITION = \{ x: \d+(\.\d+)?, y: \d+(\.\d+)? \};/);
+  for (const event of ["maximize", "unmaximize", "enter-full-screen", "leave-full-screen", "focus", "blur", "minimize", "restore"]) {
+    assert.ok(main.includes(`"${event}"`), `the window state feed must include ${event}`);
+  }
+
+  // The bridge reports state and paints the overlay; it exposes no window action,
+  // so the native controls stay the only controls.
+  assert.match(preload, /windowControls: \{/);
+  assert.match(preload, /getState: \(\) => ipcRenderer\.invoke\("window-controls:get-state"\)/);
+  assert.match(preload, /setChromeColors: \(colors\) => ipcRenderer\.invoke\("window-controls:set-chrome-colors", colors\)/);
+  assert.match(preload, /onState: \(callback\) => subscribe\("window-controls:state", callback\)/);
+  assert.doesNotMatch(preload, /window-controls:(minimize|maximize|close)/, "no HTML control may drive the window");
+  assert.match(main, /ipcMain\.handle\("window-controls:get-state"/);
+  assert.match(main, /ipcMain\.handle\("window-controls:set-chrome-colors"/);
+  assert.match(main, /win && win === mainWindow && !win\.isDestroyed\(\) \? win : null/, "the handlers must be bound to the main window");
+  assert.match(main, /return \/\^#\[0-9a-f\]\{6\}\$\/i\.test\(text\) \? text\.toLowerCase\(\) : "";/, "overlay colours must be validated");
+
+  // No Demo simulation survives the port.
+  assert.doesNotMatch(window25, /data-desk19-window|window25-platform|window25-review|review-bar/);
+  assert.doesNotMatch(window25, /paths\.window25|window25-traffic"|window25-caption"/);
+  assert.doesNotMatch(window25, /document\.title\s*=/);
+
+  // The port reads the real environment and the measured native geometry.
+  assert.match(window25, /bridge\?\.platform === "darwin" \? "mac" : "windows"/);
+  assert.match(window25, /navigator\.windowControlsOverlay/);
+  assert.match(window25, /getTitlebarAreaRect/);
+  // ... and no DPI constant is baked into the code (comments aside).
+  const window25Code = window25.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+  assert.doesNotMatch(window25Code, /138|207/, "the caption area must come from the overlay rect, not a constant");
+  assert.match(window25, /const brand = document\.querySelector\("\.brand"\);/, "the identity has to be moved out of the navigation column");
+  assert.match(window25, /controls\.onState\?\.\(applyWindowState\)/);
+
+  // The override layer carries the deviations the frozen sheet cannot express.
+  assert.match(bridge, /window25-native-caption/);
+  assert.match(bridge, /window25-native-traffic/);
+  assert.match(bridge, /\.topbar > \.brand-update-slot > \.brand-update \{[^}]*position: relative;/, "the moved update chip must keep its own positioning");
+  assert.match(bridge, /\.app\.nav-collapsed \{ --nav-width: 64px !important; \}/, "the collapsed rail is 64px at every width");
+  assert.ok(index.includes("./src/window25.js"), "the phase25 script must be loaded");
 });
 
 test("repository and flow cleanup leave no inherited separators or duplicate headings", async () => {
