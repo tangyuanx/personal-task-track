@@ -94,6 +94,7 @@ function shellSettingsAppearance() {
     ${shellSettingsChoice("font-scale", SHELL_SETTINGS_CHOICE_DESCRIPTIONS["font-scale"], shellSettingsChoiceOptions("font-scale"), state.fontScale)}
     ${shellSettingsChoice("zh-font", SHELL_SETTINGS_CHOICE_DESCRIPTIONS["zh-font"], shellSettingsChoiceOptions("zh-font"), state.zhFont)}
     ${shellSettingsChoice("en-font", SHELL_SETTINGS_CHOICE_DESCRIPTIONS["en-font"], shellSettingsChoiceOptions("en-font"), state.enFont)}
+    ${window.LoopContinuity28?.settings() || ""}
     <div class="font-preview"><div><span>字体预览</span><span>中文 · English · 0123456789</span></div><b>PCIe MSI 中断路径排查</b><p>沿设备、驱动到内核中断域逐层确认。<br />Record each step, keep the context. 0123456789</p></div>
     <footer class="settings-footer"><span>不需要额外保存</span><button class="text-button" type="button" data-action="reset-appearance">恢复默认外观</button></footer>`;
 }

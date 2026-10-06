@@ -1973,6 +1973,7 @@ function captureScrollViewport(selector, datasetKey, nextViewKey) {
     top: Number(element.scrollTop) || 0,
     left: Number(element.scrollLeft) || 0,
     previousViewKey: element.dataset[datasetKey] || "",
+    datasetKey,
     nextViewKey,
   };
 }
@@ -2003,6 +2004,7 @@ function restoreScrollViewport(snapshot, selector) {
 
   const element = scrollContainer(selector);
   if (!element) return;
+  if (snapshot.datasetKey && element.dataset[snapshot.datasetKey] !== snapshot.nextViewKey) return;
 
   const maxTop = Math.max(0, element.scrollHeight - element.clientHeight);
   const maxLeft = Math.max(0, element.scrollWidth - element.clientWidth);

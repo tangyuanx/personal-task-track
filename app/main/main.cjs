@@ -33,6 +33,7 @@ const { createTodayWidgetController } = require("./today-widget.cjs");
 const { createDeadlineReminderController } = require("./deadline-reminders.cjs");
 const { createUpdateController } = require("./updater.cjs");
 const { APP_DISPLAY_NAME, DESKTOP_APP_ID, configureDesktopIdentity } = require("./app-identity.cjs");
+const { createPointerContinuity } = require("./pointer-continuity.cjs");
 const {
   createPreInstallBackup,
   exportPortableBackup,
@@ -94,6 +95,7 @@ let updateController = null;
 let todayWidgetController = null;
 let deadlineReminderController = null;
 let mainWindow = null;
+let pointerContinuity = null;
 let isQuitting = false;
 let updateInstallPrepared = false;
 let recoveryShutdownWaitingFor = null;
@@ -127,6 +129,7 @@ function createWindow() {
     },
   });
   mainWindow = window;
+  pointerContinuity?.attach(window);
   // The renderer mirrors real window state (active / maximized / full screen)
   // instead of tracking its own clicks, so every platform event is forwarded.
   for (const eventName of WINDOW_STATE_EVENTS) window.on(eventName, () => publishWindowState(window));
@@ -769,6 +772,9 @@ app.whenReady().then(async () => {
   }
   registerStorageHandlers();
   registerWindowChromeHandlers();
+  pointerContinuity = createPointerContinuity({ app, ipcMain, screen, getMainWindow: () => mainWindow });
+  pointerContinuity.register();
+  await pointerContinuity.start();
   todayWidgetController = createTodayWidgetController({
     app,
     BrowserWindow,
@@ -826,6 +832,7 @@ app.on("before-quit", (event) => {
   knowledgeWatcher.closeAll();
   if (!isQuitting && !updateInstallPrepared && requestRecoveryShutdown(event)) return;
   isQuitting = true;
+  pointerContinuity?.stop();
   updateController?.stop();
   todayWidgetController?.stop();
   void deadlineReminderController?.stop();

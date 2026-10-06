@@ -150,3 +150,136 @@ function subscribe(channel, callback) {
   ipcRenderer.on(channel, listener);
   return () => ipcRenderer.removeListener(channel, listener);
 }
+
+// Phase28: capture is owned by the isolated preload. The page can request an
+// already armed group transition, but cannot supply live cursor coordinates.
+(() => {
+  let activeClick = null, tracking = null, fallbackFrame = 0, trackingFrame = 0, enabled = false, serial = 0;
+  const controls = 'button,[role="button"],[role="switch"],[role="menuitem"],[role="menuitemradio"],input[type="button"],input[type="submit"],summary';
+  const box = el => { const r = el.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; };
+  const within = (p, r) => p.x >= r.x && p.y >= r.y && p.x < r.x + r.width && p.y < r.y + r.height;
+  const unique = selector => { try { const matches = document.querySelectorAll(selector); return matches.length === 1 ? matches[0] : null; } catch { return null; } };
+  function cancel() {
+    activeClick = null; tracking = null;
+    cancelAnimationFrame(fallbackFrame); cancelAnimationFrame(trackingFrame);
+    ipcRenderer.send('pointer-continuity:cancel');
+  }
+  function selectorFor(el) {
+    const scope = el.closest('[data-pointer-group]');
+    const prefix = scope && scope !== el ? `[data-pointer-group="${CSS.escape(scope.dataset.pointerGroup)}"] ` : '';
+    const selectors = [];
+    if (el.id) selectors.push('#' + CSS.escape(el.id));
+    const attrs = ['data-pointer-group', 'data-action', 'data-pane', 'data-task-id', 'data-node-id', 'data-group-id',
+      'data-setting-button', 'data-key', 'data-value', 'data-direction', 'data-field', 'data-recovery26',
+      'data-management24', 'data-notebook23', 'data-note23', 'data-manage24', 'data-continuity28', 'data-brief21-toggle', 'data-bulk-action'];
+    const data = attrs.filter(name => el.hasAttribute(name)).map(name => `[${name}="${CSS.escape(el.getAttribute(name))}"]`).join('');
+    if (data) selectors.push(el.tagName.toLowerCase() + data);
+    // Stable classes disambiguate two controls with the same action on one row.
+    const classes = [...el.classList].filter(value => !['active', 'selected', 'open', 'is-checked', 'todo', 'done', 'later', 'blocked'].includes(value));
+    if (data && classes.length) selectors.push(el.tagName.toLowerCase() + classes.map(value => '.' + CSS.escape(value)).join('') + data);
+    for (const selector of selectors) {
+      if (unique(prefix + selector) === el) return prefix + selector;
+    }
+    return null;
+  }
+  function find(click, which) {
+    const el = click[which + 'Element'];
+    // Retention alone is insufficient: the parent can now represent another task.
+    if (el?.isConnected && selectorFor(el) === click[which + 'Selector']) return el;
+    return unique(click[which + 'Selector']);
+  }
+  function locate(click) {
+    if (document.querySelector('.workspace')?.dataset.taskId !== click.task) return null;
+    const button = find(click, 'button'), group = find(click, 'group');
+    if (!button || !group || !group.contains(button) || button.disabled || button.getAttribute('aria-disabled') === 'true' || !group.getClientRects().length) return null;
+    const overlays = [...document.querySelectorAll('#overlay > *,[aria-modal="true"],.knowledge-draft-backdrop,.task-priority-layer')].filter(el => el.getClientRects().length);
+    if (overlays.some(el => !el.contains(button))) return null;
+    const r = box(group), b = box(button), point = { x: r.x + click.offset.x, y: r.y + click.offset.y };
+    if (!within(point, r) || !within(point, b)) return null;
+    // Clipping, a popover, or another object on top also ends the transaction.
+    const hit = document.elementFromPoint(point.x, point.y);
+    if (!hit || !(button === hit || button.contains(hit))) return null;
+    return { group, button, rect: r, buttonRect: b };
+  }
+  function running(el) {
+    for (let parent = el; parent; parent = parent.parentElement) if (parent.getAnimations().some(a => a.playState === 'running' || a.playState === 'paused')) return true;
+    return false;
+  }
+  async function follow(request) {
+    const click = activeClick;
+    if (!enabled || !click || click.claimed || request?.key !== click.key || Date.now() - click.time > 500 || !locate(click)) return { ok: false };
+    click.claimed = true; cancelAnimationFrame(fallbackFrame);
+    const token = { click, busy: false, stable: 0, last: null, started: performance.now() }; tracking = token;
+    const result = await ipcRenderer.invoke('pointer-continuity:start', { key: click.key, rect: request.rect });
+    if (tracking !== token) return { ok: false };
+    if (!result.ok) { cancel(); return { ok: false }; }
+    token.started = performance.now();
+    const sample = () => {
+      if (tracking !== token) return;
+      trackingFrame = requestAnimationFrame(sample);
+      if (token.busy) return; // Drop this display frame; never queue old samples.
+      const target = locate(click);
+      if (!target || performance.now() - token.started > 350) { cancel(); return; }
+      const stable = token.last && Math.hypot(target.rect.x - token.last.x, target.rect.y - token.last.y) < .1;
+      token.stable = stable && !running(target.group) ? token.stable + 1 : 0; token.last = target.rect;
+      token.busy = true;
+      ipcRenderer.invoke('pointer-continuity:frame', { key: click.key, rect: target.rect, buttonRect: target.buttonRect, time: Date.now() }).then(async response => {
+        if (tracking !== token) return;
+        token.busy = false;
+        if (!response.ok) { cancel(); return; }
+        if (token.stable >= 2) {
+          tracking = null; activeClick = null; cancelAnimationFrame(trackingFrame);
+          await ipcRenderer.invoke('pointer-continuity:finish', { key: click.key });
+        }
+      }).catch(() => { if (tracking === token) cancel(); });
+    };
+    trackingFrame = requestAnimationFrame(sample);
+    return { ok: true };
+  }
+  contextBridge.exposeInMainWorld('loopPointerContinuity', {
+    currentClick: () => activeClick && !activeClick.claimed && { key: activeClick.key, selector: activeClick.groupSelector,
+      buttonSelector: activeClick.buttonSelector, rect: activeClick.rect, time: activeClick.time },
+    setEnabled(value) { enabled = value === true; if (!enabled) cancel(); },
+    follow, cancel, status: () => ipcRenderer.invoke('pointer-continuity:status'),
+  });
+  window.addEventListener('pointerdown', event => {
+    cancel();
+    const button = event.target.closest?.(controls);
+    if (!enabled || !event.isTrusted || event.button !== 0 || !button || button.disabled || button.getAttribute('aria-disabled') === 'true') return;
+    if (/^(add-|create-|new-|import-)/.test(button.dataset.action || '')) return;
+    const group = button.closest('[data-pointer-group]') || button;
+    const buttonSelector = selectorFor(button), groupSelector = selectorFor(group);
+    if (!buttonSelector || !groupSelector) return;
+    const r = box(group), b = box(button), point = { x: event.clientX, y: event.clientY };
+    if (!within(point, r) || !within(point, b)) return;
+    const time = Date.now(), key = `${++serial}:${groupSelector}:${buttonSelector}`;
+    activeClick = { key, time, rect: r, offset: { x: point.x - r.x, y: point.y - r.y },
+      task: document.querySelector('.workspace')?.dataset.taskId, buttonElement: button, groupElement: group, buttonSelector, groupSelector };
+    ipcRenderer.send('pointer-continuity:arm', { key, rect: r, buttonRect: b, x: point.x, y: point.y, time });
+  }, true);
+  // Cover direct synchronous DOM updates too. Capture schedules before app
+  // handlers run; the first rAF holds FLIP before painting the new position.
+  window.addEventListener('click', event => {
+    if (!event.isTrusted || !activeClick) return;
+    const click = activeClick;
+    const sample = () => {
+      if (activeClick !== click || click.claimed) return;
+      if (Date.now() - click.time > 100) { cancel(); return; }
+      const target = locate(click); if (!target) { cancel(); return; }
+      const r = target.rect, distance = Math.hypot(r.x - click.rect.x, r.y - click.rect.y);
+      if (running(target.group)) { cancel(); return; }
+      if (distance >= 12 && distance <= 300) {
+        const animation = target.group.animate([{ transform: `translate(${click.rect.x-r.x}px,${click.rect.y-r.y}px)` }, { transform: 'translate(0,0)' }], { duration: 200, easing: 'cubic-bezier(.2,.8,.2,1)' });
+        animation.pause(); animation.currentTime = 0;
+        follow({ key: click.key, rect: r }).finally(() => { if (target.group.isConnected) animation.play(); else animation.cancel(); });
+        return;
+      }
+      if (distance > 300) { cancel(); return; }
+      // No synchronous displacement: abandon, rather than chasing later data.
+      cancel();
+    };
+    fallbackFrame = requestAnimationFrame(sample);
+  }, true);
+  for (const name of ['wheel', 'keydown', 'compositionstart', 'beforeinput', 'resize', 'pointercancel', 'touchmove']) window.addEventListener(name, cancel, true);
+  window.addEventListener('blur', event => { if (event.target === window) cancel(); });
+})();

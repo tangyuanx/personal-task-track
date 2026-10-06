@@ -1,0 +1,52 @@
+{
+  "passed": true,
+  "scenes": [
+    "six pane directions",
+    "long-flow scroll",
+    "notes/history scroll",
+    "actual editor retained",
+    "detail Escape focus",
+    "group uniqueness",
+    "final geometry retained",
+    "no synthetic pointer arm"
+  ],
+  "identity": [
+    {
+      "selector": ".tabs-bar",
+      "unique": true
+    },
+    {
+      "selector": ".flow-row",
+      "unique": true
+    },
+    {
+      "selector": ".brand",
+      "unique": true
+    },
+    {
+      "selector": ".task-heading-actions",
+      "unique": true
+    },
+    {
+      "selector": ".nav-bottom",
+      "unique": true
+    }
+  ],
+  "savedFlow": 780,
+  "noteTop": 440,
+  "historyTop": 430,
+  "demoComparison": [
+    {
+      "pane": "flow",
+      "differences": []
+    },
+    {
+      "pane": "notes",
+      "differences": []
+    },
+    {
+      "pane": "history",
+      "differences": []
+    }
+  ]
+}
