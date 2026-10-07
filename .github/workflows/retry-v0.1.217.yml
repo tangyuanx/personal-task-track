@@ -4,7 +4,7 @@ on:
   create:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [codex/retry-v0.1.217-create]
     paths: [.github/workflows/retry-v0.1.217.yml]
 
 permissions:
@@ -25,6 +25,7 @@ jobs:
       SOURCE_SHA: cf90fbc7933d7a2b686724c5b5fa4bad8d368aa2
       SOURCE_RUN: '37641806159'
       RELEASE_TAG: v0.1.217
+      RELEASE_ID: '405894955'
     steps:
       - name: Checkout the exact verified source
         uses: actions/checkout@v4
@@ -108,10 +109,11 @@ jobs:
       - name: Verify uploaded bytes and publish complete release
         shell: bash
         run: |
-          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG" > /tmp/release-verified.json
+          gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" > /tmp/release-verified.json
           node <<'JS'
           const fs = require('fs'), crypto = require('crypto');
           const data = JSON.parse(fs.readFileSync('/tmp/release-verified.json'));
+          if (String(data.id) !== process.env.RELEASE_ID || data.tag_name !== process.env.RELEASE_TAG || !data.draft) throw new Error('Unexpected release identity or state');
           const files = fs.readdirSync('release').filter(n => /\.(dmg|zip|exe|blockmap)$/.test(n) || ['latest.yml','latest-mac.yml'].includes(n));
           for (const name of files) {
             const bytes = fs.readFileSync('release/' + name);
@@ -124,7 +126,7 @@ jobs:
           git fetch --depth=1 origin main
           git show origin/main:package.json | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{if(JSON.parse(s).version!=="0.1.217")process.exit(1)})'
           for attempt in 1 2 3 4 5; do
-            if gh release edit "$RELEASE_TAG" --draft=false --latest; then exit 0; fi
+            if gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" -F draft=false -f make_latest=true; then exit 0; fi
             sleep $((attempt * 5))
           done
           exit 1
