@@ -379,7 +379,6 @@ let pendingPersistedRevision = "";
 let saveInFlight = false;
 let saveInFlightPromise = null;
 let localSaveOutcome = "ready";
-let conclusionNoticeTimer = 0;
 let taskDragState = null;
 let flowNodeDragState = null;
 let suppressTaskClickUntil = 0;
@@ -1429,7 +1428,7 @@ async function relocateKnowledgeTask(taskId) {
   const result = await desktopKnowledgeFile.choose({ boundPaths: boundKnowledgeFilePaths(task.id) });
   if (result?.canceled) return result;
   if (!result?.success) {
-    alert(result?.code === "DUPLICATE_BINDING" ? "这篇知识笔记已绑定该文件路径，请选择其他文件。" : `重新定位失败：${knowledgeFileFailure(result)}`);
+    showWorkspaceError(result?.code === "DUPLICATE_BINDING" ? "这篇知识笔记已绑定该文件路径，请选择其他文件。" : `重新定位失败：${knowledgeFileFailure(result)}`);
     return result || { success: false, code: "FILE_READ_FAILED" };
   }
 
@@ -1571,7 +1570,7 @@ async function saveKnowledgeTask(taskId, { saveAs = false, allowExternalOverwrit
   const task = state.tasks.find((item) => item.id === taskId);
   if (!task) return { canceled: true };
   if (!desktopKnowledgeFile?.save) {
-    alert("当前环境不支持将知识笔记保存为本地文件，请在桌面应用中使用。");
+    showWorkspaceError("当前环境不支持将知识笔记保存为本地文件，请在桌面应用中使用。");
     return { canceled: true, unsupported: true };
   }
 
@@ -1582,7 +1581,7 @@ async function saveKnowledgeTask(taskId, { saveAs = false, allowExternalOverwrit
       code: "EXTERNAL_CHANGE_REQUIRES_CONFIRMATION",
       message: "文件已被外部修改，请先重新加载、明确覆盖或另存为。",
     };
-    alert(result.message);
+    showWorkspaceError(result.message);
     return result;
   }
   if (note.documentState === "FILE_MISSING" && !saveAs) {
@@ -1591,7 +1590,7 @@ async function saveKnowledgeTask(taskId, { saveAs = false, allowExternalOverwrit
       code: "FILE_MISSING_REQUIRES_RELOCATION",
       message: "原文件不存在，请重新定位文件或使用另存为。",
     };
-    alert(result.message);
+    showWorkspaceError(result.message);
     return result;
   }
 
@@ -1604,15 +1603,15 @@ async function saveKnowledgeTask(taskId, { saveAs = false, allowExternalOverwrit
     const fileCheck = await verifyKnowledgeFileBeforeSave(task, { saveAs, allowExternalOverwrite });
     if (fileCheck) {
       if (fileCheck.code === "EXTERNAL_CHANGE_REQUIRES_CONFIRMATION") {
-        alert(fileCheck.message);
+        showWorkspaceError(fileCheck.message);
       } else {
-        alert(`知识笔记保存前读取失败：${fileCheck.message || "未知文件错误"}`);
+        showWorkspaceError(`知识笔记保存前读取失败：${fileCheck.message || "未知文件错误"}`);
       }
       return fileCheck;
     }
     const stagedAssets = await stageKnowledgeAssetsForTask(task, task.notes);
     if (stagedAssets?.success === false) {
-      alert(`知识笔记图片暂存失败：${stagedAssets.message || "未知资源错误"}\n当前内容未清除，请重试。`);
+      showWorkspaceError(`知识笔记图片暂存失败：${stagedAssets.message || "未知资源错误"}\n当前内容未清除，请重试。`);
       return stagedAssets;
     }
     const result = await desktopKnowledgeFile.save({
@@ -1629,9 +1628,9 @@ async function saveKnowledgeTask(taskId, { saveAs = false, allowExternalOverwrit
     if (result?.canceled) return result;
     if (!result?.success) {
       if (result?.code === "DUPLICATE_BINDING") {
-        alert("这篇知识笔记已绑定该文件路径，请选择其他文件。");
+        showWorkspaceError("这篇知识笔记已绑定该文件路径，请选择其他文件。");
       } else {
-        alert(`知识笔记保存失败：${result?.message || "未知文件错误"}\n请重试；如仍失败，可使用“另存为”。`);
+        showWorkspaceError(`知识笔记保存失败：${result?.message || "未知文件错误"}\n请重试；如仍失败，可使用“另存为”。`);
       }
       return result || { success: false };
     }
@@ -1667,7 +1666,7 @@ async function saveKnowledgeTask(taskId, { saveAs = false, allowExternalOverwrit
     return result;
   } catch (error) {
     console.error("Failed to save knowledge note.", error);
-    alert(`知识笔记保存失败：${error?.message || "未知文件错误"}\n请重试；如仍失败，可使用“另存为”。`);
+    showWorkspaceError(`知识笔记保存失败：${error?.message || "未知文件错误"}\n请重试；如仍失败，可使用“另存为”。`);
     return { success: false, code: "SAVE_FAILED", message: error?.message || "未知文件错误", error };
   }
 }
@@ -1718,9 +1717,9 @@ async function loadAppData() {
       const failureText = `${error?.code || ""} ${error?.message || ""}`;
       if (error?.code === "UNSUPPORTED_DATA_VERSION" || failureText.includes("版本高于当前应用支持范围")) {
         dataProtectionMessage = "本地任务数据由更高版本的 Loop 写入。已进入保护模式并停止写入，请升级 Loop 后再打开，数据未被修改。";
-        alert(dataProtectionMessage);
+        showWorkspaceError(dataProtectionMessage);
       } else if (error?.code === "CORRUPT_TASK_DATA" || failureText.includes("任务数据文件已损坏")) {
-        alert("本地任务数据已损坏，应用已保留损坏文件备份。请先复制备份文件后再继续操作。");
+        showWorkspaceError("本地任务数据已损坏，应用已保留损坏文件备份。请先复制备份文件后再继续操作。");
       }
     }
   }
@@ -1765,7 +1764,55 @@ function renderLocalSaveReceipt() {
   return `<span data-local-save-status data-state="${receipt.state}" role="status" aria-live="polite" aria-atomic="true"><i class="dot"></i>${esc(receipt.label)}</span>`;
 }
 
+const WORKSPACE_FEEDBACK_MS = 10000;
+let workspaceFeedback = null;
+let workspaceFeedbackTimer = 0;
+
+function clearWorkspaceFeedback(source = "") {
+  if (source && workspaceFeedback?.source !== source) return;
+  window.clearTimeout(workspaceFeedbackTimer);
+  const previous = workspaceFeedback;
+  workspaceFeedback = null;
+  previous?.onDismiss?.();
+  updateLocalSaveReceipt();
+}
+
+function showWorkspaceFeedback(message, actions = "", { source = "notice", onDismiss = null } = {}) {
+  clearWorkspaceFeedback();
+  const feedback = { message: String(message), actions, source, onDismiss, expiresAt: Date.now() + WORKSPACE_FEEDBACK_MS };
+  workspaceFeedback = feedback;
+  workspaceFeedbackTimer = window.setTimeout(() => {
+    if (workspaceFeedback === feedback) clearWorkspaceFeedback();
+  }, WORKSPACE_FEEDBACK_MS);
+  updateLocalSaveReceipt();
+}
+
+function showWorkspaceError(message) {
+  showWorkspaceFeedback(message, "", { source: "error" });
+}
+
+function renderWorkspaceStatus() {
+  const local = localSaveReceipt();
+  if (!workspaceFeedback || workspaceFeedback.expiresAt <= Date.now()
+      || (["failed", "protected", "transferring"].includes(local.state)
+        && workspaceFeedback.source !== "error")) return renderLocalSaveReceipt();
+  const content = workspaceFeedback.source === "journey"
+    ? renderShellJourneyReceipt()
+    : `<span class="workspace-feedback-message" title="${escAttr(workspaceFeedback.message)}"><i class="dot"></i><span>${esc(workspaceFeedback.message)}</span></span>${workspaceFeedback.actions ? `<div class="workspace-feedback-actions">${workspaceFeedback.actions}</div>` : ""}`;
+  if (!content) return renderLocalSaveReceipt();
+  return `<div class="workspace-feedback" data-tone="${workspaceFeedback.source === "error" ? "error" : "notice"}" role="${workspaceFeedback.source === "error" ? "alert" : "status"}" aria-live="${workspaceFeedback.source === "error" ? "assertive" : "polite"}" aria-atomic="true">${content}<button class="workspace-feedback-dismiss" type="button" data-workspace-dismiss aria-label="关闭操作反馈">${shellIcon("close")}</button></div>`;
+}
+
 function updateLocalSaveReceipt() {
+  const status = document.querySelector("[data-workspace-status]");
+  if (status) {
+    const markup = renderWorkspaceStatus();
+    if (status.workspaceStatusMarkup !== markup) {
+      if (status.innerHTML !== markup) status.innerHTML = markup;
+      status.workspaceStatusMarkup = markup;
+    }
+    return;
+  }
   const element = document.querySelector("[data-local-save-status]");
   if (!element) return;
   const receipt = localSaveReceipt();
@@ -1952,7 +1999,9 @@ async function flushSave() {
         pendingPersistedRevision = payloadRevision;
         pendingPayloadFingerprint = "";
       }
-      alert("本地任务数据保存失败，请检查磁盘空间或权限后重试。Recovery 草稿将继续保留。");
+      if (typeof Recovery26Persisting === "undefined" || !Recovery26Persisting) {
+        showWorkspaceError("本地任务数据保存失败，请检查磁盘空间或权限后重试。Recovery 草稿将继续保留。");
+      }
       return false;
     }
   })();
@@ -2241,8 +2290,10 @@ function render() {
   const navigationMarkup = renderShellNavigation();
   const topbarMarkup = renderShellTopbar();
   const listMarkup = shellWide ? "" : renderShellTaskList(filteredTasks());
+  let workspaceBody = state.calendarOpen ? renderShellCalendar() : state.reviewOpen ? renderShellReview() : state.settingsOpen ? renderShellSettings() : renderShellWorkspace(task);
+  if (!workspaceBody.includes("data-workspace-status")) workspaceBody += renderShellWorkspaceFooter();
   const workspaceMarkup = `<section data-region="workspace" class="workspace ${shellWide ? "workspace-wide" : ""}${!shellWide && task && state.taskPane === "notes" && !shellTaskIsNote(task) ? " knowledge-workspace" : ""}" data-task-id="${escAttr(task?.id || "")}" aria-label="${shellWide ? "全屏页面" : "任务工作台"}">
-    ${state.calendarOpen ? renderShellCalendar() : state.reviewOpen ? renderShellReview() : state.settingsOpen ? renderShellSettings() : renderShellWorkspace(task)}
+    ${workspaceBody}
   </section>`;
   if (shellWide) retainedRegionMarkup.delete("workspace");
   const keepWorkspace = !shellWide && canRetainRegion("workspace", workspaceMarkup);
@@ -2265,7 +2316,6 @@ function render() {
       ${state.feedbackOpen ? renderBugReportPanel() : ""}
       <div id="overlay-slot"></div>
     </main>
-    ${renderCompletionNotice()}
     ${renderTodayWidgetRestore()}
     ${renderKnowledgeDraftPrompt()}
   `;
@@ -2343,10 +2393,10 @@ function render() {
 
 function renderCompletionNotice() {
   if (state.tasks.some((item) => item.id === state.conclusionPromptTaskId)) {
-    return `<div class="completion-notice" role="status" aria-live="polite">请先填写结论，再标记完成</div>`;
+    return "请先填写结论，再标记完成";
   }
   if (state.tasks.some((item) => item.id === state.flowPromptTaskId)) {
-    return `<div class="completion-notice" role="status" aria-live="polite">请先完成处理流中的所有节点，再标记任务完成</div>`;
+    return "请先完成处理流中的所有节点，再标记任务完成";
   }
   return "";
 }
@@ -7353,7 +7403,6 @@ function flushNodeNoteDraft(key, { persist = true } = {}) {
     if (typeof note23UpdateChrome === "function") note23UpdateChrome(task);
     if (state.activeTaskId === task.id && state.taskPane === "notes") {
       if (typeof note23RefreshOutline === "function") note23RefreshOutline(task);
-      if (typeof note23RefreshFind === "function") note23RefreshFind(false);
     }
   }
   if (persist) save();
@@ -8196,7 +8245,7 @@ async function shareTask(taskId) {
     URL.revokeObjectURL(url);
   } catch (error) {
     console.error("Failed to export task document.", error);
-    alert("导出失败，请稍后重试。");
+    showWorkspaceError("导出失败，请稍后重试。");
   }
 }
 
@@ -8878,7 +8927,7 @@ async function exportNodePdf(taskId, nodeId) {
   const node = task ? findNode(task.nodes, nodeId) : null;
   if (!task || !node) return;
   if (!desktopExport?.nodeDetailPdf) {
-    alert("当前环境不支持 PDF 导出。请在桌面应用中使用。");
+    showWorkspaceError("当前环境不支持 PDF 导出。请在桌面应用中使用。");
     return;
   }
 
@@ -8892,7 +8941,7 @@ async function exportNodePdf(taskId, nodeId) {
     });
   } catch (error) {
     console.error("Failed to export node detail PDF.", error);
-    alert("PDF 导出失败，请稍后重试。");
+    showWorkspaceError("PDF 导出失败，请稍后重试。");
   }
 }
 
@@ -9006,10 +9055,10 @@ function taskCompletionBlocker(task) {
 }
 
 function showCompletionNotice(taskId, code) {
+  clearWorkspaceFeedback("completion");
   state.conclusionPromptTaskId = code === "CONCLUSION_REQUIRED" ? taskId : "";
   state.flowPromptTaskId = code === "FLOW_INCOMPLETE" ? taskId : "";
-  window.clearTimeout(conclusionNoticeTimer);
-  conclusionNoticeTimer = window.setTimeout(() => clearCompletionNotice(taskId), 4200);
+  showWorkspaceFeedback(renderCompletionNotice(), "", { source: "completion", onDismiss: () => clearCompletionNotice(taskId) });
 }
 
 function clearConclusionNotice(taskId) {
@@ -9025,8 +9074,7 @@ function clearCompletionNotice(taskId) {
 }
 
 function clearCompletionNoticeElement() {
-  window.clearTimeout(conclusionNoticeTimer);
-  document.querySelector(".completion-notice")?.remove();
+  clearWorkspaceFeedback("completion");
   document.querySelector(".task-brief label.needs-attention")?.classList.remove("needs-attention");
 }
 

@@ -32,7 +32,6 @@
 (() => {
   if (!document.body.hasAttribute("data-management24-enabled")) return;
 
-  const MANAGE24_UNDO_MS = 12000;
   const MANAGE24_ICON = {
     edit: "edit", folder: "folder", organize: "more", up: "chevron", down: "chevron",
     remove: "close", home: "home", blocked: "blocked", later: "later", note: "note",
@@ -54,7 +53,6 @@
   let manage24OrganizerQuery = "";
   let manage24DeleteDraft = null;
   let manage24Undo = null;
-  let manage24ReceiptTimer = 0;
   let manage24LastRowTitle = null;
 
   // ---- small helpers -------------------------------------------------------
@@ -155,16 +153,11 @@
   }
 
   function manage24Receipt(text, action = "", label = "") {
-    window.clearTimeout(manage24ReceiptTimer);
-    const host = manage24Node("#toast");
-    if (!host) return;
-    host.innerHTML = `<div class="toast manage24-receipt"><span>${manage24Esc(text)}</span>${action ? `<button type="button" data-manage24="${manage24Attr(action)}">${manage24Esc(label)}</button>` : ""}</div>`;
-    manage24ReceiptTimer = window.setTimeout(() => {
-      // Only clear our own receipt: bulk.js, knowledge.js and the widget share
-      // this host, and a later toast from them must survive.
-      if (host.querySelector(".manage24-receipt")) host.innerHTML = "";
-      if (action === "undo-group") manage24Undo = null;
-    }, action === "undo-group" ? MANAGE24_UNDO_MS : 6500);
+    const undo = manage24Undo;
+    const actions = action ? `<button type="button" data-manage24="${manage24Attr(action)}">${manage24Esc(label)}</button>` : "";
+    showWorkspaceFeedback(text, actions, { source: "management", onDismiss: () => {
+      if (action === "undo-group" && manage24Undo === undo) manage24Undo = null;
+    } });
   }
 
   /**

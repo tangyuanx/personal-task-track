@@ -390,7 +390,7 @@ function renderShellWorkspace(task) {
   const reading = state.nodeDetailFullscreen === true;
   const selected = shellNodeList(task).find((node) => node.id === state.selectedNodeId);
   const pane = state.taskPane === "notes" ? "notes" : state.taskPane === "history" ? "history" : "flow";
-  return `${typeof renderShellJourneyReceipt === "function" ? renderShellJourneyReceipt() : ""}<div class="task-heading">
+  return `<div class="task-heading">
       <div class="task-heading-main">${renderShellTaskTitle(task)}${renderShellTaskProperties(task)}</div>
       <div class="task-heading-actions">
         <button class="button" type="button" data-action="toggle-task-done" data-task-id="${escAttr(task.id)}" aria-label="${shellTaskDone(task) ? "恢复任务" : "完成任务"}">${shellIcon("check")}${shellTaskDone(task) ? "恢复任务" : "完成任务"}</button>
@@ -403,11 +403,15 @@ function renderShellWorkspace(task) {
     <div class="tab-content ${reading ? "flow-reading" : ""}">
       ${pane === "flow" ? renderShellFlow(task) : pane === "notes" ? renderShellNotes(task) : renderShellHistory(task)}
     </div>
-    <footer class="workspace-foot">
-      ${renderLocalSaveReceipt()}
-      <span class="foot-shortcut">${pane === "notes" ? "⌘ / Ctrl + S 保存文件" : "拖动节点调整层级 · Esc 关闭详情"}</span>
-    </footer>
+    ${renderShellWorkspaceFooter(pane)}
     ${state.taskMenuOpen ? renderShellTaskMenu(task) : ""}`;
+}
+
+function renderShellWorkspaceFooter(pane = "") {
+  return `<footer class="workspace-foot">
+    <div data-workspace-status>${renderWorkspaceStatus()}</div>
+    ${pane ? `<span class="foot-shortcut">${pane === "notes" ? "⌘ / Ctrl + S 保存文件" : "拖动节点调整层级 · Esc 关闭详情"}</span>` : ""}
+  </footer>`;
 }
 
 function renderShellEmptyWorkspace() {

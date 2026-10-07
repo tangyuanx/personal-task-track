@@ -296,9 +296,7 @@ function shellSubmitCreateDialog(event) {
   if (state.taskFilter === "done") state.taskFilter = "active";
   save();
   // Demo phase 17: creation shows the same inline receipt as completion.
-  state.journeyReceipt = { id: task.id, kind: "created", context: null, occurrence: "", date: loopTodayKey() };
-  render();
-  shellToast(quick ? "速记已保存" : "任务已创建");
+  shellShowJourneyReceipt({ id: task.id, kind: "created", context: null, occurrence: "", date: loopTodayKey() });
 }
 
 
@@ -310,7 +308,7 @@ function shellSubmitCreateDialog(event) {
 //      that still misses a conclusion or has unfinished nodes now offers direct
 //      links to the exact record instead of only a transient notice.
 //   2. .journey17-receipt — an inline create/complete receipt with contextual
-//      actions and undo, rendered at the top of the workspace.
+//      actions and undo, rendered in the workspace footer for ten seconds.
 //
 // All data comes from the project's own model (taskCompletionBlocker,
 // flatten, toggleTaskDone, state.taskPane / selectedNodeId / recordDraft).
@@ -322,11 +320,15 @@ function shellJourneyReceipt() {
 
 function shellShowJourneyReceipt(receipt) {
   state.journeyReceipt = receipt;
+  showWorkspaceFeedback("", "", { source: "journey", onDismiss: () => {
+    if (state.journeyReceipt === receipt) state.journeyReceipt = null;
+  } });
   render();
 }
 
 function shellClearJourneyReceipt() {
   state.journeyReceipt = null;
+  clearWorkspaceFeedback("journey");
 }
 
 /** Capture enough context to come back after a detour through 日历 / 回顾. */
@@ -438,12 +440,8 @@ function renderShellJourneyReceipt() {
     : quick
       ? "速记已保留"
       : `${shellGroupTitle(task.groupId)}${task.deadlineAt ? ` · ${shellDisplayDate(localDateKey(task.deadlineAt))} 截止` : ""}`;
-  return `<section class="journey17-receipt" aria-label="${completed ? "任务完成反馈" : "创建反馈"}">
-    <div class="journey17-message" role="status" aria-live="polite">${shellIcon(completed ? "check" : "plus")}
-      <div><strong>${completed ? "已完成" : "已创建"} · ${esc(task.title || "未命名任务")}</strong><small>${esc(detail)}</small></div>
-    </div>
-    <div class="journey17-actions">${actions}<button class="icon-button" type="button" data-journey17="dismiss" aria-label="关闭操作反馈">${shellIcon("close")}</button></div>
-  </section>`;
+  const message = `${completed ? "已完成" : "已创建"} · ${task.title || "未命名任务"}`;
+  return `<span class="workspace-feedback-message" title="${escAttr(`${message} · ${detail}`)}">${shellIcon(completed ? "check" : "plus")}<span>${esc(message)}</span></span><div class="workspace-feedback-actions">${actions}</div>`;
 }
 
 /** Calendar agendas show a finished task's conclusion instead of its hypothesis. */
@@ -545,6 +543,12 @@ function shellBindJourneyReceipt() {
   if (document.__loopJourneyBound) return;
   document.__loopJourneyBound = true;
   document.addEventListener("click", (event) => {
+    if (event.target.closest?.("[data-workspace-dismiss]")) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      clearWorkspaceFeedback();
+      return;
+    }
     const button = event.target.closest?.("[data-journey17]");
     if (!button) return;
     event.preventDefault();
@@ -1362,8 +1366,7 @@ async function shellAction(data, event) {
       state.focusSearch = true;
       return true;
     case "open-toast-record":
-      // Reuse the completion receipt's own route to the record.
-      shellJourneyAction("result", document.querySelector(`[data-task-id="${CSS.escape(data.taskId || "")}"]`) || document.body);
+      shellJourneyRevealTask(data.taskId);
       return true;
     case "desk19-status":
       desktopReminderStatusPanel(trigger);

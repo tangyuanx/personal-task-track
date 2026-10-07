@@ -24,8 +24,6 @@
 // ============================================================
 
 const RECOVERY26_TYPES = { task: "任务", quick: "速记", group: "分组", node: "处理流节点", note: "知识笔记" };
-const RECOVERY26_UNDO_MS = 12000;
-const RECOVERY26_RESULT_MS = 6000;
 const RECOVERY26_TITLE_MAX = 80;
 
 let recovery26Active = "";
@@ -35,7 +33,6 @@ let recovery26Picked = new Set();
 let recovery26Pending = null;
 let recovery26Undo = null;
 let recovery26ReturnFocus = null;
-let recovery26ReceiptTimer = 0;
 let recovery26Busy = false;
 let recovery26LastGroupChoice = "";
 let recovery26LastSourceChoice = "";
@@ -126,21 +123,9 @@ async function recovery26Persist() {
   }
 }
 
-// The product's flushSave() alerts on failure. A transaction reports the
-// failure in its own dialog instead, so the alert is suppressed only while a
-// phase26 write is in flight (the error is still logged by flushSave).
+// A deletion transaction reports write errors in its decision dialog.
+// Suppress the ordinary footer error while that transaction is in flight.
 let Recovery26Persisting = false;
-if (typeof window !== "undefined" && typeof window.alert === "function" && !window.__recovery26AlertGuard) {
-  const originalAlert = window.alert.bind(window);
-  window.__recovery26AlertGuard = true;
-  window.alert = function recovery26Alert(message) {
-    if (Recovery26Persisting) {
-      console.error("[recovery26] write failed:", message);
-      return undefined;
-    }
-    return originalAlert(message);
-  };
-}
 
 /**
  * Run a delete or a restore as one transaction: snapshot what will change,
@@ -232,19 +217,14 @@ function recovery26RemoveArchive(entry) {
 
 /** The Demo's receipt: message, optional Undo, optional Recently Deleted. */
 function recovery26Receipt(message, entries = [], action = null) {
-  const host = r26("#toast");
-  if (!host) return;
   recovery26Undo = action || (entries.length
     ? () => recovery26RestoreMany(entries.map((entry) => entry.id), { restoreMoved: true })
     : null);
-  window.clearTimeout(recovery26ReceiptTimer);
-  host.innerHTML = `<div class="toast recovery26-receipt" role="status"><span>${r26Escape(message)}</span>${recovery26Undo ? r26Button("undo", "撤销", "text-button") : ""}${entries.length ? r26Button("open", "最近删除", "text-button") : ""}</div>`;
-  // The receipt timeout removes the immediate Undo only. The archive itself
-  // never expires, so the record stays recoverable from 最近删除.
-  recovery26ReceiptTimer = window.setTimeout(() => {
-    if (host.querySelector(".recovery26-receipt")) host.innerHTML = "";
-    recovery26Undo = null;
-  }, RECOVERY26_UNDO_MS);
+  const undo = recovery26Undo;
+  const actions = `${undo ? r26Button("undo", "撤销", "text-button") : ""}${entries.length ? r26Button("open", "最近删除", "text-button") : ""}`;
+  showWorkspaceFeedback(message, actions, { source: "recovery", onDismiss: () => {
+    if (recovery26Undo === undo) recovery26Undo = null;
+  } });
 }
 
 // ------------------------------------------------------------
@@ -1259,6 +1239,7 @@ function recovery26OnClick(event) {
     event.preventDefault();
     event.stopImmediatePropagation();
     const undo = recovery26Undo;
+    clearWorkspaceFeedback("recovery");
     recovery26Undo = null;
     if (typeof undo === "function") {
       Promise.resolve(undo()).catch((error) => console.error("[recovery26] undo failed", error));

@@ -988,8 +988,9 @@ test("renderer surfaces task-data persistence failures", async () => {
     },
   });
   await harness.evaluate(`pendingPayload = { tasks: [] }; flushSave()`);
-  assert.equal(harness.alerts.length, 1);
-  assert.match(harness.alerts[0], /本地任务数据保存失败/);
+  assert.equal(harness.alerts.length, 0);
+  assert.match(harness.evaluate("workspaceFeedback.message"), /本地任务数据保存失败/);
+  harness.evaluate("clearWorkspaceFeedback()");
   assert.equal(harness.evaluate("pendingPayload !== null"), true);
   assert.equal(harness.evaluate("localSaveReceipt().state"), "failed");
 });
@@ -4933,8 +4934,9 @@ test("renderer makes corrupt task-data backup recovery observable", async () => 
   });
   const loaded = await harness.evaluate("loadAppData()");
   assert.equal(loaded.tasks.length, 0);
-  assert.equal(harness.alerts.length, 1);
-  assert.match(harness.alerts[0], /损坏/);
+  assert.equal(harness.alerts.length, 0);
+  assert.match(harness.evaluate("workspaceFeedback.message"), /损坏/);
+  harness.evaluate("clearWorkspaceFeedback()");
 });
 
 test("renderer normalization restores safe task and node invariants", async () => {
@@ -7447,4 +7449,57 @@ test('complete task journey keeps grouped tasks, widget lanes, notes, attachment
   assert.equal(finalTask.notes,markdown); assert.equal(finalTask.knowledgeNote.filePath,notePath);
   assert.ok(reopened.attachments.images.journey_image);
   assert.equal(reopened.tasks.find(task=>task.id===captureId).captureSource,'today-widget');
+});
+
+test('workspace feedback resets its ten-second lifetime and restores current save status without rerendering editors', async () => {
+  const h = await rendererHarness();
+  h.evaluate(`
+    globalThis.feedbackTimers = new Map(); globalThis.feedbackTimerId = 0;
+    window.setTimeout = (callback, delay) => { const id = ++feedbackTimerId; feedbackTimers.set(id, {callback, delay}); return id; };
+    window.clearTimeout = id => feedbackTimers.delete(id);
+    globalThis.statusWrites = 0; globalThis.statusMarkup = '';
+    globalThis.statusHost = { get innerHTML() { return statusMarkup; }, set innerHTML(value) { statusWrites++; statusMarkup = value; } };
+    document.querySelector = selector => selector === '[data-workspace-status]' ? statusHost : null;
+    render = () => { throw new Error('feedback must not rerender the editor'); };
+    localSaveOutcome = 'saved'; globalThis.dismissed = [];
+    showWorkspaceFeedback('已删除一项', '<button>撤销</button>', {source:'recovery', onDismiss:()=>dismissed.push('deleted')});
+    globalThis.staleExpiry = feedbackTimers.get(workspaceFeedbackTimer).callback;
+  `);
+  assert.match(h.evaluate('statusMarkup'), /已删除一项/);
+  assert.equal(h.evaluate('feedbackTimers.get(workspaceFeedbackTimer).delay'), 10000);
+  h.evaluate(`showWorkspaceFeedback('已更新任务安排', '', {source:'notice', onDismiss:()=>dismissed.push('updated')}); staleExpiry();`);
+  assert.deepEqual(h.json('dismissed'), ['deleted']);
+  assert.match(h.evaluate('statusMarkup'), /已更新任务安排/);
+  assert.equal(h.evaluate('feedbackTimers.size'), 1);
+  h.evaluate(`globalThis.writesBefore = statusWrites; saveInFlight = true; updateLocalSaveReceipt(); updateLocalSaveReceipt();`);
+  assert.equal(h.evaluate('statusWrites'), h.evaluate('writesBefore'), 'autosave must preserve the active feedback actions');
+  h.evaluate(`clearWorkspaceFeedback('bulk');`);
+  assert.match(h.evaluate('statusMarkup'), /已更新任务安排/, 'unrelated cleanup must not dismiss the current message');
+  h.evaluate(`feedbackTimers.get(workspaceFeedbackTimer).callback();`);
+  assert.match(h.evaluate('statusMarkup'), /正在保存到本机/);
+  assert.deepEqual(h.json('dismissed'), ['deleted', 'updated']);
+  assert.equal(h.evaluate('feedbackTimers.size'), 0);
+  h.evaluate(`saveInFlight = false; localSaveOutcome = 'saved'; updateLocalSaveReceipt();`);
+  assert.match(h.evaluate('statusMarkup'), /已保存到本机/);
+});
+
+test('workspace save failures take priority over success feedback and completion prompts can replace one another', async () => {
+  const h = await rendererHarness();
+  h.evaluate(`
+    window.setTimeout = () => 1; window.clearTimeout = () => {};
+    localSaveOutcome = 'saved'; showWorkspaceFeedback('已更新任务');
+    localSaveOutcome = 'failed';
+  `);
+  assert.match(h.evaluate('renderWorkspaceStatus()'), /本地保存失败/);
+  assert.doesNotMatch(h.evaluate('renderWorkspaceStatus()'), /已更新任务/);
+  h.evaluate(`showWorkspaceError('导出失败，请稍后重试。');`);
+  assert.match(h.evaluate('renderWorkspaceStatus()'), /导出失败/);
+  assert.match(h.evaluate('renderWorkspaceStatus()'), /role="alert"/);
+  h.evaluate(`clearWorkspaceFeedback();`);
+  assert.match(h.evaluate('renderWorkspaceStatus()'), /本地保存失败/);
+  h.evaluate(`localSaveOutcome='saved'; showCompletionNotice('same-task','CONCLUSION_REQUIRED'); showCompletionNotice('same-task','FLOW_INCOMPLETE');`);
+  assert.equal(h.evaluate('state.flowPromptTaskId'), 'same-task');
+  assert.equal(h.evaluate('state.conclusionPromptTaskId'), '');
+  h.evaluate(`clearWorkspaceFeedback();`);
+  assert.equal(h.evaluate('state.flowPromptTaskId'), '');
 });

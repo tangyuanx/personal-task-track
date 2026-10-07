@@ -8,8 +8,6 @@
 // ============================================================
 
 const shellBulk = { active: false, ids: new Set(), anchor: null, scope: "", undo: null };
-const SHELL_BULK_UNDO_MS = 12000;
-let shellBulkUndoTimer = 0;
 
 function shellBulkScopeKey() {
   return JSON.stringify([
@@ -31,9 +29,7 @@ function shellBulkStop() {
   shellBulk.ids.clear();
   shellBulk.anchor = null;
   shellBulk.undo = null;
-  window.clearTimeout(shellBulkUndoTimer);
-  const host = document.querySelector("#toast");
-  if (host) host.innerHTML = "";
+  clearWorkspaceFeedback("bulk");
 }
 
 /** Drop selections that left the visible scope, and leave multi-select if the scope changed. */
@@ -106,16 +102,9 @@ function shellBulkFooter() {
 
 function shellBulkShowResult(message, undo) {
   shellBulk.undo = undo;
-  window.clearTimeout(shellBulkUndoTimer);
-  const host = document.querySelector("#toast");
-  if (host) {
-    host.innerHTML = `<div class="toast bulk-result" role="status"><span>${esc(message)}</span><button class="text-button" type="button" data-bulk-action="undo">撤销</button><button class="icon-button" type="button" data-bulk-action="dismiss-result" aria-label="关闭操作结果">${shellIcon("close")}</button></div>`;
-  }
-  shellBulkUndoTimer = window.setTimeout(() => {
-    shellBulk.undo = null;
-    const target = document.querySelector("#toast");
-    if (target) target.innerHTML = "";
-  }, SHELL_BULK_UNDO_MS);
+  showWorkspaceFeedback(message, '<button class="text-button" type="button" data-bulk-action="undo">撤销</button>', { source: "bulk", onDismiss: () => {
+    if (shellBulk.undo === undo) shellBulk.undo = null;
+  } });
 }
 
 function shellBulkSnapshot(items, fields) {
@@ -388,18 +377,14 @@ async function shellBulkActionRun(action, element, event) {
     case "undo": {
       const undo = shellBulk.undo;
       shellBulk.undo = null;
-      window.clearTimeout(shellBulkUndoTimer);
-      const host = document.querySelector("#toast");
-      if (host) host.innerHTML = "";
+      clearWorkspaceFeedback("bulk");
       if (undo) undo();
       render();
       return true;
     }
     case "dismiss-result": {
       shellBulk.undo = null;
-      window.clearTimeout(shellBulkUndoTimer);
-      const host = document.querySelector("#toast");
-      if (host) host.innerHTML = "";
+      clearWorkspaceFeedback("bulk");
       return true;
     }
     default:

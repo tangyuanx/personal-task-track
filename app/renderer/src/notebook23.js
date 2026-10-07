@@ -8,7 +8,7 @@
 // result belongs to its original path and saved baseline.
 // ------------------------------------------------------------
 
-const NOTE23_VIEWS = new Map();      // taskId -> {outline, find, query, heading}
+const NOTE23_VIEWS = new Map();      // taskId -> {outline, heading}
 const NOTE23_PENDING = new Map();    // taskId -> {path, baseline}
 const NOTE23_PARTIAL = new Map();
 const NOTE23_EXTERNAL = new Set();
@@ -17,8 +17,6 @@ const NOTE23_EDIT_DIRTY = new Set();   // tasks whose editor text differs from t
 const NOTE23_SAVED_TEXT = new Map();
 const NOTE23_BASELINE_CHECKED = new Set();
 const NOTE23_DETAILS_DISMISS = new Map();   // taskId -> the details popover dismiss handler   // tasks whose on-disk baseline was verified   // taskId -> the text a completed write confirmed    // taskId -> {snapshot, path}: a real write whose binding did not land
-let note23Matches = [];
-let note23Index = -1;
 let note23Frame = 0;
 
 function note23Task() {
@@ -44,7 +42,7 @@ function note23State(task) {
 }
 
 function note23View(task) {
-  if (!NOTE23_VIEWS.has(task.id)) NOTE23_VIEWS.set(task.id, { outline: false, find: false, query: "", heading: -1 });
+  if (!NOTE23_VIEWS.has(task.id)) NOTE23_VIEWS.set(task.id, { outline: false, heading: -1 });
   return NOTE23_VIEWS.get(task.id);
 }
 
@@ -325,20 +323,7 @@ function note23Decorate() {
   // document tools before the presentation actions
   const actions = pane.querySelector(".knowledge-header-actions");
   if (actions && !actions.querySelector(".note23-tools")) {
-    actions.insertAdjacentHTML("afterbegin", `<div class="note23-tools" role="group" aria-label="文档工具"><button class="icon-button" data-note23="find" aria-label="在笔记中查找" title="在笔记中查找 · ⌘ / Ctrl + F" aria-pressed="${view.find}">${shellIcon("search")}</button><button class="icon-button" data-note23="outline" aria-label="笔记大纲" title="笔记大纲" aria-pressed="${view.outline}">${shellIcon("note23Outline")}</button></div>`);
-  }
-
-  // find bar
-  const body = pane.querySelector(".knowledge-body");
-  const existingFind = pane.querySelector(".note23-find");
-  if (view.find && body && !existingFind) {
-    body.insertAdjacentHTML("beforebegin", `<div class="note23-find" role="search" aria-label="笔记内查找"><input id="note23-query" aria-label="查找笔记文字" placeholder="在当前笔记中查找" value="${escAttr(view.query)}" autocomplete="off"><output id="note23-match-count" aria-live="polite"></output><button class="icon-button" data-note23="find-prev" aria-label="上一个匹配">${shellIcon("chevron")}</button><button class="icon-button" data-note23="find-next" aria-label="下一个匹配">${shellIcon("chevron")}</button><button class="icon-button" data-note23="find" aria-label="关闭笔记查找">${shellIcon("close")}</button></div>`);
-    const previous = document.querySelector(".note23-find [data-note23='find-prev'] svg");
-    previous?.style.setProperty("transform", "rotate(180deg)");
-  } else if (!view.find) {
-    existingFind?.remove();
-    CSS.highlights?.delete("note23-matches");
-    CSS.highlights?.delete("note23-current");
+    actions.insertAdjacentHTML("afterbegin", `<div class="note23-tools" role="group" aria-label="文档工具"><button class="icon-button" data-note23="outline" aria-label="笔记大纲" title="笔记大纲" aria-pressed="${view.outline}">${shellIcon("note23Outline")}</button></div>`);
   }
 
   // partial: the file was written but the association record was not saved
@@ -370,6 +355,7 @@ function note23Decorate() {
   }
 
   // content wrapper + optional outline
+  const body = pane.querySelector(".knowledge-body");
   if (body && !pane.querySelector(".note23-content")) {
     const content = document.createElement("div");
     content.className = "note23-content";
@@ -405,7 +391,6 @@ function note23Decorate() {
     save.innerHTML = `${shellIcon(k.busy ? "repeat" : "check")}${k.busy ? "保存中…" : note23PartialOf(task, k) || NOTE23_PENDING.has(task.id) ? "重试关联" : k.path ? "保存" : "保存为文件"}`;
   }
   note23RefreshOutline(task);
-  note23RefreshFind(false);
 }
 
 function note23RefreshOutline(task) {
@@ -413,69 +398,6 @@ function note23RefreshOutline(task) {
   if (!aside || !task) return;
   const html = note23OutlineHTML(task);
   if (aside.outerHTML !== html) aside.outerHTML = html;
-}
-
-/** Source: native selection; rich/preview: CSS Highlight ranges (never written). */
-function note23RefreshFind(navigate = true, direction = 0) {
-  const bar = document.querySelector(".note23-find");
-  if (!bar) return;
-  const query = document.querySelector("#note23-query")?.value.toLocaleLowerCase() ?? "";
-  const source = document.querySelector("#knowledge-source");
-  const root = document.querySelector(".ProseMirror") || document.querySelector(".knowledge-preview");
-  let text = "";
-  const parts = [];
-  if (source) text = source.value;
-  else if (root) {
-    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
-      acceptNode: (node) => (node.parentElement.closest('button,[contenteditable="false"],.cm-gutters') ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT),
-    });
-    let node;
-    let block;
-    while ((node = walker.nextNode())) {
-      const current = node.parentElement.closest("p,h1,h2,h3,h4,h5,h6,pre,li,td,th");
-      if (block && current !== block) text += "\n";
-      block = current;
-      parts.push({ node, start: text.length });
-      text += node.data;
-    }
-  }
-  const matches = [];
-  if (query) {
-    const hay = text.toLocaleLowerCase();
-    let at = hay.indexOf(query);
-    while (at >= 0) { matches.push(at); at = hay.indexOf(query, at + query.length); }
-  }
-  if (direction) note23Index = matches.length ? (note23Index + direction + matches.length) % matches.length : -1;
-  else note23Index = matches.length ? Math.min(Math.max(note23Index, 0), matches.length - 1) : -1;
-  const count = document.querySelector("#note23-match-count");
-  if (count) count.textContent = query ? (matches.length ? `${note23Index + 1} / ${matches.length}` : "无匹配") : "输入查找文字";
-  bar.querySelectorAll('[data-note23="find-next"],[data-note23="find-prev"]').forEach((button) => { button.disabled = !matches.length; });
-  note23Matches = [];
-  if (source) {
-    if (navigate && note23Index >= 0) {
-      source.setSelectionRange(matches[note23Index], matches[note23Index] + query.length);
-      source.scrollTop = (matches[note23Index] / Math.max(1, text.length)) * source.scrollHeight;
-    }
-    return;
-  }
-  if (!parts.length) return;
-  for (const at of matches.slice(0, 500)) {
-    const first = parts.findLast((p) => p.start <= at);
-    const last = parts.findLast((p) => p.start < at + query.length);
-    if (!first || !last) continue;
-    const range = document.createRange();
-    range.setStart(first.node, at - first.start);
-    range.setEnd(last.node, Math.min(last.node.length, at + query.length - last.start));
-    note23Matches.push(range);
-  }
-  if (typeof Highlight === "function" && CSS.highlights) {
-    CSS.highlights.set("note23-matches", new Highlight(...note23Matches));
-    CSS.highlights.set("note23-current", new Highlight(...(note23Matches[note23Index] ? [note23Matches[note23Index]] : [])));
-  }
-  if (navigate && note23Index >= 0) {
-    const part = parts.findLast((p) => p.start <= matches[note23Index]);
-    part?.node.parentElement.scrollIntoView({ block: "center", behavior: "auto" });
-  }
 }
 
 function note23LocateHeading(index) {
@@ -603,8 +525,6 @@ if (note23PriorSaveTask) {
 // ---- wiring: decorate after every render, keep the real save state visible ----
 const note23PriorRender = render;
 render = function note23Render() {
-  CSS.highlights?.delete("note23-matches");
-  CSS.highlights?.delete("note23-current");
   note23PriorRender();
   if (state.taskPane === "notes" && document.querySelector(".knowledge-pane")) {
     updateLocalSaveReceipt();
@@ -700,12 +620,6 @@ window.addEventListener("click", (event) => {
     note23RetryAssociation(task);
     return;
   }
-  if (action === "find-next" || action === "find-prev") {
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    note23RefreshFind(true, action === "find-next" ? 1 : -1);
-    return;
-  }
   if (action === "outline") {
     event.preventDefault();
     event.stopImmediatePropagation();
@@ -713,14 +627,6 @@ window.addEventListener("click", (event) => {
     render();
     document.querySelector('.note23-tools [data-note23="outline"]')?.focus({ preventScroll: true });
     return;
-  }
-  if (action === "find") {
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    view.find = !view.find;
-    render();
-    if (view.find) document.querySelector("#note23-query")?.focus();
-    else document.querySelector('.note23-tools [data-note23="find"]')?.focus({ preventScroll: true });
   }
 }, true);
 
@@ -799,44 +705,8 @@ window.addEventListener("keydown", (event) => {
 }, true);
 
 document.addEventListener("input", (event) => {
-  if (event.target.id !== "note23-query") {
-    // Only a real edit marks the note unsaved; a programmatic content swap (for
-    // example an accepted external version) must not.
-    if (event.isTrusted !== true) return;
-    if (event.target.closest?.(".ProseMirror, .knowledge-rich-host, #knowledge-source")) note23TrackEditorInput(note23Task());
-    return;
-  }
-  const task = note23Task();
-  if (!task) return;
-  note23View(task).query = event.target.value;
-  note23Index = -1;
-  note23RefreshFind(true);
+  // Only a real edit marks the note unsaved; a programmatic content swap (for
+  // example an accepted external version) must not.
+  if (event.isTrusted !== true) return;
+  if (event.target.closest?.(".ProseMirror, .knowledge-rich-host, #knowledge-source")) note23TrackEditorInput(note23Task());
 });
-
-window.addEventListener("keydown", (event) => {
-  if (event.isComposing || event.keyCode === 229) return;
-  if (state.taskPane !== "notes" || !document.querySelector(".knowledge-pane") || document.querySelector("#overlay").firstElementChild) return;
-  if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "f") {
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    const task = note23Task();
-    if (!task) return;
-    note23View(task).find = true;
-    render();
-    const input = document.querySelector("#note23-query");
-    input?.focus();
-    input?.select();
-    return;
-  }
-  if (event.target.id === "note23-query" && ["Enter", "Escape"].includes(event.key)) {
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    if (event.key === "Enter") note23RefreshFind(true, event.shiftKey ? -1 : 1);
-    else {
-      const task = note23Task();
-      if (task) note23View(task).find = false;
-      render();
-      document.querySelector('.note23-tools [data-note23="find"]')?.focus({ preventScroll: true });
-    }
-  }
-}, true);

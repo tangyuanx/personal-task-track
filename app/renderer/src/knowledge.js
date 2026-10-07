@@ -341,19 +341,11 @@ function shellKnowledgeSyncStats(task) {
 //   2. a command that cannot apply must say so instead of failing silently.
 // ------------------------------------------------------------
 
-let shellToastTimer = 0;
-
 function shellToast(message, record) {
-  const host = document.querySelector("#toast");
-  if (!host) return;
-  // Phase18: an explanation of what moved can carry a link straight to the
-  // record, so the change is never a dead end.
-  const link = record && record.id
+  const link = record?.id
     ? `<button type="button" data-action="open-toast-record" data-task-id="${escAttr(record.id)}">查看任务${shellIcon("arrow")}</button>`
     : "";
-  host.innerHTML = `<div class="toast"><span>${esc(message)}</span>${link}</div>`;
-  window.clearTimeout(shellToastTimer);
-  shellToastTimer = window.setTimeout(() => { host.innerHTML = ""; }, link ? 6000 : 2800);
+  showWorkspaceFeedback(message, link);
 }
 
 function shellKnowledgeEditorEntry() {

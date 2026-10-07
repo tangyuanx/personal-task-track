@@ -468,3 +468,18 @@ body[data-window25-inactive] .topbar > .brand-update-slot > .brand-update {
   min-height: 0;
   resize: none;
 }
+
+/* One feedback line shares the existing footer height and save-status slot. */
+.workspace-foot [data-workspace-status] { flex: 1; min-width: 0; }
+.workspace-feedback { display: flex; align-items: center; gap: 6px; min-width: 0; width: 100%; white-space: nowrap; }
+.workspace-foot .workspace-feedback-message { flex: 1; min-width: 0; overflow: hidden; }
+.workspace-foot .workspace-feedback-message > span { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.workspace-feedback-message > svg { width: 12px; height: 12px; flex-shrink: 0; color: var(--green); }
+.workspace-feedback-message > .dot { flex-shrink: 0; }
+.workspace-feedback[data-tone="error"] .dot { background: var(--orange); }
+.workspace-feedback-actions { display: flex; align-items: center; flex-shrink: 0; gap: 2px; }
+.workspace-feedback-actions button { height: 24px; min-height: 0; padding: 0 6px; font-size: inherit; color: var(--green); white-space: nowrap; }
+.workspace-feedback-dismiss { flex-shrink: 0; width: 22px; height: 22px; min-height: 0; padding: 0; color: var(--secondary); }
+.workspace-feedback-dismiss svg { width: 12px; height: 12px; }
+.workspace-foot:has(.workspace-feedback) .foot-shortcut { display: none; }
+.workspace > .workspace-empty { flex: 1; }
