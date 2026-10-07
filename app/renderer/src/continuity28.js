@@ -80,11 +80,16 @@
   render = function continuity28Render() {
     const click = bridge?.currentClick(), old = context();
     if (!click) bridge?.cancel(); // Background/later redraws cannot reuse a press.
-    const oldTabs = rect(document.querySelector('.tabs-bar')), oldContent = rect(document.querySelector('.tab-content'));
+    const oldTabsElement = document.querySelector('.tabs-bar');
+    const oldContentElement = document.querySelector('.tab-content');
+    const oldBriefElement = document.querySelector('.workspace > .brief');
+    const oldGroup = click && one(click.selector);
+    const oldTabs = rect(oldTabsElement), oldContent = rect(document.querySelector('.tab-content'));
     const interaction = intent && performance.now() - intent.time < 500 ? intent : null;
     const anchorSelector = interaction?.action === 'toggle-node-collapse' && interaction.node ? `.collapse[data-node-id="${CSS.escape(interaction.node)}"]` : null;
     const anchor = anchorSelector && rect(one(anchorSelector));
-    remember(old); cancelMotion();
+    remember(old);
+    if (!click?.claimed) cancelMotion();
     priorRender(); // Preserve all caches, drafts, recovery, save and file bindings.
     decorate();
     const next = context(), renderEpoch = epoch;
@@ -105,6 +110,30 @@
     };
     requestAnimationFrame(() => { restoreLater(); decorate(); requestAnimationFrame(restoreLater); });
     if (!preferences.continuous || reduced.matches) { intent = null; return; }
+    if (click?.claimed) {
+      // A status/draft refresh during this same transition is not a new press.
+      // The retained operation keeps its animation and preload sampler. Object
+      // replacement or a changed context still ends the original transaction.
+      const group = one(click.selector);
+      if (sameTask && old.pane === next.pane && old.node === next.node && group === oldGroup && group?.isConnected && oldTabsElement === document.querySelector('.tabs-bar')) {
+        // The note chrome can change without changing the tabs. Carry the
+        // content's existing animation phase to its replacement; otherwise it
+        // jumps underneath the tabs and the preload hit test correctly stops.
+        for (const a of [...animations]) {
+          const target = a.effect?.target;
+          if (target?.isConnected) continue;
+          const replacement = target === oldContentElement ? document.querySelector('.tab-content')
+            : target === oldBriefElement ? document.querySelector('.workspace > .brief') : null;
+          if (replacement) {
+            const carried = animate(replacement, a.effect.getKeyframes(), a.playState === 'paused', a.effect.getTiming());
+            if (carried) { carried.currentTime = a.currentTime; if (a.playState === 'running') carried.startTime = a.startTime; }
+          }
+          a.cancel(); animations.delete(a);
+        }
+        intent = null; return;
+      }
+      cancelMotion(); bridge?.cancel(); intent = null; return;
+    }
     const tabs = document.querySelector('.tabs-bar'), content = document.querySelector('.tab-content');
     const nextTabs = rect(tabs), nextContent = rect(content);
     let operation = null, target = null;
@@ -124,8 +153,7 @@
     if (operation) {
       const carried = [...animations].some(a => a.effect?.target === operation || a.effect?.target?.contains(operation));
       if (!carried) animate(operation, [{ transform: `translate(${click.rect.x-target.x}px,${click.rect.y-target.y}px)` }, { transform: 'translate(0,0)' }], true);
-      const held = [...animations];
-      const play = () => { if (epoch === renderEpoch) held.forEach(a => { if (a.playState === 'paused') a.play(); }); };
+      const play = () => { if (epoch === renderEpoch) animations.forEach(a => { if (a.playState === 'paused') a.play(); }); };
       bridge.follow({ key: click.key, rect: { x: target.x, y: target.y, width: target.width, height: target.height } }).then(play, play);
     }
     intent = null;

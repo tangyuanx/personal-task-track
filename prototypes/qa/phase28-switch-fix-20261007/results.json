@@ -1,0 +1,128 @@
+{
+  "baseline": "91717ca217261bcf879c041af1fd179ea328600c",
+  "date": "2026-10-07",
+  "status": "accepted_for_release",
+  "timing_definition": "control handler start through two requestAnimationFrame callbacks; not physical pointer latency or editor readiness",
+  "performance": {
+    "installed_intel": {
+      "group": {
+        "samples": 3,
+        "median_ms": 1776.3,
+        "max_ms": 1907.5
+      },
+      "today": {
+        "samples": 3,
+        "median_ms": 1322.2,
+        "max_ms": 1395.2
+      },
+      "repository": {
+        "samples": 3,
+        "median_ms": 704.5,
+        "max_ms": 831.5
+      }
+    },
+    "temporary_intel": {
+      "group": {
+        "samples": 3,
+        "median_ms": 2064,
+        "max_ms": 2138.2
+      },
+      "today": {
+        "samples": 3,
+        "median_ms": 431.4,
+        "max_ms": 882.4
+      },
+      "repository": {
+        "samples": 3,
+        "median_ms": 1164.2,
+        "max_ms": 2207.8
+      }
+    },
+    "baseline_arm64": {
+      "group": {
+        "samples": 3,
+        "median_ms": 11.7,
+        "max_ms": 12.4
+      },
+      "today": {
+        "samples": 3,
+        "median_ms": 11.9,
+        "max_ms": 12.4
+      },
+      "repository": {
+        "samples": 3,
+        "median_ms": 10.5,
+        "max_ms": 11.1
+      }
+    },
+    "candidate_arm64": {
+      "group": {
+        "samples": 3,
+        "median_ms": 11.8,
+        "max_ms": 12.3
+      },
+      "today": {
+        "samples": 3,
+        "median_ms": 12.3,
+        "max_ms": 12.4
+      },
+      "repository": {
+        "samples": 3,
+        "median_ms": 12.2,
+        "max_ms": 12.2
+      }
+    }
+  },
+  "tests": {
+    "application": {
+      "pass": 255,
+      "fail": 0
+    },
+    "service": {
+      "pass": 11,
+      "fail": 0
+    },
+    "phase28_ui": "passed",
+    "switch_regression": {
+      "passed": true,
+      "followed": {
+        "starts": 1,
+        "frames": 31,
+        "finishes": 1
+      },
+      "creates": {
+        "a": 1,
+        "b": 2
+      },
+      "scenes": [
+        "follow survives redraw",
+        "navigation retains editor",
+        "group editor reuse",
+        "cold initialization replacement retries",
+        "single format binding"
+      ]
+    }
+  },
+  "product_files": {
+    "app/main/preload.cjs": "dd2f51ca5b751ee4b82826d8c13e5573be790821fb974eeac0368c71d4686b2c",
+    "app/renderer/src/app.js": "283359faf9edaaaf05bee0dfb8c0763234221bee962633c7ecfe503142f90c9b",
+    "app/renderer/src/continuity28.js": "645bf64b3a658ea6d956e7a6a0cb953cce5e2c197d870a9625540400153d3775",
+    "app/renderer/src/knowledge.js": "a5c43a1731f04925221202265c5423b3f1ac21ded2faf63e22cfe8a225a4ab33"
+  },
+  "release_version": "0.1.215",
+  "user_acceptance": "这一版正常了，现在请把这版推送到远程并发布新版本",
+  "release_validation": {
+    "version": "0.1.215",
+    "check": "255 application + 11 service passed",
+    "packages": [
+      "macOS x64",
+      "macOS arm64",
+      "Windows x64"
+    ],
+    "packaged_product_hashes_match_acceptance": true,
+    "update_feeds": 2,
+    "verified_artifact_digests": 5,
+    "release_files": 12,
+    "apple_double_files": 0
+  }
+}

@@ -366,6 +366,7 @@ let pendingPayload = null;
 // the main process acknowledged. Navigation re-runs save() without any model
 // change, and those calls must not queue another whole-database write.
 let pendingPayloadFingerprint = "";
+let pendingSaveSince = 0;
 let lastWrittenPayloadFingerprint = "";
 // Cheap fingerprint of the persistable state, used as save()'s fast path so an
 // ordinary render does not serialize the task database just to find no change.
@@ -397,7 +398,7 @@ const milkdownEditors = new Map();
  * again before a mount resolves, so this keeps a second pass from building a
  * duplicate editor for the same host.
  */
-const pendingMilkdownMounts = new Set();
+const pendingMilkdownMounts = new Map();
 const nodeNoteDrafts = new Map();
 const nodeNoteSaveTimers = new Map();
 const knowledgeRecoveryTimers = new Map();
@@ -405,6 +406,7 @@ const knowledgeExternalSnapshots = new Map();
 let knowledgeRecoveryWriteQueue = Promise.resolve();
 const knowledgeRecoveryWriteErrors = new Map();
 let cachedKnowledgePane = null;
+const cachedKnowledgePanes = new Map();
 let appSwitchFocusSnapshot = null;
 let appEditingPointerDown = false;
 // What the user last asked the updater to do; an error then retries the same
@@ -1774,48 +1776,29 @@ function save() {
     return;
   }
 
-  // Fast path: when nothing persistable changed there is no need to serialize
-  // the whole task database (measured ~1.6ms for 200 tasks) just to discover
-  // that. A real change still goes through the exact serialized comparison.
-  // This must run before pendingPayload is touched: assigning it first made the
-  // guard below depend on state this function had just written.
-  const revision = persistedStateRevision();
-  if (
-    revision === lastWrittenPersistedRevision
-    && revision === pendingPersistedRevision
-    && !pendingPayload
-    && !saveInFlight
-  ) {
-    window.clearTimeout(saveTimer);
-    saveTimer = 0;
-    return;
-  }
-  if (revision === pendingPersistedRevision && saveTimer && pendingPayload) return;
+  // Coalesce on the input path; the exact serialized comparison belongs in
+  // the deferred flush. A length/timestamp signature is not an edit revision
+  // (same-length notes or attachment changes can collide).
+  if (!pendingPayload) pendingSaveSince = Date.now();
   pendingPayload = payload;
-  const fingerprint = payloadFingerprint(payload);
-  // Comparing the payload keeps this exact: the write is skipped only when the
-  // bytes on disk would be identical, so switching groups or filters still
-  // persists any changed field.
-  if (fingerprint === lastWrittenPayloadFingerprint) {
-    pendingPayload = null;
-    pendingPayloadFingerprint = "";
-    window.clearTimeout(saveTimer);
-    saveTimer = 0;
-    return;
-  }
-  pendingPersistedRevision = revision;
-  pendingPayloadFingerprint = fingerprint;
   window.clearTimeout(saveTimer);
-  saveTimer = window.setTimeout(flushSave, 80);
+  saveTimer = window.setTimeout(flushScheduledSave, 80);
+}
+
+function flushScheduledSave() {
+  // Explicit flushSave() (quit, export, recovery) remains immediate. Only the
+  // automatic flush yields to the already bounded native transition.
+  if (window.loopPointerContinuity?.currentClick()?.claimed && Date.now() - pendingSaveSince < 400) {
+    saveTimer = window.setTimeout(flushScheduledSave, 20); return;
+  }
+  void flushSave();
 }
 
 /**
- * Fingerprint of every field a save persists, used as the fast path in save().
+ * Lightweight signature used to invalidate derived navigation/widget caches.
  *
- * A single string pass over the task data costs roughly a sixth of serializing
- * the whole payload. Correctness does not depend on this being exhaustive: any
- * change it misses only costs one unnecessary write, because the serialized
- * comparison in save() still runs on that path.
+ * This is not proof that persisted content is unchanged: notes with the same
+ * length can share a signature. Persistence compares the complete payload.
  */
 function persistedStateRevision() {
   const parts = [`n${state.tasks.length}`];
@@ -1879,7 +1862,8 @@ async function flushSave() {
   const payload = pendingPayload;
   pendingPayload = null;
   const payloadFingerprintValue = payloadFingerprint(payload);
-  const payloadRevision = pendingPersistedRevision;
+  const payloadRevision = persistedStateRevision();
+  if (payloadFingerprintValue === lastWrittenPayloadFingerprint) return true;
   saveInFlight = true;
   saveInFlightPromise = (async () => {
     try {
@@ -2116,6 +2100,10 @@ function retainRegion(name, markup) {
   regionReuse.set(name, "updated");
 }
 
+function canRetainRegion(name, markup) {
+  return Boolean(regionElements.get(name)?.isConnected && retainedRegionMarkup.get(name) === markupFingerprint(markup));
+}
+
 /**
  * Main render entry: reconstruct the entire DOM from state.
  * Sequence: capture drafts -> flush drafts -> save -> destroy editors
@@ -2152,8 +2140,6 @@ function render() {
   captureMountedMilkdownDrafts();
   flushNodeNoteDrafts({ persist: false });
   save();
-  stashKnowledgePane();
-  destroyMilkdownEditors(cachedKnowledgePane ? new Set([noteDraftKey(cachedKnowledgePane.taskId, "")]) : new Set());
   document.documentElement.dataset.theme = state.theme;
   document.documentElement.dataset.zhFont = state.zhFont;
   document.documentElement.dataset.enFont = state.enFont;
@@ -2171,15 +2157,25 @@ function render() {
   const navigationMarkup = renderShellNavigation();
   const topbarMarkup = renderShellTopbar();
   const listMarkup = shellWide ? "" : renderShellTaskList(filteredTasks());
+  const workspaceMarkup = `<section data-region="workspace" class="workspace ${shellWide ? "workspace-wide" : ""}${!shellWide && task && state.taskPane === "notes" && !shellTaskIsNote(task) ? " knowledge-workspace" : ""}" data-task-id="${escAttr(task?.id || "")}" aria-label="${shellWide ? "全屏页面" : "任务工作台"}">
+    ${state.calendarOpen ? renderShellCalendar() : state.reviewOpen ? renderShellReview() : state.settingsOpen ? renderShellSettings() : renderShellWorkspace(task)}
+  </section>`;
+  if (shellWide) retainedRegionMarkup.delete("workspace");
+  const keepWorkspace = !shellWide && canRetainRegion("workspace", workspaceMarkup);
+  const preservedEditors = new Set();
+  if (keepWorkspace) {
+    const workspace = regionElements.get("workspace");
+    milkdownEditors.forEach((entry, key) => { if (workspace.contains(entry.host)) preservedEditors.add(key); });
+  } else stashKnowledgePane();
+  cachedKnowledgePanes.forEach((_pane, taskId) => preservedEditors.add(noteDraftKey(taskId, "")));
+  destroyMilkdownEditors(preservedEditors);
   document.querySelector("#root").innerHTML = `
     <main class="app ${state.navCollapsed ? "nav-collapsed " : ""}${shellWide ? "app-wide" : ""}" style="--list-width:${normalizeSidebarWidth(state.sidebarWidth)}px">
       ${state.searchOpen ? `<div class="global-search-layer" data-global-search-layer aria-hidden="true"></div>` : ""}
       <div data-region="navigation"></div>
       <div data-region="topbar"></div>
       ${shellWide ? "" : '<div data-region="task-list"></div>'}
-      <section class="workspace ${shellWide ? "workspace-wide" : ""}${!shellWide && task && state.taskPane === "notes" && !shellTaskIsNote(task) ? " knowledge-workspace" : ""}" data-task-id="${escAttr(task?.id || "")}" aria-label="${shellWide ? "全屏页面" : "任务工作台"}">
-        ${state.calendarOpen ? renderShellCalendar() : state.reviewOpen ? renderShellReview() : state.settingsOpen ? renderShellSettings() : renderShellWorkspace(task)}
-      </section>
+      <div data-region="workspace"></div>
       <div id="context-menu-root">${renderContextMenu()}</div>
       ${renderTaskPriorityPopover()}
       ${state.feedbackOpen ? renderBugReportPanel() : ""}
@@ -2192,6 +2188,17 @@ function render() {
   retainRegion("navigation", navigationMarkup);
   retainRegion("topbar", topbarMarkup);
   retainRegion("task-list", listMarkup);
+  retainRegion("workspace", workspaceMarkup);
+  // A draft/status refresh may replace the note chrome while the tabs are in
+  // flight. Preserve that unchanged operation independently of the workspace.
+  if (regionReuse.get("workspace") !== "reused") {
+    const tabs = document.querySelector(".workspace .tabs-bar");
+    if (tabs) {
+      tabs.dataset.region = "workspace-tabs";
+      tabs.dataset.tabTaskId = task?.id || "";
+      retainRegion("workspace-tabs", tabs.outerHTML);
+    }
+  }
   // The root was just rewritten, so any previously resolved container is stale.
   clearRenderScrollCache();
   restoreCachedKnowledgePane(task);
@@ -5602,8 +5609,17 @@ function cancelFlowNodePointerDrag(event) {
 
 function bindFlowNodeDragAndDrop() {
   document.querySelectorAll("[data-flow-drag-source]").forEach((sourceRow) => {
+    if (!bindRenderElement(sourceRow, "flow-drag")) return;
     sourceRow.addEventListener("pointerdown", beginFlowNodePointerDrag);
   });
+}
+
+const renderElementBindings = new WeakMap();
+function bindRenderElement(element, binding) {
+  if (!element) return false;
+  const bindings = renderElementBindings.get(element) || new Set();
+  if (bindings.has(binding)) return false;
+  bindings.add(binding); renderElementBindings.set(element, bindings); return true;
 }
 
 
@@ -5817,6 +5833,7 @@ function bindTaskRepositoryRows(scope = document) {
   });
 
   document.querySelectorAll(".sheet-tab:not(.sheet-tab-all)").forEach((element) => {
+    if (!bindRenderElement(element, 'base:.sheet-tab:not(.sheet-tab-all)')) return;
     element.addEventListener("dblclick", (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -5849,6 +5866,7 @@ function bindTaskRepositoryRows(scope = document) {
   });
 
   document.querySelectorAll(".sheet-tab-wrap").forEach((element) => {
+    if (!bindRenderElement(element, 'base:.sheet-tab-wrap')) return;
     element.addEventListener("contextmenu", (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -5932,6 +5950,7 @@ function bindTaskRepositoryRows(scope = document) {
   // that locates a field by key, but they own their editing lifecycle: the
   // legacy binding re-rendered on blur and swallowed the next click.
   document.querySelectorAll("[data-edit-key]:not(.brief21-input)").forEach((element) => {
+    if (!bindRenderElement(element, 'base:[data-edit-key]:not(.brief21-input)')) return;
     element.addEventListener("input", (event) => {
       edit(event.target.dataset, event.target.value);
       if (event.target.closest(".task-brief")) resizeTaskBriefTextarea(event.target);
@@ -5956,6 +5975,7 @@ function bindTaskRepositoryRows(scope = document) {
   });
 
   document.querySelectorAll("[data-context]").forEach((element) => {
+    if (!bindRenderElement(element, 'base:[data-context]')) return;
     if (element.dataset.context === "flow-root") return;
     element.addEventListener("contextmenu", (event) => {
       event.preventDefault();
@@ -5978,6 +5998,7 @@ function bindTaskRepositoryRows(scope = document) {
   });
 
   document.querySelectorAll('.flow-main[data-context="flow-root"]').forEach((element) => {
+    if (!bindRenderElement(element, 'base:.flow-main[data-context="flow-root"]')) return;
     element.addEventListener("contextmenu", (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -6033,6 +6054,7 @@ function bindTaskRepositoryRows(scope = document) {
   });
 
   document.querySelectorAll("[data-setting]").forEach((element) => {
+    if (!bindRenderElement(element, 'base:[data-setting]')) return;
     element.addEventListener("click", (event) => event.stopPropagation());
     element.addEventListener("change", (event) => {
       if (event.target.dataset.setting === "theme") state.theme = normalizeTheme(event.target.value);
@@ -6049,6 +6071,7 @@ function bindTaskRepositoryRows(scope = document) {
   });
 
   document.querySelectorAll("[data-settings-page]").forEach((element) => {
+    if (!bindRenderElement(element, 'base:[data-settings-page]')) return;
     element.addEventListener("click", (event) => {
       event.stopPropagation();
       const page = event.currentTarget.dataset.settingsPage;
@@ -6224,6 +6247,7 @@ function bindTaskRepositoryRows(scope = document) {
   }
 
   document.querySelectorAll("[data-recurrence-toggle]").forEach((control) => {
+    if (!bindRenderElement(control, 'base:[data-recurrence-toggle]')) return;
     control.addEventListener("click", (event) => {
       event.stopPropagation();
       taskGroupSelectTaskId = "";
@@ -6234,6 +6258,7 @@ function bindTaskRepositoryRows(scope = document) {
   });
 
   document.querySelectorAll("[data-recurrence-field]").forEach((control) => {
+    if (!bindRenderElement(control, 'base:[data-recurrence-field]')) return;
     control.addEventListener("click", (event) => event.stopPropagation());
     control.addEventListener("change", (event) => {
       updateTaskRecurrence(event.currentTarget.dataset.taskId, event.currentTarget.dataset.recurrenceField, event.currentTarget.value);
@@ -6243,6 +6268,7 @@ function bindTaskRepositoryRows(scope = document) {
   });
 
   document.querySelectorAll("[data-recurrence-mode]").forEach((control) => {
+    if (!bindRenderElement(control, 'base:[data-recurrence-mode]')) return;
     control.addEventListener("click", (event) => {
       event.stopPropagation();
       updateTaskRecurrence(event.currentTarget.dataset.taskId, "frequency", event.currentTarget.dataset.recurrenceMode);
@@ -6252,6 +6278,7 @@ function bindTaskRepositoryRows(scope = document) {
   });
 
   document.querySelectorAll("[data-recurrence-weekday]").forEach((control) => {
+    if (!bindRenderElement(control, 'base:[data-recurrence-weekday]')) return;
     control.addEventListener("click", (event) => {
       event.stopPropagation();
       updateTaskRecurrence(event.currentTarget.dataset.taskId, "weekday", event.currentTarget.dataset.recurrenceWeekday);
@@ -6263,22 +6290,26 @@ function bindTaskRepositoryRows(scope = document) {
   bindFlowNodeDragAndDrop();
 
   document.querySelectorAll("[data-flow-split-resizer]").forEach((handle) => {
+    if (!bindRenderElement(handle, 'base:[data-flow-split-resizer]')) return;
     handle.addEventListener("click", (event) => event.stopPropagation());
     handle.addEventListener("pointerdown", startFlowSplitResize);
     handle.addEventListener("keydown", handleFlowSplitKeydown);
   });
 
   document.querySelectorAll("[data-sidebar-resizer]").forEach((handle) => {
+    if (!bindRenderElement(handle, 'base:[data-sidebar-resizer]')) return;
     handle.addEventListener("click", (event) => event.stopPropagation());
     handle.addEventListener("pointerdown", startSidebarResize);
   });
 
   document.querySelectorAll("[data-detail-resizer]").forEach((handle) => {
+    if (!bindRenderElement(handle, 'base:[data-detail-resizer]')) return;
     handle.addEventListener("click", (event) => event.stopPropagation());
     handle.addEventListener("pointerdown", startDetailResize);
   });
 
   document.querySelectorAll(".flow-outline-row[data-flow-select]").forEach((row) => {
+    if (!bindRenderElement(row, 'base:.flow-outline-row[data-flow-select]')) return;
     row.addEventListener("click", (event) => {
       if (Date.now() < suppressFlowNodeClickUntil) {
         event.preventDefault();
@@ -6304,6 +6335,7 @@ function bindTaskRepositoryRows(scope = document) {
   bindFlowTitleShortcuts();
 
   document.querySelectorAll(".markdown-editor").forEach((editor) => {
+    if (!bindRenderElement(editor, 'base:.markdown-editor')) return;
     editor.addEventListener("paste", handleMarkdownPaste);
     editor.addEventListener("input", () => updateMarkdownEditorState(editor));
     editor.addEventListener("dragover", (event) => {
@@ -6340,7 +6372,7 @@ function bindTaskRepositoryRows(scope = document) {
   });
 
   const recordInput = document.querySelector("[data-record-input]");
-  if (recordInput) {
+  if (recordInput && bindRenderElement(recordInput, "record-input")) {
     recordInput.addEventListener("input", (event) => {
       state.recordDraft = event.target.value;
       const taskId = event.target.dataset.taskId;
@@ -6378,13 +6410,14 @@ function bindTaskRepositoryRows(scope = document) {
   }
 
   const recordBackdrop = document.querySelector("[data-record-modal-backdrop]");
-  recordBackdrop?.addEventListener("pointerdown", (event) => {
+  if (bindRenderElement(recordBackdrop, "record-backdrop")) recordBackdrop.addEventListener("pointerdown", (event) => {
     if (event.target !== recordBackdrop) return;
     exitNodeDetail();
     render();
   });
 
   document.querySelectorAll("[data-editor-focus-target]").forEach((panel) => {
+    if (!bindRenderElement(panel, 'base:[data-editor-focus-target]')) return;
     panel.addEventListener("pointerdown", (event) => {
       if (event.button !== 0) return;
       if (event.target.closest("button, input, select, textarea, a, .context-menu, .detail-actions, .ProseMirror, .markdown-editor")) return;
@@ -7012,6 +7045,9 @@ function destroyMilkdownEditors(preservedKeys = new Set()) {
     entry?.instance?.destroy?.().catch?.(() => {});
     milkdownEditors.delete(key);
   });
+  cachedKnowledgePanes.forEach((_pane, taskId) => {
+    if (!preservedKeys.has(noteDraftKey(taskId, ""))) discardCachedKnowledgePane(taskId);
+  });
 }
 
 function stashKnowledgePane() {
@@ -7019,20 +7055,24 @@ function stashKnowledgePane() {
   if (!pane) return;
   const taskId = pane.dataset.taskId;
   if (!taskId) return;
-  if (cachedKnowledgePane && cachedKnowledgePane.taskId !== taskId) discardCachedKnowledgePane();
   const host = pane.querySelector(".milkdown-editor-host[data-task-id]");
   if (!host) return;
   cachedKnowledgePane = { taskId, host };
+  cachedKnowledgePanes.delete(taskId);
+  cachedKnowledgePanes.set(taskId, cachedKnowledgePane);
+  while (cachedKnowledgePanes.size > 8) discardCachedKnowledgePane(cachedKnowledgePanes.keys().next().value);
   host.remove();
 }
 
-function discardCachedKnowledgePane() {
-  if (!cachedKnowledgePane) return;
-  const key = noteDraftKey(cachedKnowledgePane.taskId, "");
+function discardCachedKnowledgePane(taskId = cachedKnowledgePane?.taskId) {
+  const pane = cachedKnowledgePanes.get(taskId);
+  if (!pane) return;
+  const key = noteDraftKey(taskId, "");
   milkdownEditors.get(key)?.instance?.destroy?.().catch?.(() => {});
   milkdownEditors.delete(key);
-  cachedKnowledgePane.host?.remove();
-  cachedKnowledgePane = null;
+  pane.host?.remove();
+  cachedKnowledgePanes.delete(taskId);
+  if (cachedKnowledgePane?.taskId === taskId) cachedKnowledgePane = null;
 }
 
 function discardMountedKnowledgeEditor(taskId) {
@@ -7043,15 +7083,16 @@ function discardMountedKnowledgeEditor(taskId) {
   nodeNoteSaveTimers.delete(key);
   nodeNoteDrafts.delete(key);
   const entry = milkdownEditors.get(key);
+  entry?.host?.remove();
   entry?.instance?.destroy?.().catch?.(() => {});
   milkdownEditors.delete(key);
-  if (cachedKnowledgePane?.taskId === normalizedTaskId) {
-    cachedKnowledgePane.host?.remove();
-    cachedKnowledgePane = null;
-  }
+  const pending = pendingMilkdownMounts.get(key);
+  if (pending) { pending.invalidated = true; pending.host.remove(); }
+  discardCachedKnowledgePane(normalizedTaskId);
 }
 
 function restoreCachedKnowledgePane(task) {
+  if (task) cachedKnowledgePane = cachedKnowledgePanes.get(task.id) || null;
   if (!cachedKnowledgePane || !task || state.taskPane !== "notes") return;
   if (cachedKnowledgePane.taskId !== task.id) return;
   const replacement = document.querySelector(".task-knowledge-pane[data-task-id]");
@@ -7164,8 +7205,10 @@ function mountMilkdownEditors() {
     // A render can run again before create() resolves. Without this registry
     // the second pass would build a second editor for the same host, leaking
     // the first one and losing its content.
-    if (pendingMilkdownMounts.has(editorKey)) return;
-    pendingMilkdownMounts.add(editorKey);
+    const pending = pendingMilkdownMounts.get(editorKey);
+    if (pending) { pending.nextHost = host; return; }
+    const mount = { host, nextHost: null };
+    pendingMilkdownMounts.set(editorKey, mount);
     const rawMarkdown = nodeNoteDrafts.get(editorKey)?.markdown ?? (node ? node.note : task.notes) ?? "";
     const markdown = node ? rawMarkdown : hydrateKnowledgeEditorMarkdown(rawMarkdown);
 
@@ -7191,7 +7234,7 @@ function mountMilkdownEditors() {
           },
     })
       .then((instance) => {
-        if (!document.body.contains(host)) {
+        if (mount.invalidated || (!document.body.contains(host) && cachedKnowledgePanes.get(taskId)?.host !== host)) {
           instance.destroy?.();
           return;
         }
@@ -7200,11 +7243,16 @@ function mountMilkdownEditors() {
         updateMarkdownStatsForMarkdown(host, node ? rawMarkdown : hydrateKnowledgeEditorMarkdown(rawMarkdown));
       })
       .catch((error) => {
+        if (mount.invalidated || (!host.isConnected && cachedKnowledgePanes.get(taskId)?.host !== host)) return;
         console.error("Milkdown failed to mount", error);
         mountFallbackMarkdownEditor(host);
       })
       .finally(() => {
+        if (pendingMilkdownMounts.get(editorKey) !== mount) return;
         pendingMilkdownMounts.delete(editorKey);
+        // A second render can replace the host before an asynchronous create
+        // finishes. The new host must not remain at "opening" indefinitely.
+        if (mount.nextHost?.isConnected && !milkdownEditors.has(editorKey)) window.requestAnimationFrame(mountMilkdownEditors);
       });
   });
 }

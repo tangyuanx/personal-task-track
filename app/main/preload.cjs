@@ -237,8 +237,8 @@ function subscribe(channel, callback) {
     return { ok: true };
   }
   contextBridge.exposeInMainWorld('loopPointerContinuity', {
-    currentClick: () => activeClick && !activeClick.claimed && { key: activeClick.key, selector: activeClick.groupSelector,
-      buttonSelector: activeClick.buttonSelector, rect: activeClick.rect, time: activeClick.time },
+    currentClick: () => activeClick && { key: activeClick.key, selector: activeClick.groupSelector,
+      buttonSelector: activeClick.buttonSelector, rect: activeClick.rect, time: activeClick.time, claimed: activeClick.claimed === true },
     setEnabled(value) { enabled = value === true; if (!enabled) cancel(); },
     follow, cancel, status: () => ipcRenderer.invoke('pointer-continuity:status'),
   });

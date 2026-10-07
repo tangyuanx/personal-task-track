@@ -284,6 +284,40 @@ function rendererHarness(personalTaskTrack = undefined) {
     });
 }
 
+test("navigation saves coalesce before serialization and preserve same-length content edits", async () => {
+  const writes = [];
+  const harness = await rendererHarness({ storage: { read: async () => null, write: async data => writes.push(JSON.parse(JSON.stringify(data))) } });
+  await harness.evaluate(`(async () => {
+    state.tasks = normalizeTasks([{id:"save_exact", title:"保存", notes:"AAAA", nodes:[], history:[]}]);
+    save(); await flushSave();
+    globalThis.fingerprintCalls = 0;
+    const original = payloadFingerprint;
+    payloadFingerprint = value => { fingerprintCalls++; return original(value); };
+    for (let i = 0; i < 20; i++) { state.activeGroupId = "view_" + i; save(); }
+  })()`);
+  assert.equal(harness.evaluate("fingerprintCalls"), 0, "navigation must not serialize the database synchronously");
+  await harness.evaluate("flushSave()");
+  assert.equal(writes.length, 2); assert.equal(writes[1].activeGroupId, "view_19");
+  await harness.evaluate(`(async () => {
+    state.tasks[0].notes = "BBBB"; state.tasks[0].history.push(["刚刚", "新的记录"]); save(); await flushSave();
+  })()`);
+  assert.equal(writes.length, 3); assert.equal(writes[2].tasks[0].notes, "BBBB");
+  assert.equal(writes[2].tasks[0].history.at(-1)[1], "新的记录");
+  await harness.evaluate("save(); flushSave()");
+  assert.equal(writes.length, 3, "unchanged data still skips disk writes");
+});
+
+test("explicit save flush bypasses the automatic transition deferral", async () => {
+  const writes = [];
+  const harness = await rendererHarness({ storage: { read: async () => null, write: async data => writes.push(data) } });
+  await harness.evaluate(`(async () => {
+    state.tasks = normalizeTasks([{id:"save_now",title:"退出前保存",notes:"草稿",nodes:[]}]);
+    window.loopPointerContinuity = { currentClick: () => ({claimed:true}) };
+    save(); flushScheduledSave(); await flushSave();
+  })()`);
+  assert.equal(writes.length, 1);
+});
+
 test("knowledge document sessions expose safe draft and save transitions", () => {
   const draft = knowledgeDocument.createDocumentSession({
     noteId: "note_a",

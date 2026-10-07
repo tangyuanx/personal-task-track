@@ -466,7 +466,7 @@ function shellBindKnowledge() {
     }, true);
   }
   const source = document.querySelector("#knowledge-source");
-  if (source) {
+  if (source && bindRenderElement(source, "knowledge-source")) {
     const task = state.tasks.find((item) => item.id === source.dataset.taskId);
     if (task) {
       source.addEventListener("input", () => {
@@ -483,7 +483,7 @@ function shellBindKnowledge() {
     }
   }
   const select = document.querySelector(".note-heading-select");
-  select?.addEventListener("change", () => {
+  if (bindRenderElement(select, "note-heading")) select.addEventListener("change", () => {
     shellApplyNoteFormat("heading", Number(select.value) || 0);
   });
   shellRefreshNoteFormatState();
