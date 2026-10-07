@@ -73,8 +73,7 @@ function note23FileName(task, k) {
   return first?.text || "未命名笔记";
 }
 
-/** Real-time draft state: the Demo marks a note dirty on input; the product only
- *  syncs on render/leave, so the layer keeps that state honest while typing. */
+/** Keep the confirmed file baseline distinct from the current editing draft. */
 function note23IsDirty(task, k) {
   // Once this layer knows the confirmed snapshot, its own verdict wins: the
   // product's dirty flag only refreshes when the product captures the draft.
@@ -99,20 +98,23 @@ function note23TrackEditorInput(task) {
   if (!had) note23UpdateChrome(task);
 }
 
-/** After the product has captured the draft (render/leave), compare Markdown with
+/** After the product has captured the draft, compare Markdown with
  *  the confirmed snapshot: equal means the edit returned to the saved version. */
-function note23EvaluateDraft(task) {
+function note23EvaluateDraft(task, markdown = task?.notes) {
   if (!task) return;
   const saved = NOTE23_SAVED_TEXT.get(task.id)
     ?? (typeof task.knowledgeNote?.content === "string" && task.knowledgeNote.content
       ? task.knowledgeNote.content
       : null);
-  if (saved === null) return;
-  const differs = String(task.notes || "") !== saved;
+  if (saved === null) {
+    if (String(markdown || "") !== String(task.notes || "")) note23TrackEditorInput(task);
+    return;
+  }
+  const differs = String(markdown || "") !== saved;
   const had = NOTE23_EDIT_DIRTY.has(task.id);
   if (differs) NOTE23_EDIT_DIRTY.add(task.id);
   else NOTE23_EDIT_DIRTY.delete(task.id);
-  if (differs !== had) render();   // one rebuild path only: the chrome cannot go stale
+  if (differs !== had) note23UpdateChrome(task);
 }
 
 /** The product's persisted snapshot can come back empty after a restart, which makes
@@ -165,22 +167,9 @@ async function note23VerifySavedBaseline(task) {
   render();
 }
 
-let note23ObservedHost = null;
-let note23ObsTimer = 0;
-
-/** Any editor mutation (typing, commands, undo/redo, paste) settles the draft:
- *  render once so the product captures it, then the render hook re-evaluates. */
-function note23ObserveEditor() {
-  const host = document.querySelector(".ProseMirror") || document.querySelector("#knowledge-source");
-  if (!host || host === note23ObservedHost) return;
-  note23ObservedHost = host;
-  new MutationObserver(() => {
-    const task = note23Task();
-    if (!task || !NOTE23_EDIT_DIRTY.has(task.id)) return;
-    window.clearTimeout(note23ObsTimer);
-    note23ObsTimer = window.setTimeout(() => render(), 180);
-  }).observe(host, { childList: true, characterData: true, subtree: true });
-}
+// Drafts are captured by Milkdown's onChange and the source input handler.
+// Never render in response to editor DOM mutations: even reusing the editor
+// detaches its host from #root and interrupts focus, selection and IME input.
 
 /** Surgical chrome refresh: receipt, dot and the footer button, no shell render. */
 function note23UpdateChrome(task) {
@@ -417,7 +406,6 @@ function note23Decorate() {
   }
   note23RefreshOutline(task);
   note23RefreshFind(false);
-  note23ObserveEditor();
 }
 
 function note23RefreshOutline(task) {
@@ -638,19 +626,8 @@ window.addEventListener("click", (event) => {
       return;
     }
   }
-  // Toolbar commands (bold, lists, undo/redo, …) change the draft without a shell
-  // render and without an input event, so re-evaluate once the command has applied.
-  const command = event.target.closest?.('[data-action="note-format"]');
-  if (command) {
-    const task = note23Task();
-    if (task) {
-      // An unbound draft has no confirmed snapshot to compare against, so any
-      // command-driven change marks it unsaved at once (the Demo's semantics).
-      if (!NOTE23_SAVED_TEXT.has(task.id)) note23TrackEditorInput(task);
-      window.setTimeout(() => note23EvaluateDraft(task), 120);
-      window.setTimeout(() => note23EvaluateDraft(task), 450);
-    }
-  }
+  // Toolbar commands, undo and redo use the same onChange draft callback as
+  // typing; comparing task.notes on a timer would read the previous autosave.
   const heading = event.target.closest?.("[data-note23-heading]");
   if (heading) {
     event.preventDefault();

@@ -198,6 +198,41 @@ test("task double-click focuses the mounted name editor and preserves its comple
   assert.equal(harness.evaluate("state.tasks[0].title"), "已修改任务", "blur must persist without an extra save button");
 });
 
+test("workspace task menu dismisses outside in place, retains inside clicks, and restores its trigger on Escape", async () => {
+  const harness = await rendererHarness();
+  harness.evaluate(`
+    document.addEventListener = window.addEventListener;
+    globalThis.taskMenuRemoved = 0;
+    globalThis.taskMenuFocused = 0;
+    globalThis.taskMenuExpanded = "true";
+    globalThis.taskMenuTrigger = {
+      setAttribute: (name, value) => { if (name === "aria-expanded") taskMenuExpanded = value; },
+      focus: () => { taskMenuFocused++; }
+    };
+    document.querySelector = selector => selector === "[data-task-menu]" ? { remove: () => { taskMenuRemoved++; } }
+      : selector === '[data-action="open-task-menu"]' ? taskMenuTrigger : null;
+    render = () => { throw new Error("Outside dismissal must not rebuild the workspace"); };
+    state.taskMenuOpen = true;
+    shellBindOverlayDismissal();
+  `);
+  for (const inside of ["menu", "trigger"]) {
+    harness.dispatch("pointerdown", { button: 0, target: { closest: () => ({ inside }) } });
+    assert.equal(harness.evaluate("state.taskMenuOpen"), true);
+  }
+  harness.dispatch("pointerdown", { button: 0, target: { closest: () => null } });
+  assert.equal(harness.evaluate("state.taskMenuOpen"), false);
+  assert.equal(harness.evaluate("taskMenuRemoved"), 1);
+  assert.equal(harness.evaluate("taskMenuExpanded"), "false");
+  assert.equal(harness.evaluate("taskMenuFocused"), 0, "outside pointer keeps focus on the clicked target");
+  let prevented = false;
+  harness.dispatch("click", { detail: 1, preventDefault() { prevented = true; }, stopImmediatePropagation() { prevented = true; } });
+  assert.equal(prevented, false, "outside control still handles the same click");
+  harness.evaluate("state.taskMenuOpen = true;");
+  harness.dispatch("keydown", { key: "Escape", preventDefault() {}, stopImmediatePropagation() {} });
+  assert.equal(harness.evaluate("state.taskMenuOpen"), false);
+  assert.equal(harness.evaluate("taskMenuFocused"), 1);
+});
+
 test("overlay backdrop dismisses without click-through and preserves the creation draft", async () => {
   const harness = await rendererHarness();
   harness.evaluate(`
@@ -365,6 +400,52 @@ function rendererHarness(personalTaskTrack = undefined) {
       };
     });
 }
+
+test("knowledge draft changes and undo update dirty chrome without rendering the editor", async () => {
+  const harness = await rendererHarness();
+  harness.evaluate(`document.addEventListener = () => {};`);
+  harness.evaluate(await fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "notebook23.js"), "utf8"));
+  harness.evaluate(`
+    state.tasks = normalizeTasks([{ id: "typing-regression", title: "输入连续性", notes: "已保存正文", nodes: [] }]);
+    state.activeTaskId = "typing-regression";
+    state.taskPane = "notes";
+    NOTE23_SAVED_TEXT.set("typing-regression", "已保存正文");
+    globalThis.chromeUpdates = 0;
+    note23UpdateChrome = () => { chromeUpdates++; };
+    render = () => { throw new Error("Typing must not render or detach the editor"); };
+    updateNodeNoteDraft("typing-regression", "", "新增输入");
+  `);
+  assert.equal(harness.evaluate(`NOTE23_EDIT_DIRTY.has("typing-regression")`), true);
+  assert.equal(harness.evaluate(`state.tasks[0].notes`), "已保存正文", "dirty state compares the pending draft before autosave");
+  harness.evaluate(`updateNodeNoteDraft("typing-regression", "", "已保存正文");`);
+  assert.equal(harness.evaluate(`NOTE23_EDIT_DIRTY.has("typing-regression")`), false, "undo before autosave clears the dirty marker");
+  assert.equal(harness.evaluate(`chromeUpdates`), 2);
+  harness.evaluate(`flushNodeNoteDrafts({ persist: true });`);
+  await harness.evaluate(`flushPendingKnowledgeRecoveries();`);
+  assert.equal(harness.evaluate(`state.tasks[0].notes`), "已保存正文");
+});
+
+test("knowledge source input persists through the shared draft path and records its dirty state", async () => {
+  const harness = await rendererHarness();
+  harness.evaluate(`
+    state.tasks = normalizeTasks([{ id: "source-regression", title: "源码输入", notes: "原正文", nodes: [],
+      knowledgeNote: { noteId: "source-regression", filePath: "/tmp/source-regression.md", documentState: "SAVED", dirty: false } }]);
+    state.activeTaskId = "source-regression";
+    state.taskPane = "notes";
+    globalThis.sourceHandlers = {};
+    globalThis.sourceEditor = { dataset: { taskId: "source-regression" }, value: "源码新正文", addEventListener: (event, callback) => { sourceHandlers[event] = callback; } };
+    document.querySelector = selector => selector === "#knowledge-source" ? sourceEditor : null;
+    shellKnowledgeSyncStats = () => {};
+    shellBindKnowledge();
+    sourceHandlers.input();
+    flushNodeNoteDrafts({ persist: true });
+  `);
+  await harness.evaluate(`flushPendingKnowledgeRecoveries();`);
+  assert.equal(harness.evaluate(`state.tasks[0].notes`), "源码新正文");
+  assert.equal(harness.evaluate(`state.tasks[0].knowledgeNote.dirty`), true);
+  assert.equal(harness.evaluate(`state.tasks[0].knowledgeNote.documentState`), "DIRTY");
+  assert.equal(JSON.parse(harness.storageValue("task-flow-sheet-prototype-v2"))[0].notes, "源码新正文");
+});
 
 test("navigation saves coalesce before serialization and preserve same-length content edits", async () => {
   const writes = [];
@@ -2959,7 +3040,19 @@ test("Today widget lane orders are migration-safe in disk and renderer normaliza
   );
 });
 
-test("disk normalization preserves every supported typography choice", () => {
+test("disk and renderer typography default to Heiti and Times while preserving explicit choices", async () => {
+  const defaults = normalizeTaskData({});
+  assert.equal(defaults.zhFont, "heiti");
+  assert.equal(defaults.enFont, "times");
+  const invalid = normalizeTaskData({ zhFont: "unknown", enFont: "unknown" });
+  assert.equal(invalid.zhFont, "heiti");
+  assert.equal(invalid.enFont, "times");
+  const harness = await rendererHarness();
+  assert.deepEqual(harness.json(`loadBrowserTypography()`), { zhFont: "heiti", enFont: "times", fontScale: "larger" });
+  harness.evaluate(`localStorage.setItem(ZH_FONT_KEY, "system"); localStorage.setItem(EN_FONT_KEY, "inter");`);
+  assert.deepEqual(harness.json(`loadBrowserTypography()`), { zhFont: "system", enFont: "inter", fontScale: "larger" });
+  assert.deepEqual(harness.json(`migrateLegacyFont("mono")`), { zhFont: "yahei", enFont: "mono" });
+  assert.deepEqual(harness.json(`migrateLegacyFont("system")`), { zhFont: "system", enFont: "inter" });
   const zhFonts = ["system", "noto", "yahei", "pingfang", "songti", "simsun", "fangsong", "heiti", "kaiti"];
   const enFonts = ["inter", "system", "segoe", "arial", "helvetica", "verdana", "trebuchet", "tahoma", "times", "georgia", "courier", "mono"];
 
@@ -3561,8 +3654,8 @@ test("Today widget appearance normalizes theme, fonts, and base font size", () =
     fontSize: 99,
   }), {
     theme: "light",
-    zhFont: "system",
-    enFont: "inter",
+    zhFont: "heiti",
+    enFont: "times",
     fontSize: 24,
     fontScale: 1,
     sans: "",
@@ -4303,6 +4396,39 @@ test("node detail records autosave to the original node before selection changes
     selectedNodeId: "second_node",
     recordDraft: "",
   });
+});
+
+test("shell node record input persists through autosave and blur after switching nodes", async () => {
+  const harness = await rendererHarness();
+  harness.evaluate(`
+    state.tasks = normalizeTasks([{ id: "shell-record-task", title: "节点记录", nodes: [
+      { id: "first", title: "定位问题", status: "later", note: "原记录", children: [] },
+      { id: "second", title: "验证结果", status: "done", note: "第二条记录", children: [] }
+    ] }]);
+    state.activeTaskId = "shell-record-task";
+    state.selectedNodeId = "first";
+    globalThis.recordHandlers = {};
+    globalThis.recordEditor = { dataset: { shellNodeRecord: "first" }, value: "自动保存内容",
+      addEventListener: (event, callback) => { recordHandlers[event] = callback; } };
+    document.querySelector = selector => selector === "[data-shell-node-record]" ? recordEditor : null;
+    render = () => { throw new Error("Record input must not rebuild the editor"); };
+    shellBindNodeRecord();
+    recordHandlers.input();
+  `);
+  assert.equal(harness.evaluate(`state.tasks[0].nodes[0].note`), "原记录", "the draft must differ from saved content until flushed");
+  assert.equal(harness.evaluate(`flushNodeNoteDraft(noteDraftKey("shell-record-task", "first"), { persist: true })`), true);
+  assert.equal(JSON.parse(harness.storageValue("task-flow-sheet-prototype-v2"))[0].nodes[0].note, "自动保存内容");
+  harness.evaluate(`
+    recordEditor.value = "切换前的新输入";
+    recordHandlers.input();
+    selectNodeForInspector("shell-record-task", "second");
+    recordHandlers.blur();
+  `);
+  const nodes = JSON.parse(harness.storageValue("task-flow-sheet-prototype-v2"))[0].nodes;
+  assert.equal(nodes[0].note, "切换前的新输入");
+  assert.equal(nodes[0].title, "定位问题");
+  assert.equal(nodes[0].status, "later");
+  assert.equal(nodes[1].note, "第二条记录");
 });
 
 test("task repository renders priority without an update timestamp", async () => {

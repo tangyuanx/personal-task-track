@@ -1336,6 +1336,15 @@ function shellStartTaskMenu() {
   state.taskMenuOpen = true;
 }
 
+function shellCloseTaskMenu({ restoreFocus = false } = {}) {
+  if (!state.taskMenuOpen) return;
+  state.taskMenuOpen = false;
+  document.querySelector("[data-task-menu]")?.remove();
+  const trigger = document.querySelector('[data-action="open-task-menu"]');
+  trigger?.setAttribute("aria-expanded", "false");
+  if (restoreFocus) trigger?.focus({ preventScroll: true });
+}
+
 // ------------------------------------------------------------
 // Dispatcher
 // ------------------------------------------------------------
@@ -1790,8 +1799,6 @@ function shellBindNodeRecord() {
     const task = shellActiveTask();
     const node = shellNodeList(task).find((item) => item.id === editor.dataset.shellNodeRecord);
     if (!node) return;
-    node.note = editor.value;
-    node.updatedAt = now();
     updateNodeNoteDraft(task.id, node.id, editor.value);
   });
   editor.addEventListener("blur", () => {
@@ -1823,7 +1830,14 @@ function shellBindOverlayDismissal() {
   });
   let consumeOutsideClick = false;
   document.addEventListener("keydown", (event) => {
-    if (event.key !== "Escape" || !shellOverlayIsOpen()) return;
+    if (event.key !== "Escape") return;
+    if (!shellOverlayIsOpen()) {
+      if (!state.taskMenuOpen) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      shellCloseTaskMenu({ restoreFocus: true });
+      return;
+    }
     event.preventDefault();
     // The overlay owns this Escape: stopImmediatePropagation keeps the
     // multi-select shortcuts from also reacting to the same key press.
@@ -1835,6 +1849,11 @@ function shellBindOverlayDismissal() {
   }, true);
   document.addEventListener("pointerdown", (event) => {
     consumeOutsideClick = false;
+    // This menu is inline in the workspace, outside #overlay. Remove only its
+    // DOM so the clicked input/control can keep focus and handle this pointer.
+    if (state.taskMenuOpen && !event.target.closest?.('[data-task-menu], [data-action="open-task-menu"]')) {
+      shellCloseTaskMenu();
+    }
     if (!shellOverlayIsOpen()) return;
     const overlay = shellOverlay();
     const surface = overlay.querySelector(".dialog") || overlay.firstElementChild;

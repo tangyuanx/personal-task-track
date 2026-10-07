@@ -269,39 +269,13 @@ function renderShellRecord(note) {
 }
 
 function renderShellInspector(task, node) {
-  const list = shellNodeList(task);
-  const index = list.findIndex((item) => item.id === node.id);
-  const path = shellNodePath(task, node.id);
-  const parent = path.at(-2);
-  const preview = state.nodeRecordPreview === true;
-  const location = `<nav class="inspector-location" aria-label="节点位置">
-    ${parent ? `<button class="text-button flow-parent" type="button" data-action="open-node-detail" data-task-id="${escAttr(task.id)}" data-node-id="${escAttr(parent.id)}" title="返回上级：${escAttr(parent.title)}">${shellIcon("folder")}<span>${esc(parent.title)}</span></button>` : '<span class="flow-parent">顶层节点</span>'}
-    <button class="text-button flow-path-button" type="button" data-action="open-node-path" aria-haspopup="menu" aria-label="查看完整节点路径">第 ${path.length} 层${shellIcon("down")}</button>
-  </nav>`;
-  const head = `<header class="inspector-head">${shellIcon("note")}节点记录<div class="inspector-head-actions">
-    <button class="icon-button" type="button" data-action="export-node-pdf" data-task-id="${escAttr(task.id)}" data-node-id="${escAttr(node.id)}" aria-label="导出节点处理记录为 PDF" title="导出 PDF">${shellIcon("download")}</button>
-    <button class="icon-button" type="button" data-action="toggle-node-detail-fullscreen" aria-label="${state.nodeDetailFullscreen ? "恢复处理流视图" : "展开节点记录"}" title="${state.nodeDetailFullscreen ? "恢复处理流视图" : "展开节点记录"}" aria-pressed="${state.nodeDetailFullscreen === true}">${shellIcon(state.nodeDetailFullscreen ? "restoreRecord" : "expandRecord")}</button>
+  const head = `<header class="inspector-head">${shellIcon("note")}处理记录<div class="inspector-head-actions">
     <button class="icon-button" type="button" data-action="close-node-detail" aria-label="关闭节点详情">${shellIcon("close")}</button>
   </div></header>`;
   const body = `<div class="inspector-body">
-    ${location}
-    <h2 class="inspector-title"><button class="title-edit" type="button" data-action="edit-node-title" data-node-id="${escAttr(node.id)}" aria-label="编辑节点标题">${esc(node.title)}${shellIcon("edit")}</button></h2>
-    <div class="node-secondary-actions"><button class="text-button" type="button" data-action="open-node-operations" data-node-id="${escAttr(node.id)}">${shellIcon("more")}节点操作</button></div>
-    <div class="inspector-status"><span>状态</span><button class="status-trigger ${node.status}" type="button" data-action="open-node-status" data-node-id="${escAttr(node.id)}" aria-label="节点状态：${shellNodeStatusLabel(node.status)}，选择状态" aria-haspopup="menu">${shellIcon(node.status === "todo" ? "circle" : node.status)}${shellNodeStatusLabel(node.status)}${shellIcon("down")}</button></div>
-    <div class="record-heading"><h3>处理记录</h3><div class="record-heading-actions"><span class="record-save-state" title="自动保存到本机">已自动保存</span><button class="text-button" type="button" data-action="toggle-note-preview">${preview ? "编辑" : "预览"}</button></div></div>
-    ${preview
-      ? `<div class="record-document">${renderShellRecord(node.note)}</div>`
-      : `<textarea class="record-editor" id="record-draft" data-shell-node-record="${escAttr(node.id)}" aria-label="处理记录" placeholder="记录处理过程、验证结果与下一步…">${esc(node.note || "")}</textarea>`}
+    <textarea class="record-editor" id="record-draft" data-shell-node-record="${escAttr(node.id)}" aria-label="处理记录" placeholder="记录处理过程、验证结果与下一步…">${esc(node.note || "")}</textarea>
   </div>`;
-  const prevNode = list[index - 1];
-  const nextNode = list[index + 1];
-  const navButton = (target, label, disabled) => `<button class="text-button" type="button" data-action="navigate-node-detail" data-task-id="${escAttr(task.id)}" data-node-id="${escAttr(target?.id || "")}" ${disabled ? "disabled" : ""}>${label}</button>`;
-  const foot = `<footer class="inspector-foot">
-    ${navButton(prevNode, "上一节点", !prevNode)}
-    <span>${index + 1} / ${list.length}</span>
-    ${navButton(nextNode, `下一节点${shellIcon("arrow")}`, !nextNode)}
-  </footer>`;
-  return `<aside class="inspector" data-node-id="${escAttr(node.id)}" aria-label="节点详情">${head}${body}${foot}</aside>`;
+  return `<aside class="inspector inspector-record-only" data-node-id="${escAttr(node.id)}" aria-label="节点详情">${head}${body}</aside>`;
 }
 
 // ------------------------------------------------------------
@@ -458,7 +432,7 @@ function renderShellNotes(task) {
 
 function renderShellTaskMenu(task) {
   const tags = normalizeTaskTags(task.tags);
-  return `<div class="popover" role="menu" aria-label="任务操作">
+  return `<div class="popover" data-task-menu role="menu" aria-label="任务操作">
     <button type="button" role="menuitem" data-action="toggle-task-tag" data-tag="today" data-task-id="${escAttr(task.id)}">${shellIcon("home")}${tags.today ? "移出今日" : "加入今日"}</button>
     <button type="button" role="menuitem" data-action="toggle-task-group-select" data-task-id="${escAttr(task.id)}">${shellIcon("folder")}移动至分组</button>
     ${["blocked", "later"].map((tag) => `<button type="button" data-action="toggle-task-tag" data-tag="${tag}" data-task-id="${escAttr(task.id)}" role="menuitemcheckbox" aria-checked="${Boolean(tags[tag])}">${shellIcon(tag)}${tags[tag] ? "取消" : "标记"}${SHELL_NODE_STATUS_LABELS[tag]}</button>`).join("")}

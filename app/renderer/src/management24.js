@@ -579,7 +579,7 @@
 
   renderShellTaskMenu = function manage24TaskMenu(task) {
     const tags = normalizeTaskTags(task.tags);
-    return `<div class="popover" role="menu" aria-label="任务操作">
+    return `<div class="popover" data-task-menu role="menu" aria-label="任务操作">
       <button type="button" role="menuitem" data-recovery26="open">${manage24Icon("folder")}最近删除</button>
       <div class="menu-divider"></div>
       <button type="button" role="menuitem" data-manage24="properties" data-task-id="${manage24Attr(task.id)}">${manage24Icon("edit")}编辑属性</button>

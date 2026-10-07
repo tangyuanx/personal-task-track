@@ -282,8 +282,8 @@ let state = {
   uiPreferences: loadBrowserUiPreferences(),
   markdownMode: "edit",
   theme: "light",
-  zhFont: "system",
-  enFont: "inter",
+  zhFont: "heiti",
+  enFont: "times",
   fontScale: "large",
   settingsOpen: false,
   calendarOpen: false,
@@ -944,11 +944,11 @@ function normalizePriority(value) {
 }
 
 function normalizeZhFont(value) {
-  return Object.hasOwn(zhFontLabels, value) ? value : "system";
+  return Object.hasOwn(zhFontLabels, value) ? value : "heiti";
 }
 
 function normalizeEnFont(value) {
-  return Object.hasOwn(enFontLabels, value) ? value : "inter";
+  return Object.hasOwn(enFontLabels, value) ? value : "times";
 }
 
 function normalizeFontScale(value) {
@@ -960,7 +960,8 @@ function migrateLegacyFont(value) {
   if (value === "songti") return { zhFont: "songti", enFont: "inter" };
   if (value === "heiti") return { zhFont: "heiti", enFont: "inter" };
   if (value === "mono") return { zhFont: "yahei", enFont: "mono" };
-  return { zhFont: "system", enFont: "inter" };
+  if (value === "system" || value === "yahei") return { zhFont: "system", enFont: "inter" };
+  return { zhFont: "heiti", enFont: "times" };
 }
 
 function loadBrowserTheme() {
@@ -7306,7 +7307,11 @@ function noteDraftKey(taskId, nodeId) {
 function updateNodeNoteDraft(taskId, nodeId, markdown, host = null) {
   nodeNoteDrafts.set(noteDraftKey(taskId, nodeId), { taskId, nodeId, markdown });
   if (host) updateMarkdownStatsForMarkdown(host, markdown);
-  if (!nodeId) scheduleKnowledgeRecovery(taskId, markdown);
+  if (!nodeId) {
+    scheduleKnowledgeRecovery(taskId, markdown);
+    const task = state.tasks.find((item) => item.id === taskId);
+    if (task && typeof note23EvaluateDraft === "function") note23EvaluateDraft(task, markdown);
+  }
   scheduleNodeNoteSave(taskId, nodeId);
 }
 
@@ -7343,6 +7348,14 @@ function flushNodeNoteDraft(key, { persist = true } = {}) {
     task.knowledgeNote = knowledgeDocument.markDocumentEdited(task.knowledgeNote);
   }
   task.updatedAt = now();
+  if (!draft.nodeId) {
+    if (typeof shellKnowledgeSyncStats === "function") shellKnowledgeSyncStats(task);
+    if (typeof note23UpdateChrome === "function") note23UpdateChrome(task);
+    if (state.activeTaskId === task.id && state.taskPane === "notes") {
+      if (typeof note23RefreshOutline === "function") note23RefreshOutline(task);
+      if (typeof note23RefreshFind === "function") note23RefreshFind(false);
+    }
+  }
   if (persist) save();
   return true;
 }

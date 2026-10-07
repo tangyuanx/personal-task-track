@@ -144,7 +144,7 @@ function applyLoopAppearance() {
   root.style.setProperty("--font-scale", shellFontScaleValue(state.fontScale));
   root.style.setProperty(
     "--sans",
-    `"TaskTrack English ${SHELL_EN_FAMILIES[state.enFont] || "System"}","TaskTrack Chinese ${SHELL_ZH_FAMILIES[state.zhFont] || "System"}",-apple-system,BlinkMacSystemFont,sans-serif`,
+    `"TaskTrack English ${SHELL_EN_FAMILIES[state.enFont] || "Times"}","TaskTrack Chinese ${SHELL_ZH_FAMILIES[state.zhFont] || "Heiti"}",-apple-system,BlinkMacSystemFont,sans-serif`,
   );
 }
 

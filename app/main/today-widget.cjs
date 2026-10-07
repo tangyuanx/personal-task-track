@@ -1239,8 +1239,8 @@ function normalizeTodayWidgetAppearance(value) {
   const fontScale = Number(raw.fontScale);
   return {
     theme: raw.theme === "dark" ? "dark" : "light",
-    zhFont: WIDGET_ZH_FONTS.has(raw.zhFont) ? raw.zhFont : "system",
-    enFont: WIDGET_EN_FONTS.has(raw.enFont) ? raw.enFont : "inter",
+    zhFont: WIDGET_ZH_FONTS.has(raw.zhFont) ? raw.zhFont : "heiti",
+    enFont: WIDGET_EN_FONTS.has(raw.enFont) ? raw.enFont : "times",
     fontSize: Number.isFinite(fontSize) ? Math.max(12, Math.min(24, fontSize)) : 16.5,
     fontScale: Number.isFinite(fontScale) ? Math.max(0.8, Math.min(1.6, fontScale)) : 1,
     // The main window composes the `--sans` stack from the font preferences

@@ -70,24 +70,11 @@
 @media (pointer: coarse) { .context-menu button { min-height: 44px; } }
 
 /* --- 知识笔记页宽 ---------------------------------------------------------
-   与 Demo 的偏差 D-02，用户已确认采用方案 B。
-
-   Demo 的三档是绝对值 840 / 1120 / 无限制。产品默认窗口 1280×820 下知识正文
-   只有 826px，低于「默认」档的 840px，三档全部撑满，控件在默认窗口下完全无效
-   （实测 Demo 数值与应用完全相同，是 Demo 自身的设计缺陷）。
-
-   方案 B：把前两档改成相对正文宽度的比例，使任意窗口下三档都可区分。
-   上限仍保留 Demo 的 840px / 1120px，所以正文足够宽时结果与 Demo 相同：
-   正文 1420px（窗口 1920）→ 840 / 1120 / 1420，与 Demo 逐像素一致；
-   正文 ≥1167px 时「默认」回到 840，正文 ≥1273px 时「较宽」回到 1120。
-
-   实测：1024→454/555/631，1280→594/726/826，1440→710/867/986，
-        1920→840/1120/1414（与 Demo 相同）。 */
-/* Phase20 parity: the Demo's note page keeps its own fixed ladder (the frozen
-   scale layer handles the narrow-window padding instead), so the page width
-   preset must not shrink the default page. */
-.knowledge-page.width-default { max-width: 840px; }
-.knowledge-page.width-wide { max-width: 1120px; }
+   固定上限会让窄窗口或打开大纲时的三档全部铺满。默认 / 较宽分别占正文可用
+   空间的 72% / 88%，仍以 840px / 1120px 为上限；全宽使用全部可用空间。
+   编辑、Markdown 和预览共享此容器，窗口和大纲变化时自动重新计算。 */
+.knowledge-page.width-default { max-width: min(840px, 72%); }
+.knowledge-page.width-wide { max-width: min(1120px, 88%); }
 .knowledge-page.width-full { max-width: none; }
 
 /* --- 知识笔记正文行距 ------------------------------------------------------
@@ -469,4 +456,15 @@ body[data-window25-inactive] .topbar > .brand-update-slot > .brand-update {
 }
 .workspace-foot [data-local-save-status][data-state="failed"] .dot {
   background: var(--orange);
+}
+
+/* Keep the node inspector focused on its processing record. */
+.inspector-record-only .inspector-body {
+  display: flex;
+  flex-direction: column;
+}
+.inspector-record-only .record-editor {
+  flex: 1;
+  min-height: 0;
+  resize: none;
 }

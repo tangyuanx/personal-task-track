@@ -508,9 +508,7 @@ function shellBindKnowledge() {
     if (task) {
       source.addEventListener("input", () => {
         updateNodeNoteDraft(task.id, "", source.value);
-        task.notes = source.value;
-        task.updatedAt = now();
-        shellKnowledgeSyncStats(task);
+        shellKnowledgeSyncStats({ ...task, notes: source.value });
       });
       source.addEventListener("keydown", (event) => {
         if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "s") return;
