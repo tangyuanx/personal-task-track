@@ -5292,6 +5292,66 @@ test("context-menu commands activate exactly once on the first primary pointer p
   assert.deepEqual(result.listenerTypes, ["click", "pointerdown"]);
 });
 
+test("task context menu preserves the working task and record draft without rebuilding the renderer", async () => {
+  const harness = await rendererHarness();
+  const result = harness.json(`(() => {
+    state.tasks = [
+      { id: "working", title: "正在记录的任务", status: "todo", tags: {} },
+      { id: "other", title: "另一项<任务>", status: "done", tags: { today: true, later: true, blocked: false } }
+    ];
+    state.activeTaskId = "working";
+    state.selectedNodeId = "working-node";
+    state.recordDraft = "未提交的处理记录";
+    let mounts = 0, focused = 0;
+    syncContextMenuRoot = () => { mounts++; };
+    render = () => { throw new Error("right-click must not render the workspace"); };
+    const trigger = { isConnected: true, focus() { focused++; } };
+    const row = { querySelector: () => trigger };
+    openTaskContextMenu("other", { type: "contextmenu", clientX: 120, clientY: 200, preventDefault() {}, stopPropagation() {} }, row);
+    const menu = { ...state.contextMenu };
+    const markup = renderContextMenu();
+    closeContextMenu(true);
+    return { menu, markup, mounts, focused, current: state.activeTaskId, node: state.selectedNodeId, draft: state.recordDraft, closed: state.contextMenu };
+  })()`);
+  assert.equal(result.current, "working");
+  assert.equal(result.node, "working-node");
+  assert.equal(result.draft, "未提交的处理记录");
+  assert.equal(result.menu.taskId, "other");
+  assert.equal(result.mounts, 2);
+  assert.equal(result.focused, 1);
+  assert.equal(result.closed, null);
+  assert.doesNotMatch(result.markup, /打开任务|data-action="select-task"|Today/);
+  assert.match(result.markup, /另一项&lt;任务&gt;/);
+  assert.match(result.markup, /标记为未完成/);
+  assert.match(result.markup, /aria-checked="true"[^>]*data-tag="today"/);
+  assert.match(result.markup, /取消手动加入今日/);
+  assert.match(result.markup, /aria-checked="true"[^>]*data-tag="later"/);
+  assert.match(result.markup, /aria-checked="false"[^>]*data-tag="blocked"/);
+  assert.equal((result.markup.match(/<button /g) || []).length, 5);
+  assert.match(result.markup, /data-action="delete-task"/);
+});
+
+test("task context menu positions a keyboard invocation from its row and ignores a stale task", async () => {
+  const harness = await rendererHarness();
+  const result = harness.json(`(() => {
+    state.tasks = [{ id: "keyboard", title: "键盘任务", tags: {} }];
+    let mounts = 0, focused = 0, prevented = 0;
+    syncContextMenuRoot = () => { mounts++; };
+    document.querySelector = () => ({ focus() { focused++; } });
+    const row = { querySelector: () => null, getBoundingClientRect: () => ({ left: 200, bottom: 320 }) };
+    const event = { type: "keydown", preventDefault() { prevented++; }, stopPropagation() {} };
+    openTaskContextMenu("keyboard", event, row);
+    const menu = { ...state.contextMenu };
+    openTaskContextMenu("missing", event, row);
+    return { menu, mounts, focused, prevented };
+  })()`);
+  assert.equal(result.menu.x, 232);
+  assert.equal(result.menu.y, 320);
+  assert.equal(result.mounts, 1);
+  assert.equal(result.focused, 1);
+  assert.equal(result.prevented, 1);
+});
+
 test("quick captures and preserved group deletions remain truly ungrouped across disk normalization", async () => {
   const disk = normalizeTaskData({
     activeGroupId: "group_ungrouped",

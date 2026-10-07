@@ -2286,6 +2286,7 @@ function render() {
   clearRenderScrollCache();
   restoreCachedKnowledgePane(task);
   bind();
+  syncContextMenuRoot();
   if (typeof shellAfterRender === "function") shellAfterRender();
   if (typeof shellBindFlowKeyboard === "function") shellBindFlowKeyboard();
   if (typeof shellBindKnowledge === "function") shellBindKnowledge();
@@ -3553,6 +3554,43 @@ function renderEmptyPage() {
   `;
 }
 
+let taskContextMenuReturnFocus = null;
+
+window.addEventListener("pointerdown", (event) => {
+  if (state.contextMenu && event.button !== 2 && !event.target?.closest?.(".context-menu")) closeContextMenu();
+}, true);
+window.addEventListener("scroll", (event) => {
+  if (state.contextMenu && !event.target?.closest?.(".context-menu")) closeContextMenu();
+}, true);
+window.addEventListener("resize", () => { if (state.contextMenu) closeContextMenu(); });
+window.addEventListener("blur", () => { if (state.contextMenu) closeContextMenu(); });
+
+function openTaskContextMenu(taskId, event, row) {
+  if (!state.tasks.some((task) => task.id === taskId)) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const keyboard = event.type === "keydown";
+  const rect = keyboard ? row.getBoundingClientRect() : null;
+  taskContextMenuReturnFocus = row.querySelector(".task-select") || row;
+  state.contextMenu = {
+    kind: "task", taskId, nodeId: "",
+    x: keyboard ? rect.left + 32 : event.clientX,
+    y: keyboard ? rect.bottom : event.clientY,
+  };
+  // Mount only the floating menu: preserve the current task, inspector, editor
+  // draft, and list scroll position when inspecting another row's actions.
+  syncContextMenuRoot();
+  if (keyboard) document.querySelector("#context-menu-root .context-menu button")?.focus({ preventScroll: true });
+}
+
+function closeContextMenu(restoreFocus = false) {
+  const trigger = taskContextMenuReturnFocus;
+  state.contextMenu = null;
+  taskContextMenuReturnFocus = null;
+  syncContextMenuRoot();
+  if (restoreFocus && trigger?.isConnected) trigger.focus({ preventScroll: true });
+}
+
 function renderContextMenu() {
   // Group management (打开/重命名/批量添加/删除分组) was removed from the product;
   // a leftover kind must not fall through to the node menu.
@@ -3582,16 +3620,18 @@ function renderContextMenu() {
 
   if (menu.kind === "task") {
     const task = state.tasks.find((item) => item.id === menu.taskId);
-    const tags = normalizeTaskTags(task?.tags);
+    if (!task) return "";
+    const tags = normalizeTaskTags(task.tags);
     return `
-      <div class="context-menu" style="left:${menu.x}px; top:${menu.y}px">
-        <button data-action="select-task" data-task-id="${escAttr(menu.taskId)}">打开任务</button>
-        <button data-action="toggle-task-done" data-task-id="${escAttr(menu.taskId)}">${task?.status === "done" ? "标记为未完成" : "标记为完成"}</button>
-        <button data-action="toggle-task-tag" data-task-id="${escAttr(menu.taskId)}" data-tag="today">${tags.today ? "取消 Today" : "标记 Today"}</button>
-        <button data-action="toggle-task-tag" data-task-id="${escAttr(menu.taskId)}" data-tag="later">${tags.later ? "取消稍后" : "标记稍后"}</button>
-        <button data-action="toggle-task-tag" data-task-id="${escAttr(menu.taskId)}" data-tag="blocked">${tags.blocked ? "取消卡住" : "标记卡住"}</button>
-        <hr />
-        <button class="danger" data-action="delete-task" data-task-id="${escAttr(menu.taskId)}">删除任务</button>
+      <div class="context-menu task-context-menu" role="menu" aria-label="${escAttr(task.title || "未命名任务")}的操作" style="left:${menu.x}px; top:${menu.y}px">
+        <div class="context-menu-title">${esc(task.title || "未命名任务")}</div>
+        <button type="button" role="menuitem" data-action="toggle-task-done" data-task-id="${escAttr(menu.taskId)}">${shellIcon(task.status === "done" ? "history" : "done")}<span>${task.status === "done" ? "标记为未完成" : "完成任务"}</span></button>
+        <hr role="separator" />
+        <button type="button" role="menuitemcheckbox" aria-checked="${tags.today}" data-action="toggle-task-tag" data-task-id="${escAttr(menu.taskId)}" data-tag="today">${shellIcon("home")}<span>${tags.today ? "取消手动加入今日" : "加入今日"}</span>${tags.today ? shellIcon("check", "context-menu-check") : ""}</button>
+        <button type="button" role="menuitemcheckbox" aria-checked="${tags.later}" data-action="toggle-task-tag" data-task-id="${escAttr(menu.taskId)}" data-tag="later">${shellIcon("later")}<span>${tags.later ? "取消稍后" : "标记稍后"}</span>${tags.later ? shellIcon("check", "context-menu-check") : ""}</button>
+        <button type="button" role="menuitemcheckbox" aria-checked="${tags.blocked}" data-action="toggle-task-tag" data-task-id="${escAttr(menu.taskId)}" data-tag="blocked">${shellIcon("blocked")}<span>${tags.blocked ? "取消卡住" : "标记卡住"}</span>${tags.blocked ? shellIcon("check", "context-menu-check") : ""}</button>
+        <hr role="separator" />
+        <button type="button" role="menuitem" class="danger" data-action="delete-task" data-task-id="${escAttr(menu.taskId)}">${shellIcon("close")}<span>删除任务…</span></button>
       </div>
     `;
   }
@@ -3617,6 +3657,39 @@ function syncContextMenuRoot() {
   const root = document.querySelector("#context-menu-root");
   if (!root) return;
   root.innerHTML = renderContextMenu();
+  document.querySelectorAll(".task-item[data-task-id]").forEach((row) => {
+    row.classList.toggle("context-menu-target", state.contextMenu?.kind === "task" && row.dataset.taskId === state.contextMenu.taskId);
+  });
+  const menu = root.querySelector?.(".context-menu");
+  if (menu && state.contextMenu) {
+    const rect = menu.getBoundingClientRect();
+    const margin = 12;
+    const bottom = window.innerHeight - 50;
+    let x = state.contextMenu.x + 4;
+    let y = state.contextMenu.y + 4;
+    if (x + rect.width > window.innerWidth - margin) x = state.contextMenu.x - rect.width - 4;
+    if (y + rect.height > bottom) y = state.contextMenu.y - rect.height - 4;
+    menu.style.left = `${Math.max(margin, Math.min(x, window.innerWidth - rect.width - margin))}px`;
+    menu.style.top = `${Math.max(margin, Math.min(y, bottom - rect.height))}px`;
+    root.onkeydown = (event) => {
+      const buttons = [...menu.querySelectorAll("button")];
+      if (!buttons.length) return;
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        closeContextMenu(true);
+        return;
+      }
+      if (event.key === "Tab") { closeContextMenu(); return; }
+      if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const current = buttons.indexOf(document.activeElement);
+      const next = event.key === "Home" ? 0 : event.key === "End" ? buttons.length - 1
+        : (current + (event.key === "ArrowDown" ? 1 : -1) + buttons.length) % buttons.length;
+      buttons[next].focus({ preventScroll: true });
+    };
+  } else root.onkeydown = null;
   root.querySelectorAll("[data-action]").forEach((element) => {
     let activatedByPointer = false;
     element.addEventListener("pointerdown", (event) => {
@@ -5855,18 +5928,10 @@ function bindTaskRepositoryRows(scope = document) {
         control.addEventListener("click", (event) => event.stopPropagation());
       });
       element.addEventListener("contextmenu", (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        state.contextMenu = {
-          kind: "task",
-          taskId: element.dataset.taskId,
-          nodeId: "",
-          x: Math.min(event.clientX, window.innerWidth - 210),
-          y: Math.min(event.clientY, window.innerHeight - 245),
-        };
-        state.activeTaskId = element.dataset.taskId;
-        state.selectedNodeId = "";
-        render();
+        openTaskContextMenu(element.dataset.taskId, event, element);
+      });
+      element.addEventListener("keydown", (event) => {
+        if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) openTaskContextMenu(element.dataset.taskId, event, element);
       });
     });
     return;
@@ -6086,6 +6151,10 @@ function bindTaskRepositoryRows(scope = document) {
     if (!bindRenderElement(element, 'base:[data-context]')) return;
     if (element.dataset.context === "flow-root") return;
     element.addEventListener("contextmenu", (event) => {
+      if (element.dataset.context === "task") {
+        openTaskContextMenu(element.dataset.taskId, event, element);
+        return;
+      }
       event.preventDefault();
       event.stopPropagation();
       const x = Math.min(event.clientX, window.innerWidth - 210);
@@ -6097,11 +6166,10 @@ function bindTaskRepositoryRows(scope = document) {
         x,
         y,
       };
-      if (element.dataset.context === "task" && element.dataset.taskId) {
-        state.activeTaskId = element.dataset.taskId;
-        state.selectedNodeId = "";
-      }
       render();
+    });
+    if (element.dataset.context === "task") element.addEventListener("keydown", (event) => {
+      if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) openTaskContextMenu(element.dataset.taskId, event, element);
     });
   });
 
@@ -6565,8 +6633,7 @@ function bindTaskRepositoryRows(scope = document) {
       const keepRepositoryGroup = isRepositoryGroupInteraction(event.target);
 
       if (state.contextMenu && !keepContextMenu) {
-        state.contextMenu = null;
-        syncContextMenuRoot();
+        closeContextMenu();
       }
 
       if (state.settingsOpen && !keepSettings) {
@@ -10053,8 +10120,7 @@ window.addEventListener("keydown", (event) => {
     }
     if (state.contextMenu) {
       event.preventDefault();
-      state.contextMenu = null;
-      syncContextMenuRoot();
+      closeContextMenu(true);
       return;
     }
     if (state.selectedNodeId || state.settingsOpen || state.calendarOpen || state.reviewOpen || state.feedbackOpen || recurrencePopoverTaskId || taskGroupSelectTaskId || deadlinePopoverTaskId || repositoryGroupPickerOpen || repositoryFilterMenuOpen || taskPriorityMenu) {

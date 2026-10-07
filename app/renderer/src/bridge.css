@@ -12,6 +12,63 @@
    The product has no review bar, so the shell owns the full viewport. */
 .app { height: 100dvh; }
 
+/* Context actions survived the shell migration, but their legacy stylesheet
+   did not. Keep this floating surface out of the three-column grid and use
+   the current shell's tokens; frozen baseline styles remain untouched. */
+#context-menu-root { display: contents; }
+.context-menu {
+  position: fixed;
+  z-index: 1100;
+  width: 214px;
+  max-width: calc(100vw - 24px);
+  max-height: calc(100dvh - 72px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 5px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--canvas);
+  color: var(--text);
+  box-shadow: 0 8px 30px #20242b20, 0 2px 6px #20242b0b;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+.context-menu-title {
+  padding: 5px 9px 7px;
+  font-size: calc(11px * var(--font-scale, 1));
+  color: var(--secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.context-menu button {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  width: 100%;
+  min-height: 33px;
+  padding: 6px 9px;
+  text-align: left;
+  font-size: calc(13px * var(--font-scale, 1));
+  font-weight: 400;
+  background: transparent;
+}
+.context-menu button > span { min-width: 0; overflow-wrap: anywhere; }
+.context-menu button > svg { width: 15px; height: 15px; flex-shrink: 0; }
+.context-menu button:focus-visible { outline-offset: -2px; }
+.context-menu-check { margin-left: auto; color: var(--green); }
+.context-menu hr { border: 0; border-top: 1px solid var(--line); margin: 4px 5px; }
+.context-menu .danger { color: #b64545; }
+.context-menu .danger:hover { background: color-mix(in srgb, #b64545 8%, var(--canvas)); }
+.task-item.context-menu-target {
+  outline: 1px solid color-mix(in srgb, var(--green) 38%, transparent);
+  outline-offset: -1px;
+}
+:root[data-theme="dark"] .context-menu { box-shadow: 0 8px 30px #0007, 0 2px 6px #0005; }
+:root[data-theme="dark"] .context-menu .danger { color: #ef9292; }
+@media (pointer: coarse) { .context-menu button { min-height: 44px; } }
+
 /* --- 知识笔记页宽 ---------------------------------------------------------
    与 Demo 的偏差 D-02，用户已确认采用方案 B。
 
