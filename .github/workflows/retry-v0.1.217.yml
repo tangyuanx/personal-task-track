@@ -1,0 +1,130 @@
+name: Retry v0.1.217 publication
+
+on:
+  create:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [.github/workflows/retry-v0.1.217.yml]
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: publish-v0.1.217
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/codex/retry-v0.1.217-create'
+    name: Publish verified v0.1.217 assets
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_SHA: cf90fbc7933d7a2b686724c5b5fa4bad8d368aa2
+      SOURCE_RUN: '37641806159'
+      RELEASE_TAG: v0.1.217
+    steps:
+      - name: Checkout the exact verified source
+        uses: actions/checkout@v4
+        with:
+          ref: cf90fbc7933d7a2b686724c5b5fa4bad8d368aa2
+      - name: Verify source and successful platform builds
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          node -e "if (require('./package.json').version !== '0.1.217') process.exit(1)"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN" > /tmp/release-source-run.json
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN/jobs" > /tmp/release-source-jobs.json
+          node <<'JS'
+          const fs = require('fs');
+          const run = JSON.parse(fs.readFileSync('/tmp/release-source-run.json'));
+          const jobs = JSON.parse(fs.readFileSync('/tmp/release-source-jobs.json')).jobs;
+          if (run.head_sha !== process.env.SOURCE_SHA) throw new Error('Source commit mismatch');
+          for (const platform of ['macOS', 'Windows']) {
+            const job = jobs.find(j => j.name === 'Build v0.1.217 ' + platform);
+            if (job?.conclusion !== 'success') throw new Error(platform + ' build has not passed');
+          }
+          JS
+      - name: Collect already verified platform assets
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: 37641806159
+          pattern: v0.1.217-*
+          path: release
+          merge-multiple: true
+      - name: Verify complete update feed
+        run: node tools/verify-update-artifacts.cjs release --require-all-platforms
+      - name: Create the exact source tag separately
+        shell: bash
+        run: |
+          existing="$(git ls-remote origin "refs/tags/$RELEASE_TAG" | cut -f1)"
+          if [ -n "$existing" ]; then
+            test "$existing" = "$SOURCE_SHA"
+          else
+            git tag "$RELEASE_TAG" "$SOURCE_SHA"
+            git push origin "refs/tags/$RELEASE_TAG"
+          fi
+      - name: Create a draft with delayed API retries
+        shell: bash
+        run: |
+          created=false
+          for attempt in 1 2 3 4 5; do
+            if gh release view "$RELEASE_TAG" --json isDraft --jq '.isDraft' > /tmp/release-is-draft; then
+              test "$(cat /tmp/release-is-draft)" = true
+              created=true
+              break
+            fi
+            if gh release create "$RELEASE_TAG" --verify-tag --draft --title "$RELEASE_TAG" --notes-file "docs/release-notes/$RELEASE_TAG.md"; then
+              created=true
+              break
+            fi
+            sleep $((attempt * 5))
+          done
+          test "$created" = true
+      - name: Upload verified assets with retries
+        shell: bash
+        run: |
+          for file in release/*.dmg release/*.zip release/*.exe release/*.blockmap release/latest.yml release/latest-mac.yml; do
+            name="$(basename "$file")"
+            size="$(stat -c %s "$file")"
+            uploaded=false
+            for attempt in 1 2 3 4 5; do
+              gh release view "$RELEASE_TAG" --json assets > /tmp/release-assets.json
+              if node -e 'const fs=require("fs");const d=JSON.parse(fs.readFileSync("/tmp/release-assets.json"));process.exit(d.assets.some(a=>a.name===process.argv[1]&&a.size===Number(process.argv[2])&&a.state==="uploaded")?0:1)' "$name" "$size"; then
+                uploaded=true
+                break
+              fi
+              if gh release upload "$RELEASE_TAG" "$file"; then
+                uploaded=true
+                break
+              fi
+              sleep $((attempt * 5))
+            done
+            test "$uploaded" = true
+          done
+      - name: Verify uploaded bytes and publish complete release
+        shell: bash
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG" > /tmp/release-verified.json
+          node <<'JS'
+          const fs = require('fs'), crypto = require('crypto');
+          const data = JSON.parse(fs.readFileSync('/tmp/release-verified.json'));
+          const files = fs.readdirSync('release').filter(n => /\.(dmg|zip|exe|blockmap)$/.test(n) || ['latest.yml','latest-mac.yml'].includes(n));
+          for (const name of files) {
+            const bytes = fs.readFileSync('release/' + name);
+            const asset = data.assets.find(a => a.name === name);
+            const digest = 'sha256:' + crypto.createHash('sha256').update(bytes).digest('hex');
+            if (!asset || asset.state !== 'uploaded' || asset.size !== bytes.length || asset.digest !== digest) throw new Error('Uploaded asset mismatch: ' + name);
+          }
+          if (files.length !== 12) throw new Error('Incomplete release');
+          JS
+          git fetch --depth=1 origin main
+          git show origin/main:package.json | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{if(JSON.parse(s).version!=="0.1.217")process.exit(1)})'
+          for attempt in 1 2 3 4 5; do
+            if gh release edit "$RELEASE_TAG" --draft=false --latest; then exit 0; fi
+            sleep $((attempt * 5))
+          done
+          exit 1
