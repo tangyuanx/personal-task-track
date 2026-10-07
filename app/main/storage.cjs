@@ -186,6 +186,11 @@ function normalizeTaskData(data) {
     priorityFilter: PRIORITY_FILTERS.has(safeData.priorityFilter) ? safeData.priorityFilter : "all",
     captureSourceFilter: CAPTURE_SOURCE_FILTERS.has(safeData.captureSourceFilter) ? safeData.captureSourceFilter : "all",
     newTaskPriority: PRIORITIES.has(safeData.newTaskPriority) ? safeData.newTaskPriority : "medium",
+    uiPreferences: safeData.uiPreferences && typeof safeData.uiPreferences === "object" ? {
+      continuous: safeData.uiPreferences.continuous !== false,
+      follow: safeData.uiPreferences.follow !== false,
+      workNavigationEnabled: safeData.uiPreferences.workNavigationEnabled === true,
+    } : null,
     workNavigation: workNavigationModel.normalizeWorkNavigation(safeData.workNavigation, {
       groupIds: taskGroups.map((group) => group.id),
     }),

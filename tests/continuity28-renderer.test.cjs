@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
-function renderer() {
+function renderer(options = {}) {
   const handlers = new Map(), mediaHandlers = new Map(), frames = [], elements = new Map(), focus = [];
   let requested = { task: 'A', pane: 'flow', node: '' };
   const makeViewport = (top = 0, height = 1000) => ({ scrollTop: top, scrollLeft: 0, scrollHeight: height, clientHeight: 200, scrollWidth: 500, clientWidth: 400 });
@@ -23,13 +23,13 @@ function renderer() {
   const storage = new Map();
   const win = { addEventListener: (k, fn) => handlers.set(k, fn) };
   const context = vm.createContext({ window: win, document: { querySelector: key => elements.get(key) || null,
-    querySelectorAll: key => key === '.node-title[data-node-id="n1"]' ? [elements.get(key)] : [] },
+    querySelectorAll: key => options.queryAll?.(key) || (key === '.node-title[data-node-id="n1"]' ? [elements.get(key)] : []) },
     render: baseRender, matchMedia: () => media, localStorage: { getItem: k => storage.get(k), setItem: (k, v) => storage.set(k, v) },
     requestAnimationFrame: fn => { frames.push(fn); return frames.length; }, performance: { now: () => 10 }, CSS: { escape: value => value },
     shellSettingsRow: (_label, _desc, control) => control, shellSettingsToggle: (_label, _desc, _checked, attrs) => attrs });
   baseRender(); vm.runInContext(fs.readFileSync(path.join(__dirname, '../app/renderer/src/continuity28.js'), 'utf8'), context);
   const flush = () => { let count = 0; while (frames.length && count++ < 100) frames.shift()(); };
-  return { elements, focus, context, storage, media, handlers, flush,
+  return { elements, focus, context, storage, media, handlers, flush, frame: () => frames.shift()?.(),
     go(task, pane, node = '', height = 1000) { requested = { task, pane, node, height }; context.render(); },
     get: selector => elements.get(selector) };
 }
@@ -64,4 +64,36 @@ test('original mode and follow preferences persist independently of task data', 
   assert.equal(JSON.parse(r.storage.get('loop.interaction28')).continuous, false);
   r.media.matches = true;
   assert.equal(r.context.window.LoopContinuity28.preferences().reduced, true);
+});
+
+test('deferred viewport restoration yields immediately to new user input', () => {
+  for (const event of ['wheel', 'keydown', 'pointerdown', 'beforeinput', 'touchmove']) {
+    const r = renderer(); r.get('.flow-scroll').scrollTop = 320;
+    r.go('A', 'notes');
+    r.get('.knowledge-body').scrollTop = 90;
+    r.handlers.get(event)?.({ key: 'ArrowDown', button: 0, target: { closest: () => null } });
+    r.flush();
+    assert.equal(r.get('.knowledge-body').scrollTop, 90, `${event} must invalidate scheduled restoration`);
+  }
+});
+
+test('input between the two layout frames does not get undone by the second restoration', () => {
+  const r = renderer(); r.go('A', 'notes'); r.frame();
+  r.get('.knowledge-body').scrollTop = 180;
+  r.handlers.get('wheel')?.({}); r.flush();
+  assert.equal(r.get('.knowledge-body').scrollTop, 180);
+});
+
+test('navigation toggle keeps its own operation identity across Windows brand reparenting', () => {
+  let inBrand = true;
+  const button = { dataset: {}, matches: selector => selector === '.nav-toggle',
+    closest: () => inBrand ? {dataset:{pointerGroup:'brand'}} : null };
+  const r = renderer({ queryAll: selector => selector === 'button,summary,[role="button"],[role="switch"]' ? [button] : [] });
+  const original = button.dataset.pointerGroup;
+  assert.ok(original, 'the toggle is individually identified even inside the brand');
+  assert.notEqual(original, 'brand');
+  inBrand = false; r.go('A', 'flow'); r.flush();
+  assert.equal(button.dataset.pointerGroup, original);
+  inBrand = true; r.go('A', 'flow'); r.flush();
+  assert.equal(button.dataset.pointerGroup, original);
 });

@@ -309,6 +309,7 @@ class MilkdownTaskEditor {
   static async create({
     root,
     markdown = "",
+    sourceMarkdown = markdown,
     placeholder = "记录处理过程",
     onChange,
     enableTableResizing = false,
@@ -351,7 +352,9 @@ class MilkdownTaskEditor {
       })
       .use(completeInlineCodeInputRule);
 
-    let lastMarkdown = markdown;
+    let lastMarkdown = sourceMarkdown;
+    let originalDoc = null;
+    let ready = false;
     let markdownTimer = 0;
     let tableColumnResizer = null;
     // Serialization cache. ProseMirror hands out a new immutable document
@@ -385,6 +388,14 @@ class MilkdownTaskEditor {
         milkdownMetrics.cacheHits += 1;
         return serializedMarkdown;
       }
+      // Opening an editor must preserve the source bytes. Parsing/serializing
+      // Markdown (and hydrating images) is not a user edit. ProseMirror's
+      // structural comparison also recognizes undo back to the loaded note.
+      if (originalDoc && doc && doc.eq(originalDoc)) {
+        serializedDoc = doc;
+        serializedMarkdown = sourceMarkdown;
+        return sourceMarkdown;
+      }
       const nextMarkdown = crepe.getMarkdown();
       milkdownMetrics.serializations += 1;
       serializedDoc = doc;
@@ -395,6 +406,7 @@ class MilkdownTaskEditor {
     const emitMarkdown = () => {
       cancelScheduledIdle(markdownTimer, emitMarkdown);
       markdownTimer = 0;
+      if (!ready) return sourceMarkdown;
       const nextMarkdown = currentMarkdown();
       if (nextMarkdown === lastMarkdown) return nextMarkdown;
       lastMarkdown = nextMarkdown;
@@ -402,6 +414,7 @@ class MilkdownTaskEditor {
       return nextMarkdown;
     };
     const scheduleMarkdown = () => {
+      if (!ready) return;
       cancelScheduledIdle(markdownTimer, emitMarkdown);
       markdownTimer = scheduleIdle(emitMarkdown);
     };
@@ -416,6 +429,10 @@ class MilkdownTaskEditor {
     });
 
     await crepe.create();
+    originalDoc = currentDoc();
+    serializedDoc = originalDoc;
+    serializedMarkdown = sourceMarkdown;
+    ready = true;
     if (enableTableResizing) {
       tableColumnResizer = new MilkdownTableColumnResizer(root, tableColumnWidths, onTableColumnWidthsChange);
     }

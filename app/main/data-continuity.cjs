@@ -4,6 +4,7 @@ const os = require("node:os");
 const path = require("node:path");
 
 const { LEGACY_USER_DATA_DIRECTORY } = require("./app-identity.cjs");
+const { isNewerThanSupported } = require("./storage.cjs");
 
 const TASK_DATA_FILE = "task-data.json";
 const BACKUP_ROOT_DIRECTORY = "Personal Task Track Upgrade Backups";
@@ -191,7 +192,13 @@ async function taskDataSummary(userDataPath, fileSystem = fs) {
   try {
     const raw = await fileSystem.readFile(path.join(userDataPath, TASK_DATA_FILE), "utf8");
     const parsed = JSON.parse(raw);
-    const tasks = Array.isArray(parsed?.tasks) ? parsed.tasks : [];
+    if (!parsed || Array.isArray(parsed) || !Array.isArray(parsed.tasks)) {
+      throw Object.assign(new Error("Invalid task database structure."), { code: "INVALID_IMPORTED_TASK_DATA" });
+    }
+    if (isNewerThanSupported(parsed)) {
+      throw Object.assign(new Error("Task data requires a newer Loop version."), { code: "UNSUPPORTED_DATA_VERSION" });
+    }
+    const tasks = parsed.tasks;
     const nodes = tasks.reduce((total, task) => total + countNodes(task?.nodes), 0);
     return { valid: true, tasks: tasks.length, nodes, bytes: Buffer.byteLength(raw), score: tasks.length * 1_000_000 + nodes * 10_000 + Buffer.byteLength(raw) };
   } catch (error) {
@@ -217,6 +224,12 @@ async function restoreManagedBackup(backup, destinationPath, fileSystem = fs) {
   const expectedTaskData = backup.manifest.files.find((file) => file.relativePath === TASK_DATA_FILE);
   if (!expectedTaskData || JSON.stringify(restoredTaskData) !== JSON.stringify({ bytes: expectedTaskData.bytes, sha256: expectedTaskData.sha256 })) {
     throw Object.assign(new Error("Migrated task data verification failed."), { code: "TASK_DATA_MIGRATION_VERIFY_FAILED" });
+  }
+  for (const file of backup.manifest.files) {
+    const actual = await fileDigest(path.join(destinationPath, ...file.relativePath.split("/")), fileSystem);
+    if (actual.bytes !== file.bytes || actual.sha256 !== file.sha256) {
+      throw Object.assign(new Error("Restored backup file verification failed."), { code: "RESTORED_BACKUP_VERIFY_FAILED" });
+    }
   }
 }
 
@@ -372,7 +385,10 @@ async function importBackup({
     ? await stageDirectoryBackup(selectedPath, fileSystem, now)
     : await stagePortableBackup(selectedPath, fileSystem);
   const incomingSummary = await taskDataSummary(incoming.dataPath, fileSystem);
-  if (!incomingSummary.valid) throw Object.assign(new Error("Imported task database is invalid."), { code: "INVALID_IMPORTED_TASK_DATA" });
+  if (!incomingSummary.valid) {
+    if (incoming.temporary) await fileSystem.rm(incoming.cleanupPath || incoming.backupPath, { recursive: true, force: true }).catch(() => {});
+    throw Object.assign(new Error("备份中的任务数据无效，或需要更高版本的 Loop；当前工作空间未修改。"), { code: incomingSummary.errorCode || "INVALID_IMPORTED_TASK_DATA" });
+  }
 
   const current = await createVerifiedBackup({
     sourcePath: userDataPath,

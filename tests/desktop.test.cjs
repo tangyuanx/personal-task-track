@@ -149,6 +149,88 @@ async function waitForCondition(predicate, timeoutMs = 500) {
   assert.fail("Timed out waiting for asynchronous test condition.");
 }
 
+test("task double-click focuses the mounted name editor and preserves its complete control", async () => {
+  const harness = await rendererHarness();
+  harness.evaluate(`
+    globalThis.performance = { now: () => 100 };
+    document.body.hasAttribute = () => true;
+    document.addEventListener = window.addEventListener;
+    state.tasks = [{ id: "rename-test", title: "原任务", status: "todo", nodes: [] }];
+    state.activeTaskId = "rename-test";
+    globalThis.focusCount = 0;
+    globalThis.selectCount = 0;
+    globalThis.renameSaveCount = 0;
+    save = () => { renameSaveCount++; };
+    flushSave = async () => true;
+    globalThis.nameInput = null;
+    document.getElementById = id => id === "manage24-row-title" ? nameInput : null;
+    render = () => {
+      globalThis.rowMarkup = renderShellTaskRow(state.tasks[0], 3);
+      nameInput = rowMarkup.includes('id="manage24-row-title"') ? {
+        id: "manage24-row-title", value: "原任务", removeAttribute() {},
+        focus() { document.activeElement = this; focusCount++; },
+        select() { selectCount++; },
+        closest() { return null; }
+      } : null;
+    };
+    globalThis.renameButton = {
+      dataset: { taskId: "rename-test" },
+      closest: selector => selector === ".task-select[data-task-id]" ? renameButton
+        : selector === ".task-item" ? {} : null
+    };
+  `);
+  harness.evaluate(await fs.readFile(path.join(__dirname, "../app/renderer/src/management24.js"), "utf8"));
+  harness.dispatch("click", {
+    target: harness.evaluate("renameButton"), detail: 2,
+    preventDefault() {}, stopImmediatePropagation() {},
+  });
+  assert.equal(harness.evaluate("document.activeElement === nameInput"), true);
+  assert.equal(harness.evaluate("focusCount"), 1);
+  assert.equal(harness.evaluate("selectCount"), 1, "one action must not reselect an already focused editor");
+  assert.match(harness.evaluate("rowMarkup"), /task-sequence-action/);
+  assert.match(harness.evaluate("rowMarkup"), /data-action="toggle-task-done"/);
+  assert.match(harness.evaluate("rowMarkup"), />03<\/span>/);
+  const input = harness.evaluate('nameInput.value = "已修改任务"; nameInput');
+  harness.dispatch("input", { target: input });
+  assert.equal(harness.evaluate("state.tasks[0].title"), "原任务");
+  harness.dispatch("focusout", { target: input });
+  await waitForCondition(() => harness.evaluate("renameSaveCount === 1"));
+  assert.equal(harness.evaluate("state.tasks[0].title"), "已修改任务", "blur must persist without an extra save button");
+});
+
+test("overlay backdrop dismisses without click-through and preserves the creation draft", async () => {
+  const harness = await rendererHarness();
+  harness.evaluate(`
+    document.addEventListener = window.addEventListener;
+    globalThis.savedDraft = { title: "未提交标题", deadline: "2026-10-08" };
+    state.createDraft = savedDraft;
+    globalThis.captureCount = 0;
+    globalThis.renderCount = 0;
+    globalThis.dialog = { contains: target => target.inside === true };
+    globalThis.overlay = {
+      firstElementChild: {},
+      querySelector: selector => selector === ".dialog" ? dialog : null,
+      set innerHTML(value) { if (!value) this.firstElementChild = null; }
+    };
+    document.querySelector = selector => selector === "#overlay" ? overlay
+      : selector === "#create-form" ? {} : null;
+    shellCaptureCreateDraft = () => { captureCount++; };
+    render = () => { renderCount++; };
+    shellBindOverlayDismissal();
+  `);
+  const inside = { inside: true, closest: () => null };
+  harness.dispatch("pointerdown", { target: inside, button: 0 });
+  assert.equal(harness.evaluate("shellOverlayIsOpen()"), true, "inside interaction must keep the dialog");
+  const backdrop = { closest: selector => selector === "#overlay" ? {} : null };
+  harness.dispatch("pointerdown", { target: backdrop, button: 0 });
+  assert.equal(harness.evaluate("shellOverlayIsOpen()"), false);
+  assert.equal(harness.evaluate("captureCount"), 1);
+  assert.equal(harness.evaluate("state.createDraft === savedDraft"), true);
+  let consumed = false;
+  harness.dispatch("click", { target: backdrop, detail: 1, preventDefault() {}, stopImmediatePropagation() { consumed = true; } });
+  assert.equal(consumed, true, "closing the dialog must not activate the newly exposed control");
+});
+
 function rendererHarness(personalTaskTrack = undefined) {
   const storage = new Map();
   const alerts = [];
@@ -514,7 +596,7 @@ test("the main process locks task-data writes while a data import is running", a
   const mainSource = await fs.readFile(path.join(__dirname, "..", "app", "main", "main.cjs"), "utf8");
   assert.match(mainSource, /task-data:write"[\s\S]*dataMaintenance\.assertWritable\(\)[\s\S]*writeTaskData\(app\.getPath\("userData"\), data\)/);
   assert.match(mainSource, /dataMaintenance\.begin\("manual-import"\)/);
-  assert.match(mainSource, /\} catch \(error\) \{\r?\n\s+dataMaintenance\.end\(\);\r?\n\s+throw error;/);
+  assert.match(mainSource, /if \(error\?\.code !== "IMPORT_ROLLBACK_FAILED"\) dataMaintenance\.end\(\)/);
 });
 
 test("the renderer stops writing task data while a data import is in progress", async () => {
@@ -828,6 +910,74 @@ test("renderer surfaces task-data persistence failures", async () => {
   assert.equal(harness.alerts.length, 1);
   assert.match(harness.alerts[0], /本地任务数据保存失败/);
   assert.equal(harness.evaluate("pendingPayload !== null"), true);
+  assert.equal(harness.evaluate("localSaveReceipt().state"), "failed");
+});
+
+test("workspace receipt follows acknowledged writes, newer queued edits and failed retries", async () => {
+  const writes = [];
+  const harness = await rendererHarness({ storage: { write: (payload) => new Promise((resolve, reject) => writes.push({ payload, resolve, reject })) } });
+  harness.evaluate(`
+    globalThis.receipt = { dataset: {}, innerHTML: "" };
+    document.querySelector = (selector) => selector === "[data-local-save-status]" ? receipt : null;
+    state.tasks = normalizeTasks([{ id: "receipt", title: "原任务", notes: "正文", nodes: [] }]);
+    state.taskGroups = normalizeTaskGroups([], state.tasks);
+    state.activeGroupId = state.taskGroups[0].id;
+    state.activeTaskId = "receipt";
+  `);
+  assert.equal(harness.evaluate("localSaveReceipt().state"), "ready");
+  assert.doesNotMatch(harness.evaluate("renderShellWorkspace(activeTask())"), /预览中的修改已保留|文件状态仅为预览/);
+  harness.evaluate("save(); window.clearTimeout(saveTimer)");
+  assert.equal(harness.evaluate("receipt.dataset.state"), "pending");
+  const flushing = harness.evaluate("flushSave()");
+  assert.equal(harness.evaluate("receipt.dataset.state"), "saving");
+  harness.evaluate('state.tasks[0].title = "较新的修改"; save(); window.clearTimeout(saveTimer)');
+  writes[0].resolve();
+  await waitForCondition(() => writes.length === 2);
+  assert.equal(harness.evaluate("receipt.dataset.state"), "saving", "first acknowledgement must not mark newer work saved");
+  writes[1].reject(new Error("disk full"));
+  assert.equal(await flushing, false);
+  assert.equal(harness.evaluate("receipt.dataset.state"), "failed");
+  assert.match(harness.evaluate("receipt.innerHTML"), /本地保存失败/);
+  assert.equal(harness.evaluate("pendingPayload.tasks[0].title"), "较新的修改");
+  const retrying = harness.evaluate("flushSave()");
+  assert.equal(harness.evaluate("receipt.dataset.state"), "saving");
+  writes[2].resolve();
+  assert.equal(await retrying, true);
+  assert.equal(harness.evaluate("receipt.dataset.state"), "saved");
+  assert.match(harness.evaluate("receipt.innerHTML"), /已保存到本机/);
+  harness.evaluate('dataProtectionMessage = "newer data"; save()');
+  assert.equal(harness.evaluate("receipt.dataset.state"), "protected");
+});
+
+test("opening, navigating and undoing an editor preserve the note source and discard abandoned drafts", async () => {
+  const harness = await rendererHarness();
+  await harness.evaluate(`(async () => {
+    state.tasks = normalizeTasks([{ id: "source-note", notes: "原文\\n## 标题\\n![图](assets/image.png)", nodes: [] }]);
+    state.activeTaskId = "source-note";
+    globalThis.source = state.tasks[0].notes;
+    globalThis.editorText = source;
+    globalThis.host = { dataset: { taskId: "source-note" }, querySelector: () => null, closest: () => null };
+    globalThis.mountOptions = null;
+    document.querySelectorAll = () => [host];
+    hydrateKnowledgeEditorMarkdown = () => "原文\\n## 标题\\n![图](data:image/png;base64,AAAA)";
+    window.MilkdownTaskEditor = { create: async (options) => { mountOptions = options; return { getMarkdown: () => editorText }; } };
+    mountMilkdownEditors();
+    await Promise.resolve();
+    captureMountedMilkdownDrafts();
+  })()`);
+  assert.equal(harness.evaluate("mountOptions.sourceMarkdown === source"), true);
+  assert.notEqual(harness.evaluate("mountOptions.markdown"), harness.evaluate("source"), "hydrated images must retain a separate source baseline");
+  assert.equal(harness.evaluate("nodeNoteDrafts.size"), 0);
+  assert.equal(harness.evaluate("knowledgeRecoveryTimers.size"), 0);
+  assert.equal(harness.evaluate("pendingPayload"), null);
+  harness.evaluate('editorText = "编辑后的正文"; captureMountedMilkdownDrafts()');
+  assert.equal(harness.evaluate('nodeNoteDrafts.get(noteDraftKey("source-note", "")).markdown'), "编辑后的正文");
+  harness.evaluate("editorText = source; captureMountedMilkdownDrafts()");
+  assert.equal(harness.evaluate('nodeNoteDrafts.get(noteDraftKey("source-note", "")).markdown === source'), true);
+  assert.equal(harness.evaluate("flushNodeNoteDrafts()"), false, "undo before debounce must not persist the abandoned edit");
+  assert.equal(harness.evaluate("state.tasks[0].notes === source"), true);
+  assert.equal(harness.evaluate("pendingPayload"), null);
+  harness.evaluate(`knowledgeRecoveryTimers.forEach((pending) => { window.clearTimeout(pending.debounceTimer); window.clearTimeout(pending.maxTimer); }); knowledgeRecoveryTimers.clear()`);
 });
 
 test("Markdown save keeps Recovery when task metadata persistence fails", async () => {
@@ -2180,6 +2330,85 @@ test("knowledge file IPC exposes read, relocate, and watcher lifecycle", async (
   assert.match(watcher, /DEFAULT_DEBOUNCE_MS = 300/);
   assert.match(watcher, /external-changed/);
   assert.match(watcher, /file-missing/);
+});
+
+test("note export uses the latest body without rebinding and recovers from cancellation or failure", async () => {
+  const calls = [];
+  let response = { canceled: true };
+  const harness = await rendererHarness({ export: { taskDocument: async payload => {
+    calls.push(payload);
+    if (response instanceof Error) throw response;
+    return response;
+  } } });
+  harness.evaluate(`
+    state.tasks = normalizeTasks([{ id: "export-note", title: "笔记标题", notes: "旧正文", nodes: [] }]);
+    state.tasks[0].knowledgeNote.filePath = "/original/linked.md";
+    state.tasks[0].knowledgeNote.lastSavedHash = "original-hash";
+    nodeNoteDrafts.set(noteDraftKey("export-note", null), { taskId: "export-note", nodeId: null, markdown: "最新正文" });
+    globalThis.exportButton = { disabled: false, isConnected: true, addEventListener: (_type, listener) => { globalThis.exportClick = listener; } };
+    globalThis.exportError = { hidden: true, textContent: "" };
+    globalThis.closedExports = 0;
+    document.querySelector = selector => selector === "#knowledge-export-download" ? exportButton
+      : selector === "#knowledge-export-error" ? exportError
+      : selector === "#knowledge-export-format" ? { value: "html" } : null;
+    shellKnowledgeDialog = () => {};
+    shellToast = () => {};
+    shellCloseOverlay = () => { closedExports++; };
+    shellKnowledgeExportNote(state.tasks[0]);
+  `);
+  await harness.evaluate("exportClick()");
+  assert.equal(calls[0].markdown, "最新正文");
+  assert.equal(calls[0].documentKind, "note");
+  assert.equal(calls[0].format, "html");
+  assert.equal(harness.evaluate("closedExports"), 0, "cancel returns to the export preview");
+  assert.equal(harness.evaluate("exportButton.disabled"), false);
+  response = new Error("写入失败");
+  await harness.evaluate("exportClick()");
+  assert.equal(harness.evaluate("exportError.textContent"), "写入失败");
+  assert.equal(harness.evaluate("exportButton.disabled"), false);
+  response = { canceled: false, filePath: "/copy/note.html" };
+  await harness.evaluate("exportClick()");
+  assert.equal(harness.evaluate("closedExports"), 1);
+  assert.equal(harness.evaluate("state.tasks[0].knowledgeNote.filePath"), "/original/linked.md");
+  assert.equal(harness.evaluate("state.tasks[0].knowledgeNote.lastSavedHash"), "original-hash");
+});
+
+test("document export writes the selected format and preserves the legacy task export contract", async () => {
+  const source = await fs.readFile(path.join(__dirname, "../app/main/main.cjs"), "utf8");
+  const body = source.slice(source.indexOf("async function exportTaskDocument(payload)"), source.indexOf("async function exportNodeDetailPdf(payload)"));
+  let chosen = { canceled: true }, options;
+  const writes = [], windows = [];
+  const context = vm.createContext({
+    dialog: { showSaveDialog: async value => { options = value; return chosen; } },
+    fs: { writeFile: async (...args) => { writes.push(args); } },
+    sanitizeFileName: value => value,
+    taskDocumentPdfHtml: ({ bodyHtml }) => `<!doctype html>${bodyHtml}`,
+    BrowserWindow: class {
+      constructor() { windows.push(this); this.webContents = { printToPDF: async () => Buffer.from("PDF") }; }
+      async loadURL(value) { this.url = value; }
+      destroy() { this.destroyed = true; }
+    },
+  });
+  vm.runInContext(body, context);
+  const run = payload => context.exportTaskDocument(payload);
+  assert.equal((await run({ documentKind: "note", format: "html" })).canceled, true);
+  assert.equal(writes.length, 0);
+  for (const format of ["md", "html", "pdf"]) {
+    chosen = { canceled: false, filePath: `/copy/note-${format}` };
+    const result = await run({ taskTitle: "笔记", documentKind: "note", format, markdown: "正文", html: "<p>正文</p>" });
+    assert.equal(result.filePath, `/copy/note-${format}.${format}`);
+    assert.equal(options.title, "导出笔记");
+    assert.equal(options.filters[0].extensions[0], format);
+  }
+  assert.equal(writes[0][1], "正文");
+  assert.match(writes[1][1], /^<!doctype html><p>正文<\/p>/);
+  assert.equal(writes[2][1].toString(), "PDF");
+  assert.equal(windows[0].destroyed, true);
+  chosen = { canceled: false, filePath: "/copy/task.pdf" };
+  await run({ taskTitle: "任务", markdown: "完整任务", html: "<h1>任务</h1>" });
+  assert.equal(options.title, "导出任务");
+  assert.deepEqual(Array.from(options.filters, item => item.extensions[0]), ["md", "pdf"]);
+  assert.equal(writes[3][0], "/copy/task.pdf");
 });
 
 test("renderer knowledge save binds metadata only after the file service succeeds", async () => {
@@ -3728,13 +3957,13 @@ test("production Today widget uses its dedicated frontend and a sandboxed Electr
   assert.match(settingsSource, /function shellSettingsInfo\(label, description, value\)/);
   assert.match(settingsSource, /data-shell-update-detail/);
   assert.match(settingsSource, /function shellSettingsSyncUpdateCard\(\)/);
-  assert.match(settingsSource, /lastUpdateAction === "check" \? "重新检查" : "重试下载"/);
+  assert.match(settingsSource, /update\.retryAction === "check" \? "重新检查"/);
   assert.match(rendererApp, /function bindUpdateActionDelegation\(\)/);
   assert.match(rendererApp, /let lastUpdateAction = "check"/);
   assert.match(rendererApp, /const effective = action === "download" && !\["available", "downloaded"\]\.includes\(status\)/);
   assert.match(rendererApp, /if \(typeof globalThis\.shellSettingsSyncUpdateCard === "function"\) \{\s*globalThis\.shellSettingsSyncUpdateCard\(\);/);
-  // - search copy trimmed, brief fields click-to-edit, group manage button in-row
-  assert.match(shellSource, /placeholder="搜索" aria-label="搜索全部任务、节点、速记"/);
+  // - search scope matches the approved Demo; brief fields stay click-to-edit
+  assert.match(shellSource, /placeholder="搜索全部任务、节点、速记" aria-label="搜索全部任务、节点、速记"/);
   assert.match(workspaceSource, /<button class="brief-value \$\{value \? "" : "muted"\}" type="button" data-action="shell-edit-brief"/);
   // Group management was removed (the row had no visible control of its own);
   // group rows now render as a single button.
@@ -4430,8 +4659,9 @@ test("the frozen Demo baseline is the renderer stylesheet authority", async () =
 
   // Load order mirrors the Demo entry, and bridge.css is the only override layer.
   const linked = [...index.matchAll(/<link[^>]+href="\.\/src\/([^"?]+)/g)].map((match) => match[1]);
-  const order = ["shell.css", "vendor/milkdown-editor.css", "knowledge.css", "fonts.css", "settings.css", "typography.css", "refinement.css", "selection.css", "flow.css", "shell-refinement.css", "help.css", "work.css", "task-entry.css", "journey.css", "time.css", "desktop.css", "scale.css", "brief21.css", "controls22.css", "notebook23.css", "management24.css", "window25.css", "bridge.css", "recovery26.css"];
+  const order = ["shell.css", "vendor/milkdown-editor.css", "knowledge.css", "fonts.css", "settings.css", "typography.css", "refinement.css", "selection.css", "flow.css", "shell-refinement.css", "help.css", "work.css", "task-entry.css", "journey.css", "time.css", "desktop.css", "scale.css", "brief21.css", "controls22.css", "notebook23.css", "management24.css", "window25.css", "bridge.css", "recovery26.css", "manual27.css"];
   assert.deepEqual(linked, order, "stylesheets must load in the frozen Demo order, with bridge.css last");
+  assert.equal(await fs.readFile(path.join(rendererDir, "src", "manual27.css"), "utf8"), await fs.readFile(path.join(__dirname, "..", "prototypes", "baseline", "loop-plane-phase27-frozen", "loop-manual-phase27.css"), "utf8"), "the manual keeps the approved Demo CSS verbatim");
   const scripts = [...index.matchAll(/<script[^>]+src="\.\/src\/([^"?]+)/g)].map((match) => match[1]);
   const phase24Script = scripts.indexOf("management24.js");
   assert.ok(phase24Script > scripts.indexOf("notebook23.js"), "phase24 must load after the phase23 layer");
@@ -4448,6 +4678,8 @@ test("the frozen Demo baseline is the renderer stylesheet authority", async () =
   assert.ok(recovery26Script > scripts.indexOf("management24.js"), "phase26 must load after the phase24 task-menu layer");
   assert.ok(recovery26Script > scripts.indexOf("window25.js"), "phase26 must load after the phase25 render wrapper");
   assert.ok(recovery26Script < scripts.indexOf("work.js"), "phase26 must load before the work-navigation layer");
+  assert.ok(scripts.indexOf("manual27.js") > scripts.indexOf("work.js"), "the manual captures drafts through the product's work layer");
+  assert.ok(scripts.indexOf("manual27.js") < scripts.indexOf("continuity28.js"), "manual navigation retains the continuity layer");
   assert.ok(index.includes("data-recovery26-enabled"), "the phase26 sheet is gated on the body flag");
   assert.ok(!index.includes("approved-4174.css"), "the superseded approved-4174 shell must no longer be loaded");
   assert.ok(!index.includes("styles.css"), "the superseded styles.css must no longer be loaded");
@@ -4500,7 +4732,7 @@ test("the integrated title bar keeps the platform's own window controls", async 
   const window25Code = window25.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
   assert.doesNotMatch(window25Code, /138|207/, "the caption area must come from the overlay rect, not a constant");
   assert.match(window25, /const brand = document\.querySelector\("\.brand"\);/, "the identity has to be moved out of the navigation column");
-  assert.match(window25, /controls\.onState\?\.\(applyWindowState\)/);
+  assert.match(window25, /controls\.onState\?\.\(/);
 
   // The override layer carries the deviations the frozen sheet cannot express.
   assert.match(bridge, /window25-native-caption/);
@@ -5502,6 +5734,85 @@ test("calendar owns one global navigation entry, fills the workspace, and keeps 
   assert.match(app, /data-action="apply-deadline-time"/);
 });
 
+test("calendar date navigation clears unrelated filters and returns to the selected day", async () => {
+  const harness = await rendererHarness();
+  await harness.evaluate(`(async () => {
+    render = () => {};
+    syncContextMenuRoot = () => {};
+    state.tasks = normalizeTasks([
+      { id: "a", title: "分组一任务", groupId: "g1", priority: "low", deadlineAt: new Date(2026,9,7,9).toISOString(), nodes: [] },
+      { id: "b", title: "分组二已完成", groupId: "g2", status: "done", conclusion: "完成", deadlineAt: new Date(2026,9,7,18).toISOString(), nodes: [] },
+      { id: "c", title: "次日任务", groupId: "g2", deadlineAt: new Date(2026,9,8,9).toISOString(), nodes: [] }
+    ]);
+    state.taskGroups = normalizeTaskGroups([{id:"g1",title:"一"},{id:"g2",title:"二"}], state.tasks);
+    Object.assign(state, { activeGroupId: "g1", calendarOpen: true, calendarSelectedDate: "2026-10-07", calendarMonth: "2026-10-01", taskFilter: "blocked", captureSourceFilter: "quick", priorityFilter: "high", query: "不会命中", taskPane: "notes" });
+    await action({action:"apply-calendar-date"});
+  })()`);
+  assert.deepEqual(harness.json("filteredTasks().map(task => task.id)"), ["a", "b"]);
+  assert.equal(harness.evaluate("state.activeGroupId === ALL_TASKS_GROUP_ID"), true);
+  assert.equal(harness.evaluate("state.taskPane"), "flow");
+  assert.match(harness.evaluate("renderShellTopbar()"), /返回日历/);
+  await harness.evaluate('action({action:"return-global-page"})');
+  assert.deepEqual(harness.json("[state.calendarOpen,state.calendarSelectedDate,state.calendarMonth,state.query,state.priorityFilter,state.globalListReturn]"), [true,"2026-10-07","2026-10-01","不会命中","high",null]);
+});
+
+test("review ranges reject invalid bounds and include the entire end date; task detours restore context and focus", async () => {
+  const harness = await rendererHarness();
+  harness.evaluate(`
+    render = () => {}; syncContextMenuRoot = () => {};
+    state.tasks = normalizeTasks([
+      {id:"end",title:"结束日任务",groupId:"g",createdAt:new Date(2026,9,7,23,59,59).toISOString(),nodes:[]},
+      {id:"next",title:"次日任务",groupId:"g",createdAt:new Date(2026,9,8,0).toISOString(),nodes:[]}
+    ]);
+    state.taskGroups = normalizeTaskGroups([{id:"g",title:"分组"}],state.tasks);
+    Object.assign(state,{reviewOpen:true,calendarOpen:false,reviewPreset:"custom",reviewDateField:"created",reviewStartDate:"2026-10-07",reviewEndDate:"2026-10-07",captureSourceFilter:"quick",taskPane:"notes"});
+  `);
+  assert.deepEqual(harness.json("reviewTasks().map(item => item.task.id)"), ["end"]);
+  assert.match(harness.evaluate("renderShellReview()"), /10 月 7 日 — 10 月 7 日/);
+  assert.doesNotMatch(harness.evaluate("renderShellReview()"), /data-action="time18-clock"/);
+  assert.match(harness.evaluate("shellSettingsAdvanced()"), /data-action="time18-clock"/);
+  for (const bounds of [["2026-10-08","2026-10-07"],["","2026-10-07"],["2026-02-30","2026-10-07"]]) {
+    harness.evaluate(`state.reviewStartDate = ${JSON.stringify(bounds[0])}; state.reviewEndDate = ${JSON.stringify(bounds[1])}`);
+    assert.equal(harness.evaluate("shellReviewRangeError()"), true);
+    assert.equal(harness.evaluate("reviewTasks().length"), 0);
+    assert.doesNotMatch(harness.evaluate("renderShellReview()"), /<table/);
+    assert.match(harness.evaluate("renderShellReview()"), /role="alert"/);
+  }
+  harness.evaluate(`
+    state.reviewStartDate = "2026-10-07"; state.reviewEndDate = "2026-10-07";
+    globalThis.returnFocus = false;
+    globalThis.scroll = {className:"review-content",scrollTop:93,scrollTo({top}) {this.scrollTop=top;}};
+    document.querySelectorAll = (selector) => selector.includes("review-content") ? [scroll] : [];
+    document.querySelector = (selector) => selector === ".review-content" ? scroll : selector.includes("open-review-task") ? {focus() {returnFocus=true;}} : null;
+    window.requestAnimationFrame = (callback) => callback();
+    openTaskFromGlobalList("end");
+    scroll.scrollTop = 0;
+  `);
+  assert.equal(harness.evaluate("filteredTasks().some(task => task.id === 'end')"), true);
+  assert.equal(harness.evaluate("state.taskPane"), "flow");
+  assert.match(harness.evaluate("renderShellTopbar()"), /返回回顾/);
+  await harness.evaluate('action({action:"return-global-page"})');
+  assert.deepEqual(harness.json("[state.reviewOpen,state.reviewPreset,state.reviewDateField,state.reviewStartDate,state.reviewEndDate,scroll.scrollTop,returnFocus]"), [true,"custom","created","2026-10-07","2026-10-07",93,true]);
+  harness.evaluate('openTaskFromGlobalList("end"); applySetting("task-filter","today")');
+  assert.equal(harness.evaluate("state.globalListReturn"), null, "explicit primary navigation must discard the old detour");
+});
+
+test("calendar uses local month boundaries, variable week counts and a quiet empty agenda", async () => {
+  const harness = await rendererHarness();
+  for (const [month, count] of [["2027-02-01",28],["2026-10-01",35],["2026-08-01",42]]) {
+    harness.evaluate(`state.calendarMonth=${JSON.stringify(month)};state.calendarSelectedDate=${JSON.stringify(month)}`);
+    assert.equal(harness.evaluate("shellCalendarMonth().getDate()"), 1);
+    assert.equal(harness.evaluate("shellCalendarMonth().getHours()"), 0, "date-only months must parse at local midnight, not UTC");
+    const html = harness.evaluate("renderShellCalendar()");
+    assert.equal((html.match(/data-action="select-calendar-date"/g) || []).length, count);
+    const agenda = html.match(/<aside class="agenda"[\s\S]*?<\/aside>/)[0];
+    assert.match(agenda, /暂无任务/);
+    assert.doesNotMatch(agenda, /在任务中查看|个任务截止|尚未记录进展/);
+  }
+  harness.evaluate('loopSetPreviewClock("2027-02-03T09:00"); state.calendarMonth=""; state.calendarSelectedDate="";ensureCalendarState()');
+  assert.deepEqual(harness.json("[state.calendarMonth,state.calendarSelectedDate]"), ["2027-02-01","2027-02-03"]);
+});
+
 test("deadline picker follows the documented date-first and time-save flow", async () => {
   const harness = await rendererHarness();
   const result = harness.json(`(() => {
@@ -6074,6 +6385,60 @@ test("Milkdown handles matching backtick code spans and defers markdown serializ
   assert.doesNotMatch(entry, /listener\.markdownUpdated/);
 });
 
+test("Milkdown normalization and hydrated images stay clean until a real document edit, including undo", async () => {
+  const { Schema } = await import("@milkdown/kit/prose/model");
+  const schema = new Schema({ nodes: { doc: { content: "paragraph+" }, paragraph: { content: "text*" }, text: {} } });
+  const doc = (text) => schema.node("doc", null, [schema.node("paragraph", null, text ? schema.text(text) : null)]);
+  const source = "正文\n## 标题\n![图](assets/image.png)\n";
+  const normalized = "正文\n\n## 标题\n\n![图](data:image/png;base64,AAAA)\n";
+  const emitted = [];
+  let crepe;
+  let serializations = 0;
+  class FakeCrepe {
+    static Feature = {};
+    constructor() {
+      crepe = this;
+      this.view = { state: { doc: doc("loaded") } };
+      this.listeners = [];
+      this.editor = { config: () => this.editor, use: () => this.editor, action: (action) => action({ get: () => this.view }) };
+    }
+    on(register) {
+      register({ updated: (listener) => this.listeners.push(listener), selectionUpdated() {}, blur: (listener) => { this.blur = listener; }, destroy() {} });
+    }
+    async create() {
+      this.listeners.forEach((listener) => listener());
+      this.blur(); // Some editor plugins emit during initialization.
+    }
+    getMarkdown() { serializations += 1; return this.view.state.doc.textContent === "loaded" ? normalized : "真正编辑后的正文\n"; }
+    async destroy() {}
+  }
+  const window = { setTimeout, clearTimeout };
+  const context = vm.createContext({
+    window, Crepe: FakeCrepe, instances: new WeakMap(), completeInlineCodeInputRule: {}, editorViewCtx: {}, imageFileToDataUrl() {},
+    milkdownMetrics: { serializations: 0, cacheHits: 0, mounts: 0 }, queueMicrotask() {},
+    scheduleIdle: (callback) => setTimeout(callback, 1000), cancelScheduledIdle: (timer) => clearTimeout(timer),
+  });
+  const entry = await fs.readFile(path.join(__dirname, "..", "app", "renderer", "src", "milkdown-editor.entry.js"), "utf8");
+  vm.runInContext(entry.slice(entry.indexOf("class MilkdownTaskEditor {")), context);
+  const instance = await window.MilkdownTaskEditor.create({ root: {}, markdown: normalized, sourceMarkdown: source, onChange: (markdown) => emitted.push(markdown) });
+  assert.equal(instance.getMarkdown(), source);
+  crepe.blur();
+  assert.deepEqual(emitted, []);
+  assert.equal(serializations, 0, "opening and navigation must not normalize or reserialize the saved source");
+  crepe.view.state.doc = doc("edited");
+  crepe.listeners.forEach((listener) => listener());
+  crepe.blur();
+  assert.deepEqual(emitted, ["真正编辑后的正文\n"]);
+  assert.equal(instance.getMarkdown(), emitted[0]);
+  assert.equal(serializations, 1);
+  crepe.view.state.doc = doc("loaded"); // Equal document, different identity after undo.
+  crepe.blur();
+  assert.deepEqual(emitted, ["真正编辑后的正文\n", source]);
+  assert.equal(instance.getMarkdown(), source);
+  assert.equal(serializations, 1);
+  await instance.destroy();
+});
+
 test("node mutation rejects invalid statuses and clears deleted descendant detail", async () => {
   const harness = await rendererHarness();
   const result = JSON.parse(JSON.stringify(await harness.evaluate(`(async () => {
@@ -6425,4 +6790,475 @@ test("archive ids are de-duplicated and the collection is bounded and newest-fir
   ]);
   assert.deepEqual(ordered.map((entry) => entry.id), ["b", "a"]);
   assert.deepEqual(normalizeRecentlyDeleted(null), []);
+});
+
+async function recoveryRendererHarness(api) {
+  const harness = await rendererHarness(api);
+  harness.evaluate(`
+    globalThis.structuredClone = value => JSON.parse(JSON.stringify(value));
+    document.addEventListener = window.addEventListener.bind(window);
+    document.body.dataset = {};
+    globalThis.CSS = { escape: value => value };
+    render = () => {};
+    state.tasks = []; state.taskGroups = []; state.recentlyDeleted = [];
+    captureMountedMilkdownDrafts = () => {};
+    flushNodeNoteDrafts = () => {};
+  `);
+  harness.evaluate(await fs.readFile(path.join(__dirname, '..', 'app/renderer/src/recovery26.js'), 'utf8'));
+  return harness;
+}
+
+test('failed deletion rolls back both the visible model and every later disk retry', async () => {
+  let failing = true;
+  const writes = [];
+  const harness = await recoveryRendererHarness({ storage: { async write(payload) {
+    writes.push(JSON.parse(JSON.stringify(payload)));
+    if (failing) throw new Error('synthetic disk failure');
+  } } });
+  harness.evaluate(`state.tasks = normalizeTasks([{id:'task_safe',title:'保留任务',notes:'正文',nodes:[]}]);`);
+  const result = await harness.evaluate(`recovery26Transaction(() => recovery26DeleteRecords(['task_safe']))`);
+  assert.equal(result.ok, false);
+  assert.deepEqual(harness.json('state.tasks.map(task => task.id)'), ['task_safe']);
+  assert.equal(harness.evaluate('state.recentlyDeleted.length'), 0);
+  assert.deepEqual(harness.json('pendingPayload.tasks.map(task => task.id)'), ['task_safe']);
+  assert.equal(harness.evaluate('pendingPayload.recentlyDeleted.length'), 0);
+  failing = false;
+  await harness.evaluate('flushSave()');
+  assert.equal(writes.at(-1).tasks[0].notes, '正文');
+  assert.equal(writes.at(-1).recentlyDeleted.length, 0, 'quit/retry must never commit the canceled deletion');
+});
+
+test('delete confirmation can retry after a failed save without reopening or losing content', async () => {
+  let failing = true;
+  const harness = await recoveryRendererHarness({ storage: { async write() { if (failing) throw new Error('synthetic disk failure'); } } });
+  harness.evaluate(`
+    state.tasks = normalizeTasks([{id:'task_retry',title:'可重试',nodes:[]}]);
+    recovery26Pending = {mode:'records',ids:['task_retry']};
+    recovery26AfterRemoval = () => {};
+  `);
+  await harness.evaluate('recovery26CommitDelete()');
+  assert.equal(harness.evaluate('recovery26Busy'), false);
+  assert.equal(harness.evaluate('recovery26Pending.ids[0]'), 'task_retry');
+  assert.equal(harness.evaluate('state.tasks.length'), 1);
+  failing = false;
+  await harness.evaluate('recovery26CommitDelete()');
+  assert.equal(harness.evaluate('recovery26Pending'), null);
+  assert.equal(harness.evaluate('state.tasks.length'), 0);
+  assert.equal(harness.evaluate('state.recentlyDeleted.length'), 1);
+  await harness.evaluate('flushSave()');
+});
+
+test('batch restore survives a failed sibling transaction without leaving a restored duplicate in the archive', async () => {
+  let calls = 0;
+  const harness = await recoveryRendererHarness({ storage: { async write() { if (++calls === 1) throw new Error('first restore fails'); } } });
+  harness.evaluate(`state.recentlyDeleted = normalizeRecentlyDeleted([
+    {id:'rd_a',kind:'task',title:'A',deletedAt:'2026-10-07T00:00:00Z',record:{id:'task_a',title:'A'}},
+    {id:'rd_b',kind:'task',title:'B',deletedAt:'2026-10-07T00:00:01Z',record:{id:'task_b',title:'B'}}
+  ]);`);
+  const results = await harness.evaluate(`recovery26RestoreMany(['rd_a','rd_b'])`);
+  assert.deepEqual(Array.from(results, result => result.ok), [false, true]);
+  assert.deepEqual(harness.json('state.tasks.map(task => task.id)'), ['task_b']);
+  assert.deepEqual(harness.json('state.recentlyDeleted.map(entry => entry.id)'), ['rd_a']);
+  const retry = await harness.evaluate(`recovery26RestoreMany(['rd_a'])`);
+  assert.equal(retry[0].ok, true);
+  assert.deepEqual(harness.json('state.tasks.map(task => task.id).sort()'), ['task_a', 'task_b']);
+  assert.equal(harness.evaluate('state.recentlyDeleted.length'), 0);
+  await harness.evaluate('flushSave()');
+});
+
+test('restore preserves group identity, missing-parent nodes and occupied note bodies', async () => {
+  const harness = await recoveryRendererHarness();
+  harness.evaluate(`
+    state.taskGroups = [{id:'group_live',title:'现有分组',order:1}];
+    state.tasks = normalizeTasks([{id:'task_owner',title:'所属任务',notes:'新正文',nodes:[]}]);
+    state.recentlyDeleted = normalizeRecentlyDeleted([
+      {id:'rd_group',kind:'group',groupId:'group_live',title:'旧分组',members:[],migrated:[],policy:'delete',deletedAt:'2026-10-07T00:00:00Z'},
+      {id:'rd_node',kind:'node',ownerTaskId:'task_owner',parentNodeId:'gone_parent',title:'恢复节点',record:{id:'node_old',title:'恢复节点',note:'处理记录',children:[]},deletedAt:'2026-10-07T00:00:00Z'},
+      {id:'rd_note',kind:'note',ownerTaskId:'task_owner',ownerTaskTitle:'所属任务',title:'旧笔记',body:'旧正文',sourcePath:'/original.md',deletedAt:'2026-10-07T00:00:00Z'},
+      {id:'rd_task',kind:'task',groupId:'gone_group',title:'已删除任务',record:{id:'task_old',title:'已删除任务'},deletedAt:'2026-10-07T00:00:00Z'}
+    ]);
+  `);
+  const results = await harness.evaluate(`recovery26RestoreMany(['rd_group','rd_node','rd_note','rd_task'])`);
+  assert.equal(results.find(result => result.title === '旧分组').ok, false);
+  assert.deepEqual(harness.json('state.taskGroups.map(group => [group.id,group.title])'), [['group_live', '现有分组']]);
+  assert.equal(harness.evaluate(`r26Task('task_owner').nodes[0].note`), '处理记录');
+  assert.equal(harness.evaluate(`r26Task('task_owner').notes`), '新正文');
+  const recovered = harness.json(`state.tasks.find(task => task.notes === '旧正文')`);
+  assert.ok(recovered);
+  assert.equal(recovered.knowledgeNote.filePath, null);
+  assert.equal(harness.evaluate(`r26Task('task_old').groupId`), '');
+  assert.deepEqual(harness.json('state.recentlyDeleted.map(entry => entry.id)'), ['rd_group']);
+});
+
+test('recovery dismissal respects the destination focus and restores it on Escape', async () => {
+  const harness = await recoveryRendererHarness();
+  harness.evaluate(`
+    globalThis.focusCalls = 0;
+    recovery26ReturnFocus = {isConnected:true,focus(){focusCalls++;}};
+    document.querySelector = selector => selector === '#overlay .recovery26-manager, #overlay .recovery26-confirm' ? {} : selector === '#overlay' ? {innerHTML:'dialog',querySelector(){return null;}} : null;
+    shellCloseOverlay({restoreFocus:false});
+  `);
+  assert.equal(harness.evaluate('focusCalls'), 0, 'outside click must allow focus to move to the clicked input');
+  harness.evaluate('shellCloseOverlay()');
+  assert.equal(harness.evaluate('focusCalls'), 1, 'Escape returns focus to the original trigger');
+});
+
+async function manualRendererHarness() {
+  const harness = await recoveryRendererHarness({ platform: 'darwin' });
+  harness.evaluate(`
+    globalThis.manualReader = null;
+    globalThis.manualTopics = {innerHTML:''};
+    globalThis.manualInput = {id:'manual27-search',value:'',focus(){}};
+    globalThis.manualClear = {hidden:true};
+    globalThis.manualJumpReturn = '';
+    document.querySelector = selector => selector === '.manual27-reader' ? manualReader : selector === '#manual27-search' ? manualInput : selector === '#manual27-topics' ? manualTopics : selector === '.manual27-search [data-manual27=clear]' ? manualClear : selector === '.breadcrumb' ? {insertAdjacentHTML(position,html){manualJumpReturn=html;}} : null;
+    state.tasks = normalizeTasks([{id:'manual_task',title:'正在处理的任务',notes:'保留正文',nodes:[]}]);
+    state.activeTaskId = 'manual_task';
+    render = () => {
+      const html = renderShellSettings();
+      const article = state.settingsOpen && html.match(/data-article="([^"]+)"/);
+      manualReader = article ? {dataset:{article:article[1]},scrollTop:0,addEventListener(){}} : null;
+    };
+  `);
+  harness.evaluate(await fs.readFile(path.join(__dirname, '..', 'app/renderer/src/manual27.js'), 'utf8'));
+  // The harness intentionally skips bootstrap; dispatch only this feature's
+  // target vocabulary, matching the real delegated capture handler.
+  harness.manualClick = (action, data = {}) => harness.dispatch('click', {
+    target: { closest(selector) { return selector === '[data-manual27]' ? { dataset: { manual27: action, ...data } } : null; } },
+    preventDefault() {}, stopImmediatePropagation() {},
+  });
+  return harness;
+}
+
+test('the real manual includes all Demo articles, local multiword search and clear without rebuilding the input', async () => {
+  const harness = await manualRendererHarness();
+  harness.evaluate(`LoopManual27.open()`);
+  let html = harness.evaluate('renderShellSettings()');
+  assert.equal((html.match(/class="manual27-topic"/g) || []).length, 15);
+  assert.match(html, /manual27-reader/);
+  assert.match(html, /manual27-toc/);
+  assert.doesNotMatch(html, /本 Demo|平台预览|v0\.1\.212/);
+  harness.dispatch('input', { target: { id: 'manual27-search', value: '笔记 保存' } });
+  assert.match(harness.evaluate('manualTopics.innerHTML'), /相关说明/);
+  assert.match(harness.evaluate('manualTopics.innerHTML'), /<mark>/);
+  harness.dispatch('input', { target: { id: 'manual27-search', value: '绝不存在的检索词' } });
+  assert.match(harness.evaluate('manualTopics.innerHTML'), /没有找到相关说明/);
+  harness.manualClick('clear');
+  assert.equal(harness.evaluate('manualInput.value'), '');
+  assert.equal((harness.evaluate('manualTopics.innerHTML').match(/class="manual27-topic"/g) || []).length, 15);
+  harness.manualClick('close');
+  assert.match(harness.evaluate('renderShellSettings()'), /manual27-entry/);
+  assert.match(harness.evaluate('renderShellSettings()'), /help14-intro/, 'existing help and feedback remain available');
+});
+
+test('manual function jumps use real routes and return to the same article, query and reading position', async () => {
+  const harness = await manualRendererHarness();
+  harness.evaluate(`LoopManual27.open('organize')`);
+  harness.dispatch('input', { target: { id: 'manual27-search', value: '今日' } });
+  harness.evaluate(`manualReader = {dataset:{article:'organize'},scrollTop:286,addEventListener(){}}`);
+  harness.manualClick('go', { target: 'calendar' });
+  assert.equal(harness.evaluate('state.calendarOpen'), true);
+  assert.equal(harness.evaluate('state.settingsOpen'), false);
+  assert.match(harness.evaluate('manualJumpReturn'), /返回手册/);
+  harness.manualClick('return');
+  assert.match(harness.evaluate('renderShellSettings()'), /今日、仓库、分组与速记/);
+  assert.match(harness.evaluate('renderShellSettings()'), /value="今日"/);
+  assert.equal(harness.evaluate('manualReader.scrollTop'), 286);
+  harness.manualClick('go', { target: 'notes' });
+  assert.equal(harness.evaluate('state.taskPane'), 'notes');
+  assert.equal(harness.evaluate('state.activeTaskId'), 'manual_task');
+  assert.equal(harness.evaluate(`r26Task('manual_task').notes`), '保留正文');
+});
+
+test('group deletion and restore retain every record while preserving later moves and the growth source decision', async () => {
+  const harness = await recoveryRendererHarness();
+  harness.evaluate(`
+    state.taskGroups = [{id:'group_old',title:'原分组',order:1},{id:'group_next',title:'新分组',order:2}];
+    state.tasks = normalizeTasks([
+      {id:'task_unchanged',title:'未再修改',groupId:'group_old',notes:'知识笔记',nodes:[{id:'node_keep',title:'步骤',note:'处理记录',children:[]}]},
+      {id:'task_changed',title:'之后修改',groupId:'group_old',notes:'原文',nodes:[]}
+    ]);
+    state.workNavigation = normalizeCurrentWorkNavigation();
+    state.workNavigation.config.growth.sourceGroupId = 'group_old';
+  `);
+  const blocked = await harness.evaluate(`recovery26Transaction(() => recovery26DeleteGroup('group_old'))`);
+  assert.equal(blocked.ok, false, 'deleting a growth source requires an explicit replacement decision');
+  assert.equal(harness.evaluate('state.taskGroups.length'), 2);
+  const removed = await harness.evaluate(`recovery26Transaction(() => recovery26DeleteGroup('group_old',{policy:'keep',targetGroupId:'group_next',replacement:'stop'}))`);
+  assert.equal(removed.ok, true);
+  assert.deepEqual(harness.json('state.tasks.map(task => task.groupId)'), ['group_next', 'group_next']);
+  harness.evaluate(`r26Task('task_changed').notes = '之后的新正文'`);
+  await harness.evaluate(`recovery26RestoreMany(state.recentlyDeleted.map(entry=>entry.id),{restoreMoved:true})`);
+  assert.equal(harness.evaluate(`r26Task('task_unchanged').groupId`), 'group_old');
+  assert.equal(harness.evaluate(`r26Task('task_changed').groupId`), 'group_next', 'Undo must not reverse a later edit');
+  assert.equal(harness.evaluate(`normalizeCurrentWorkNavigation().config.growth.sourceGroupId`), '', 'restore must not restart growth');
+  const deleted = await harness.evaluate(`recovery26Transaction(() => recovery26DeleteGroup('group_old',{policy:'delete'}))`);
+  assert.equal(deleted.ok, true);
+  assert.equal(harness.evaluate('state.tasks.length'), 1);
+  const restored = await harness.evaluate(`recovery26RestoreMany(state.recentlyDeleted.map(entry=>entry.id))`);
+  assert.equal(restored[0].ok, true);
+  assert.equal(harness.evaluate('state.tasks.length'), 2);
+  assert.equal(harness.evaluate(`r26Task('task_unchanged').nodes[0].note`), '处理记录');
+  assert.equal(harness.evaluate(`r26Task('task_unchanged').notes`), '知识笔记');
+  assert.equal(harness.evaluate(`r26Task('task_changed').notes`), '之后的新正文');
+});
+
+test('core viewport snapshots cannot undo new input or revive an older render', async () => {
+  const harness = await rendererHarness();
+  harness.evaluate(`
+    globalThis.viewportElement = {dataset:{taskRepositoryView:'same'},scrollTop:140,scrollLeft:60,scrollHeight:1000,clientHeight:200,scrollWidth:800,clientWidth:300};
+    document.querySelector = () => viewportElement;
+    globalThis.viewportSnapshot = captureScrollViewport('#viewport', 'taskRepositoryView', 'same');
+    viewportElement.scrollTop = 210; viewportElement.scrollLeft = 90;
+  `);
+  harness.dispatch('wheel', {});
+  harness.evaluate(`restoreScrollViewport(viewportSnapshot, '#viewport')`);
+  assert.deepEqual(harness.json('[viewportElement.scrollTop, viewportElement.scrollLeft]'), [210, 90]);
+  harness.evaluate(`viewportSnapshot = captureScrollViewport('#viewport', 'taskRepositoryView', 'same'); renderViewportEpoch++; viewportElement.scrollTop = 320; restoreScrollViewport(viewportSnapshot, '#viewport')`);
+  assert.equal(harness.evaluate('viewportElement.scrollTop'), 320, 'older render callbacks cannot write into a newer matching view');
+  for (const type of ['pointerdown', 'keydown', 'beforeinput', 'compositionstart', 'touchmove', 'resize', 'blur']) {
+    harness.evaluate(`viewportSnapshot = captureScrollViewport('#viewport', 'taskRepositoryView', 'same'); viewportElement.scrollTop += 10`);
+    const expected = harness.evaluate('viewportElement.scrollTop');
+    harness.dispatch(type, {isComposing: true});
+    harness.evaluate(`restoreScrollViewport(viewportSnapshot, '#viewport')`);
+    assert.equal(harness.evaluate('viewportElement.scrollTop'), expected, type);
+  }
+});
+
+test('floating menus stay reachable after desktop resize without dismissing their draft or focus', async () => {
+  const harness = await rendererHarness();
+  harness.evaluate(`
+    document.addEventListener = window.addEventListener.bind(window);
+    globalThis.surface = {style:{left:'1040px',top:'650px'},offsetWidth:300,offsetHeight:240};
+    document.querySelectorAll = selector => selector.startsWith('#overlay .surface-popover') ? [surface] : [];
+    shellBindOverlayDismissal();
+    window.innerWidth = 1024; window.innerHeight = 680;
+  `);
+  harness.dispatch('resize', {});
+  assert.deepEqual(harness.json('[surface.style.left,surface.style.top]'), ['712px', '428px']);
+  harness.evaluate(`surface.offsetHeight = 900; shellClampFloatingSurface(surface)`);
+  assert.equal(harness.evaluate('surface.style.maxHeight'), '656px');
+  assert.equal(harness.evaluate('surface.style.overflowY'), 'auto');
+});
+
+test('outside dismissal resets a popup trigger state while leaving destination focus alone', async () => {
+  const harness = await rendererHarness();
+  harness.evaluate(`
+    globalThis.popupFocusCalls = 0;
+    globalThis.popupTrigger = {expanded:'true',hasAttribute:name=>name==='aria-expanded',setAttribute(name,value){this.expanded=value;},focus(){popupFocusCalls++;}};
+    globalThis.popupHost = {dataset:{returnFocus:'#popup-trigger'}};
+    globalThis.popupOverlay = {innerHTML:'menu',querySelector:()=>popupHost};
+    document.querySelector = selector => selector === '#overlay' ? popupOverlay : selector === '#popup-trigger' ? popupTrigger : null;
+    shellCloseOverlay({restoreFocus:false});
+  `);
+  assert.equal(harness.evaluate('popupTrigger.expanded'), 'false');
+  assert.equal(harness.evaluate('popupFocusCalls'), 0);
+  harness.evaluate('shellCloseOverlay()');
+  assert.equal(harness.evaluate('popupFocusCalls'), 1);
+});
+
+test('update retry surfaces use the failed operation and busy clicks never start another action', async () => {
+  const calls = [];
+  const h = await rendererHarness({ updates: {
+    download: async () => { calls.push('download'); return {status:'available', supported:true, version:'1.0.0'}; },
+    install: async () => { calls.push('install'); return {status:'downloaded', supported:true, version:'1.0.0'}; },
+    check: async () => { calls.push('check'); return {status:'latest', supported:true}; },
+  } });
+  h.evaluate(`refreshUpdateSurfaces = () => {}; appUpdateState = normalizeAppUpdateState({status:'error',supported:true,version:'1.0.0',retryAction:'download'});`);
+  assert.match(h.evaluate('shellSettingsUpdateCardBody()'), /data-update-action="download"/);
+  assert.match(h.evaluate('shellUpdatePanelBody()'), /data-update-action="download"/);
+  await h.evaluate(`runUpdateAction('download')`);
+  h.evaluate(`appUpdateState = normalizeAppUpdateState({status:'error',supported:true,version:'1.0.0',retryAction:'install'});`);
+  await h.evaluate(`runUpdateAction('install')`);
+  h.evaluate(`appUpdateState = normalizeAppUpdateState({status:'downloading',supported:true});`);
+  await h.evaluate(`runUpdateAction('check')`);
+  assert.deepEqual(calls, ['download','install']);
+});
+
+test('backup ownership survives settings rerenders, prevents duplicate operations and retains cancellation status', async () => {
+  let finish, calls = 0;
+  const h = await rendererHarness({ dataBackup: { export: () => { calls++; return new Promise(resolve => { finish = resolve; }); } } });
+  h.evaluate(`
+    flushAllDataForTransfer = async () => {};
+    globalThis.makeBackupButton = () => ({dataset:{backupAction:'export'},listeners:[],addEventListener(_,fn){this.listeners.push(fn);}});
+    globalThis.controls = [makeBackupButton()]; globalThis.backupStatus = {};
+    document.querySelectorAll = selector => selector === '[data-backup-action]' ? controls : [];
+    document.querySelector = selector => selector === '[data-backup-status]' ? backupStatus : null;
+    bindDataBackupControls(); bindDataBackupControls();
+    globalThis.invokeBackup = () => controls[0].listeners[0]({stopPropagation(){},currentTarget:controls[0]});
+    globalThis.transferPromise = invokeBackup();
+  `);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(calls, 1);
+  assert.equal(h.evaluate('controls[0].listeners.length'), 1);
+  h.evaluate(`controls = [makeBackupButton()]; backupStatus = {}; bindDataBackupControls(); invokeBackup();`);
+  assert.equal(h.evaluate('controls[0].disabled'), true);
+  assert.match(h.evaluate('backupStatus.textContent'), /正在保存/);
+  assert.equal(calls, 1);
+  finish({canceled:true}); await h.evaluate('transferPromise');
+  assert.equal(h.evaluate('controls[0].disabled'), false);
+  assert.match(h.evaluate('backupStatus.textContent'), /已取消/);
+  h.evaluate(`backupStatus = {}; bindDataBackupControls()`);
+  assert.match(h.evaluate('backupStatus.textContent'), /已取消/);
+});
+
+test('a failed import rollback cannot resume autosave into a partially restored workspace', async () => {
+  let writes = 0;
+  const h = await rendererHarness({storage:{write:async()=>{writes++;}},dataBackup:{importFile:async()=>{throw new Error('IMPORT_ROLLBACK_FAILED 自动回滚未能完成；安全备份位于 /safe/backup');}}});
+  h.evaluate(`
+    flushAllDataForTransfer = async () => {};
+    globalThis.control = {dataset:{backupAction:'import-file'},addEventListener(_,fn){this.run=fn;}};
+    globalThis.transferStatus = {};
+    document.querySelectorAll = selector => selector === '[data-backup-action]' ? [control] : [];
+    document.querySelector = selector => selector === '[data-backup-status]' ? transferStatus : null;
+    bindDataBackupControls();
+  `);
+  await h.evaluate(`control.run({stopPropagation(){},currentTarget:control})`);
+  assert.equal(h.evaluate('dataTransferInProgress'), true);
+  assert.equal(h.evaluate('control.disabled'), true);
+  assert.match(h.evaluate('transferStatus.textContent'), /暂停写入.*safe\/backup/);
+  h.evaluate('save()'); await h.evaluate('flushSave()');
+  assert.equal(writes, 0);
+});
+
+test('interaction preferences migrate from legacy cache but restored workspace values take precedence', async () => {
+  const writes = [];
+  let stored = {tasks:[],uiPreferences:null};
+  const h = await rendererHarness({storage:{read:async()=>stored,write:async data=>writes.push(data)}});
+  h.evaluate(`localStorage.setItem('loop.interaction28',JSON.stringify({continuous:false,follow:false})); localStorage.setItem('loop-work-rhythm-v1:enabled','1')`);
+  const legacy = await h.evaluate('loadAppData()');
+  assert.deepEqual(JSON.parse(JSON.stringify(legacy.uiPreferences)), {continuous:false,follow:false,workNavigationEnabled:true});
+  stored = {tasks:[],uiPreferences:{continuous:true,follow:true,workNavigationEnabled:false}};
+  const restored = await h.evaluate('loadAppData()');
+  assert.deepEqual(JSON.parse(JSON.stringify(restored.uiPreferences)), stored.uiPreferences);
+  h.evaluate(`state.uiPreferences = normalizeUiPreferences({continuous:true,follow:true,workNavigationEnabled:false}); LoopUiPreferences.update({follow:false})`);
+  await h.evaluate('flushSave()');
+  assert.deepEqual(JSON.parse(JSON.stringify(writes[0].uiPreferences)), {continuous:true,follow:false,workNavigationEnabled:false});
+});
+
+test('changing default task range within settings keeps the current settings page visible', async () => {
+  const h = await rendererHarness();
+  h.evaluate(`state.settingsOpen=true; activeSettingsPage='tasks'; save=()=>{}; shellCloseOverlay=()=>{};`);
+  await h.evaluate(`shellAction({action:'set-settings-choice',key:'task-filter',value:'today'}, {})`);
+  assert.equal(h.evaluate('state.settingsOpen'), true);
+  assert.equal(h.evaluate('state.taskFilter'), 'today');
+});
+
+test('native import releases the write lock on cancellation or successful rollback, and retains it after failed rollback', async () => {
+  const source = await fs.readFile(path.join(__dirname, '../app/main/main.cjs'), 'utf8');
+  const handlerSource = source.slice(source.indexOf('  ipcMain.handle("data-backup:import"'), source.indexOf('  ipcMain.handle("knowledge-document:save"'));
+  const { createDataMaintenanceLock } = require('../app/main/data-maintenance.cjs');
+  for (const scenario of ['canceled', 'IMPORT_ROLLED_BACK', 'IMPORT_ROLLBACK_FAILED', 'success']) {
+    const lock = createDataMaintenanceLock(); let handler;
+    const context = vm.createContext({
+      ipcMain: {handle:(_,fn)=>{handler=fn;}}, BrowserWindow:{fromWebContents:()=>({})}, path, process,
+      dialog:{showOpenDialog:async()=>({canceled:scenario==='canceled',filePaths:['/synthetic/incoming.loopbackup']}),showMessageBox:async()=>({response:1})},
+      app:{getPath:()=>'/synthetic/profile',relaunch(){},exit(){}}, dataMaintenance:lock,
+      importBackup:async()=>{ assert.equal(lock.isActive(),true); if(scenario!=='success') throw Object.assign(new Error(scenario),{code:scenario}); return {imported:true}; },
+      setTimeout:()=>({unref(){}}),
+    });
+    vm.runInContext(handlerSource, context);
+    if (scenario.startsWith('IMPORT_')) await assert.rejects(handler({sender:{}},{}),{code:scenario});
+    else await handler({sender:{}},{});
+    assert.equal(lock.isActive(), ['success','IMPORT_ROLLBACK_FAILED'].includes(scenario), scenario);
+  }
+});
+
+test('quick capture leaves the active node and its draft intact and rejects blank titles', async () => {
+  const h = await rendererHarness();
+  h.evaluate(`render=()=>{}; state.tasks=normalizeTasks([{id:'working',title:'当前任务',nodes:[{id:'working_node',title:'当前节点'}]}]); state.taskGroups=normalizeTaskGroups([],state.tasks); state.activeTaskId='working'; state.selectedNodeId='working_node'; state.recordDraft='尚未完成的节点记录'; state.taskFilter='today'; state.query='检索中';`);
+  const result = h.json(`(() => { const capture=createQuickCapture('浮窗速记','多行内容\\n第二行'); return {id:capture.id, selectedNodeId:state.selectedNodeId,activeTaskId:state.activeTaskId,draft:state.recordDraft,filter:state.taskFilter,query:state.query}; })()`);
+  assert.equal(result.selectedNodeId,'working_node');
+  assert.equal(result.activeTaskId,'working');
+  assert.equal(result.draft,'尚未完成的节点记录');
+  assert.equal(result.filter,'today'); assert.equal(result.query,'检索中');
+  const count=h.evaluate('state.tasks.length');
+  assert.equal(h.evaluate(`createQuickCapture('  \\n  ')`),null);
+  assert.equal(h.evaluate('state.tasks.length'),count);
+});
+
+test('global task jumps leave settings, clear unrelated capture filters and reveal a requested node', async () => {
+  const h=await rendererHarness();
+  h.evaluate(`state.tasks=normalizeTasks([{id:'target',title:'目标任务',nodes:[{id:'target_node',title:'目标节点'}]}]); state.taskGroups=normalizeTaskGroups([],state.tasks); state.settingsOpen=true; state.captureSourceFilter='quick'; state.priorityFilter='high'; state.taskPane='notes'; openTaskFromGlobalList('target','target_node');`);
+  assert.equal(h.evaluate('state.settingsOpen'),false);
+  assert.equal(h.evaluate('state.captureSourceFilter'),'all');
+  assert.equal(h.evaluate('state.taskPane'),'flow');
+  assert.deepEqual(h.json('filteredTasks().map(task=>task.id)'),['target']);
+  assert.equal(h.evaluate('state.selectedNodeId'),'target_node');
+});
+
+test('complete task journey keeps grouped tasks, widget lanes, notes, attachments, calendar, review and restore consistent', async (t) => {
+  const {saveKnowledgeDocument}=require('../app/main/knowledge-file.cjs');
+  const {exportPortableBackup,importBackup}=require('../app/main/data-continuity.cjs');
+  const root=await fs.mkdtemp(path.join(os.tmpdir(),'loop-final-journey-'));
+  t.after(()=>fs.rm(root,{recursive:true,force:true}));
+  const userData=path.join(root,'profile'),notePath=path.join(root,'files','联动笔记.md');
+  await fs.mkdir(path.dirname(notePath),{recursive:true});
+  const h=await recoveryRendererHarness({
+    storage:{write:payload=>writeTaskData(userData,JSON.parse(JSON.stringify(payload)))},
+    knowledgeFile:{save:payload=>saveKnowledgeDocument(payload,{dialog:{showSaveDialog:async()=>({canceled:false,filePath:notePath})},platform:'darwin'})},
+  });
+  h.evaluate(`
+    state.taskGroups=[{id:'journey_group',title:'联动检阅',order:1}]; state.activeGroupId='journey_group';
+    globalThis.journeyTask=createTask('联动任务',false); globalThis.journeyId=journeyTask.id;
+    edit({taskId:journeyId,editKey:'title'},'联动任务 · 更新名称');
+    toggleTaskTag(journeyId,'today');
+    addNode(journeyId,null); globalThis.rootNode=journeyTask.nodes[0].id;
+    addNode(journeyId,rootNode); globalThis.childNode=journeyTask.nodes[0].children[0].id;
+    edit({taskId:journeyId,nodeId:rootNode,editKey:'title'},'核对上下文');
+    edit({taskId:journeyId,nodeId:childNode,editKey:'note'},'逐层验证\\n保留原始记录');
+    edit({taskId:journeyId,editKey:'description'},'背景第一行\\n背景第二行');
+    edit({taskId:journeyId,editKey:'hypothesis'},'正在核对跨页联动');
+    edit({taskId:journeyId,editKey:'conclusion'},'处理完成并保留解决过程');
+    edit({taskId:journeyId,editKey:'deadlineAt'},loopTodayKey()+'T23:30');
+    state.selectedNodeId=childNode; state.recordDraft='逐层验证\\n保留原始记录';
+    globalThis.captureId=createQuickCapture('独立速记','速记正文').id;
+  `);
+  assert.equal(h.evaluate('state.selectedNodeId'),h.evaluate('childNode'));
+  const before=h.json('todayWidgetSnapshot()');
+  const taskId=h.evaluate('journeyId'),captureId=h.evaluate('captureId');
+  assert.deepEqual(before.items.map(item=>item.taskId),[taskId]);
+  assert.deepEqual(before.quickCaptures.map(item=>item.taskId),[captureId]);
+  h.evaluate(`state.query='逐层验证'`);
+  assert.deepEqual(h.json('globalSearchMatches().nodes.map(item=>item.node.id)'),[h.evaluate('childNode')]);
+  h.evaluate(`state.query='独立速记'`);
+  assert.deepEqual(h.json('globalSearchMatches().notes.map(task=>task.id)'),[captureId]);
+  assert.deepEqual(h.json('calendarTasksForDate(loopTodayKey()).map(task=>task.id)'),[taskId]);
+  h.evaluate(`
+    state.query='';
+    state.attachments.images.journey_image='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a9WQAAAAASUVORK5CYII=';
+    journeyTask.notes='# 联动记录\\n\\n原文、换行与图片均保留。\\n\\n![附件](task-image:journey_image)\\n';
+    journeyTask.knowledgeNote=knowledgeDocument.markDocumentEdited(journeyTask.knowledgeNote);
+  `);
+  const saved=await h.evaluate('saveKnowledgeTask(journeyId)');
+  assert.equal(saved.success,true);
+  const markdown=await fs.readFile(notePath,'utf8');
+  assert.match(markdown,/原文、换行与图片均保留/);
+  assert.match(markdown,/attachments\//);
+  assert.ok((await fs.readdir(path.join(path.dirname(notePath),'attachments'))).length>0);
+  h.evaluate(`markNodeStatus(journeyId,rootNode,'done'); markNodeStatus(journeyId,childNode,'done');`);
+  const completion=h.json('toggleTaskDone(journeyId)'); assert.equal(completion.success,true);
+  h.evaluate('save()'); await h.evaluate('flushSave()');
+  assert.deepEqual(h.json('todayWidgetSnapshot().items.map(item=>item.taskId)'),[]);
+  h.evaluate(`state.reviewDateField='resolved'; state.reviewPreset='all'`);
+  assert.deepEqual(h.json('reviewTasks().map(item=>item.task.id)'),[taskId]);
+  const removed=await h.evaluate(`recovery26Transaction(()=>recovery26DeleteRecords([journeyId]))`);
+  assert.equal(removed.ok,true);
+  assert.deepEqual(h.json('calendarTasksForDate(loopTodayKey()).map(task=>task.id)'),[]);
+  assert.equal(h.evaluate('r26Archive()[0].record.notes'),markdown);
+  const restored=await h.evaluate('recovery26RestoreMany([r26Archive()[0].id])');
+  assert.equal(restored[0].ok,true);
+  assert.equal(h.evaluate('r26Task(journeyId).knowledgeNote.filePath'),notePath);
+  assert.equal(h.evaluate('r26Task(journeyId).nodes[0].children[0].note'),'逐层验证\n保留原始记录');
+  const backup=path.join(root,'workspace.loopbackup'),reopenedPath=path.join(root,'reopened');
+  await exportPortableBackup({userDataPath:userData,destinationPath:backup,appVersion:'0.1.216'});
+  await importBackup({selectedPath:backup,userDataPath:reopenedPath,appDataPath:root});
+  const reopened=await readTaskData(reopenedPath);
+  const finalTask=reopened.tasks.find(task=>task.id===taskId);
+  assert.equal(finalTask.title,'联动任务 · 更新名称');
+  assert.equal(finalTask.status,'done'); assert.equal(finalTask.groupId,'journey_group');
+  assert.equal(finalTask.description,'背景第一行\n背景第二行');
+  assert.equal(finalTask.notes,markdown); assert.equal(finalTask.knowledgeNote.filePath,notePath);
+  assert.ok(reopened.attachments.images.journey_image);
+  assert.equal(reopened.tasks.find(task=>task.id===captureId).captureSource,'today-widget');
 });

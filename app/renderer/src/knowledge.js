@@ -213,19 +213,56 @@ function shellKnowledgeFileMenu(trigger) {
     ? '<div class="menu-divider"></div><button class="button danger-action" type="button" role="menuitem" data-recovery26="remove-note" data-task-id="' + escAttr(task.id) + '">' + shellIcon("close") + '移除软件内笔记…</button>'
     : "";
   shellMountSurface(
-    `<div class="surface-popover" role="menu" aria-label="笔记文件操作">${shellSurfaceHeader("笔记文件")}
+    `<div class="surface-popover" role="menu" aria-label="笔记文件操作"><div class="note23-menu-label">文件</div>
       <button class="button" type="button" role="menuitem" data-action="relocate-knowledge" data-task-id="${escAttr(task.id)}">打开 Markdown 文件…</button>
       <button class="button" type="button" role="menuitem" data-action="save-knowledge-as" data-task-id="${escAttr(task.id)}">另存为…</button>
-      ${bound ? `<button class="button" type="button" role="menuitem" data-action="knowledge-file-info" data-task-id="${escAttr(task.id)}">文件信息</button>
-      <button class="button" type="button" role="menuitem" data-action="remove-knowledge-binding" data-task-id="${escAttr(task.id)}">解除文件关联…</button>` : ""}
       <div class="menu-divider"></div>
-      <button class="button" type="button" role="menuitem" data-action="share-task" data-task-id="${escAttr(task.id)}">分享／导出任务…</button>
-      <div class="menu-divider"></div>
+      <div class="note23-menu-label">当前笔记</div>
+      <button class="button" type="button" role="menuitem" data-action="knowledge-file-info" data-task-id="${escAttr(task.id)}">文件信息</button>
+      ${bound ? `<button class="button" type="button" role="menuitem" data-action="remove-knowledge-binding" data-task-id="${escAttr(task.id)}">解除文件关联…</button>` : ""}
       <button class="button" type="button" role="menuitem" data-action="close-knowledge-editor" data-task-id="${escAttr(task.id)}">关闭笔记</button>
+      <div class="menu-divider"></div>
+      <div class="note23-menu-label">导出</div>
+      <button class="button" type="button" role="menuitem" data-action="export-knowledge-note" data-task-id="${escAttr(task.id)}">导出笔记…</button>
+      <button class="button" type="button" role="menuitem" data-action="share-task" data-task-id="${escAttr(task.id)}">分享／导出任务…</button>
       ${removable}</div>`,
     trigger,
     232,
   );
+}
+
+/** Export a snapshot of the current body; saving a copy never rebinds the note. */
+function shellKnowledgeExportNote(task) {
+  if (!task) return;
+  captureMountedMilkdownDrafts();
+  flushNodeNoteDrafts({ persist: true });
+  const markdown = String(task.notes || "");
+  const bodyHtml = renderMarkdown(markdown);
+  const title = typeof note23FileName === "function"
+    ? note23FileName(task, { path: task.knowledgeNote?.filePath }).replace(/\.md$/i, "")
+    : task.title || "未命名笔记";
+  shellKnowledgeDialog("导出笔记",
+    `<p class="knowledge-dialog-copy">导出当前笔记内容；不改变文件关联。</p><div class="export-format-row"><label for="knowledge-export-format">格式</label><select id="knowledge-export-format"><option value="md">Markdown</option><option value="html">HTML</option><option value="pdf">PDF（桌面应用）</option></select></div><article class="knowledge-preview export-preview">${bodyHtml}</article><p class="knowledge-demo-boundary">HTML 与 PDF 包含已加载的图片；Markdown 保留图片引用，附件请一同备份。</p><p class="error" id="knowledge-export-error" role="status" hidden></p>`,
+    '<button class="button" data-action="close-dialog">取消</button><button class="button primary" id="knowledge-export-download">导出</button>', 680);
+  const button = document.querySelector("#knowledge-export-download");
+  button?.addEventListener("click", async () => {
+    const format = document.querySelector("#knowledge-export-format")?.value || "md";
+    const error = document.querySelector("#knowledge-export-error");
+    button.disabled = true;
+    if (error) error.hidden = true;
+    try {
+      if (!desktopExport?.taskDocument) throw new Error("请在桌面应用中导出笔记。");
+      const result = await desktopExport.taskDocument({ taskTitle: title, documentKind: "note", format, markdown, html: bodyHtml });
+      if (result?.canceled) return;
+      if (!result?.filePath) throw new Error("文件未导出，请重试。");
+      if (button.isConnected) shellCloseOverlay();
+      shellToast("笔记已导出");
+    } catch (failure) {
+      if (error) { error.textContent = failure?.message || "导出失败，请重试。"; error.hidden = false; }
+    } finally {
+      button.disabled = false;
+    }
+  });
 }
 
 function shellKnowledgeDialog(title, body, footer = "", width = 520) {

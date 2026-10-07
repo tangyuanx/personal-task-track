@@ -240,25 +240,30 @@
   }
 
   renderShellTaskRow = function manage24TaskRow(task, displayOrder) {
+    const markup = manage24BaseTaskRow(task, displayOrder);
     if (manage24RowTitleSession?.id === task.id) {
-      const done = task.status === "done";
-      return `
-        <li class="task-item ${task.id === state.activeTaskId ? "selected" : ""} ${done ? "done" : ""}" data-task-row="${manage24Attr(task.id)}" data-task-id="${manage24Attr(task.id)}" data-context="task" draggable="true" data-task-drag-target="${manage24Attr(task.id)}">
-          ${manage24RowEditorMarkup()}
-        </li>`;
+      // Keep the sequence/complete control and its geometry while naming.
+      return markup.replace(/<button class="task-select"[\s\S]*?<\/button>/, () => manage24RowEditorMarkup());
     }
-    return manage24BaseTaskRow(task, displayOrder);
+    return markup;
   };
 
   function manage24DrawRowTitle() {
     if (!manage24RowTitleSession) return;
-    const row = document.querySelector(`.task-select[data-task-id="${escSelectorValue(manage24RowTitleSession.id)}"]`);
-    if (!row) return;
     if (!manage24Task(manage24RowTitleSession.id)) { manage24RowTitleSession = null; return; }
-    row.outerHTML = manage24RowEditorMarkup();
-    const input = document.getElementById("manage24-row-title");
-    input?.focus({ preventScroll: true });
-    input?.select();
+    let input = document.getElementById("manage24-row-title");
+    if (!input) {
+      const row = document.querySelector(`.task-select[data-task-id="${escSelectorValue(manage24RowTitleSession.id)}"]`);
+      if (!row) return;
+      row.outerHTML = manage24RowEditorMarkup();
+      input = document.getElementById("manage24-row-title");
+    }
+    // render() may have already mounted the editor. Focus that live input,
+    // without selecting it again when this helper runs twice in one action.
+    if (input && document.activeElement !== input) {
+      input.focus({ preventScroll: true });
+      input.select();
+    }
   }
 
   function manage24BeginRowTitle(taskId) {
@@ -301,8 +306,7 @@
       }
     }
     if (fromBlur && task) {
-      // Repaint the whole row, otherwise the sequence gutter and the complete
-      // button would stay missing until an unrelated full render.
+      // Restore the title button while retaining the row's current state.
       const editor = document.querySelector(".manage24-row-title");
       const row = editor?.closest(".task-item[data-task-id]");
       if (row) row.outerHTML = manage24RowMarkup(task);

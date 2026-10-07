@@ -154,7 +154,7 @@ function applyLoopAppearance() {
 
 function renderShellBrandUpdate() {
   const update = appUpdateState;
-  const pending = ["available", "downloading", "downloaded", "preparing", "installing"];
+  const pending = ["available", "downloading", "downloaded", "preparing", "installing", "error"];
   if (!pending.includes(update.status)) return "";
   const busy = ["downloading", "preparing", "installing"].includes(update.status);
   const labels = {
@@ -163,6 +163,7 @@ function renderShellBrandUpdate() {
     downloaded: "重启更新",
     preparing: "准备更新",
     installing: "正在安装",
+    error: "更新未完成",
   };
   const label = labels[update.status] || "更新可用";
   return `<button class="icon-button shell-update brand-update" type="button" data-action="open-update-panel" aria-label="软件更新：${escAttr(label)}" title="${escAttr(label)}" ${busy ? 'aria-busy="true" disabled' : ""}>${shellIcon("download")}</button>`;
@@ -265,6 +266,7 @@ function renderShellTopbar() {
     <header class="topbar">
       <div class="breadcrumb">
         个人空间${shellIcon("chevron")}
+        ${route === "tasks" && state.globalListReturn ? `<button class="text-button" type="button" data-action="return-global-page">返回${state.globalListReturn.route === "calendar" ? "日历" : "回顾"}</button>${shellIcon("chevron")}` : ""}
         ${grouped ? `<button class="text-button" type="button" data-action="select-group" data-group-id="${ALL_TASKS_GROUP_ID}">任务仓库</button>${shellIcon("chevron")}` : ""}
         <b>${esc(crumb)}</b>
       </div>
@@ -359,7 +361,7 @@ function renderShellTaskList(list) {
       <span class="list-resizer" data-action="resize-list-column" role="separator" tabindex="0" aria-orientation="vertical" aria-label="调整任务列表宽度" aria-valuemin="230" aria-valuemax="460" aria-valuenow="${normalizeSidebarWidth(state.sidebarWidth)}" title="拖动调整任务列表宽度"></span>
       <div class="list-search" role="search">
         ${shellIcon("search")}
-        <input id="search" type="search" placeholder="搜索" aria-label="搜索全部任务、节点、速记" aria-controls="global-results" aria-expanded="${state.searchOpen}" autocomplete="off" value="${escAttr(state.query)}" />
+        <input id="search" type="search" placeholder="搜索全部任务、节点、速记" aria-label="搜索全部任务、节点、速记" aria-controls="global-results" aria-expanded="${state.searchOpen}" autocomplete="off" value="${escAttr(state.query)}" />
         <button class="search-clear" type="button" data-action="clear-search" aria-label="清空搜索" title="清空搜索" ${state.query ? "" : "hidden"}>${shellIcon("close")}</button>
       </div>
       <div class="list-heading">

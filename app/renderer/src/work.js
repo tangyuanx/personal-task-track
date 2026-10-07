@@ -377,6 +377,7 @@
       return;
     }
     ui.enabled = true;
+    globalThis.LoopUiPreferences?.update({ workNavigationEnabled: true });
     ui.gateOpen = false;
     ui.gateError = "";
     localStorage.setItem(ENABLED_KEY, "1");
@@ -442,6 +443,7 @@
     if (action === "toggle") {
       if (ui.enabled) {
         ui.enabled = false;
+        globalThis.LoopUiPreferences?.update({ workNavigationEnabled: false });
         localStorage.setItem(ENABLED_KEY, "0");
         document.querySelector("#overlay").innerHTML = "";
         syncPill();
@@ -529,7 +531,7 @@
 
   document.addEventListener("loop:overlay-dismiss", () => { ui.panelOpen = false; });
 
-  globalThis.LoopWork = Object.freeze({ settingsBody, syncPill, openPanel });
+  globalThis.LoopWork = Object.freeze({ settingsBody, syncPill, openPanel, restorePreferences(value) { ui.enabled = value.workNavigationEnabled === true; } });
   syncPill();
   // app.js already ran its first render before this script loaded; refresh the
   // settings page so the advanced block is present immediately.

@@ -19,6 +19,53 @@ const {
 
 const fixedNow = () => new Date("2026-08-29T08:09:10.000Z");
 
+test("invalid or newer backup databases are rejected before replacing the workspace", async (t) => {
+  const root = await tempRoot(t, "loop-import-schema");
+  const source = path.join(root, "source"), target = path.join(root, "target");
+  await writeCompleteUserData(source); await writeCompleteUserData(target, "kept");
+  const before = await fs.readFile(path.join(target, TASK_DATA_FILE), "utf8");
+  for (const invalid of [{}, [], { tasks: "bad" }, { tasks: [], version: 999 }, { tasks: [], recentlyDeletedSchemaVersion: 99 }]) {
+    await fs.writeFile(path.join(source, TASK_DATA_FILE), JSON.stringify(invalid));
+    const selectedPath = path.join(root, "invalid.loopbackup");
+    await exportPortableBackup({ userDataPath: source, destinationPath: selectedPath });
+    await assert.rejects(importBackup({ selectedPath, userDataPath: target, appDataPath: root }), error => ["INVALID_IMPORTED_TASK_DATA", "UNSUPPORTED_DATA_VERSION"].includes(error.code));
+    assert.equal(await fs.readFile(path.join(target, TASK_DATA_FILE), "utf8"), before);
+  }
+});
+
+test("a corrupted restored attachment triggers verified rollback of all managed files", async (t) => {
+  const root = await tempRoot(t, "loop-import-assets");
+  const source = path.join(root, "source"), target = path.join(root, "target");
+  await writeCompleteUserData(source, "incoming"); await writeCompleteUserData(target, "kept");
+  const selectedPath = path.join(root, "incoming.loopbackup");
+  await exportPortableBackup({ userDataPath: source, destinationPath: selectedPath });
+  let corrupted = false;
+  const fileSystem = { ...fs, async cp(from, to, options) {
+    await fs.cp(from, to, options);
+    if (!corrupted && to === path.join(target, "knowledge-note-recovery")) {
+      corrupted = true;
+      await fs.writeFile(path.join(to, "note-a", "assets", "image.png"), "corruption");
+    }
+  } };
+  await assert.rejects(importBackup({ selectedPath, userDataPath: target, appDataPath: root, fileSystem }), { code: "IMPORT_ROLLED_BACK" });
+  assert.equal(JSON.parse(await fs.readFile(path.join(target, TASK_DATA_FILE), "utf8")).tasks[0].id, "task-kept");
+  assert.equal(await fs.readFile(path.join(target, "knowledge-note-recovery", "note-a", "assets", "image.png"), "utf8"), "asset");
+  assert.equal(await fs.readFile(path.join(target, "Cache", "chromium.bin"), "utf8"), "not-user-content");
+});
+
+test("complete backup and restart retain appearance, filters, interaction settings, navigation and archives", async (t) => {
+  const { readTaskData, writeTaskData } = require("../app/main/storage.cjs");
+  const root = await tempRoot(t, "loop-preferences-roundtrip");
+  const source = path.join(root, "source"), target = path.join(root, "target");
+  const prefs = { continuous: false, follow: false, workNavigationEnabled: true };
+  const written = await writeTaskData(source, { ...completeTaskData("prefs"), uiPreferences: prefs, zhFont: "noto", enFont: "inter", fontScale: "current", priorityFilter: "high", newTaskPriority: "low" });
+  const selectedPath = path.join(root, "preferences.loopbackup");
+  await exportPortableBackup({ userDataPath: source, destinationPath: selectedPath });
+  await importBackup({ selectedPath, userDataPath: target, appDataPath: root });
+  const reopened = await readTaskData(target);
+  for (const key of ["uiPreferences", "theme", "zhFont", "enFont", "fontScale", "priorityFilter", "newTaskPriority", "workNavigation", "attachments", "recentlyDeleted"]) assert.deepEqual(reopened[key], written[key], key);
+});
+
 function completeTaskData(label = "legacy") {
   return {
     version: 1,

@@ -32,7 +32,7 @@ const DATA_VERSION = 2;
 const KNOWLEDGE_MIGRATION_VERSION = 1;
 const RECENTLY_DELETED_LIMIT = 500;
 /**
- * Calendar list column: fixed height with an internally scrolling task list.
+ * Calendar list column: remaining workspace height, internally scrolling tasks.
  *
  * shell.css is the frozen Demo baseline and index.html must keep the Demo's
  * exact stylesheet order (both are asserted by tests), so this correction is
@@ -50,7 +50,7 @@ const RECENTLY_DELETED_LIMIT = 500;
   const style = document.createElement("style");
   style.id = id;
   style.textContent = `
-.calendar-layout{height:100%;max-height:100%;min-height:0;align-items:start}
+.calendar-layout{height:auto;max-height:none;min-height:0;flex:1 1 auto;align-items:start}
 .agenda{display:flex;flex-direction:column;max-height:100%;min-height:0;overflow:hidden}
 .agenda-items{flex:0 1 auto;min-height:0;overflow-y:auto;padding-right:4px;margin-bottom:12px}
 .agenda>.button,.agenda>.agenda-empty{flex:0 0 auto}
@@ -279,6 +279,7 @@ let state = {
   priorityFilter: "all",
   captureSourceFilter: "all",
   newTaskPriority: "medium",
+  uiPreferences: loadBrowserUiPreferences(),
   markdownMode: "edit",
   theme: "light",
   zhFont: "system",
@@ -351,12 +352,15 @@ let state = {
   createResumed: false,
   journeyReceipt: null,
   noteSummaryOpen: false,
+  globalListReturn: null,
   deadlineDraft: null,
   recurrenceDraft: null,
 };
 
 let dataProtectionMessage = "";
 let dataTransferInProgress = false;
+let dataBackupOperation = { busy: false, message: "" };
+let updatePreferenceInFlight = false;
 let saveTimer = 0;
 let nodeDetailSaveFeedbackTimer = 0;
 let activeSettingsPage = "appearance";
@@ -374,6 +378,7 @@ let lastWrittenPersistedRevision = "";
 let pendingPersistedRevision = "";
 let saveInFlight = false;
 let saveInFlightPromise = null;
+let localSaveOutcome = "ready";
 let conclusionNoticeTimer = 0;
 let taskDragState = null;
 let flowNodeDragState = null;
@@ -970,6 +975,24 @@ function loadBrowserTypography() {
     fontScale: normalizeFontScale(localStorage.getItem(FONT_SCALE_KEY)),
   };
 }
+
+function normalizeUiPreferences(value) {
+  return { continuous: value?.continuous !== false, follow: value?.follow !== false, workNavigationEnabled: value?.workNavigationEnabled === true };
+}
+
+function loadBrowserUiPreferences() {
+  let interaction = {};
+  try { interaction = JSON.parse(localStorage.getItem("loop.interaction28")) || {}; } catch {}
+  return normalizeUiPreferences({ ...interaction, workNavigationEnabled: localStorage.getItem("loop-work-rhythm-v1:enabled") === "1" });
+}
+
+globalThis.LoopUiPreferences = {
+  snapshot: () => ({ ...state.uiPreferences }),
+  update(patch) {
+    state.uiPreferences = normalizeUiPreferences({ ...state.uiPreferences, ...patch });
+    save();
+  },
+};
 
 function loadBrowserPreferences() {
   return {
@@ -1676,6 +1699,7 @@ async function loadAppData() {
       const priorityFilter = normalizePriorityFilter(stored?.priorityFilter);
       const captureSourceFilter = normalizeCaptureSourceFilter(stored?.captureSourceFilter);
       const newTaskPriority = normalizePriority(stored?.newTaskPriority);
+      const uiPreferences = stored?.uiPreferences ? normalizeUiPreferences(stored.uiPreferences) : loadBrowserUiPreferences();
       const sidebarWidth = normalizeSidebarWidth(stored?.sidebarWidth);
       const detailHeight = normalizeDetailHeight(stored?.detailHeight);
       const attachments = normalizeAttachments(stored?.attachments);
@@ -1684,7 +1708,7 @@ async function loadAppData() {
         groupIds: taskGroups.map((group) => group.id),
       });
       const recentlyDeleted = normalizeRecentlyDeleted(stored?.recentlyDeleted);
-      return { tasks, taskGroups, activeGroupId, flowWidths, sidebarWidth, detailHeight, attachments, theme, zhFont, enFont, fontScale, taskFilter, priorityFilter, captureSourceFilter, newTaskPriority, installationId, workNavigation, recentlyDeleted };
+      return { tasks, taskGroups, activeGroupId, flowWidths, sidebarWidth, detailHeight, attachments, theme, zhFont, enFont, fontScale, taskFilter, priorityFilter, captureSourceFilter, newTaskPriority, uiPreferences, installationId, workNavigation, recentlyDeleted };
     } catch (error) {
       console.error("Failed to read local task data.", error);
       // Electron only forwards the message of an error thrown inside an
@@ -1717,10 +1741,36 @@ async function loadAppData() {
     installationId: loadBrowserInstallationId(),
     workNavigation: loadBrowserWorkNavigation(taskGroups),
     recentlyDeleted: loadBrowserRecentlyDeleted(),
+    uiPreferences: loadBrowserUiPreferences(),
     theme: loadBrowserTheme(),
     ...typography,
     ...preferences,
   };
+}
+
+function localSaveReceipt() {
+  if (dataProtectionMessage) return { state: "protected", label: "只读保护 · 未写入" };
+  if (dataTransferInProgress) return { state: "transferring", label: "数据处理中…" };
+  if (saveInFlight) return { state: "saving", label: "正在保存到本机…" };
+  if (localSaveOutcome === "failed") return { state: "failed", label: "本地保存失败 · 待重试" };
+  if (pendingPayload) return { state: "pending", label: "等待保存到本机…" };
+  return localSaveOutcome === "saved"
+    ? { state: "saved", label: "已保存到本机" }
+    : { state: "ready", label: "本地工作区" };
+}
+
+function renderLocalSaveReceipt() {
+  const receipt = localSaveReceipt();
+  return `<span data-local-save-status data-state="${receipt.state}" role="status" aria-live="polite" aria-atomic="true"><i class="dot"></i>${esc(receipt.label)}</span>`;
+}
+
+function updateLocalSaveReceipt() {
+  const element = document.querySelector("[data-local-save-status]");
+  if (!element) return;
+  const receipt = localSaveReceipt();
+  if (element.dataset.state === receipt.state) return;
+  element.dataset.state = receipt.state;
+  element.innerHTML = `<i class="dot"></i>${esc(receipt.label)}`;
 }
 
 /**
@@ -1728,7 +1778,7 @@ async function loadAppData() {
  * In browser environment, writes directly to individual localStorage keys.
  */
 function save() {
-  if (dataProtectionMessage || dataTransferInProgress) return;
+  if (dataProtectionMessage || dataTransferInProgress) { updateLocalSaveReceipt(); return; }
   const payload = {
     version: DATA_VERSION,
     knowledgeSchemaVersion: KNOWLEDGE_MIGRATION_VERSION,
@@ -1747,6 +1797,7 @@ function save() {
     priorityFilter: state.priorityFilter,
     captureSourceFilter: state.captureSourceFilter,
     newTaskPriority: state.newTaskPriority,
+    uiPreferences: normalizeUiPreferences(state.uiPreferences),
     installationId: state.installationId,
     workNavigation: state.workNavigation,
     recentlyDeletedSchemaVersion: RECENTLY_DELETED_SCHEMA_VERSION,
@@ -1755,24 +1806,34 @@ function save() {
   };
 
   if (!desktopStorage?.write) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state.tasks));
-    localStorage.setItem(TASK_GROUPS_KEY, JSON.stringify(state.taskGroups));
-    localStorage.setItem(ACTIVE_GROUP_KEY, state.activeGroupId);
-    localStorage.setItem(FLOW_WIDTH_KEY, JSON.stringify(state.flowWidths));
-    localStorage.setItem(SIDEBAR_WIDTH_KEY, String(state.sidebarWidth));
-    localStorage.setItem(DETAIL_HEIGHT_KEY, String(state.detailHeight));
-    localStorage.setItem(ATTACHMENTS_KEY, JSON.stringify(state.attachments));
-    localStorage.setItem(THEME_KEY, state.theme);
-    localStorage.setItem(ZH_FONT_KEY, state.zhFont);
-    localStorage.setItem(EN_FONT_KEY, state.enFont);
-    localStorage.setItem(FONT_SCALE_KEY, state.fontScale);
-    localStorage.setItem(TASK_FILTER_KEY, state.taskFilter);
-    localStorage.setItem(PRIORITY_FILTER_KEY, state.priorityFilter);
-    localStorage.setItem(CAPTURE_SOURCE_FILTER_KEY, state.captureSourceFilter);
-    localStorage.setItem(NEW_TASK_PRIORITY_KEY, state.newTaskPriority);
-    localStorage.setItem(INSTALLATION_ID_KEY, state.installationId);
-    localStorage.setItem(WORK_NAVIGATION_KEY, JSON.stringify(state.workNavigation));
-    localStorage.setItem(RECENTLY_DELETED_KEY, JSON.stringify(state.recentlyDeleted));
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state.tasks));
+      localStorage.setItem(TASK_GROUPS_KEY, JSON.stringify(state.taskGroups));
+      localStorage.setItem(ACTIVE_GROUP_KEY, state.activeGroupId);
+      localStorage.setItem(FLOW_WIDTH_KEY, JSON.stringify(state.flowWidths));
+      localStorage.setItem(SIDEBAR_WIDTH_KEY, String(state.sidebarWidth));
+      localStorage.setItem(DETAIL_HEIGHT_KEY, String(state.detailHeight));
+      localStorage.setItem(ATTACHMENTS_KEY, JSON.stringify(state.attachments));
+      localStorage.setItem(THEME_KEY, state.theme);
+      localStorage.setItem(ZH_FONT_KEY, state.zhFont);
+      localStorage.setItem(EN_FONT_KEY, state.enFont);
+      localStorage.setItem(FONT_SCALE_KEY, state.fontScale);
+      localStorage.setItem(TASK_FILTER_KEY, state.taskFilter);
+      localStorage.setItem(PRIORITY_FILTER_KEY, state.priorityFilter);
+      localStorage.setItem(CAPTURE_SOURCE_FILTER_KEY, state.captureSourceFilter);
+      localStorage.setItem(NEW_TASK_PRIORITY_KEY, state.newTaskPriority);
+      localStorage.setItem("loop.interaction28", JSON.stringify({ continuous: state.uiPreferences.continuous, follow: state.uiPreferences.follow }));
+      localStorage.setItem("loop-work-rhythm-v1:enabled", state.uiPreferences.workNavigationEnabled ? "1" : "0");
+      localStorage.setItem(INSTALLATION_ID_KEY, state.installationId);
+      localStorage.setItem(WORK_NAVIGATION_KEY, JSON.stringify(state.workNavigation));
+      localStorage.setItem(RECENTLY_DELETED_KEY, JSON.stringify(state.recentlyDeleted));
+      localSaveOutcome = "saved";
+    } catch (error) {
+      localSaveOutcome = "failed";
+      throw error;
+    } finally {
+      updateLocalSaveReceipt();
+    }
     return;
   }
 
@@ -1783,6 +1844,7 @@ function save() {
   pendingPayload = payload;
   window.clearTimeout(saveTimer);
   saveTimer = window.setTimeout(flushScheduledSave, 80);
+  updateLocalSaveReceipt();
 }
 
 function flushScheduledSave() {
@@ -1854,6 +1916,7 @@ async function flushSave() {
   saveTimer = 0;
   if (dataProtectionMessage || dataTransferInProgress) {
     pendingPayload = null;
+    updateLocalSaveReceipt();
     return false;
   }
   if (!desktopStorage?.write) return true;
@@ -1863,17 +1926,24 @@ async function flushSave() {
   pendingPayload = null;
   const payloadFingerprintValue = payloadFingerprint(payload);
   const payloadRevision = persistedStateRevision();
-  if (payloadFingerprintValue === lastWrittenPayloadFingerprint) return true;
+  if (payloadFingerprintValue === lastWrittenPayloadFingerprint) {
+    localSaveOutcome = "saved";
+    updateLocalSaveReceipt();
+    return true;
+  }
   saveInFlight = true;
+  updateLocalSaveReceipt();
   saveInFlightPromise = (async () => {
     try {
       await desktopStorage.write(payload);
       lastWrittenPayloadFingerprint = payloadFingerprintValue;
       lastWrittenPersistedRevision = payloadRevision;
       pendingPersistedRevision = payloadRevision;
+      localSaveOutcome = "saved";
       return true;
     } catch (error) {
       console.error("Failed to save local task data.", error);
+      localSaveOutcome = "failed";
       if (!pendingPayload) {
         // Re-queueing the payload must leave the fingerprints consistent with
         // the bytes still on disk, or the retry could be mistaken for a no-op.
@@ -1888,6 +1958,7 @@ async function flushSave() {
   const success = await saveInFlightPromise;
   saveInFlight = false;
   saveInFlightPromise = null;
+  updateLocalSaveReceipt();
   if (pendingPayload && success) return (await flushSave()) && success;
   return success;
 }
@@ -1949,11 +2020,22 @@ function knowledgeViewKey(task = activeTask()) {
   return JSON.stringify([task?.id || "", "notes"]);
 }
 
+// Delayed stabilization must yield to a newer render or physical input. View
+// identity alone is insufficient when the user scrolls the same view again.
+let renderViewportEpoch = 0;
+for (const name of ["pointerdown", "wheel", "keydown", "beforeinput", "compositionstart", "touchmove", "resize"]) {
+  window.addEventListener(name, () => { renderViewportEpoch++; }, true);
+}
+// Input blur does not mean the window lost focus; renders deliberately move
+// focus between their controls, so only listen to the window's own blur.
+window.addEventListener("blur", () => { renderViewportEpoch++; });
+
 function captureScrollViewport(selector, datasetKey, nextViewKey) {
   const element = document.querySelector(selector);
   if (!element) return null;
 
   return {
+    revision: renderViewportEpoch,
     top: Number(element.scrollTop) || 0,
     left: Number(element.scrollLeft) || 0,
     previousViewKey: element.dataset[datasetKey] || "",
@@ -1984,7 +2066,7 @@ function scrollContainer(selector) {
 }
 
 function restoreScrollViewport(snapshot, selector) {
-  if (!snapshot || snapshot.previousViewKey !== snapshot.nextViewKey) return;
+  if (!snapshot || snapshot.revision !== renderViewportEpoch || snapshot.previousViewKey !== snapshot.nextViewKey) return;
 
   const element = scrollContainer(selector);
   if (!element) return;
@@ -2111,6 +2193,7 @@ function canRetainRegion(name, markup) {
  * This is called after every state change.
  */
 function render() {
+  const viewportRevision = ++renderViewportEpoch;
   clearFilteredTasksCache();
   if (typeof shellBeforeRender === "function") shellBeforeRender();
   reconcileWorkNavigationRuntime();
@@ -2221,7 +2304,7 @@ function render() {
   settingsMotion = "none";
   resizeTaskBriefTextareas();
   const restoreGroupScroll = () => {
-    if (groupScrollLeft === null) return;
+    if (groupScrollLeft === null || viewportRevision !== renderViewportEpoch) return;
     const groupScroller = document.querySelector("[data-sheet-tabs]");
     if (groupScroller) groupScroller.scrollLeft = groupScrollLeft;
   };
@@ -2245,7 +2328,7 @@ function render() {
   window.requestAnimationFrame(() => {
     restoreGroupScroll();
     restoreRenderViewports();
-    restoreDeadlinePickerTimeScroll();
+    if (viewportRevision === renderViewportEpoch) restoreDeadlinePickerTimeScroll();
     mountMilkdownEditors();
     restoreRenderViewports();
     window.requestAnimationFrame(() => {
@@ -4424,6 +4507,8 @@ function normalizeAppUpdateState(value) {
     bytesPerSecond: safeNumber(raw.bytesPerSecond),
     lastCheckedAt: String(raw.lastCheckedAt || "").slice(0, 64),
     errorCode: String(raw.errorCode || "").replace(/[^0-9A-Z_.-]/gi, "").slice(0, 64),
+    retryAction: ["check", "download", "install"].includes(raw.retryAction) ? raw.retryAction : (raw.version ? "download" : "check"),
+    preferenceError: String(raw.preferenceError || "").replace(/[^0-9A-Z_.-]/gi, "").slice(0, 64),
   };
 }
 
@@ -4702,19 +4787,25 @@ function refreshUpdateSettings() {
 }
 
 function bindUpdateSettingsControls() {
-  document.querySelector("[data-update-automatic]")?.addEventListener("click", async (event) => {
+  const toggle = document.querySelector("[data-update-automatic]");
+  if (toggle && toggle.dataset.updateBound !== "1") {
+    toggle.dataset.updateBound = "1";
+    toggle.addEventListener("click", async (event) => {
     event.stopPropagation();
-    if (!desktopUpdates?.setAutomaticChecks) return;
+    if (!desktopUpdates?.setAutomaticChecks || updatePreferenceInFlight) return;
+    updatePreferenceInFlight = true;
     const previous = appUpdateState.automaticChecks;
     appUpdateState = { ...appUpdateState, automaticChecks: !previous };
-    refreshUpdateSettings();
+    refreshUpdateSurfaces();
     try {
       appUpdateState = normalizeAppUpdateState(await desktopUpdates.setAutomaticChecks(!previous));
     } catch {
-      appUpdateState = { ...appUpdateState, automaticChecks: previous, status: "error", errorCode: "PREFERENCE_FAILED" };
+      appUpdateState = { ...appUpdateState, automaticChecks: previous, preferenceError: "PREFERENCE_FAILED" };
     }
-    refreshUpdateSettings();
+    updatePreferenceInFlight = false;
+    refreshUpdateSurfaces();
   });
+  }
 
   // [data-update-action] is handled by one delegated listener (see
   // bindUpdateActionDelegation) because the update surfaces re-render in place.
@@ -4763,15 +4854,16 @@ async function flushAllDataForTransfer() {
 }
 
 function bindDataBackupControls() {
+  syncDataBackupControls();
   document.querySelectorAll("[data-backup-action]").forEach((button) => {
+    if (button.dataset.backupBound === "1") return;
+    button.dataset.backupBound = "1";
     button.addEventListener("click", async (event) => {
       event.stopPropagation();
-      if (!desktopDataBackup) return;
+      if (!desktopDataBackup || dataBackupOperation.busy || dataTransferInProgress) return;
       const action = event.currentTarget.dataset.backupAction;
-      const buttons = Array.from(document.querySelectorAll("[data-backup-action]"));
-      const status = document.querySelector("[data-backup-status]");
-      buttons.forEach((control) => { control.disabled = true; });
-      if (status) status.textContent = action === "export" ? "正在保存并生成完整备份…" : "正在保存当前数据并校验所选备份…";
+      dataBackupOperation = { busy: true, message: action === "export" ? "正在保存并生成完整备份…" : "正在保存当前数据并校验所选备份…" };
+      syncDataBackupControls();
       try {
         await flushAllDataForTransfer();
         // An import replaces the whole data set in place, so stop accepting
@@ -4786,43 +4878,58 @@ function bindDataBackupControls() {
               ? await desktopDataBackup.importDirectory()
               : await desktopDataBackup.importFile();
         } catch (error) {
-          if (isImport) dataTransferInProgress = false;
+          if (isImport && !/IMPORT_ROLLBACK_FAILED|自动回滚未能完成/.test(`${error?.code} ${error?.message}`)) dataTransferInProgress = false;
           throw error;
         }
         if (result?.canceled && isImport) dataTransferInProgress = false;
         if (result?.canceled) {
-          if (status) status.textContent = "操作已取消，当前数据未发生变化。";
+          dataBackupOperation.message = "操作已取消，当前数据未发生变化。";
+          if (isImport) save();
         } else if (action === "export") {
-          if (status) status.textContent = `完整备份已保存：${result.destinationPath || "所选位置"}`;
-          globalThis.alert("Loop 完整数据备份已导出并校验成功。");
-        } else if (status) {
-          status.textContent = "数据已恢复并校验成功，Loop 正在重新启动…";
+          dataBackupOperation.message = `完整备份已保存：${result.destinationPath || "所选位置"}`;
+        } else {
+          dataBackupOperation.message = "数据已恢复并校验成功，Loop 正在重新启动…";
         }
       } catch (error) {
         console.error("Loop data backup operation failed.", error);
-        if (status) status.textContent = `操作失败（${String(error?.code || "DATA_BACKUP_FAILED")}），当前数据已保留。`;
         const detail = String(error?.message || "").split("Error: ").pop().trim();
-        globalThis.alert(detail && /回滚|备份/.test(detail)
-          ? `数据迁移或恢复未完成：${detail}`
-          : "数据迁移或恢复未完成。Loop 已保留当前数据与安全备份，请检查文件、磁盘空间或目录权限后重试。");
+        const rollbackFailed = /IMPORT_ROLLBACK_FAILED|自动回滚未能完成/.test(`${error?.code} ${detail}`);
+        if (rollbackFailed) {
+          dataProtectionMessage = `恢复未完成，已暂停写入。${detail}`;
+          dataTransferInProgress = true;
+        }
+        dataBackupOperation.message = rollbackFailed ? dataProtectionMessage
+          : `操作未完成。${detail && /回滚|备份/.test(detail) ? detail : "请检查文件、磁盘空间或目录权限后重试，当前工作空间已保留。"}`;
       } finally {
-        buttons.forEach((control) => { control.disabled = false; });
+        dataBackupOperation.busy = false;
+        syncDataBackupControls();
+        updateLocalSaveReceipt();
       }
     });
   });
 }
 
+function syncDataBackupControls() {
+  document.querySelectorAll("[data-backup-action]").forEach(control => {
+    control.disabled = !desktopDataBackup || dataBackupOperation.busy || dataTransferInProgress || Boolean(dataProtectionMessage);
+  });
+  const status = document.querySelector("[data-backup-status]");
+  if (status) status.textContent = dataBackupOperation.message;
+}
+
 async function runUpdateAction(action) {
   if (!desktopUpdates) return;
+  if (!appUpdateState.supported || ["checking", "downloading", "preparing", "installing"].includes(appUpdateState.status)) return;
   // A click must never look dead. Two things can make it look dead: asking for a
   // download while nothing is downloadable (the updater returns the unchanged
   // state), and waiting for the first push from the main process. So the action
   // is validated against the current state and the result is reflected here,
   // before anything is awaited.
   const status = appUpdateState.status;
-  const effective = action === "download" && !["available", "downloaded"].includes(status)
+  const retry = status === "error" ? appUpdateState.retryAction : "";
+  const effective = action === "download" && !["available", "downloaded"].includes(status) && retry !== "download"
     ? "check"
-    : action === "install" && status !== "downloaded"
+    : action === "install" && status !== "downloaded" && retry !== "install"
       ? "check"
       : action;
   lastUpdateAction = effective;
@@ -5009,7 +5116,7 @@ function feedbackEnvironmentSummary() {
 // DEADLINE CALENDAR
 // ============================================================
 function ensureCalendarState() {
-  const todayKey = localDateKey(new Date());
+  const todayKey = loopTodayKey();
   if (!normalizeTaskDateFilter(state.calendarSelectedDate)) state.calendarSelectedDate = todayKey;
   if (!normalizeTaskDateFilter(state.calendarMonth)) state.calendarMonth = `${state.calendarSelectedDate.slice(0, 7)}-01`;
 }
@@ -5200,6 +5307,7 @@ function renderReviewItem({ task, date }) {
 }
 
 function reviewTasks(range = reviewRange()) {
+  if (range.error) return [];
   return state.tasks
     .map((task) => ({ task, date: taskReviewDate(task, state.reviewDateField) }))
     .filter((item) => item.date && isWithinRange(item.date, range))
@@ -5236,8 +5344,8 @@ function customReviewRange() {
   const end = rawEnd ? new Date(rawEnd.getFullYear(), rawEnd.getMonth(), rawEnd.getDate() + 1) : null;
   const startText = state.reviewStartDate || "开始";
   const endText = state.reviewEndDate || "结束";
-  if (start && end && start > end) return { start: rawEnd, end: new Date(start.getFullYear(), start.getMonth(), start.getDate() + 1), label: `${endText} - ${startText}` };
-  return { start, end, label: `${startText} - ${endText}` };
+  const error = !start || !rawEnd || start > rawEnd;
+  return { start, end, error, label: `${startText} - ${endText}` };
 }
 
 function ensureReviewCustomDates() {
@@ -6544,6 +6652,7 @@ function applySetting(key, value) {
   if (key === "en-font") state.enFont = normalizeEnFont(value);
   if (key === "font-scale") state.fontScale = normalizeFontScale(value);
   if (key === "task-filter") {
+    state.globalListReturn = null;
     state.taskFilter = normalizeTaskFilter(value);
     if (state.taskFilter === "today") state.todayFilter = "active";
     // 今日 / 任务仓库 must leave every full-width route, settings included.
@@ -7109,15 +7218,13 @@ function captureMountedMilkdownDrafts() {
     if (!host || !taskId || !instance?.getMarkdown) return;
     try {
       const markdown = instance.getMarkdown() ?? "";
-      // An unchanged document must not re-schedule stats, recovery and draft
-      // saves. The editor normalizes Markdown on the way in (for example a
-      // heading right after a paragraph gains a blank line), so a note that has
-      // merely been opened never compares equal to the stored text. Adopting the
-      // editor's own serialization as the model value converges after one write
-      // and stops every later navigation from queueing a full task-data save.
+      // The editor preserves source text until its document actually changes.
+      // Compare with the pending draft too: undo before the debounce fires must
+      // replace that draft rather than leave an abandoned edit queued to save.
       const task = state.tasks.find((item) => item.id === taskId);
       const node = task && nodeId ? findNode(task.nodes, nodeId) : null;
-      if (task && (node ? node.note : task.notes) === markdown) return;
+      const draft = nodeNoteDrafts.get(noteDraftKey(taskId, nodeId));
+      if (task && (draft?.markdown ?? (node ? node.note : task.notes)) === markdown) return;
       updateNodeNoteDraft(taskId, nodeId, markdown, host);
     } catch {
       // Ignore transient editor teardown states; the last onChange draft is still used.
@@ -7215,6 +7322,7 @@ function mountMilkdownEditors() {
     window.MilkdownTaskEditor.create({
       root: host,
       markdown,
+      sourceMarkdown: rawMarkdown,
       placeholder: node ? "记录处理过程" : "记录分析过程、知识点和可复用结论……",
       enableTableResizing: !nodeId,
       tableColumnWidths: nodeId ? [] : task.knowledgeNote?.tableColumnWidths,
@@ -7483,6 +7591,7 @@ async function pickEditorImageFile() {
  * @param {Event|null} event - Original DOM event, used for position calculations
  */
 async function action(data, event = null) {
+  if (["toggle-calendar", "toggle-review", "toggle-settings"].includes(data.action)) state.globalListReturn = null;
   // The three-column shell owns the Demo's action vocabulary; anything it
   // recognises is executed there and re-rendered, the legacy chain below
   // keeps handling the remaining project commands.
@@ -7775,10 +7884,19 @@ async function action(data, event = null) {
     }
   }
   if (data.action === "apply-calendar-date") {
+    rememberGlobalListReturn('[data-action="apply-calendar-date"]');
+    state.activeGroupId = ALL_TASKS_GROUP_ID;
+    state.taskFilter = "all";
+    state.captureSourceFilter = "all";
+    state.priorityFilter = "all";
+    state.query = "";
     state.taskDateFilter = normalizeTaskDateFilter(state.calendarSelectedDate);
     state.taskDeadlineFilter = "all";
     state.selectedNodeId = "";
     state.calendarOpen = false;
+    state.reviewOpen = false;
+    state.taskPane = "flow";
+    state.activeTaskId = calendarTasksForDate(state.taskDateFilter)[0]?.id || "";
   }
   if (data.action === "shift-calendar-month") {
     const month = calendarMonthDate();
@@ -7803,6 +7921,16 @@ async function action(data, event = null) {
     if (state.reviewPreset === "custom") ensureReviewCustomDates();
   }
   if (data.action === "open-review-task") openTaskFromGlobalList(data.taskId);
+  if (data.action === "return-global-page" && state.globalListReturn) {
+    const { context, focusSelector } = state.globalListReturn;
+    const { scroll, ...values } = context;
+    Object.assign(state, values);
+    state.globalListReturn = null;
+    window.requestAnimationFrame(() => {
+      for (const entry of scroll) document.querySelector(`.${entry.className.split(/\s+/).filter(Boolean).join(".")}`)?.scrollTo({ top: entry.top });
+      document.querySelector(focusSelector)?.focus({ preventScroll: true });
+    });
+  }
   if (data.action === "reload-app") window.location.reload();
   if (data.action === "select-group") selectGroup(data.groupId);
   if (data.action === "toggle-repository-type") {
@@ -8105,11 +8233,31 @@ function syncTaskTitleInputs(taskId, value) {
   });
 }
 
+function rememberGlobalListReturn(focusSelector) {
+  if (!state.calendarOpen && !state.reviewOpen) return;
+  state.globalListReturn = {
+    route: state.calendarOpen ? "calendar" : "review",
+    context: shellCaptureJourneyContext(),
+    focusSelector,
+  };
+}
+
 function openTaskFromGlobalList(taskId, nodeId = "", options = {}) {
   const task = state.tasks.find((item) => item.id === taskId);
   if (!task) return;
+  const fromPage = state.calendarOpen || state.reviewOpen;
+  const fromSettings = state.settingsOpen;
+  if (fromPage) {
+    rememberGlobalListReturn(`[data-action="${state.calendarOpen ? "open-calendar-task" : "open-review-task"}"][data-task-id="${escSelectorValue(taskId)}"]`);
+    state.captureSourceFilter = "all";
+    state.taskPane = "flow";
+    state.settingsOpen = false;
+  } else state.globalListReturn = null;
+  state.settingsOpen = false;
+  state.captureSourceFilter = "all";
+  if (fromSettings || nodeId) state.taskPane = "flow";
   const keepTodayView = options.keepToday === true && state.taskFilter === "today";
-  state.activeGroupId = task.groupId || UNGROUPED_TASKS_GROUP_ID;
+  state.activeGroupId = fromPage ? ALL_TASKS_GROUP_ID : task.groupId || UNGROUPED_TASKS_GROUP_ID;
   state.activeTaskId = task.id;
   state.selectedNodeId = nodeId;
   state.recordDraft = nodeId ? findNode(task.nodes, nodeId)?.note || "" : "";
@@ -8204,6 +8352,8 @@ function createTask(title, shouldRender = true) {
 }
 
 function createQuickCapture(title, description = "", addToToday = false) {
+  const normalizedTitle = String(title || "").trim();
+  if (!normalizedTitle) return null;
   const previousActiveTaskId = state.activeTaskId;
   const previousActiveGroupId = state.activeGroupId;
   const {
@@ -8215,6 +8365,7 @@ function createQuickCapture(title, description = "", addToToday = false) {
     query,
     focusTaskTitleId,
     revealTaskId,
+    selectedNodeId,
   } = state;
   const previousRepositoryState = {
     taskFilter,
@@ -8225,8 +8376,9 @@ function createQuickCapture(title, description = "", addToToday = false) {
     query,
     focusTaskTitleId,
     revealTaskId,
+    selectedNodeId,
   };
-  const task = createTask(String(title || "").trim(), false);
+  const task = createTask(normalizedTitle, false);
   if (!task) return null;
   const asTodayTask = addToToday === true;
   task.groupId = "";
@@ -8304,6 +8456,7 @@ async function deleteQuickCaptureFromWidget(taskId) {
  * @param {string} groupId - Target group ID
  */
 function selectGroup(groupId) {
+  state.globalListReturn = null;
   state.activeGroupId = normalizeActiveGroupId(groupId, state.taskGroups);
   state.activeTaskId = "";
   state.selectedNodeId = "";
@@ -9652,6 +9805,7 @@ async function initializeTodayWidgetBridge() {
   });
   unsubscribeTodayWidgetOpenTask = desktopTodayWidget.onOpenTask(({ taskId } = {}) => {
     if (!taskId) return;
+    shellPreserveDraftsForReturn();
     openTaskFromGlobalList(taskId);
     render();
   });
@@ -9796,6 +9950,9 @@ async function bootstrap() {
   state.priorityFilter = data.priorityFilter;
   state.captureSourceFilter = normalizeCaptureSourceFilter(data.captureSourceFilter);
   state.newTaskPriority = data.newTaskPriority;
+  state.uiPreferences = normalizeUiPreferences(data.uiPreferences);
+  globalThis.LoopContinuity28?.restorePreferences?.(state.uiPreferences);
+  globalThis.LoopWork?.restorePreferences?.(state.uiPreferences);
   state.knowledgeRecovery = recovery;
   state.installationId = normalizeInstallationId(data.installationId);
   state.workNavigation = workNavigationModel.normalizeWorkNavigation(data.workNavigation, {

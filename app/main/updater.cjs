@@ -53,12 +53,15 @@ function createUpdateController({
     bytesPerSecond: 0,
     lastCheckedAt: "",
     errorCode: "",
+    retryAction: "check",
+    preferenceError: "",
   };
   let startupTimer = null;
   let intervalTimer = null;
   let started = false;
   let userApprovedInstall = false;
   let installInFlight = null;
+  let preferenceQueue = Promise.resolve();
 
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = false;
@@ -97,16 +100,19 @@ function createUpdateController({
     }
   }
 
-  async function savePreferences() {
+  async function savePreferences(automaticChecks) {
+    const temporary = `${preferencesPath()}.tmp`;
     try {
       await fileSystem.mkdir(app.getPath("userData"), { recursive: true });
       await fileSystem.writeFile(
-        preferencesPath(),
-        `${JSON.stringify({ automaticChecks: state.automaticChecks }, null, 2)}\n`,
+        temporary,
+        `${JSON.stringify({ automaticChecks }, null, 2)}\n`,
         "utf8",
       );
+      await fileSystem.rename(temporary, preferencesPath());
     } catch (error) {
-      console.warn("Unable to save update preferences.", safeErrorCode(error));
+      await fileSystem.rm(temporary, { force: true }).catch(() => {});
+      throw error;
     }
   }
 
@@ -126,13 +132,22 @@ function createUpdateController({
     intervalTimer.unref?.();
   }
 
-  async function setAutomaticChecks(value) {
-    const automaticChecks = value === true;
-    updateState({ automaticChecks });
-    await savePreferences();
-    if (automaticChecks) scheduleAutomaticChecks(1_500);
-    else clearSchedule();
-    return getState();
+  function setAutomaticChecks(value) {
+    const operation = preferenceQueue.then(async () => {
+      const automaticChecks = value === true;
+      try {
+        await savePreferences(automaticChecks);
+      } catch (error) {
+        updateState({ preferenceError: safeErrorCode(error) });
+        throw error;
+      }
+      updateState({ automaticChecks, preferenceError: "" });
+      if (automaticChecks) scheduleAutomaticChecks(1_500);
+      else clearSchedule();
+      return getState();
+    });
+    preferenceQueue = operation.catch(() => {});
+    return operation;
   }
 
   async function checkForUpdates(source = "manual") {
@@ -145,6 +160,7 @@ function createUpdateController({
       total: 0,
       bytesPerSecond: 0,
       checkSource: source === "automatic" ? "automatic" : "manual",
+      retryAction: "check",
     });
     try {
       await autoUpdater.checkForUpdates();
@@ -155,10 +171,11 @@ function createUpdateController({
   }
 
   async function downloadUpdate() {
-    if (!supported || !["available", "downloaded"].includes(state.status)) return getState();
+    if (!supported || !(["available", "downloaded"].includes(state.status)
+      || (state.status === "error" && state.retryAction === "download" && state.version))) return getState();
     userApprovedInstall = true;
     if (state.status === "downloaded") return installDownloadedUpdate();
-    updateState({ status: "downloading", errorCode: "", percent: 0 });
+    updateState({ status: "downloading", errorCode: "", percent: 0, retryAction: "download" });
     try {
       await autoUpdater.downloadUpdate();
     } catch (error) {
@@ -169,6 +186,9 @@ function createUpdateController({
   }
 
   function installUpdate() {
+    if (state.status === "error" && state.retryAction === "install" && state.version) {
+      updateState({ status: "downloaded", errorCode: "" });
+    }
     if (!supported || state.status !== "downloaded") return getState();
     userApprovedInstall = true;
     return installDownloadedUpdate();
@@ -178,7 +198,7 @@ function createUpdateController({
     if (!supported || !userApprovedInstall || state.status !== "downloaded") return Promise.resolve(getState());
     if (installInFlight) return installInFlight;
     installInFlight = (async () => {
-      updateState({ status: "preparing", errorCode: "" });
+      updateState({ status: "preparing", errorCode: "", retryAction: "install" });
       let prepared = false;
       try {
         prepared = await prepareInstall();

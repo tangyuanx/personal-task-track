@@ -21,7 +21,7 @@ function shellPageHeading(title, description, actions = "") {
 // ------------------------------------------------------------
 
 function shellCalendarMonth() {
-  const parsed = safeDate(`${String(state.calendarMonth || "").slice(0, 7)}-01`);
+  const parsed = parseDateInput(`${String(state.calendarMonth || "").slice(0, 7)}-01`);
   return parsed || loopNow();
 }
 
@@ -102,6 +102,13 @@ function shellReviewItems() {
   return { range, items };
 }
 
+function shellReviewRangeLabel(range) {
+  if (state.reviewPreset === "all") return "全部时间";
+  if (!range.start || !range.end) return "选择日期范围";
+  const inclusiveEnd = new Date(range.end.getFullYear(), range.end.getMonth(), range.end.getDate() - 1);
+  return `${shellDisplayDate(localDateKey(range.start))} — ${shellDisplayDate(localDateKey(inclusiveEnd))}`;
+}
+
 /** Same value the range filter used, so the column never disagrees with the range. */
 function shellReviewDateText(date) {
   if (!date) return "—";
@@ -124,7 +131,6 @@ function renderShellReview() {
       <div class="segmented" aria-label="回顾时间范围">
         ${SHELL_REVIEW_PRESETS.map(([value, label]) => `<button class="${state.reviewPreset === value ? "active" : ""}" type="button" data-action="set-review-preset" data-preset="${value}" aria-pressed="${state.reviewPreset === value}">${label}</button>`).join("")}
       </div>
-      <button class="text-button time18-clock-trigger" type="button" data-action="time18-clock" aria-haspopup="dialog" aria-expanded="false" title="切换检阅用的日期与时间（不修改系统时间）">${shellIcon("clock")}<span>${loopClockIsPreview() ? loopStamp() : "预览时间"}</span>${shellIcon("down")}</button>
       <label class="field-select">依据
         <select data-review-date-field aria-label="回顾日期依据">
           ${Object.entries(SHELL_REVIEW_FIELD_LABELS).map(([value, label]) => `<option value="${value}" ${state.reviewDateField === value ? "selected" : ""}>${label}</option>`).join("")}
@@ -140,7 +146,7 @@ function renderShellReview() {
     </div>
     <section class="review-content">
       <div class="review-caption">
-        <span><b>${esc(range.label)}</b> · ${SHELL_REVIEW_FIELD_LABELS[state.reviewDateField] || "更新日期"}</span>
+        <span><b>${esc(shellReviewRangeLabel(range))}</b> · ${SHELL_REVIEW_FIELD_LABELS[state.reviewDateField] || "更新日期"}</span>
         <span>${items.length} 个任务</span>
       </div>
       ${items.length
@@ -168,7 +174,5 @@ function renderShellReview() {
 
 function shellReviewRangeError() {
   if (state.reviewPreset !== "custom") return false;
-  const start = parseDateInput(state.reviewStartDate);
-  const end = parseDateInput(state.reviewEndDate);
-  return !state.reviewStartDate || !state.reviewEndDate || (start && end && start > end);
+  return customReviewRange().error;
 }

@@ -45,6 +45,23 @@
   let chromeSignature = "";
   let trafficSpace = null;
   let captionSpace = null;
+  let windowStateRevision = 0;
+
+  // The shell caches navigation and topbar independently. Return borrowed
+  // identity nodes to their markup owner before either region is reused or
+  // replaced; otherwise a new navigation can duplicate the retained brand,
+  // or a new topbar can discard it while navigation reuses an empty slot.
+  function restoreIdentityOwner() {
+    const navigation = document.querySelector(".navigation");
+    const brand = document.querySelector(".brand");
+    const bar = document.querySelector(".topbar");
+    if (!navigation || !brand) return;
+    const toggle = bar?.querySelector(".nav-toggle") || brand.querySelector(".nav-toggle");
+    const update = bar?.querySelector("[data-brand-update-slot]") || brand.querySelector("[data-brand-update-slot]");
+    if (toggle && toggle.parentElement !== brand) brand.append(toggle);
+    if (update && update.parentElement !== brand) brand.append(update);
+    if (brand.parentElement !== navigation) navigation.prepend(brand);
+  }
 
   function navIsCollapsed() {
     const app = document.querySelector(".app");
@@ -195,8 +212,11 @@
 
   function watchWindowState() {
     if (typeof controls?.getState === "function") {
-      controls.onState?.(applyWindowState);
-      Promise.resolve(controls.getState()).then(applyWindowState).catch(() => {});
+      controls.onState?.((next) => { windowStateRevision++; applyWindowState(next); });
+      const revision = windowStateRevision;
+      Promise.resolve(controls.getState()).then((next) => {
+        if (windowStateRevision === revision) applyWindowState(next);
+      }).catch(() => {});
       return;
     }
     // Without the desktop bridge the header still follows real DOM focus.
@@ -206,8 +226,18 @@
 
   const window25BaseRender = render;
   render = function window25Render() {
+    const focused = document.activeElement;
+    const action = focused?.closest?.(".topbar") ? focused.getAttribute("data-action") : null;
+    restoreIdentityOwner();
     window25BaseRender();
     decorate();
+    // Root replacement detaches the focused header button. Restore its same
+    // action only when the render has not explicitly focused an editor/dialog.
+    if (action && (!document.activeElement?.isConnected || document.activeElement === document.body)) {
+      const button = [...(document.querySelector(".topbar")?.querySelectorAll("[data-action]") || [])]
+        .find((element) => element.getAttribute("data-action") === action);
+      if (!button?.disabled) button?.focus({ preventScroll: true });
+    }
   };
 
   watchNativeGeometry();

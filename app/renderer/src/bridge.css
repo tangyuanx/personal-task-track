@@ -405,3 +405,11 @@ body[data-window25-inactive] .topbar > .brand-update-slot > .brand-update {
 @media (min-width: 1600px) {
   .app.nav-collapsed { --nav-width: 64px !important; }
 }
+
+/* Persistence receipts reuse the quiet footer; only confirmed writes are green. */
+.workspace-foot [data-local-save-status]:not([data-state="saved"]) .dot {
+  background: var(--secondary);
+}
+.workspace-foot [data-local-save-status][data-state="failed"] .dot {
+  background: var(--orange);
+}

@@ -68,6 +68,19 @@ function shellMountSurface(markup, trigger, width = 320) {
   return surface;
 }
 
+/** Keep fixed menus reachable when the desktop window shrinks around them. */
+function shellClampFloatingSurface(surface) {
+  if (!surface) return;
+  const left = Number.parseFloat(surface.style.left), top = Number.parseFloat(surface.style.top);
+  const width = surface.offsetWidth, availableHeight = Math.max(0, window.innerHeight - 24);
+  if (surface.offsetHeight > availableHeight) {
+    surface.style.maxHeight = `${availableHeight}px`;
+    surface.style.overflowY = "auto";
+  }
+  if (Number.isFinite(left) && width > 0) surface.style.left = `${Math.max(12, Math.min(left, window.innerWidth - width - 12))}px`;
+  if (Number.isFinite(top)) surface.style.top = `${Math.max(12, Math.min(top, window.innerHeight - surface.offsetHeight - 12))}px`;
+}
+
 function shellCloseOverlay({ restoreFocus = true } = {}) {
   // Demo phase 16: dismissing keeps the creation draft for this session.
   if (document.querySelector("#create-form") && state.createDraft) shellCaptureCreateDraft();
@@ -76,10 +89,10 @@ function shellCloseOverlay({ restoreFocus = true } = {}) {
   const host = overlay.querySelector("[data-return-focus]");
   const selector = host?.dataset.returnFocus || "";
   overlay.innerHTML = "";
-  if (!restoreFocus || !selector) return;
+  if (!selector) return;
   const trigger = document.querySelector(selector);
-  if (trigger?.hasAttribute("aria-haspopup")) trigger.setAttribute("aria-expanded", "false");
-  trigger?.focus({ preventScroll: true });
+  if (trigger?.hasAttribute("aria-haspopup") || trigger?.hasAttribute("aria-expanded")) trigger.setAttribute("aria-expanded", "false");
+  if (restoreFocus) trigger?.focus({ preventScroll: true });
 }
 
 /**
@@ -324,12 +337,19 @@ function shellCaptureJourneyContext() {
     activeTaskId: state.activeTaskId,
     selectedNodeId: state.selectedNodeId,
     taskPane: state.taskPane,
+    query: state.query,
+    priorityFilter: state.priorityFilter,
+    captureSourceFilter: state.captureSourceFilter,
+    taskDateFilter: state.taskDateFilter,
+    taskDeadlineFilter: state.taskDeadlineFilter,
     calendarOpen: state.calendarOpen,
     calendarSelectedDate: state.calendarSelectedDate,
     calendarMonth: state.calendarMonth,
     reviewOpen: state.reviewOpen,
     reviewPreset: state.reviewPreset,
     reviewDateField: state.reviewDateField,
+    reviewStartDate: state.reviewStartDate,
+    reviewEndDate: state.reviewEndDate,
     scroll: [...document.querySelectorAll(".tasks-scroll, .workspace, .flow-scroll, .review-content")]
       .map((element) => ({ className: element.className, top: element.scrollTop })),
   };
@@ -891,17 +911,19 @@ function shellUpdatePanelBody() {
     downloaded: "更新已准备好",
     preparing: "正在准备更新",
     installing: "正在安装更新",
-    error: "下载未完成",
+    error: update.retryAction === "check" ? "检查更新失败" : "更新未完成",
+    checking: "正在检查更新",
     latest: "当前已是最新版本",
-    idle: "当前已是最新版本",
+    idle: "尚未检查更新",
   };
   const bodies = {
-    available: "新版本说明会显示在这里。你可以稍后更新。",
+    available: "确认后在后台下载，完成后自动安装并重新启动。",
     downloading: `${Math.round(update.percent || 0)}% · 下载期间可继续处理任务。`,
-    downloaded: "安装需要重启 Loop。请先保存正在编辑的内容。",
+    downloaded: update.errorCode ? "升级前保存未完成，应用没有退出。请检查磁盘空间或目录权限后重试。" : "安装需要重启 Loop。请先保存正在编辑的内容。",
     preparing: "正在安全写入任务与知识笔记草稿。",
     installing: "应用即将自动重启，请稍候。",
-    error: "请检查网络后重试。",
+    error: updateErrorPresentation(update.errorCode).detail,
+    checking: "正在连接 GitHub Release。",
   };
   const version = update.version ? ` · 新版本 v${update.version}` : "";
   const progress = ["downloading", "preparing", "installing"].includes(update.status)
@@ -914,7 +936,7 @@ function shellUpdatePanelBody() {
       ${progress}
       <footer>
         <button type="button" class="text-button" data-action="close-dialog">稍后</button>
-        ${["available", "error"].includes(update.status) ? `<button type="button" class="button primary" data-action="run-update-download">${update.status === "error" ? "重试下载" : "下载更新"}</button>` : ""}
+        ${["available", "error"].includes(update.status) ? `<button type="button" class="button primary" data-update-action="${update.status === "error" ? update.retryAction : "download"}">${update.status === "error" ? (update.retryAction === "check" ? "重新检查" : update.retryAction === "install" ? "重试安装" : "重试下载") : "下载更新"}</button>` : ""}
         ${update.status === "downloaded" ? '<button type="button" class="button primary" data-action="run-update-install">重启并安装</button>' : ""}
       </footer>`;
 }
@@ -950,6 +972,7 @@ function shellChoiceMenu(trigger, title, options, selected, dataKey, iconName = 
     <p class="status-menu-title">${esc(title)}</p>
     ${Object.entries(options).map(([value, label]) => `<button type="button" role="menuitemradio" aria-checked="${selected === value}" data-action="set-task-priority" data-priority="${escAttr(value)}">${shellIcon(iconName)}<span>${esc(label)}</span>${selected === value ? shellIcon("check") : "<span></span>"}</button>`).join("")}
   </div>`;
+  shellClampFloatingSurface(overlay.querySelector(".priority-popover"));
   trigger.setAttribute("aria-expanded", "true");
   overlay.querySelector('[aria-checked="true"]')?.focus({ preventScroll: true });
 }
@@ -1548,6 +1571,9 @@ async function shellAction(data, event) {
     case "knowledge-file-info":
       shellKnowledgeFileInfo(shellActiveTask());
       return true;
+    case "export-knowledge-note":
+      shellKnowledgeExportNote(state.tasks.find((task) => task.id === data.taskId) || shellActiveTask());
+      return true;
     case "knowledge-conflict":
       shellKnowledgeConflict(shellActiveTask());
       return true;
@@ -1593,7 +1619,10 @@ async function shellAction(data, event) {
       shellSettingsChoiceMenu(trigger, data.key);
       return true;
     case "set-settings-choice":
+      // Changing a default inside Settings keeps the same page visible.
+      const settingsWasOpen = state.settingsOpen;
       applySetting(data.key, data.value);
+      if (settingsWasOpen) state.settingsOpen = true;
       save();
       shellCloseOverlay({ restoreFocus: false });
       return true;
@@ -1788,6 +1817,11 @@ function shellBindOverlayDismissal() {
   if (typeof document.addEventListener !== "function") return;
   if (window.__loopShellDismissBound) return;
   window.__loopShellDismissBound = true;
+  window.addEventListener("resize", () => {
+    document.querySelectorAll("#overlay .surface-popover, #overlay .priority-popover, #overlay .status-menu")
+      .forEach(shellClampFloatingSurface);
+  });
+  let consumeOutsideClick = false;
   document.addEventListener("keydown", (event) => {
     if (event.key !== "Escape" || !shellOverlayIsOpen()) return;
     event.preventDefault();
@@ -1800,13 +1834,24 @@ function shellBindOverlayDismissal() {
     render();
   }, true);
   document.addEventListener("pointerdown", (event) => {
+    consumeOutsideClick = false;
     if (!shellOverlayIsOpen()) return;
-    if (event.target.closest("#overlay")) return;
+    const overlay = shellOverlay();
+    const surface = overlay.querySelector(".dialog") || overlay.firstElementChild;
+    if (surface?.contains(event.target)) return;
     if (event.target.closest(SHELL_OVERLAY_TRIGGERS)) return;
+    consumeOutsideClick = event.button === 0;
     shellCloseOverlay({ restoreFocus: false });
     state.taskMenuOpen = false;
     state.contextMenu = null;
     render();
+  }, true);
+  document.addEventListener("click", (event) => {
+    // The closing pointer click must not activate a control exposed underneath.
+    if (!consumeOutsideClick || event.detail === 0) return;
+    consumeOutsideClick = false;
+    event.preventDefault();
+    event.stopImmediatePropagation();
   }, true);
 }
 

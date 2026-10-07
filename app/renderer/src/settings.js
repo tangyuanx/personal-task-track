@@ -149,7 +149,8 @@ function shellSettingsUpdateCardBody() {
     downloaded: "更新已准备好",
     preparing: "正在保存并准备升级…",
     installing: "正在完成升级…",
-    error: lastUpdateAction === "check" ? "检查更新失败" : "更新未完成",
+    error: update.retryAction === "check" ? "检查更新失败" : "更新未完成",
+    unsupported: "当前环境暂不支持应用内更新",
     latest: "当前已是最新版本",
     checking: "正在检查更新…",
     idle: "尚未检查更新",
@@ -157,13 +158,14 @@ function shellSettingsUpdateCardBody() {
   const bodies = {
     available: "确认后在后台下载，完成后自动安装并重新启动。",
     downloading: "下载期间可继续处理任务；完成后应用会自动重启。",
-    downloaded: "请保存正在编辑的内容，然后重启完成安装。",
+    downloaded: update.errorCode ? "升级前保存未完成，应用没有退出。请检查磁盘空间或目录权限后重试。" : "请保存正在编辑的内容，然后重启完成安装。",
     preparing: "正在安全写入任务与知识笔记草稿。",
     installing: "应用即将自动重启，请稍候。",
-    error: update.errorCode ? `未能完成（${update.errorCode}）。请检查网络连接后重试。` : "请检查网络连接后重试。",
+    error: updateErrorPresentation(update.errorCode).detail,
     latest: `当前为 v${esc(update.currentVersion || APP_VERSION || "")}${checkedLabel ? " · " + checkedLabel : ""}`,
     checking: "正在连接 GitHub Release。",
     idle: "应用启动后会定期检查，也可以手动检查。",
+    unsupported: update.unsupportedReason === "development" ? "开发检阅不会连接更新服务。" : "请从发布页获取安装包。",
   };
   const busy = ["checking", "downloading", "preparing", "installing"].includes(status);
   const progress = ["downloading", "preparing", "installing"].includes(status)
@@ -173,7 +175,7 @@ function shellSettingsUpdateCardBody() {
   // checking while busy is disabled, otherwise it offers the only useful action.
   const actions = status === "available" ? '<button class="button primary" type="button" data-update-action="download">升级并重启</button>'
     : status === "downloaded" ? '<button class="button primary" type="button" data-update-action="install">重启并安装</button>'
-      : status === "error" ? `<button class="button primary" type="button" data-update-action="${lastUpdateAction === "check" ? "check" : "download"}">${lastUpdateAction === "check" ? "重新检查" : "重试下载"}</button>`
+      : status === "error" ? `<button class="button primary" type="button" data-update-action="${update.retryAction}">${update.retryAction === "check" ? "重新检查" : update.retryAction === "install" ? "重试安装" : "重试下载"}</button>`
         : `<button class="button" type="button" data-update-action="check" ${busy || !update.supported ? "disabled" : ""}>${status === "checking" ? "检查中…" : "检查更新"}</button>`;
   return `<h3>${esc(titles[status] || "软件更新")}</h3>
       <p>${esc(bodies[status] || "")}</p>
@@ -188,13 +190,18 @@ function shellSettingsSyncUpdateCard() {
   if (!node) return;
   node.innerHTML = shellSettingsUpdateCardBody();
   const toggle = document.querySelector("[data-update-automatic]");
-  if (toggle) toggle.setAttribute("aria-checked", String(appUpdateState.automaticChecks === true));
+  if (toggle) {
+    toggle.setAttribute("aria-checked", String(appUpdateState.automaticChecks === true));
+    toggle.disabled = !appUpdateState.supported || updatePreferenceInFlight;
+    const caption = toggle.closest(".setting-row")?.querySelector("p");
+    if (caption) caption.textContent = appUpdateState.preferenceError ? "设置未保存，请检查目录权限后重试。" : appUpdateState.automaticChecks ? "应用启动后定期检查。" : "仅在手动操作时检查。";
+  }
 }
 
 function shellSettingsUpdates() {
   const update = appUpdateState;
   return `<h2>软件更新</h2><p>检查新版本，管理更新方式。</p>
-    ${shellSettingsToggle("自动检查更新", update.automaticChecks ? "应用启动后定期检查。" : "仅在手动操作时检查。", update.automaticChecks === true, `data-update-automatic ${update.supported ? "" : "disabled"}`)}
+    ${shellSettingsToggle("自动检查更新", update.preferenceError ? "设置未保存，请检查目录权限后重试。" : update.automaticChecks ? "应用启动后定期检查。" : "仅在手动操作时检查。", update.automaticChecks === true, `data-update-automatic ${update.supported && !updatePreferenceInFlight ? "" : "disabled"}`)}
     ${shellSettingsInfo("当前版本", "Loop 的当前安装版本。", `Loop v${esc(update.currentVersion || APP_VERSION || "")}`)}
     <section class="prefs-update-detail" data-shell-update-detail aria-live="polite">${shellSettingsUpdateCardBody()}</section>
     ${update.supported ? "" : '<p class="prefs-native-caption">开发模式或未签名的构建不连接更新服务。</p>'}`;
@@ -202,9 +209,12 @@ function shellSettingsUpdates() {
 
 function shellSettingsAdvanced() {
   // work.js owns this page (Demo phase 15): unlock gate + schedule form.
-  return typeof globalThis.LoopWork?.settingsBody === "function"
+  const body = typeof globalThis.LoopWork?.settingsBody === "function"
     ? globalThis.LoopWork.settingsBody()
     : `<h2>高级功能</h2><p>按需要启用附加能力，保持日常任务工作台简洁。</p>`;
+  return `${body}<h3 class="prefs-subheading">时间预览</h3>
+    ${shellSettingsAction("预览时间", loopClockIsPreview() ? `当前预览：${loopStamp()}。不修改系统时间。` : "临时切换界面中的日期与时间，不修改系统时间。", "设置预览", 'data-action="time18-clock" aria-haspopup="dialog" aria-expanded="false"')}
+    ${loopClockIsPreview() ? '<button class="text-button" type="button" data-action="time18-clear">恢复真实时间</button>' : ""}`;
 }
 
 // ------------------------------------------------------------
@@ -226,6 +236,7 @@ const SHELL_HELP_TOPICS = [
 function shellSettingsHelp() {
   const open = Number(state.helpTopicOpen);
   return `<h2>帮助与反馈</h2><p>了解 Loop 的使用方式，记录遇到的问题与建议。</p>
+    ${globalThis.LoopManual27?.entry() || ""}
     <section class="help14-intro">
       <div><span class="setting-label">问题与建议</span><p>描述遇到的情况，保留复现步骤与预期结果。</p></div>
       <button class="button" type="button" data-action="open-help-feedback">提交反馈</button>

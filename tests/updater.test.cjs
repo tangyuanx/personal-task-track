@@ -14,6 +14,7 @@ function createHarness({
   installThrows = false,
   checkError = null,
   installDirectory = "C:\\Users\\example\\AppData\\Local\\Programs\\Personal Task Track",
+  fileSystem = fs,
 } = {}) {
   const updates = new EventEmitter();
   const handlers = new Map();
@@ -64,6 +65,7 @@ function createHarness({
     platform,
     macUpdatesEnabled,
     installDirectory,
+    fileSystem,
     prepareInstall: async () => {
       prepareInstallCount += 1;
       return prepareInstallResult;
@@ -83,6 +85,65 @@ function createHarness({
 }
 
 const settle = () => new Promise((resolve) => setImmediate(resolve));
+
+test("a failed download retries the download without losing the checked release", async (t) => {
+  const h = createHarness();
+  t.after(() => fs.rm(h.userData, { recursive: true, force: true }));
+  await h.controller.start({ schedule: false });
+  await h.controller.checkForUpdates();
+  const download = h.updates.downloadUpdate;
+  h.updates.downloadUpdate = async () => { throw Object.assign(new Error("offline"), { code: "ENOTFOUND" }); };
+  await h.controller.downloadUpdate();
+  assert.equal(h.controller.getState().status, "error");
+  assert.equal(h.controller.getState().retryAction, "download");
+  h.updates.downloadUpdate = download;
+  await h.controller.downloadUpdate(); await settle();
+  assert.equal(h.downloadCount(), 1);
+  assert.equal(h.checkCount(), 1);
+  assert.equal(h.controller.getState().status, "installing");
+});
+
+test("an installer failure can retry the downloaded installer without downloading again", async (t) => {
+  const h = createHarness({ installThrows: true });
+  t.after(() => fs.rm(h.userData, { recursive: true, force: true }));
+  await h.controller.checkForUpdates(); await h.controller.downloadUpdate(); await settle();
+  assert.equal(h.controller.getState().retryAction, "install");
+  let installed = 0;
+  h.updates.quitAndInstall = () => { installed++; };
+  await h.controller.installUpdate();
+  assert.equal(installed, 1);
+  assert.equal(h.downloadCount(), 1);
+  assert.equal(h.controller.getState().status, "installing");
+});
+
+test("failed update-preference persistence retains the saved value and current download state", async (t) => {
+  let fail = false;
+  const h = createHarness({ fileSystem: { ...fs, rename: async (...args) => {
+    if (fail) throw Object.assign(new Error("disk full"), { code: "ENOSPC" });
+    return fs.rename(...args);
+  } } });
+  t.after(() => fs.rm(h.userData, { recursive: true, force: true }));
+  await h.controller.setAutomaticChecks(false);
+  h.updates.emit("download-progress", { percent: 23 });
+  fail = true;
+  await assert.rejects(h.controller.setAutomaticChecks(true), { code: "ENOSPC" });
+  assert.equal(h.controller.getState().automaticChecks, false);
+  assert.equal(h.controller.getState().status, "downloading");
+  assert.equal(h.controller.getState().preferenceError, "ENOSPC");
+  assert.deepEqual(JSON.parse(await fs.readFile(path.join(h.userData, "update-preferences.json"), "utf8")), { automaticChecks: false });
+  fail = false; await h.controller.setAutomaticChecks(true); h.controller.stop();
+  assert.equal(h.controller.getState().preferenceError, "");
+});
+
+test("concurrent update-preference changes commit in order and restart reads the final value", async (t) => {
+  const h = createHarness();
+  t.after(() => { h.controller.stop(); return fs.rm(h.userData, { recursive: true, force: true }); });
+  await Promise.all([h.controller.setAutomaticChecks(false), h.controller.setAutomaticChecks(true), h.controller.setAutomaticChecks(false)]);
+  assert.equal(h.controller.getState().automaticChecks, false);
+  const other = createHarness({ fileSystem: { ...fs, readFile: () => fs.readFile(path.join(h.userData, "update-preferences.json"), "utf8") } });
+  await other.controller.start({ schedule: false });
+  assert.equal(other.controller.getState().automaticChecks, false);
+});
 
 test("one explicit Windows upgrade action downloads, prepares, silently installs, and relaunches", async () => {
   const harness = createHarness();

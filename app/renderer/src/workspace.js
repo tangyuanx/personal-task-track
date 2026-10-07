@@ -430,8 +430,8 @@ function renderShellWorkspace(task) {
       ${pane === "flow" ? renderShellFlow(task) : pane === "notes" ? renderShellNotes(task) : renderShellHistory(task)}
     </div>
     <footer class="workspace-foot">
-      <span><i class="dot"></i>预览中的修改已保留</span>
-      <span class="foot-shortcut">${pane === "notes" ? "⌘ / Ctrl + S 保存 · 文件状态仅为预览" : "拖动节点调整层级 · Esc 关闭详情"}</span>
+      ${renderLocalSaveReceipt()}
+      <span class="foot-shortcut">${pane === "notes" ? "⌘ / Ctrl + S 保存文件" : "拖动节点调整层级 · Esc 关闭详情"}</span>
     </footer>
     ${state.taskMenuOpen ? renderShellTaskMenu(task) : ""}`;
 }

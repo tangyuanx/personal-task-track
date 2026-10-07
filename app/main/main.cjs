@@ -387,7 +387,9 @@ function registerStorageHandlers() {
         installDirectory: process.platform === "win32" ? path.dirname(process.execPath) : "",
       });
     } catch (error) {
-      dataMaintenance.end();
+      // A failed rollback leaves a partial workspace. Keep every writer locked
+      // until the user can recover the verified safety copy.
+      if (error?.code !== "IMPORT_ROLLBACK_FAILED") dataMaintenance.end();
       throw error;
     }
     setTimeout(() => {
@@ -446,8 +448,14 @@ function registerStorageHandlers() {
   ipcMain.handle("knowledge-document:unwatch", (_event, payload) => knowledgeWatcher.unwatch(payload?.noteId));
   ipcMain.handle("knowledge-document:update-baseline", (_event, payload) => knowledgeWatcher.updateBaseline(payload?.noteId, payload));
   ipcMain.handle("knowledge-recovery:read", () => readKnowledgeRecovery(app.getPath("userData")));
-  ipcMain.handle("knowledge-recovery:write", (_event, record) => writeKnowledgeRecovery(app.getPath("userData"), record));
-  ipcMain.handle("knowledge-recovery:delete", (_event, noteId) => deleteKnowledgeRecovery(app.getPath("userData"), noteId));
+  ipcMain.handle("knowledge-recovery:write", (_event, record) => {
+    dataMaintenance.assertWritable();
+    return writeKnowledgeRecovery(app.getPath("userData"), record);
+  });
+  ipcMain.handle("knowledge-recovery:delete", (_event, noteId) => {
+    dataMaintenance.assertWritable();
+    return deleteKnowledgeRecovery(app.getPath("userData"), noteId);
+  });
   ipcMain.on("knowledge-recovery:flush-complete", (event) => {
     if (event.sender.id !== recoveryShutdownWaitingFor) return;
     finishRecoveryShutdown();
@@ -514,15 +522,19 @@ function platformName(platform) {
 async function exportTaskDocument(payload) {
   const safePayload = payload && typeof payload === "object" ? payload : {};
   const taskTitle = String(safePayload.taskTitle || "未命名任务").trim() || "未命名任务";
+  const format = ["md", "html", "pdf"].includes(safePayload.format) ? safePayload.format : "";
+  const formats = {
+    md: { name: "Markdown", extensions: ["md"] },
+    html: { name: "HTML", extensions: ["html"] },
+    pdf: { name: "PDF", extensions: ["pdf"] },
+  };
   const { canceled, filePath } = await dialog.showSaveDialog({
-    title: "导出任务",
-    defaultPath: `${sanitizeFileName(taskTitle)}.md`,
-    filters: [
-      { name: "Markdown", extensions: ["md"] },
-      { name: "PDF", extensions: ["pdf"] },
-    ],
+    title: safePayload.documentKind === "note" ? "导出笔记" : "导出任务",
+    defaultPath: `${sanitizeFileName(taskTitle)}.${format || "md"}`,
+    filters: format ? [formats[format]] : [formats.md, formats.pdf],
   });
   if (canceled || !filePath) return { canceled: true };
+  const exportPath = format && !filePath.toLowerCase().endsWith(`.${format}`) ? `${filePath}.${format}` : filePath;
 
 /**
  * Export a single node detail as PDF.
@@ -530,7 +542,7 @@ async function exportTaskDocument(payload) {
  * @param {object} payload - { nodeTitle, taskTitle, status, updatedAt, html }
  * @returns {Promise<{ canceled: boolean, filePath?: string }>}
  */
-  if (filePath.toLowerCase().endsWith(".pdf")) {
+  if (format === "pdf" || (!format && exportPath.toLowerCase().endsWith(".pdf"))) {
     const window = new BrowserWindow({
       width: 900,
       height: 1200,
@@ -553,14 +565,18 @@ async function exportTaskDocument(payload) {
         pageSize: "A4",
         margins: { marginType: "custom", top: 0.48, bottom: 0.48, left: 0.52, right: 0.52 },
       });
-      await fs.writeFile(filePath, pdf);
-      return { canceled: false, filePath };
+      await fs.writeFile(exportPath, pdf);
+      return { canceled: false, filePath: exportPath };
     } finally {
       window.destroy();
     }
   }
 
-  const markdownPath = filePath.toLowerCase().endsWith(".md") ? filePath : `${filePath}.md`;
+  if (format === "html") {
+    await fs.writeFile(exportPath, taskDocumentPdfHtml({ taskTitle, bodyHtml: String(safePayload.html || "") }), "utf8");
+    return { canceled: false, filePath: exportPath };
+  }
+  const markdownPath = exportPath.toLowerCase().endsWith(".md") ? exportPath : `${exportPath}.md`;
   await fs.writeFile(markdownPath, String(safePayload.markdown || ""), "utf8");
   return { canceled: false, filePath: markdownPath };
 }

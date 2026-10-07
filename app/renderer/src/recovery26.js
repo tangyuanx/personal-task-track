@@ -161,8 +161,19 @@ async function recovery26Transaction(mutate) {
     restoreRecovery26State(before);
     return outcome;
   }
-  if (!(await recovery26Persist())) {
+  let persisted = false;
+  try {
+    persisted = await recovery26Persist();
+  } catch (error) {
+    console.error("[recovery26] persistence threw", error);
+  }
+  if (!persisted) {
     restoreRecovery26State(before);
+    // flushSave keeps failed writes queued. Replace that payload with the
+    // rolled-back model before a retry, quit flush or later edit can write it.
+    // Keep this rollback queued even if synchronous browser storage fails.
+    if (typeof pendingPayload !== "undefined") pendingPayload = null;
+    try { save(); } catch (error) { console.error("[recovery26] rollback save failed", error); }
     return { ok: false, message: "未能写入本地数据，内容保持不变" };
   }
   return outcome || { ok: true };
@@ -212,7 +223,9 @@ function recovery26Archive(entry) {
 
 function recovery26RemoveArchive(entry) {
   const list = r26Archive();
-  const index = list.indexOf(entry);
+  // A failed sibling transaction replaces the archive with cloned objects.
+  // Identity is the stable archive id, never the pre-rollback object reference.
+  const index = list.findIndex((item) => item.id === entry.id);
   if (index >= 0) list.splice(index, 1);
   recovery26Picked.delete(entry.id);
 }
@@ -676,11 +689,11 @@ async function recovery26CommitDelete() {
       replacement: wasGrowthSource ? replacement : null,
     }));
     recovery26Busy = false;
-    recovery26Pending = null;
     if (!outcome.ok) {
       recovery26ShowConfirmError(outcome.message);
       return;
     }
+    if (recovery26Pending === pending) recovery26Pending = null;
     recovery26AfterRemoval(outcome.entries, outcome.entries.length === 1 ? "1 项已移到最近删除" : `${outcome.entries.length} 项已移到最近删除`);
     return;
   }
@@ -688,11 +701,11 @@ async function recovery26CommitDelete() {
     recovery26Busy = true;
     const outcome = await recovery26Transaction(() => recovery26DeleteRecords(pending.ids));
     recovery26Busy = false;
-    recovery26Pending = null;
     if (!outcome.ok) {
       recovery26ShowConfirmError(outcome.message);
       return;
     }
+    if (recovery26Pending === pending) recovery26Pending = null;
     if (pending.ids.length > 1 && typeof shellBulkStop === "function") shellBulkStop();
     recovery26AfterRemoval(outcome.entries, `${outcome.entries.length} 项已移到最近删除`);
     return;
@@ -701,11 +714,11 @@ async function recovery26CommitDelete() {
     recovery26Busy = true;
     const outcome = await recovery26Transaction(() => recovery26DeleteNode(pending.taskId, pending.nodeId));
     recovery26Busy = false;
-    recovery26Pending = null;
     if (!outcome.ok) {
       recovery26ShowConfirmError(outcome.message);
       return;
     }
+    if (recovery26Pending === pending) recovery26Pending = null;
     recovery26AfterRemoval(outcome.entries, "1 项已移到最近删除");
     return;
   }
@@ -713,11 +726,11 @@ async function recovery26CommitDelete() {
     recovery26Busy = true;
     const outcome = await recovery26Transaction(() => recovery26RemoveNote(pending.ids[0]));
     recovery26Busy = false;
-    recovery26Pending = null;
     if (!outcome.ok) {
       recovery26ShowConfirmError(outcome.message);
       return;
     }
+    if (recovery26Pending === pending) recovery26Pending = null;
     recovery26AfterRemoval(outcome.entries, "1 项已移到最近删除");
   }
 }
@@ -784,6 +797,7 @@ function recovery26RestoreProblem(entry) {
       : "";
   }
   if (entry.kind === "group") {
+    if (entry.groupId && r26Group(entry.groupId)) return "此分组已存在，未覆盖现有内容。";
     if (entry.members.some((member) => r26Task(member.record?.id))) {
       return "组内有记录已存在，需先处理冲突再整体恢复。";
     }
@@ -862,7 +876,7 @@ function recovery26RestoreEntry(entry, { target = "", name = "", restoreMoved = 
   if (problem) return { ok: false, title: entry.title, message: problem };
   let message = "已恢复";
   if (entry.kind === "task" || entry.kind === "quick") {
-    const record = structuredClone(entry.record);
+    const record = normalizeTasks([structuredClone(entry.record)])[0];
     const resolved = (target && r26Group(target)) ? target : recovery26RestoreTarget(entry);
     record.groupId = resolved;
     record.updatedAt = now();
@@ -877,7 +891,8 @@ function recovery26RestoreEntry(entry, { target = "", name = "", restoreMoved = 
     if (!task) return { ok: false, title: entry.title, message: "所属任务已删除，请先恢复任务。" };
     const parent = entry.parentNodeId ? findNode(task.nodes, entry.parentNodeId) : null;
     const siblings = parent ? (parent.children = parent.children || []) : task.nodes;
-    siblings.splice(Math.min(Math.max(0, (entry.position || 1) - 1), siblings.length), 0, structuredClone(entry.record));
+    const record = normalizeNodes([structuredClone(entry.record)], task.id, parent?.id || null)[0];
+    siblings.splice(Math.min(Math.max(0, (entry.position || 1) - 1), siblings.length), 0, record);
     reorder(siblings);
     task.updatedAt = now();
     if (entry.parentNodeId && !parent) {
@@ -901,7 +916,7 @@ function recovery26RestoreEntry(entry, { target = "", name = "", restoreMoved = 
     let restored = 0;
     for (const member of entry.members || []) {
       if (r26Task(member.record.id)) continue;
-      const record = structuredClone(member.record);
+      const record = normalizeTasks([structuredClone(member.record)])[0];
       record.groupId = group.id;
       record.updatedAt = now();
       state.tasks.splice(Math.min(Math.max(0, (member.position || 1) - 1), state.tasks.length), 0, record);
@@ -960,7 +975,9 @@ async function recovery26RestoreMany(ids, { restoreMoved = false } = {}) {
     .filter(Boolean)
     .sort((a, b) => order.indexOf(a.kind) - order.indexOf(b.kind));
   const results = [];
-  for (const entry of entries) {
+  for (const original of entries) {
+    const entry = r26Archive().find((item) => item.id === original.id);
+    if (!entry) continue;
     const outcome = await recovery26Transaction(() => recovery26RestoreEntry(entry, { restoreMoved }));
     results.push({ ok: outcome.ok, title: entry.title, message: outcome.message || "已恢复" });
   }
@@ -1408,3 +1425,14 @@ function recovery26Bind() {
 }
 
 recovery26Bind();
+
+// Shared outside-click and Escape dismissal must return focus just like the
+// explicit cancel button. Keep the original element instead of guessing a
+// selector for the many task, group, note and settings entry points.
+const recovery26PreviousCloseOverlay = shellCloseOverlay;
+shellCloseOverlay = function recovery26CloseOverlay(options = {}) {
+  const isRecovery = Boolean(r26("#overlay .recovery26-manager, #overlay .recovery26-confirm"));
+  const trigger = recovery26ReturnFocus;
+  recovery26PreviousCloseOverlay(options);
+  if (isRecovery && options.restoreFocus !== false && trigger?.isConnected) trigger.focus({ preventScroll: true });
+};

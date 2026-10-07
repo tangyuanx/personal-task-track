@@ -4,7 +4,7 @@
   const bridge = window.loopPointerContinuity;
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
   const storageKey = 'loop.interaction28';
-  let preferences = { continuous: true, follow: true }, available = false, epoch = 0, intent = null;
+  let preferences = { continuous: true, follow: true }, available = false, epoch = 0, viewportEpoch = 0, intent = null;
   try { const saved = JSON.parse(localStorage.getItem(storageKey)); if (saved) preferences = { continuous: saved.continuous !== false, follow: saved.follow !== false }; } catch {}
   const memory = new Map(), animations = new Set();
   const selectors = ['.flow-scroll', '.inspector-body', '.knowledge-body', '#knowledge-source', '.knowledge-pane .cm-scroller', '.article-pane'];
@@ -37,6 +37,7 @@
   function applyPreferences() { bridge?.setEnabled(enabled()); }
   function setPreference(key, value) {
     preferences[key] = value === true;
+    globalThis.LoopUiPreferences?.update({ [key]: value === true });
     try { localStorage.setItem(storageKey, JSON.stringify(preferences)); } catch {}
     cancelMotion(); applyPreferences();
   }
@@ -62,6 +63,12 @@
     // Dynamically mounted toolbars and menus acquire identities before capture.
     // Isolated semantic buttons are their own groups, scoped to their object.
     document.querySelectorAll('button,summary,[role="button"],[role="switch"]').forEach(el => {
+      // Windows moves this control out of the brand when collapsing the rail.
+      // Its operation identity must survive that reparenting on both platforms.
+      if (el.matches('.nav-toggle')) {
+        el.dataset.pointerGroup = JSON.stringify(['topbar', 'navigation-toggle']);
+        return;
+      }
       if (el.closest('[data-pointer-group]')) return;
       const workspace = el.closest('.workspace');
       const attrs = ['id', 'data-action', 'data-pane', 'data-task-id', 'data-node-id', 'data-group-id', 'data-key', 'data-value', 'data-note23', 'data-manage24', 'data-recovery26', 'data-brief21-toggle'];
@@ -78,6 +85,7 @@
   }
   const priorRender = render;
   render = function continuity28Render() {
+    const viewportRevision = ++viewportEpoch;
     const click = bridge?.currentClick(), old = context();
     if (!click) bridge?.cancel(); // Background/later redraws cannot reuse a press.
     const oldTabsElement = document.querySelector('.tabs-bar');
@@ -104,7 +112,7 @@
       one(`.node-title[data-node-id="${CSS.escape(old.node)}"]`)?.focus({ preventScroll: true });
     }
     const restoreLater = () => {
-      if (epoch !== renderEpoch || JSON.stringify(context()) !== JSON.stringify(next)) return;
+      if (viewportEpoch !== viewportRevision || epoch !== renderEpoch || JSON.stringify(context()) !== JSON.stringify(next)) return;
       restore(next);
       const scroll = document.querySelector('.flow-scroll'); if (scroll && scrollAdjustment) scroll.scrollTop += scrollAdjustment;
     };
@@ -159,10 +167,14 @@
     intent = null;
   };
   window.addEventListener('pointerdown', event => {
+    viewportEpoch++;
     const button = event.target.closest?.('button');
     intent = event.button === 0 && button ? { action: button.dataset.action, node: button.dataset.nodeId, time: performance.now() } : null;
   }, true);
-  window.addEventListener('keydown', event => { intent = event.key === 'Escape' && !event.isComposing ? { action: 'escape', time: performance.now() } : null; }, true);
+  window.addEventListener('keydown', event => { viewportEpoch++; intent = event.key === 'Escape' && !event.isComposing ? { action: 'escape', time: performance.now() } : null; }, true);
+  // Layout stabilization belongs to this render only. A new scroll, caret edit
+  // or scrollbar press must not be undone by either of its deferred frames.
+  for (const name of ['wheel', 'beforeinput', 'compositionstart', 'touchmove']) window.addEventListener(name, () => { viewportEpoch++; }, true);
   window.addEventListener('click', event => {
     const control = event.target.closest?.('[data-continuity28]'); if (!control) return;
     event.preventDefault(); event.stopImmediatePropagation();
@@ -171,9 +183,13 @@
     else setPreference('continuous', value === 'continuous');
     render();
   }, true);
-  for (const name of ['resize', 'blur']) window.addEventListener(name, () => { intent = null; cancelMotion(); bridge?.cancel(); });
+  for (const name of ['resize', 'blur']) window.addEventListener(name, () => { viewportEpoch++; intent = null; cancelMotion(); bridge?.cancel(); });
   reduced.addEventListener('change', () => { cancelMotion(); applyPreferences(); });
   window.LoopContinuity28 = {
+    restorePreferences(value) {
+      preferences = { continuous: value.continuous !== false, follow: value.follow !== false };
+      cancelMotion(); applyPreferences();
+    },
     settings() {
       return shellSettingsRow('切换方式', '在布局变化时保持操作位置的连续性。', `<div role="group" aria-label="切换方式"><button class="text-button" type="button" data-continuity28="continuous" aria-pressed="${preferences.continuous}">连续切换</button><button class="text-button" type="button" data-continuity28="original" aria-pressed="${!preferences.continuous}">原有切换</button></div>`) +
         shellSettingsToggle('操作组移动时跟随鼠标', available ? '仅跟随本次点击造成的位移，主动移动鼠标即可接管。' : '当前平台的原生鼠标接口不可用。', preferences.follow && available, `data-continuity28="follow" ${available ? '' : 'disabled'}`);

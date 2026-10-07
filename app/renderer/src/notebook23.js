@@ -619,8 +619,7 @@ render = function note23Render() {
   CSS.highlights?.delete("note23-current");
   note23PriorRender();
   if (state.taskPane === "notes" && document.querySelector(".knowledge-pane")) {
-    const foot = document.querySelector(".workspace-foot");
-    if (foot) foot.innerHTML = "<span>知识笔记 · 本页预览</span><span>⌘ / Ctrl + S 保存文件</span>";
+    updateLocalSaveReceipt();
     cancelAnimationFrame(note23Frame);
     note23Frame = requestAnimationFrame(() => { const task = note23Task(); if (task) note23EvaluateDraft(task); note23Decorate(); });
   }
