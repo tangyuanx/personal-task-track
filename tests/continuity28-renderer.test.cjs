@@ -44,13 +44,25 @@ test('flow, notes/source and history keep separate per-task reading positions', 
   r.go('B', 'history'); r.flush(); assert.equal(r.get('.article-pane').scrollTop, 0);
   r.go('A', 'history'); r.flush(); assert.equal(r.get('.article-pane').scrollTop, 330);
 });
-test('node contexts keep independent flow/record scroll; closing returns semantic focus without scrolling', () => {
+test('node selection shares the task flow position while records keep independent positions', () => {
   const r = renderer(); r.get('.flow-scroll').scrollTop = 300;
-  r.go('A', 'flow', 'n1'); r.flush(); r.get('.flow-scroll').scrollTop = 140; r.get('.inspector-body').scrollTop = 270;
+  r.go('A', 'flow', 'n1');
+  assert.equal(r.get('.flow-scroll').scrollTop, 300, 'opening a node preserves the visible flow immediately');
+  r.flush(); assert.equal(r.get('.flow-scroll').scrollTop, 300);
+  r.get('.flow-scroll').scrollTop = 140; r.get('.inspector-body').scrollTop = 270;
+  r.go('A', 'flow', 'n2'); r.flush();
+  assert.equal(r.get('.flow-scroll').scrollTop, 140, 'switching nodes preserves the flow');
+  assert.equal(r.get('.inspector-body').scrollTop, 0, 'new records start at the top');
+  r.get('.inspector-body').scrollTop = 110;
+  r.go('A', 'flow', 'n1'); r.flush();
+  assert.equal(r.get('.flow-scroll').scrollTop, 140);
+  assert.equal(r.get('.inspector-body').scrollTop, 270, 'record positions remain per-node');
   r.handlers.get('pointerdown')({ isTrusted: true, button: 0, target: { closest: () => ({ dataset: { action: 'close-node-detail' } }) } });
-  r.go('A', 'flow'); r.flush(); assert.equal(r.get('.flow-scroll').scrollTop, 300); assert.equal(r.focus.at(-1).preventScroll, true);
+  r.go('A', 'flow'); r.flush(); assert.equal(r.get('.flow-scroll').scrollTop, 140); assert.equal(r.focus.at(-1).preventScroll, true);
   r.go('A', 'flow', 'n1'); r.flush(); assert.equal(r.get('.flow-scroll').scrollTop, 140); assert.equal(r.get('.inspector-body').scrollTop, 270);
-  r.go('A', 'flow', 'n2'); r.flush(); assert.equal(r.get('.inspector-body').scrollTop, 0);
+  r.go('A', 'flow', 'n2'); r.flush(); assert.equal(r.get('.inspector-body').scrollTop, 110);
+  r.go('B', 'flow', 'n2'); r.flush(); assert.equal(r.get('.flow-scroll').scrollTop, 0);
+  r.go('A', 'flow', 'n2'); r.flush(); assert.equal(r.get('.flow-scroll').scrollTop, 140);
 });
 test('stale render callbacks cannot restore another task; offsets clamp to actual boundaries', () => {
   const r = renderer(); r.get('.flow-scroll').scrollTop = 700;
