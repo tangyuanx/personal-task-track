@@ -56,6 +56,20 @@ const { _electron: electron } = require('playwright-core');
     assert.equal(await page.locator('.knowledge-body').evaluate(el => el.scrollTop), noteTop);
     await choose('history'); assert.equal(await page.locator('.article-pane').evaluate(el => el.scrollTop), historyTop);
     await choose('notes'); await choose('flow'); await choose('history'); await choose('flow'); // Six directions through the real renderer.
+    // Node selection must share the task's flow viewport, even on first open.
+    // Opening the record can resize the flow; only actual boundaries may clamp it.
+    await page.evaluate(() => { document.querySelector('.flow-scroll').scrollTop = 2200; });
+    const beforeNodeOpen = await page.locator('.flow-scroll').evaluate(el => el.scrollTop);
+    assert.ok(beforeNodeOpen > 0, 'the fixture must actually scroll');
+    await page.evaluate(() => document.querySelector('.node-title[data-node-id="node60"]').click()); await settle();
+    const afterNodeOpen = await page.locator('.flow-scroll').evaluate((el, saved) => Math.min(saved, el.scrollHeight - el.clientHeight), beforeNodeOpen);
+    assert.equal(await page.locator('.flow-scroll').evaluate(el => el.scrollTop), afterNodeOpen, 'first node open preserves the flow position');
+    await page.evaluate(() => document.querySelector('.node-title[data-node-id="node61"]').click()); await settle();
+    assert.equal(await page.locator('.flow-scroll').evaluate(el => el.scrollTop), afterNodeOpen, 'switching nodes keeps the same flow position');
+    await page.evaluate(() => document.querySelector('.node-title[data-node-id="node60"]').click()); await settle();
+    assert.equal(await page.locator('.flow-scroll').evaluate(el => el.scrollTop), afterNodeOpen, 'returning to the previous node keeps the flow position');
+    await page.evaluate(() => document.querySelector('[data-action="close-node-detail"]').click()); await settle();
+    assert.equal(await page.locator('.flow-scroll').evaluate(el => el.scrollTop), afterNodeOpen, 'closing a record keeps the current flow position');
     await page.evaluate(() => document.querySelector('.node-title[data-node-id="node4"]').click()); await settle();
     await page.evaluate(() => document.querySelector('[data-action="close-node-detail"]').click()); await settle();
     // DOM-only synthetic click has no trusted pointer intent; Escape does.

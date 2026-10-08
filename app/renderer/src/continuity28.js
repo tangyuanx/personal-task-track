@@ -14,7 +14,9 @@
     return { task: document.querySelector('.workspace')?.dataset.taskId || '', node: document.querySelector('.inspector')?.dataset.nodeId || '', pane: document.querySelector('.pane-tab.active')?.dataset.pane || '' };
   }
   function key(c, selector) {
-    return JSON.stringify([c.task, selector, ['.flow-scroll', '.inspector-body'].includes(selector) ? c.node : '']);
+    // The flow belongs to the task, regardless of the selected node. Only
+    // the record viewport needs a separate reading position for each node.
+    return JSON.stringify([c.task, selector, selector === '.inspector-body' ? c.node : '']);
   }
   function remember(c) {
     if (!c.task) return;
