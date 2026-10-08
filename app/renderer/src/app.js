@@ -5920,7 +5920,7 @@ function bindFlowNodeDragAndDrop() {
     if (!doubleClick) return;
     event.preventDefault(); event.stopImmediatePropagation();
     flowNodeLastTitleClick = null;
-    shellTitleEditor(title, title.dataset.nodeId);
+    shellStartNodeTitleEdit(title);
   }, true);
 }
 

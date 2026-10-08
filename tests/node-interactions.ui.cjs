@@ -71,20 +71,42 @@ const { chromium } = require('playwright-core');
 
     // Double-click must work even when click one opens/rebuilds the inspector.
     await title('a').dblclick({ delay: 60 });
-    await page.waitForSelector('#title-form');
-    assert.equal(await page.locator('#editable-title').inputValue(), '步骤 A');
-    await page.locator('#editable-title').fill('   ');
-    await page.locator('#title-form button[type="submit"]').click();
-    assert.equal(await page.locator('#entry16-title-error').innerText(), '请输入标题后再保存');
-    await page.locator('#editable-title').fill('已改名步骤 A');
+    const rename = page.locator('[data-shell-node-rename]');
+    await rename.waitFor();
+    assert.equal(await page.locator('#title-form').count(), 0, 'rename never opens a dialog');
+    assert.equal(await page.evaluate(() => shellOverlayIsOpen()), false);
+    assert.equal(await rename.inputValue(), '步骤 A');
+    assert.equal(await rename.getAttribute('data-node-id'), 'a', 'relayout still renames the first node');
+    assert.equal(await page.evaluate(() => document.activeElement.matches('[data-shell-node-rename]')), true);
+    await rename.dispatchEvent('keydown', { key: 'Enter', isComposing: true });
+    assert.equal(await rename.count(), 1, 'IME confirmation never finishes renaming');
+    await rename.fill('   ');
+    await page.keyboard.press('Enter');
+    assert.equal(await rename.getAttribute('aria-invalid'), 'true');
+    assert.equal((await tree())[0].title, '步骤 A', 'blank titles do not overwrite the name');
+    await rename.fill('已改名步骤 A');
     await page.keyboard.press('Enter'); await settle();
     assert.equal((await tree())[0].title, '已改名步骤 A');
     assert.equal((await tree())[0].note, '保留父节点记录');
-    await title('a').dblclick({ delay: 60, position: { x: 25, y: 20 } }); await page.waitForSelector('#title-form');
-    await page.locator('#editable-title').fill('不保存的名字');
-    await page.locator('#title-form').getByRole('button', { name: '取消', exact: true }).click();
+    await title('a').dblclick({ delay: 60, position: { x: 25, y: 20 } }); await rename.waitFor();
+    await rename.fill('不保存的名字');
+    await page.evaluate(() => render());
+    assert.equal(await rename.inputValue(), '不保存的名字', 'rerenders keep the inline draft');
+    await page.keyboard.press('Escape');
     assert.equal((await tree())[0].title, '已改名步骤 A');
     await settle();
+    assert.equal(await rename.count(), 0);
+
+    await title('a').dblclick({ delay: 60, position: { x: 25, y: 20 } }); await rename.waitFor();
+    await rename.fill('   ');
+    await page.locator('.flow-toolbar > span').click();
+    assert.equal(await rename.count(), 0);
+    assert.equal((await tree())[0].title, '已改名步骤 A', 'blank blur restores the original name');
+    await title('d').dblclick({ delay: 60, position: { x: 25, y: 20 } }); await rename.waitFor();
+    await rename.fill('步骤 D 已改名');
+    await title('a').click({ position: { x: 25, y: 20 } }); await settle();
+    assert.equal((await tree()).find(n => n.id === 'd').title, '步骤 D 已改名');
+    assert.equal(await page.evaluate(() => state.selectedNodeId), 'a', 'blur save retains the clicked action');
 
     // Long-pressing the title moves a whole subtree into a collapsed parent.
     const selected = await page.evaluate(() => state.selectedNodeId);

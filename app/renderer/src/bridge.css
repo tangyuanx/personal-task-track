@@ -71,6 +71,9 @@
 
 /* Restore long-press feedback with the current flow's drop lines and tokens. */
 .flow-row.node-drag-pressing > .node-title { color: var(--green); }
+.flow-row > .node-title-rename { margin-block: 5px; cursor: text; }
+.node-title-rename:focus { outline: none; border-color: var(--green); box-shadow: 0 0 0 2px var(--selected); }
+.node-title-rename[aria-invalid="true"] { border-color: var(--danger, #b54a42); }
 .flow-row.node-dragging { opacity: .48; }
 .flow-node-reordering, .flow-node-reordering .node-title { cursor: grabbing; user-select: none; }
 .flow-scroll.node-drag-over-root { outline: 1px dashed var(--green); outline-offset: -3px; }

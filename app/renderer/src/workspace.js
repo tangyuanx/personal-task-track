@@ -17,6 +17,7 @@
 const SHELL_PRIORITY_LABELS = { high: "高优先", medium: "中优先", low: "低优先" };
 const SHELL_PRIORITY_FILTER_LABELS = { all: "全部优先级", high: "高优先", medium: "中优先", low: "低优先" };
 const SHELL_DEADLINE_SCOPE_LABELS = { all: "全部截止", today: "今天截止", week: "本周截止", overdue: "逾期" };
+let shellNodeRenameDraft = null;
 
 function shellActiveTask() {
   return state.tasks.find((task) => task.id === state.activeTaskId) || null;
@@ -187,6 +188,13 @@ function shellIsDraftNode(task, node) {
   return state.focusNodeTitleId === node.id;
 }
 
+function renderShellNodeTitle(task, node, selected = node.id === state.selectedNodeId) {
+  if (shellNodeRenameDraft?.taskId === task.id && shellNodeRenameDraft.nodeId === node.id) {
+    return `<input class="node-title-input node-title-rename" data-shell-node-rename="1" data-task-id="${escAttr(task.id)}" data-node-id="${escAttr(node.id)}" aria-label="修改节点标题" value="${escAttr(shellNodeRenameDraft.value)}" maxlength="160" autocomplete="off" />`;
+  }
+  return `<button class="node-title" type="button" data-action="open-node-detail" data-task-id="${escAttr(task.id)}" data-node-id="${escAttr(node.id)}" title="${escAttr(node.title)}" aria-pressed="${selected}">${esc(node.title)}</button>`;
+}
+
 function renderShellFlowNode(task, node, depth = 0) {
   if (shellIsDraftNode(task, node)) {
     const children = node.children || [];
@@ -200,7 +208,7 @@ function renderShellFlowNode(task, node, depth = 0) {
   const body = `<div class="flow-row ${node.status} ${selected ? "selected" : ""}" data-context="node" data-task-id="${escAttr(task.id)}" data-node-id="${escAttr(node.id)}" data-flow-drag-source data-flow-drag-target>
       <button class="collapse ${hasChildren ? "" : "empty"}" type="button" data-action="toggle-node-collapse" data-task-id="${escAttr(task.id)}" data-node-id="${escAttr(node.id)}" aria-label="${node.collapsed ? "展开" : "收起"} ${escAttr(node.title)}" aria-expanded="${!node.collapsed}" ${hasChildren ? "" : "disabled"}>${shellIcon(node.collapsed ? "chevron" : "down")}</button>
       <button class="node-status ${node.status}" type="button" data-action="open-node-status" data-node-id="${escAttr(node.id)}" title="选择节点状态" aria-label="${escAttr(node.title)}：${shellNodeStatusLabel(node.status)}，选择状态" aria-haspopup="menu">${shellIcon(node.status === "todo" ? "circle" : node.status)}</button>
-      <button class="node-title" type="button" data-action="open-node-detail" data-task-id="${escAttr(task.id)}" data-node-id="${escAttr(node.id)}" title="${escAttr(node.title)}" aria-pressed="${selected}">${esc(node.title)}</button>
+      ${renderShellNodeTitle(task, node, selected)}
       <span class="node-badge ${node.status}">${shellNodeStatusLabel(node.status)}</span>
       <button class="node-add" type="button" data-action="add-child-node" data-task-id="${escAttr(task.id)}" data-node-id="${escAttr(node.id)}" title="添加子节点" aria-label="给 ${escAttr(node.title)} 添加子节点">${shellIcon("plus")}</button>
     </div>`;
@@ -292,6 +300,10 @@ const SHELL_FOCUS_KEYS = ["data-node-id", "data-action", "data-bulk-action", "da
 
 function shellBeforeRender() {
   const task = shellActiveTask();
+  if (shellNodeRenameDraft && (shellNodeRenameDraft.taskId !== task?.id || state.taskPane !== "flow")) {
+    shellFinishNodeTitleEdit(true);
+  }
+  if (shellNodeRenameDraft) shellNodeRenameDraft.rendering = true;
   const changed = task?.id !== shellLastFlowTaskId || state.selectedNodeId !== shellLastFlowNodeId;
   if (task && state.selectedNodeId && changed) {
     shellNodePath(task, state.selectedNodeId).slice(0, -1).forEach((node) => { node.collapsed = false; });
@@ -330,6 +342,7 @@ function shellAfterRender() {
   }
   shellLastFlowTaskId = task?.id || null;
   shellLastFlowNodeId = state.selectedNodeId;
+  if (shellNodeRenameDraft) shellNodeRenameDraft.rendering = false;
 }
 
 /** Arrow-key navigation inside the processing flow, mirroring the Demo. */

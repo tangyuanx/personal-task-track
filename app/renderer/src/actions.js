@@ -1728,6 +1728,73 @@ async function shellAction(data, event) {
 // Bindings that are not plain [data-action] clicks
 // ------------------------------------------------------------
 
+function shellStartNodeTitleEdit(title) {
+  if (shellNodeRenameDraft) shellFinishNodeTitleEdit(true);
+  const task = state.tasks.find((item) => item.id === title.dataset.taskId);
+  const node = task && findNode(task.nodes, title.dataset.nodeId);
+  if (!node || !title.isConnected) return;
+  shellNodeRenameDraft = { taskId: task.id, nodeId: node.id, value: node.title };
+  title.outerHTML = renderShellNodeTitle(task, node);
+  retainedRegionMarkup.delete("workspace");
+  shellBindInlineNodeTitles();
+  const input = document.querySelector("[data-shell-node-rename]");
+  input?.focus({ preventScroll: true });
+  input?.select();
+}
+
+function shellFinishNodeTitleEdit(commit, { restoreFocus = false } = {}) {
+  const draft = shellNodeRenameDraft;
+  if (!draft) return;
+  const input = document.querySelector("[data-shell-node-rename]");
+  const task = state.tasks.find((item) => item.id === draft.taskId);
+  const node = task && findNode(task.nodes, draft.nodeId);
+  const next = (input?.value ?? draft.value).trim();
+  shellNodeRenameDraft = null;
+  if (node && commit && next && next !== node.title) {
+    node.title = next;
+    node.updatedAt = task.updatedAt = now();
+    save();
+  }
+  if (input && node) {
+    const row = input.closest(".flow-row");
+    input.outerHTML = renderShellNodeTitle(task, node);
+    const collapse = row.querySelector(".collapse");
+    collapse?.setAttribute("aria-label", `${node.collapsed ? "展开" : "收起"} ${node.title}`);
+    row.querySelector(".node-status")?.setAttribute("aria-label", `${node.title}：${shellNodeStatusLabel(node.status)}，选择状态`);
+    row.querySelector(".node-add")?.setAttribute("aria-label", `给 ${node.title} 添加子节点`);
+    bindTaskRepositoryRows(row);
+    if (restoreFocus) row.querySelector(".node-title")?.focus({ preventScroll: true });
+  }
+  retainedRegionMarkup.delete("workspace");
+}
+
+function shellBindInlineNodeTitles() {
+  document.querySelectorAll("[data-shell-node-rename]").forEach((input) => {
+    if (!bindRenderElement(input, "inline-node-title")) return;
+    input.addEventListener("input", () => {
+      if (shellNodeRenameDraft?.nodeId === input.dataset.nodeId) shellNodeRenameDraft.value = input.value;
+      input.removeAttribute("aria-invalid");
+      input.removeAttribute("title");
+    });
+    input.addEventListener("keydown", (event) => {
+      if (event.isComposing || event.keyCode === 229) return;
+      if (!["Enter", "Escape"].includes(event.key)) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (event.key === "Enter" && !input.value.trim()) {
+        input.setAttribute("aria-invalid", "true");
+        input.title = "节点标题不能为空";
+        return;
+      }
+      shellFinishNodeTitleEdit(event.key === "Enter", { restoreFocus: true });
+    });
+    input.addEventListener("blur", () => {
+      if (input.isConnected && shellNodeRenameDraft?.nodeId === input.dataset.nodeId
+        && !shellNodeRenameDraft.rendering) shellFinishNodeTitleEdit(true);
+    });
+  });
+}
+
 function shellBindNodeDraft() {
   if (typeof document.addEventListener === "function" && !document.__loopNodeDraftDismissBound) {
     document.__loopNodeDraftDismissBound = true;
@@ -1959,6 +2026,7 @@ function shellBindOverlay() {
   shellBindOverlayDelegation();
   shellBindOverlayDismissal();
   shellBindNodeDraft();
+  shellBindInlineNodeTitles();
   shellBindBriefDrafts();
   shellBindNodeRecord();
 }
