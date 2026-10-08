@@ -114,6 +114,7 @@ function renderShellKnowledge(task) {
         </div>
       </div>
       <footer class="knowledge-footer">
+        <span class="knowledge-feature-caution" title="知识笔记功能不完善，暂不建议使用">知识笔记功能不完善，暂不建议使用</span>
         <div class="knowledge-footer-meta">
           <span data-note-stats>${stats.characters} 字 · ${stats.lines} 行</span>
           <span data-note-recovery>${esc(shellKnowledgeRecoveryText(task))}</span>

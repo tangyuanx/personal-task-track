@@ -1062,6 +1062,66 @@ test("opening, navigating and undoing an editor preserve the note source and dis
   harness.evaluate(`knowledgeRecoveryTimers.forEach((pending) => { window.clearTimeout(pending.debounceTimer); window.clearTimeout(pending.maxTimer); }); knowledgeRecoveryTimers.clear()`);
 });
 
+test("knowledge save verification compares the write receipt and ignores later drafts and superseded reads", async () => {
+  let diskHash = "saved-hash";
+  let finishRead;
+  const harness = await rendererHarness({ knowledgeFile: {
+    read: async () => {
+      if (finishRead) await new Promise(resolve => { finishRead = resolve; });
+      return { success: true, content: "已写入的正文", lastSavedHash: diskHash };
+    },
+  } });
+  harness.evaluate(`document.addEventListener = () => {};`);
+  harness.evaluate(await fs.readFile(path.join(__dirname, "../app/renderer/src/notebook23.js"), "utf8"));
+  harness.evaluate(`
+    state.tasks = normalizeTasks([{ id: "receipt-note", notes: "保存后继续输入的草稿", nodes: [],
+      knowledgeNote: { noteId: "receipt-note", filePath: "/tmp/receipt.md", lastSavedHash: "saved-hash", documentState: "DIRTY" } }]);
+    render = () => {};
+    globalThis.receipt = { filePath: "/tmp/receipt.md", lastSavedHash: "saved-hash", content: "已写入的正文" };
+  `);
+  await harness.evaluate(`note23ConfirmWriteLanded(state.tasks[0], receipt)`);
+  assert.equal(harness.evaluate(`NOTE23_EXTERNAL.has("receipt-note")`), false, "new local input is not an external change");
+
+  finishRead = true;
+  const staleCheck = harness.evaluate(`note23ConfirmWriteLanded(state.tasks[0], receipt)`);
+  harness.evaluate(`state.tasks[0].knowledgeNote.lastSavedHash = "newer-save-hash"`);
+  diskHash = "newer-save-hash";
+  finishRead();
+  finishRead = null;
+  await staleCheck;
+  assert.equal(harness.evaluate(`NOTE23_EXTERNAL.has("receipt-note")`), false, "a newer save supersedes an older verification");
+
+  harness.evaluate(`state.tasks[0].knowledgeNote.lastSavedHash = "saved-hash"`);
+  diskHash = "genuine-external-hash";
+  await harness.evaluate(`note23ConfirmWriteLanded(state.tasks[0], receipt)`);
+  assert.equal(harness.evaluate(`NOTE23_EXTERNAL.has("receipt-note")`), true, "a changed disk hash still requires conflict resolution");
+});
+
+test("knowledge file save preserves input and Recovery created while the write is pending", async () => {
+  let finishWrite;
+  let savedPayload;
+  let deletes = 0;
+  const harness = await rendererHarness({
+    knowledgeRecovery: { delete: async () => { deletes++; } },
+    knowledgeFile: { save: payload => {
+      savedPayload = payload;
+      return new Promise(resolve => { finishWrite = resolve; });
+    } },
+  });
+  harness.evaluate(`state.tasks = normalizeTasks([{ id: "pending-input", notes: "本次保存的正文", nodes: [] }]);`);
+  const saving = harness.evaluate(`saveKnowledgeTask("pending-input")`);
+  await waitForCondition(() => Boolean(finishWrite));
+  assert.equal(savedPayload.content, "本次保存的正文");
+  harness.evaluate(`state.tasks[0].notes = "本次保存的正文，附加新输入";
+    state.knowledgeRecovery.records["pending-input"] = { noteId: "pending-input", content: state.tasks[0].notes };`);
+  finishWrite({ success: true, filePath: "/tmp/pending-input.md", content: savedPayload.content, lastSavedHash: "saved-hash" });
+  assert.equal((await saving).success, true);
+  assert.equal(harness.evaluate(`state.tasks[0].notes`), "本次保存的正文，附加新输入");
+  assert.equal(harness.evaluate(`state.tasks[0].knowledgeNote.documentState`), "DIRTY");
+  assert.equal(deletes, 0);
+  assert.equal(harness.evaluate(`state.knowledgeRecovery.records["pending-input"].content`), "本次保存的正文，附加新输入");
+});
+
 test("Markdown save keeps Recovery when task metadata persistence fails", async () => {
   let recoveryDeleteCalls = 0;
   const harness = await rendererHarness({

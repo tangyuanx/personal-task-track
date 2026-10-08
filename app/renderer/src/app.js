@@ -1610,7 +1610,8 @@ async function saveKnowledgeTask(taskId, { saveAs = false, allowExternalOverwrit
       }
       return fileCheck;
     }
-    const stagedAssets = await stageKnowledgeAssetsForTask(task, task.notes);
+    const contentToSave = task.notes;
+    const stagedAssets = await stageKnowledgeAssetsForTask(task, contentToSave);
     if (stagedAssets?.success === false) {
       showWorkspaceError(`知识笔记图片暂存失败：${stagedAssets.message || "未知资源错误"}\n当前内容未清除，请重试。`);
       return stagedAssets;
@@ -1620,7 +1621,7 @@ async function saveKnowledgeTask(taskId, { saveAs = false, allowExternalOverwrit
       filePath: saveAs ? "" : note.filePath,
       saveAs,
       title: task.title,
-      content: task.notes,
+      content: contentToSave,
       assets: stagedAssets.assets,
       expectedLastSavedHash: saveAs ? null : sessionBeforeSave.lastSavedHash,
       allowExternalOverwrite,
@@ -1636,9 +1637,29 @@ async function saveKnowledgeTask(taskId, { saveAs = false, allowExternalOverwrit
       return result || { success: false };
     }
 
-    task.notes = result.content ?? task.notes;
+    // Capture edits made while the file write was pending. Its receipt belongs
+    // to contentToSave, while newer input must stay an unsaved draft.
+    captureMountedMilkdownDrafts();
+    flushNodeNoteDraft(noteDraftKey(task.id, ""), { persist: false });
+    const hasNewerDraft = task.notes !== contentToSave;
+    milkdownEditors.get(noteDraftKey(task.id, ""))?.instance?.acceptSavedAssetReferences?.(result.assetFiles);
+    if (hasNewerDraft) {
+      for (const asset of result.assetFiles || []) {
+        if (asset.source && asset.relativePath) task.notes = task.notes.split(asset.source).join(asset.relativePath);
+      }
+    } else {
+      task.notes = result.content ?? contentToSave;
+    }
+    const source = document.querySelector("#knowledge-source");
+    if (source && state.activeTaskId === task.id && source.value !== task.notes) {
+      const start = source.selectionStart;
+      const end = source.selectionEnd;
+      source.value = task.notes;
+      source.setSelectionRange(start, end);
+    }
     rememberKnowledgeAssetFiles(result.assetFiles);
     task.knowledgeNote = knowledgeDocument.markDocumentSaved(sessionBeforeSave, result);
+    if (hasNewerDraft) task.knowledgeNote = knowledgeDocument.markDocumentEdited(task.knowledgeNote);
     task.knowledgeNote.updatedAt = now();
     task.updatedAt = now();
     save();
@@ -1663,7 +1684,7 @@ async function saveKnowledgeTask(taskId, { saveAs = false, allowExternalOverwrit
       console.error("Failed to update knowledge file watcher baseline after save.", error);
     }
     knowledgeExternalSnapshots.delete(task.knowledgeNote.noteId);
-    await clearKnowledgeRecoveryRecord(task.knowledgeNote.noteId);
+    if (!task.knowledgeNote.dirty) await clearKnowledgeRecoveryRecord(task.knowledgeNote.noteId);
     return result;
   } catch (error) {
     console.error("Failed to save knowledge note.", error);

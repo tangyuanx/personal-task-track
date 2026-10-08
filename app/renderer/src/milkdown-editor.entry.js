@@ -353,6 +353,12 @@ class MilkdownTaskEditor {
       .use(completeInlineCodeInputRule);
 
     let lastMarkdown = sourceMarkdown;
+    const savedAssetReferences = new Map();
+    const applySavedAssetReferences = (value) => {
+      let next = value;
+      for (const [source, relativePath] of savedAssetReferences) next = next.split(source).join(relativePath);
+      return next;
+    };
     let originalDoc = null;
     let ready = false;
     let markdownTimer = 0;
@@ -396,7 +402,7 @@ class MilkdownTaskEditor {
         serializedMarkdown = sourceMarkdown;
         return sourceMarkdown;
       }
-      const nextMarkdown = crepe.getMarkdown();
+      const nextMarkdown = applySavedAssetReferences(crepe.getMarkdown());
       milkdownMetrics.serializations += 1;
       serializedDoc = doc;
       serializedMarkdown = nextMarkdown;
@@ -487,6 +493,19 @@ class MilkdownTaskEditor {
         cancelScheduledIdle(markdownTimer, emitMarkdown);
         markdownTimer = 0;
         return currentMarkdown();
+      },
+      // Saving moves managed images to attachments. Rebase the source and
+      // serializer together without replacing the document, selection or undo
+      // history; the live editor must not resurrect the temporary references.
+      acceptSavedAssetReferences: (assets = []) => {
+        for (const asset of assets) {
+          if (asset.source && asset.relativePath) savedAssetReferences.set(asset.source, asset.relativePath);
+          if (asset.dataUrl && asset.relativePath) savedAssetReferences.set(asset.dataUrl, asset.relativePath);
+        }
+        const savedSource = (value) => applySavedAssetReferences(value).replace(/\r\n?/g, "\n");
+        sourceMarkdown = savedSource(sourceMarkdown);
+        lastMarkdown = savedSource(lastMarkdown);
+        if (serializedMarkdown !== null) serializedMarkdown = savedSource(serializedMarkdown);
       },
       insertImage: ({ src, alt = "图片", title = "" }) =>
         crepe.editor.action((ctx) => ctx.get(commandsCtx).call(insertImageCommand.key, { src, alt, title })),

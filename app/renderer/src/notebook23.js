@@ -119,22 +119,20 @@ function note23EvaluateDraft(task, markdown = task?.notes) {
  *  a note that matches its file look unsaved. Verify against the file itself: only an
  *  exact hash match is treated as the saved baseline. */
 /** Confirm that a reported success actually reached the bound file. */
-async function note23ConfirmWriteLanded(task) {
-  const note = task?.knowledgeNote;
+async function note23ConfirmWriteLanded(task, saved) {
   const api = window.personalTaskTrack?.knowledgeFile;
-  if (!task || !note?.filePath || !note.lastSavedHash || !api?.read) return;
+  if (!task || !saved?.filePath || !saved.lastSavedHash || !api?.read) return;
   let file;
   try {
-    file = await api.read({ filePath: note.filePath });
+    file = await api.read({ filePath: saved.filePath });
   } catch (error) {
     return;
   }
   if (!file || file.success === false) return;
-  // The product's own baseline can already have been moved to the external version
-  // by its watcher, so hashes alone cannot decide: compare the actual file body
-  // with what this note holds. A write that did not land must never claim success.
-  const same = String(file.content ?? "").trim() === String(task.notes ?? "").trim();
-  if (same) return;
+  // Verify the immutable write receipt, never the live editing draft. Later
+  // typing or image-reference migration is not an external file modification.
+  if (task.knowledgeNote?.filePath !== saved.filePath || task.knowledgeNote?.lastSavedHash !== saved.lastSavedHash) return;
+  if (file.lastSavedHash === saved.lastSavedHash) return;
   NOTE23_EXTERNAL.add(task.id);
   NOTE23_SAVED_TEXT.delete(task.id);
   NOTE23_EDIT_DIRTY.add(task.id);
@@ -443,26 +441,27 @@ if (note23PriorCloseEditor) {
 const note23PriorSaveTask = typeof saveKnowledgeTask === "function" ? saveKnowledgeTask : null;
 
 /** Confirm a partial on the next frame: a write that finishes without a binding. */
-function note23VerifySaveBoundary(task, before, attempt = 0) {
+function note23VerifySaveBoundary(task, before, saved, attempt = 0) {
   if (!task) return;
+  if (saved.filePath && (task.knowledgeNote?.filePath !== saved.filePath || task.knowledgeNote?.lastSavedHash !== saved.lastSavedHash)) return;
   const k = note23State(task);
   if (!k) return;
   if (k.path || !String(task.notes || "").trim()) {
     NOTE23_PARTIAL.delete(task.id);   // the binding landed (or there is nothing to bind)
     NOTE23_PENDING.delete(task.id);
-    NOTE23_SAVED_TEXT.set(task.id, String(task.notes || ""));
-    NOTE23_EDIT_DIRTY.delete(task.id);
+    NOTE23_SAVED_TEXT.set(task.id, String(saved.content ?? before.notes));
+    note23EvaluateDraft(task, nodeNoteDrafts.get(noteDraftKey(task.id, ""))?.markdown ?? task.notes);
     render();
     // A write the product reports as successful is only trusted when the file on
     // disk really carries the accepted hash; otherwise the refusal is surfaced.
-    void note23ConfirmWriteLanded(task);
+    void note23ConfirmWriteLanded(task, saved);
     // The product refreshes parts of the pane after a save; re-decorate once it has
     // settled so the footer receipt cannot be dropped by that refresh.
     window.setTimeout(() => note23Decorate(), 300);
     window.setTimeout(() => note23Decorate(), 900);
     return;
   }
-  if (k.busy && attempt < 8) { requestAnimationFrame(() => note23VerifySaveBoundary(task, before, attempt + 1)); return; }
+  if (k.busy && attempt < 8) { requestAnimationFrame(() => note23VerifySaveBoundary(task, before, saved, attempt + 1)); return; }
   NOTE23_PARTIAL.set(task.id, { snapshot: before.notes, path: k.path ?? "" });
   NOTE23_PENDING.set(task.id, { path: k.path ?? "", baseline: k.saved ?? before.notes });
   render();
@@ -517,7 +516,8 @@ if (note23PriorSaveTask) {
       return outcome;
     }
     if (outcome && outcome.success === false) return outcome;
-    requestAnimationFrame(() => note23VerifySaveBoundary(task, before));
+    const saved = { ...outcome, content: outcome?.content ?? String(task.notes || "") };
+    requestAnimationFrame(() => note23VerifySaveBoundary(task, before, saved));
     return outcome;
   };
 }
