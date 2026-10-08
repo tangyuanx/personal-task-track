@@ -107,10 +107,61 @@ const { chromium } = require('playwright-core');
     await page.keyboard.press('Escape');
     assert.deepEqual(await tree(), nodes);
 
+    // Empty drafts cancel on outside clicks without consuming the target action.
+    const expectCancelled = async () => {
+      await page.waitForFunction(() => !state.focusNodeTitleId);
+      assert.equal(await page.locator('[data-shell-node-draft]').count(), 0);
+      assert.deepEqual(await tree(), nodes);
+      assert.equal(await page.locator('[data-pane="flow"] .pane-count').innerText(),
+        String(await page.evaluate(() => shellNodeList(shellActiveTask()).length)));
+    };
+    await page.locator('.add-node').click();
+    await page.locator('[data-shell-node-draft]').click();
+    assert.equal(await page.locator('[data-shell-node-draft]').count(), 1, 'inside clicks keep the draft');
+    await page.locator('.flow-toolbar > span').click();
+    await expectCancelled();
+
+    await open('n35');
+    await page.getByRole('menuitem', { name: '添加兄弟节点' }).click();
+    await page.locator('[data-shell-node-draft]').fill('   ');
+    await page.locator('.node-title[data-node-id="n36"]').click({ position: { x: 25, y: 20 } });
+    await expectCancelled();
+    assert.equal(await page.evaluate(() => state.selectedNodeId), 'n36', 'the clicked node still opens');
+
+    await open('child');
+    await page.getByRole('menuitem', { name: '添加子节点' }).click();
+    await page.locator('#search').click();
+    await expectCancelled();
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'search', 'outside input retains focus');
+    await page.keyboard.press('Escape');
+
+    await open('n44');
+    await page.getByRole('menuitem', { name: '添加子节点' }).click();
+    await page.locator('.flow-toolbar > span').click();
+    await expectCancelled();
+    assert.equal(await page.locator('.collapse[data-node-id="n44"]').isDisabled(), true);
+
+    await page.locator('.add-node').click();
+    const oldDraft = await page.evaluate(() => state.focusNodeTitleId);
+    await page.locator('.add-node').click();
+    await page.waitForFunction(old => state.focusNodeTitleId && state.focusNodeTitleId !== old, oldDraft);
+    assert.equal(await page.locator('[data-shell-node-draft]').count(), 1, 'add again leaves exactly one fresh draft');
+    assert.equal(await page.evaluate(id => Boolean(findNode(shellActiveTask().nodes, id)), oldDraft), false);
+    await page.locator('.flow-toolbar > span').click();
+    await expectCancelled();
+    await page.waitForFunction(() => !JSON.parse(localStorage.getItem('task-flow-sheet-prototype-v2'))[0].nodes
+      .some(node => !node.title.trim()));
+
     // Existing hover plus uses the same task identity and inline naming path.
     await page.locator('.node-title[data-node-id="child"]').hover();
     await page.locator('.node-add[data-node-id="child"]').click();
     await nameDraft('快捷添加');
+    await open('child');
+    await page.getByRole('menuitem', { name: '添加子节点' }).click();
+    await page.locator('[data-shell-node-draft]').fill('失焦保存标题');
+    await page.locator('.flow-toolbar > span').click();
+    await page.waitForFunction(() => !state.focusNodeTitleId);
+    assert.ok((await tree())[35].children[0].children.some(node => node.title === '失焦保存标题'));
     const saved = await tree();
     await page.waitForFunction(() => JSON.parse(localStorage.getItem('task-flow-sheet-prototype-v2'))[0].nodes
       .find(n => n.id === 'n35').children[0].children.some(n => n.title === '快捷添加'));
@@ -145,6 +196,6 @@ const { chromium } = require('playwright-core');
     await nameDraft('窄窗口子节点');
     assert.equal((await tree()).find(n => n.id === 'n44').children[0].title, '窄窗口子节点');
     assert.deepEqual(errors, []);
-    console.log('Node context menu passed: sibling/child/nested creation, cancellation, persistence, DOM/scroll retention, keyboard, light/dark, edge clamping.');
+    console.log('Node context menu passed: sibling/child/nested creation, empty/whitespace outside cancellation, click/focus retention, fresh drafts, persistence, DOM/scroll retention, keyboard, light/dark, edge clamping.');
   } finally { await browser?.close(); await new Promise(resolve => server.close(resolve)); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

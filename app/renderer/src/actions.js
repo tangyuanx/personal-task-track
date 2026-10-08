@@ -1729,7 +1729,21 @@ async function shellAction(data, event) {
 // ------------------------------------------------------------
 
 function shellBindNodeDraft() {
+  if (typeof document.addEventListener === "function" && !document.__loopNodeDraftDismissBound) {
+    document.__loopNodeDraftDismissBound = true;
+    const dismissEmptyDraft = (event) => {
+      const input = document.querySelector("[data-shell-node-draft]");
+      if (!state.focusNodeTitleId || !input || input.value.trim()
+        || event.target.closest?.("[data-shell-node-draft]")) return;
+      // Keep the clicked control mounted so its action and focus still work.
+      shellCancelNodeDraft({ renderView: false });
+    };
+    document.addEventListener("click", dismissEmptyDraft, true);
+    document.addEventListener("contextmenu", dismissEmptyDraft, true);
+  }
   document.querySelectorAll("[data-shell-node-draft]").forEach((input) => {
+    const taskId = shellActiveTask()?.id;
+    const nodeId = state.focusNodeTitleId;
     input.addEventListener("input", () => {
       const task = shellActiveTask();
       const node = shellNodeList(task).find((item) => item.id === state.focusNodeTitleId);
@@ -1748,7 +1762,9 @@ function shellBindNodeDraft() {
     input.addEventListener("blur", () => {
       window.setTimeout(() => {
         if (document.activeElement === input) return;
-        if (state.focusNodeTitleId && !shellNodeList(shellActiveTask()).find((item) => item.id === state.focusNodeTitleId)?.title) return;
+        if (state.focusNodeTitleId !== nodeId || shellActiveTask()?.id !== taskId) return;
+        // Outside clicks cancel blanks in place; blur continues to save titles.
+        if (!shellNodeList(shellActiveTask()).find((item) => item.id === nodeId)?.title.trim()) return;
         shellCommitNodeDraft();
       }, 0);
     });
@@ -1768,13 +1784,36 @@ function shellCommitNodeDraft() {
   render();
 }
 
-function shellCancelNodeDraft() {
+function shellCancelNodeDraft({ renderView = true } = {}) {
   const task = shellActiveTask();
   const nodeId = state.focusNodeTitleId;
   state.focusNodeTitleId = "";
   if (task && nodeId) {
-    const { siblings, index } = shellNodeSiblings(task, nodeId);
-    if (index >= 0) siblings.splice(index, 1);
+    const { parent, siblings, index } = shellNodeSiblings(task, nodeId);
+    if (index >= 0) { siblings.splice(index, 1); reorder(siblings); }
+    if (!renderView) {
+      const draft = document.querySelector("[data-shell-node-draft]")?.closest(".node-draft");
+      const container = draft?.parentElement;
+      draft?.remove();
+      if (container?.matches(".flow-children") && !container.childElementCount) container.remove();
+      if (parent && !parent.children.length) {
+        const collapse = document.querySelector(`.collapse[data-node-id="${CSS.escape(parent.id)}"]`);
+        if (collapse) { collapse.disabled = true; collapse.classList.add("empty"); }
+      }
+      const nodes = shellNodeList(task);
+      const count = document.querySelector('[data-pane="flow"] .pane-count');
+      if (count) count.textContent = String(nodes.length);
+      const progress = document.querySelector(".flow-toolbar > span");
+      if (progress) progress.textContent = `${shellCountDoneNodes(task)} / ${nodes.length} 已完成`;
+      document.querySelector(".flow-tree")?.style.setProperty("--flow-depth", shellFlowDepth(task.nodes || []));
+      const next = document.querySelector('[data-action="focus-next-pending"]');
+      if (next) next.disabled = !nodes.some((node) => node.status === "todo" || node.status === "blocked");
+      // The cached markup still contains the removed draft. A new empty draft
+      // can otherwise match it and reuse a workspace with no input remaining.
+      retainedRegionMarkup.delete("workspace");
+      save();
+      return;
+    }
   }
   render();
 }
