@@ -42,7 +42,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
       - name: Check JavaScript and tests
-        run: npm run check
+        run: |
+          npm run check
+          node --check tests/node-context-menu.ui.cjs
+          node --check tests/node-interactions.ui.cjs
       - name: Build app
         run: ${{ matrix.script }}
         env:

@@ -20,7 +20,10 @@ const { chromium } = require('playwright-core');
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
     browser = await chromium.launch({ headless: true, executablePath: process.env.LOOP_TEST_CHROMIUM || undefined,
       args: process.platform === 'linux' ? ['--no-sandbox', '--disable-dev-shm-usage'] : [] });
-    const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+    const page = await browser.newPage({ viewport: {
+      width: Number(process.env.LOOP_TEST_WIDTH) || 1000,
+      height: Number(process.env.LOOP_TEST_HEIGHT) || 720,
+    } });
     const errors = []; page.on('pageerror', error => errors.push(error.message));
     await page.addInitScript(() => {
       if (localStorage.getItem('task-flow-sheet-prototype-v2')) return;
@@ -77,7 +80,7 @@ const { chromium } = require('playwright-core');
     await page.keyboard.press('Enter'); await settle();
     assert.equal((await tree())[0].title, '已改名步骤 A');
     assert.equal((await tree())[0].note, '保留父节点记录');
-    await title('a').dblclick({ delay: 60 }); await page.waitForSelector('#title-form');
+    await title('a').dblclick({ delay: 60, position: { x: 25, y: 20 } }); await page.waitForSelector('#title-form');
     await page.locator('#editable-title').fill('不保存的名字');
     await page.locator('#title-form').getByRole('button', { name: '取消', exact: true }).click();
     assert.equal((await tree())[0].title, '已改名步骤 A');
@@ -133,7 +136,7 @@ const { chromium } = require('playwright-core');
     assert.equal(await page.evaluate(() => flowNodeDragState), null);
     await page.mouse.up(); await page.waitForSelector('.status-menu'); await page.keyboard.press('Escape'); await settle();
     await page.waitForFunction(() => Date.now() >= suppressFlowNodeClickUntil);
-    await title('d').click(); await settle(); assert.equal(await page.evaluate(() => state.selectedNodeId), 'd');
+    await title('d').click({ position: { x: 25, y: 20 } }); await settle(); assert.equal(await page.evaluate(() => state.selectedNodeId), 'd');
     assert.equal(await page.locator('#title-form').count(), 0);
 
     await page.waitForFunction(() => JSON.parse(localStorage.getItem('task-flow-sheet-prototype-v2'))[0].nodes[0].title === '已改名步骤 A');

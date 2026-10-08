@@ -5903,7 +5903,8 @@ function bindFlowNodeDragAndDrop() {
     const stamp = Date.now();
     const sameGesture = previous && stamp - previous.stamp <= 500
       && Math.hypot(event.clientX - previous.x, event.clientY - previous.y) <= 6;
-    if (!title && event.detail >= 2 && sameGesture) {
+    if (sameGesture && !shellOverlayIsOpen() && (!title
+      || title.dataset.nodeId !== previous.nodeId || title.dataset.taskId !== previous.taskId)) {
       title = [...document.querySelectorAll(".node-title")].find((item) =>
         item.dataset.nodeId === previous.nodeId && item.dataset.taskId === previous.taskId);
     }
