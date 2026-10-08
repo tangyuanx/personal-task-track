@@ -4633,7 +4633,8 @@ test("knowledge save shortcuts are handled before editable-target filtering", as
       },
     },
   });
-  harness.evaluate(`document.querySelector = (selector) => selector === "#root" ? { innerHTML: "" } : null`);
+  harness.evaluate(`document.addEventListener = () => {};
+    document.querySelector = (selector) => selector === "#root" ? { innerHTML: "" } : null`);
   harness.evaluate(`(() => {
     state.tasks = normalizeTasks([{ id: "shortcut_task", title: "快捷键任务", notes: "正文", nodes: [] }]);
     state.activeTaskId = "shortcut_task";
@@ -6509,7 +6510,8 @@ test("processing-flow nodes move across parents, levels, and sibling positions w
   assert.match(app, /function beginFlowNodePointerDrag\(/);
   assert.match(app, /classList\.add\("node-drag-pressing"\)/);
   assert.match(app, /window\.setTimeout\(\(\) => activateFlowNodePointerDrag\(\), flowNodeLongPressDelay\)/);
-  assert.match(app, /event\.target\.closest\("button, select, textarea, a, \[contenteditable\]"\)/);
+  assert.match(app, /event\.target\.closest\("button, select, textarea, input, a, \[contenteditable\]"\)/);
+  assert.match(app, /control && !control\.matches\("\.node-title"\)/);
   assert.match(app, /distance > flowNodeLongPressMoveTolerance/);
   assert.match(app, /function updateFlowNodePointerDrag\(/);
   assert.match(app, /document\.elementFromPoint\(event\.clientX, event\.clientY\)/);

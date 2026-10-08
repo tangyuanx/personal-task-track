@@ -765,7 +765,8 @@ function shellNodeOperations(trigger, nodeId) {
   shellMountSurface(
     `<div class="surface-popover" role="menu" aria-label="节点操作">${shellSurfaceHeader("节点操作")}
       <button class="button" type="button" role="menuitem" data-action="edit-node-title" data-node-id="${escAttr(nodeId)}">${shellIcon("edit")}修改标题</button>
-      <button class="button" type="button" role="menuitem" data-action="add-sibling-node" data-task-id="${escAttr(task.id)}" data-node-id="${escAttr(nodeId)}">${shellIcon("plus")}添加同级节点</button>
+      <button class="button" type="button" role="menuitem" data-action="add-sibling-node" data-task-id="${escAttr(task.id)}" data-node-id="${escAttr(nodeId)}">${shellIcon("plus")}添加兄弟节点</button>
+      <button class="button" type="button" role="menuitem" data-action="add-child-node" data-task-id="${escAttr(task.id)}" data-node-id="${escAttr(nodeId)}">${shellIcon("indent")}添加子节点</button>
       <div class="menu-divider"></div>
       ${moves.map(([value, label, disabled]) => `<button class="button" type="button" role="menuitem" data-action="move-node" data-node-id="${escAttr(nodeId)}" data-direction="${value}" ${disabled ? "disabled" : ""}>${label}</button>`).join("")}
       <div class="menu-divider"></div>

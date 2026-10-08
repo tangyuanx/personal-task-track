@@ -26,6 +26,7 @@ const SHELL_ICON_PATHS = {
   history: "M3 4v5h5M3 9a9 9 0 1 1 1.7 9M12 7v5l3 2",
   search: "M21 21l-5-5M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0",
   plus: "M12 5v14M5 12h14",
+  indent: "M5 4v8h14m-5-5 5 5-5 5",
   note23Outline: "M4 5h2m4 0h10M4 12h2m4 0h10M4 19h2m4 0h10",
   chevron: "m9 5 7 7-7 7",
   down: "m5 9 7 7 7-7",

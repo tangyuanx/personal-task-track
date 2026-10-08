@@ -69,6 +69,28 @@
 :root[data-theme="dark"] .context-menu .danger { color: #ef9292; }
 @media (pointer: coarse) { .context-menu button { min-height: 44px; } }
 
+/* Restore long-press feedback with the current flow's drop lines and tokens. */
+.flow-row.node-drag-pressing > .node-title { color: var(--green); }
+.flow-row.node-dragging { opacity: .48; }
+.flow-node-reordering, .flow-node-reordering .node-title { cursor: grabbing; user-select: none; }
+.flow-scroll.node-drag-over-root { outline: 1px dashed var(--green); outline-offset: -3px; }
+.flow-node-drop-guide {
+  position: fixed;
+  z-index: 1200;
+  max-width: calc(100vw - 24px);
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--canvas);
+  color: var(--text);
+  box-shadow: 0 4px 16px #20242b18;
+  font-size: calc(11px * var(--font-scale, 1));
+  line-height: 1.5;
+  pointer-events: none;
+}
+.flow-node-drop-guide[data-placement="invalid"] { color: var(--secondary); }
+:root[data-theme="dark"] .flow-node-drop-guide { box-shadow: 0 4px 16px #0005; }
+
 /* --- 知识笔记页宽 ---------------------------------------------------------
    固定上限会让窄窗口或打开大纲时的三档全部铺满。默认 / 较宽分别占正文可用
    空间的 72% / 88%，仍以 840px / 1120px 为上限；全宽使用全部可用空间。

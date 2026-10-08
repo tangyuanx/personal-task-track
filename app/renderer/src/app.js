@@ -383,6 +383,7 @@ let taskDragState = null;
 let flowNodeDragState = null;
 let suppressTaskClickUntil = 0;
 let suppressFlowNodeClickUntil = 0;
+let flowNodeLastTitleClick = null;
 let recurrenceScheduleTimer = 0;
 let recurringTodaySignature = "";
 let recurrencePopoverTaskId = "";
@@ -3642,6 +3643,25 @@ function closeContextMenu(restoreFocus = false) {
   if (restoreFocus && trigger?.isConnected) trigger.focus({ preventScroll: true });
 }
 
+function openNodeContextMenu(taskId, nodeId, event, row) {
+  const task = state.tasks.find((item) => item.id === taskId);
+  if (!task || !findNode(task.nodes, nodeId)) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const keyboard = event.type === "keydown";
+  const rect = keyboard ? row.getBoundingClientRect() : null;
+  taskContextMenuReturnFocus = row.querySelector(".node-title") || row;
+  if (typeof shellCloseOverlay === "function") shellCloseOverlay({ restoreFocus: false });
+  state.contextMenu = {
+    kind: "node", taskId, nodeId,
+    x: keyboard ? rect.left + 32 : event.clientX,
+    y: keyboard ? rect.bottom : event.clientY,
+  };
+  // Right-click only mounts a menu; keep selection, record drafts and scroll.
+  syncContextMenuRoot();
+  if (keyboard) document.querySelector("#context-menu-root .context-menu button")?.focus({ preventScroll: true });
+}
+
 function renderContextMenu() {
   // Group management (打开/重命名/批量添加/删除分组) was removed from the product;
   // a leftover kind must not fall through to the node menu.
@@ -3695,11 +3715,16 @@ function renderContextMenu() {
     `;
   }
 
+  const task = state.tasks.find((item) => item.id === menu.taskId);
+  const node = task && findNode(task.nodes, menu.nodeId);
+  if (!node) return "";
   return `
-    <div class="context-menu" style="left:${menu.x}px; top:${menu.y}px">
-      <button data-action="add-child-node" data-task-id="${escAttr(menu.taskId)}" data-node-id="${escAttr(menu.nodeId)}">添加子节点</button>
-      <button data-action="add-sibling-node" data-task-id="${escAttr(menu.taskId)}" data-node-id="${escAttr(menu.nodeId)}">添加兄弟节点</button>
-      <button class="danger" data-action="delete-node" data-task-id="${escAttr(menu.taskId)}" data-node-id="${escAttr(menu.nodeId)}">删除节点</button>
+    <div class="context-menu node-context-menu" role="menu" aria-label="${escAttr(node.title || "未命名节点")}的操作" style="left:${menu.x}px; top:${menu.y}px">
+      <div class="context-menu-title">${esc(node.title || "未命名节点")}</div>
+      <button type="button" role="menuitem" data-action="add-sibling-node" data-task-id="${escAttr(menu.taskId)}" data-node-id="${escAttr(menu.nodeId)}">${shellIcon("plus")}<span>添加兄弟节点</span></button>
+      <button type="button" role="menuitem" data-action="add-child-node" data-task-id="${escAttr(menu.taskId)}" data-node-id="${escAttr(menu.nodeId)}">${shellIcon("indent")}<span>添加子节点</span></button>
+      <hr role="separator" />
+      <button type="button" role="menuitem" class="danger" data-action="delete-node" data-task-id="${escAttr(menu.taskId)}" data-node-id="${escAttr(menu.nodeId)}">${shellIcon("close")}<span>删除节点…</span></button>
     </div>
   `;
 }
@@ -5653,8 +5678,9 @@ function flowNodeDropPlacement(targetRow, clientY) {
 }
 
 function flowNodeDropFeedback(targetRow, placement) {
-  const targetDepth = Math.max(0, Number(targetRow?.closest?.(".flow-outline-node")?.dataset.flowDepth) || 0);
-  const targetTitle = targetRow?.querySelector?.(".flow-title-input")?.value?.trim() || "未命名节点";
+  const targetDepth = Math.max(0, Number(targetRow?.closest?.(".flow-outline-node, .flow-item")?.dataset.flowDepth) || 0);
+  const targetTitle = targetRow?.querySelector?.(".flow-title-input")?.value?.trim()
+    || targetRow?.querySelector?.(".node-title")?.textContent?.trim() || "未命名节点";
   if (placement === "inside") return `成为「${targetTitle}」的子级 · 第 ${targetDepth + 2} 层`;
   return `同级排序，不改变层级 · 放到「${targetTitle}」${placement === "before" ? "之前" : "之后"} · 第 ${targetDepth + 1} 层`;
 }
@@ -5683,15 +5709,16 @@ function updateFlowNodeDropGuide(label, placement, clientX, clientY) {
 
 function updateFlowNodeDropIndicator(targetRow, placement, event) {
   clearFlowNodeDropIndicators({ keepGuide: true });
-  const targetNode = targetRow.closest(".flow-outline-node");
+  const targetNode = targetRow.closest(".flow-outline-node, .flow-item");
   if (!targetNode) return;
   targetNode.classList.add(`node-drag-over-${placement}`);
+  if (targetRow.classList.contains("flow-row")) targetRow.dataset.drop = placement;
   targetNode.dataset.flowDropLabel = flowNodeDropFeedback(targetRow, placement);
   updateFlowNodeDropGuide(targetNode.dataset.flowDropLabel, placement, event.clientX, event.clientY);
 }
 
 function autoScrollFlowDuringDrag(event) {
-  const viewport = flowNodeDragState?.sourceRow?.closest?.("[data-processing-flow-scroll]") || document.querySelector("[data-processing-flow-scroll]");
+  const viewport = flowNodeDragState?.sourceRow?.closest?.("[data-processing-flow-scroll], .flow-scroll") || document.querySelector("[data-processing-flow-scroll], .flow-scroll");
   if (!viewport) return;
   const bounds = viewport.getBoundingClientRect();
   const edge = 42;
@@ -5709,6 +5736,7 @@ function canMoveFlowNode(taskId, sourceId, targetId = "") {
 }
 
 function clearFlowNodeDropIndicators({ keepGuide = false } = {}) {
+  document.querySelectorAll(".flow-row[data-drop]").forEach((row) => { delete row.dataset.drop; });
   document
     .querySelectorAll(".node-drag-over-before, .node-drag-over-inside, .node-drag-over-after")
     .forEach((node) => {
@@ -5731,12 +5759,16 @@ function clearFlowNodeDragState() {
   document.removeEventListener("pointermove", updateFlowNodePointerDrag);
   document.removeEventListener("pointerup", finishFlowNodePointerDrag);
   document.removeEventListener("pointercancel", cancelFlowNodePointerDrag);
+  document.removeEventListener("keydown", cancelFlowNodeDragOnEscape, true);
+  window.removeEventListener("blur", abandonFlowNodeDrag);
   clearFlowNodeDropIndicators();
 }
 
 function beginFlowNodePointerDrag(event) {
   const sourceRow = event.currentTarget;
-  if (event.button !== 0 || event.target.closest("button, select, textarea, a, [contenteditable]")) return;
+  const control = event.target.closest("button, select, textarea, input, a, [contenteditable]");
+  if (event.button !== 0 || (control && !control.matches(".node-title"))) return;
+  if (shellOverlayIsOpen?.() || state.contextMenu || state.focusNodeTitleId) return;
   const taskId = sourceRow.dataset.taskId || "";
   const nodeId = sourceRow.dataset.nodeId || "";
   if (!canMoveFlowNode(taskId, nodeId)) return;
@@ -5761,10 +5793,13 @@ function beginFlowNodePointerDrag(event) {
   document.addEventListener("pointermove", updateFlowNodePointerDrag, { passive: false });
   document.addEventListener("pointerup", finishFlowNodePointerDrag);
   document.addEventListener("pointercancel", cancelFlowNodePointerDrag);
+  document.addEventListener("keydown", cancelFlowNodeDragOnEscape, true);
+  window.addEventListener("blur", abandonFlowNodeDrag);
 }
 
 function activateFlowNodePointerDrag() {
   if (!flowNodeDragState || flowNodeDragState.active) return;
+  if (!flowNodeDragState.sourceRow.isConnected) { clearFlowNodeDragState(); return; }
   flowNodeDragState.active = true;
   flowNodeDragState.timer = 0;
   flowNodeDragState.sourceRow.classList.remove("node-drag-pressing");
@@ -5813,7 +5848,7 @@ function updateFlowNodePointerDrag(event) {
     return;
   }
 
-  const viewport = flowNodeDragState.sourceRow.closest("[data-processing-flow-scroll]");
+  const viewport = flowNodeDragState.sourceRow.closest("[data-processing-flow-scroll], .flow-scroll");
   if (viewport && hovered && viewport.contains(hovered)) {
     flowNodeDragState.root = true;
     viewport.classList.add("node-drag-over-root");
@@ -5836,7 +5871,20 @@ function finishFlowNodePointerDrag(event) {
 
 function cancelFlowNodePointerDrag(event) {
   if (!flowNodeDragState || event.pointerId !== flowNodeDragState.pointerId) return;
+  if (flowNodeDragState.active) suppressFlowNodeClickUntil = Date.now() + 450;
   clearFlowNodeDragState();
+}
+
+function abandonFlowNodeDrag() {
+  if (flowNodeDragState?.active) suppressFlowNodeClickUntil = Date.now() + 450;
+  clearFlowNodeDragState();
+}
+
+function cancelFlowNodeDragOnEscape(event) {
+  if (event.key !== "Escape") return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  abandonFlowNodeDrag();
 }
 
 function bindFlowNodeDragAndDrop() {
@@ -5844,6 +5892,35 @@ function bindFlowNodeDragAndDrop() {
     if (!bindRenderElement(sourceRow, "flow-drag")) return;
     sourceRow.addEventListener("pointerdown", beginFlowNodePointerDrag);
   });
+  if (document.__loopNodeTitleClicksBound) return;
+  document.__loopNodeTitleClicksBound = true;
+  // Opening details can resize the flow and replace the first click's title.
+  // Keep the gesture on the document so the second click survives that redraw.
+  document.addEventListener("click", (event) => {
+    if (!event.detail) { flowNodeLastTitleClick = null; return; }
+    let title = event.target.closest?.(".node-title");
+    const previous = flowNodeLastTitleClick;
+    const stamp = Date.now();
+    const sameGesture = previous && stamp - previous.stamp <= 500
+      && Math.hypot(event.clientX - previous.x, event.clientY - previous.y) <= 6;
+    if (!title && event.detail >= 2 && sameGesture) {
+      title = [...document.querySelectorAll(".node-title")].find((item) =>
+        item.dataset.nodeId === previous.nodeId && item.dataset.taskId === previous.taskId);
+    }
+    if (!title) { flowNodeLastTitleClick = null; return; }
+    if (Date.now() < suppressFlowNodeClickUntil) {
+      event.preventDefault(); event.stopImmediatePropagation();
+      flowNodeLastTitleClick = null; return;
+    }
+    const doubleClick = sameGesture && previous.taskId === title.dataset.taskId
+      && previous.nodeId === title.dataset.nodeId;
+    flowNodeLastTitleClick = { taskId: title.dataset.taskId, nodeId: title.dataset.nodeId,
+      stamp, x: event.clientX, y: event.clientY };
+    if (!doubleClick) return;
+    event.preventDefault(); event.stopImmediatePropagation();
+    flowNodeLastTitleClick = null;
+    shellTitleEditor(title, title.dataset.nodeId);
+  }, true);
 }
 
 const renderElementBindings = new WeakMap();
@@ -6206,6 +6283,10 @@ function bindTaskRepositoryRows(scope = document) {
         openTaskContextMenu(element.dataset.taskId, event, element);
         return;
       }
+      if (element.dataset.context === "node") {
+        openNodeContextMenu(element.dataset.taskId, element.dataset.nodeId, event, element);
+        return;
+      }
       event.preventDefault();
       event.stopPropagation();
       const x = Math.min(event.clientX, window.innerWidth - 210);
@@ -6221,6 +6302,9 @@ function bindTaskRepositoryRows(scope = document) {
     });
     if (element.dataset.context === "task") element.addEventListener("keydown", (event) => {
       if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) openTaskContextMenu(element.dataset.taskId, event, element);
+    });
+    if (element.dataset.context === "node") element.addEventListener("keydown", (event) => {
+      if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) openNodeContextMenu(element.dataset.taskId, element.dataset.nodeId, event, element);
     });
   });
 
@@ -7128,6 +7212,12 @@ function focusPendingElement() {
   }
 
   if (state.focusNodeTitleId) {
+    const draft = document.querySelector("[data-shell-node-draft]");
+    if (draft) {
+      draft.focus({ preventScroll: true });
+      draft.scrollIntoView({ block: "nearest", inline: "nearest" });
+      return;
+    }
     const input = document.querySelector(`.flow-title-input[data-node-id="${escSelectorValue(state.focusNodeTitleId)}"]`);
     state.focusNodeTitleId = "";
     if (input) {
@@ -8178,8 +8268,11 @@ async function action(data, event = null) {
   if (data.action === "toggle-task-tag") toggleTaskTag(data.taskId, data.tag);
   if (data.action === "add-node") addNode(data.taskId, data.parentId || null);
   if (data.action === "add-root-node") addNode(data.taskId, null);
-  if (data.action === "add-child-node") addNode(data.taskId, data.nodeId);
-  if (data.action === "add-sibling-node") addSiblingNode(data.taskId, data.nodeId);
+  if (data.action === "add-child-node" || data.action === "add-sibling-node") {
+    if (typeof shellCloseOverlay === "function") shellCloseOverlay({ restoreFocus: false });
+    if (data.action === "add-child-node") addNode(data.taskId, data.nodeId);
+    else addSiblingNode(data.taskId, data.nodeId);
+  }
   if (data.action === "toggle-node-done") toggleNodeDone(data.taskId, data.nodeId);
   if (data.action === "toggle-node-collapse") toggleNodeCollapse(data.taskId, data.nodeId);
   if (data.action === "toggle-all-nodes") toggleAllNodes(data.taskId);

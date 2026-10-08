@@ -184,7 +184,7 @@ function shellParentIdOf(task, nodeId) {
 }
 
 function shellIsDraftNode(task, node) {
-  return state.focusNodeTitleId === node.id && !String(node.title || "").trim();
+  return state.focusNodeTitleId === node.id;
 }
 
 function renderShellFlowNode(task, node, depth = 0) {
@@ -197,12 +197,12 @@ function renderShellFlowNode(task, node, depth = 0) {
   const adding = false;
   const hasChildren = children.length > 0 || adding;
   const selected = node.id === state.selectedNodeId;
-  const body = `<div class="flow-row ${node.status} ${selected ? "selected" : ""}">
+  const body = `<div class="flow-row ${node.status} ${selected ? "selected" : ""}" data-context="node" data-task-id="${escAttr(task.id)}" data-node-id="${escAttr(node.id)}" data-flow-drag-source data-flow-drag-target>
       <button class="collapse ${hasChildren ? "" : "empty"}" type="button" data-action="toggle-node-collapse" data-task-id="${escAttr(task.id)}" data-node-id="${escAttr(node.id)}" aria-label="${node.collapsed ? "展开" : "收起"} ${escAttr(node.title)}" aria-expanded="${!node.collapsed}" ${hasChildren ? "" : "disabled"}>${shellIcon(node.collapsed ? "chevron" : "down")}</button>
       <button class="node-status ${node.status}" type="button" data-action="open-node-status" data-node-id="${escAttr(node.id)}" title="选择节点状态" aria-label="${escAttr(node.title)}：${shellNodeStatusLabel(node.status)}，选择状态" aria-haspopup="menu">${shellIcon(node.status === "todo" ? "circle" : node.status)}</button>
       <button class="node-title" type="button" data-action="open-node-detail" data-task-id="${escAttr(task.id)}" data-node-id="${escAttr(node.id)}" title="${escAttr(node.title)}" aria-pressed="${selected}">${esc(node.title)}</button>
       <span class="node-badge ${node.status}">${shellNodeStatusLabel(node.status)}</span>
-      <button class="node-add" type="button" data-action="add-child-node" data-node-id="${escAttr(node.id)}" title="添加子节点" aria-label="给 ${escAttr(node.title)} 添加子节点">${shellIcon("plus")}</button>
+      <button class="node-add" type="button" data-action="add-child-node" data-task-id="${escAttr(task.id)}" data-node-id="${escAttr(node.id)}" title="添加子节点" aria-label="给 ${escAttr(node.title)} 添加子节点">${shellIcon("plus")}</button>
     </div>`;
   const nested = hasChildren && !node.collapsed
     ? `<ol class="flow-children">${children.map((child) => renderShellFlowNode(task, child, depth + 1)).join("")}${adding ? renderShellNodeDraft(task) : ""}</ol>`
@@ -219,7 +219,6 @@ function renderShellFlow(task) {
   const pending = list.filter((node) => node.status === "todo" || node.status === "blocked");
   const selected = list.find((node) => node.id === state.selectedNodeId);
   const roots = sort(task.nodes || []);
-  const draftAtRoot = state.focusNodeTitleId && !roots.some((node) => node.id === state.focusNodeTitleId);
   return `<section class="flow-pane" aria-label="层级处理流">
     <div class="flow-toolbar">
       <span>${shellCountDoneNodes(task)} / ${list.length} 已完成</span>
@@ -231,7 +230,6 @@ function renderShellFlow(task) {
     <div class="flow-scroll">
       <ol class="flow-tree" style="--flow-depth:${shellFlowDepth(task.nodes || [])}">
         ${roots.map((node) => renderShellFlowNode(task, node, 0)).join("")}
-        ${draftAtRoot ? renderShellNodeDraft(task) : ""}
       </ol>
       <button class="add-node" type="button" data-action="add-root-node" data-task-id="${escAttr(task.id)}">${shellIcon("plus")}添加节点</button>
     </div>
