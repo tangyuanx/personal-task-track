@@ -26,8 +26,6 @@ body[data-notebook23-enabled] .knowledge-notice.recovered {background: var(--gre
 ::highlight(note23-matches) {background: var(--orange-soft); color: var(--text);}
 ::highlight(note23-current) {background: var(--selected); color: var(--green);}
 body[data-notebook23-enabled] .knowledge-footer {min-height: 42px; padding-inline: 28px; gap: 12px;}
-.knowledge-feature-caution {flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center; color: #ad6262; font-size: calc(10px * var(--font-scale,1)); font-weight: 400;}
-:root[data-theme="dark"] .knowledge-feature-caution {color: #cc8c8c;}
 .note23-receipt {display: flex; align-items: center; gap: 7px; min-width: 0; color: var(--secondary); font-size: calc(11px * var(--font-scale,1));}
 .note23-receipt span {overflow: hidden; text-overflow: ellipsis; white-space: nowrap;}
 .note23-receipt svg {width: 13px; height: 13px; color: var(--green);}

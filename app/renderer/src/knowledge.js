@@ -11,6 +11,18 @@
 //   DRAFT / SAVED / DIRTY / EXTERNAL_CHANGED / FILE_MISSING / READ_ONLY
 // ============================================================
 
+(function installKnowledgeFooterNoticeStyles() {
+  const id = "loop-knowledge-footer-notice";
+  if (!document.head || typeof document.getElementById !== "function" || document.getElementById(id)) return;
+  const style = document.createElement("style");
+  style.id = id;
+  style.textContent = `
+.knowledge-feature-caution {flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center; color: #ad6262; font-size: calc(10px * var(--font-scale,1)); font-weight: 400;}
+:root[data-theme="dark"] .knowledge-feature-caution {color: #cc8c8c;}
+`;
+  document.head.appendChild(style);
+})();
+
 Object.assign(SHELL_ICON_PATHS, {
   knowledgeTable: "M3 3h18v18H3zM3 9h18M9 3v18",
   knowledgeCode: "m8 7-5 5 5 5m8-10 5 5-5 5m-2-14-4 18",
