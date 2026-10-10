@@ -828,7 +828,7 @@ let shellLocatorQuery = "";
 function shellLocatorResults() {
   const task = shellActiveTask();
   const query = shellLocatorQuery.trim().toLowerCase();
-  const list = shellNodeList(task).filter((node) => !query || `${node.title} ${node.note}`.toLowerCase().includes(query));
+  const list = shellNodeList(task).filter((node) => shellFlowNodeVisible(node) && (!query || `${node.title} ${node.note}`.toLowerCase().includes(query)));
   if (!list.length) {
     return `<div class="flow-locator-empty"><span>没有匹配节点</span><button class="text-button" type="button" data-action="clear-locator">清空</button></div>`;
   }
@@ -1358,6 +1358,10 @@ async function shellAction(data, event) {
   const trigger = event?.currentTarget || event?.target;
   const task = shellActiveTask();
   switch (data.action) {
+    case "toggle-completed-nodes":
+      shellHideCompletedNodes = !shellHideCompletedNodes;
+      try { localStorage.setItem(SHELL_HIDE_COMPLETED_KEY, shellHideCompletedNodes ? "1" : "0"); } catch {}
+      return true;
     case "toggle-nav":
       state.navCollapsed = !state.navCollapsed;
       return true;

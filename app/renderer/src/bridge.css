@@ -12,6 +12,13 @@
    The product has no review bar, so the shell owns the full viewport. */
 .app { height: 100dvh; }
 
+/* Completed-node filtering keeps descendant indentation without a blank row. */
+.flow-children > .flow-hidden-parent::before,
+.flow-children > .flow-hidden-parent::after { display: none; }
+.flow-completed-toggle { white-space: nowrap; }
+.flow-completed-toggle[aria-pressed="true"] { color: var(--green); }
+.flow-filter-empty { margin: 18px 12px; color: var(--secondary); font-size: calc(12px * var(--font-scale, 1)); }
+
 /* Context actions survived the shell migration, but their legacy stylesheet
    did not. Keep this floating surface out of the three-column grid and use
    the current shell's tokens; frozen baseline styles remain untouched. */

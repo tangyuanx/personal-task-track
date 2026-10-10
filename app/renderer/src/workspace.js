@@ -18,6 +18,17 @@ const SHELL_PRIORITY_LABELS = { high: "高优先", medium: "中优先", low: "�
 const SHELL_PRIORITY_FILTER_LABELS = { all: "全部优先级", high: "高优先", medium: "中优先", low: "低优先" };
 const SHELL_DEADLINE_SCOPE_LABELS = { all: "全部截止", today: "今天截止", week: "本周截止", overdue: "逾期" };
 let shellNodeRenameDraft = null;
+const SHELL_HIDE_COMPLETED_KEY = "loop-flow-hide-completed";
+let shellHideCompletedNodes = false;
+try { shellHideCompletedNodes = localStorage.getItem(SHELL_HIDE_COMPLETED_KEY) === "1"; } catch {}
+
+function shellFlowNodeVisible(node) {
+  return !shellHideCompletedNodes || node.status !== "done";
+}
+
+function shellFlowBranchVisible(node) {
+  return shellFlowNodeVisible(node) || (node.children || []).some(shellFlowBranchVisible);
+}
 
 function shellActiveTask() {
   return state.tasks.find((task) => task.id === state.activeTaskId) || null;
@@ -196,12 +207,18 @@ function renderShellNodeTitle(task, node, selected = node.id === state.selectedN
 }
 
 function renderShellFlowNode(task, node, depth = 0) {
+  if (!shellFlowNodeVisible(node)) {
+    // Keep the actual indentation and ancestry; a completed parent's collapse
+    // state must never conceal unfinished descendants while its row is hidden.
+    const nested = sort(node.children || []).map((child) => renderShellFlowNode(task, child, depth + 1)).join("");
+    return nested ? `<li class="flow-item flow-hidden-parent"><ol class="flow-children">${nested}</ol></li>` : "";
+  }
   if (shellIsDraftNode(task, node)) {
     const children = node.children || [];
     const inner = children.length && !node.collapsed ? `<ol class="flow-children">${children.map((child) => renderShellFlowNode(task, child, depth + 1)).join("")}</ol>` : "";
     return `${renderShellNodeDraft(task)}${inner}`;
   }
-  const children = sort(node.children || []);
+  const children = sort(node.children || []).filter(shellFlowBranchVisible);
   const adding = false;
   const hasChildren = children.length > 0 || adding;
   const selected = node.id === state.selectedNodeId;
@@ -231,6 +248,7 @@ function renderShellFlow(task) {
     <div class="flow-toolbar">
       <span>${shellCountDoneNodes(task)} / ${list.length} 已完成</span>
       <div class="flow-tools">
+        <button class="text-button flow-completed-toggle" type="button" data-action="toggle-completed-nodes" aria-pressed="${shellHideCompletedNodes}" title="${shellHideCompletedNodes ? "显示所有已完成节点" : "隐藏已完成节点，保留未完成子节点"}">${shellHideCompletedNodes ? "显示已完成" : "隐藏已完成"}</button>
         <button class="text-button" type="button" data-action="focus-next-pending" ${pending.length ? "" : "disabled"}>下一待处理${shellIcon("arrow")}</button>
         <button class="icon-button" type="button" data-action="open-flow-locator" aria-label="定位处理流节点" title="定位节点" aria-haspopup="dialog">${shellIcon("search")}</button>
       </div>
@@ -239,6 +257,7 @@ function renderShellFlow(task) {
       <ol class="flow-tree" style="--flow-depth:${shellFlowDepth(task.nodes || [])}">
         ${roots.map((node) => renderShellFlowNode(task, node, 0)).join("")}
       </ol>
+      ${shellHideCompletedNodes && list.length && list.every((node) => !shellFlowNodeVisible(node)) ? '<p class="flow-filter-empty" role="status">所有节点均已完成，已隐藏</p>' : ""}
       <button class="add-node" type="button" data-action="add-root-node" data-task-id="${escAttr(task.id)}">${shellIcon("plus")}添加节点</button>
     </div>
     </section>
@@ -300,6 +319,11 @@ const SHELL_FOCUS_KEYS = ["data-node-id", "data-action", "data-bulk-action", "da
 
 function shellBeforeRender() {
   const task = shellActiveTask();
+  if (task && shellHideCompletedNodes && shellNodeList(task).some((node) => node.id === state.selectedNodeId && !shellFlowNodeVisible(node))) {
+    flushNodeNoteDrafts?.({ persist: true });
+    state.selectedNodeId = "";
+    state.nodeDetailFullscreen = false;
+  }
   if (shellNodeRenameDraft && (shellNodeRenameDraft.taskId !== task?.id || state.taskPane !== "flow")) {
     shellFinishNodeTitleEdit(true);
   }
